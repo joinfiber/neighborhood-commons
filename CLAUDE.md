@@ -8,6 +8,109 @@ A standalone API serving structured public event data — concerts, comedy, mark
 
 This is infrastructure, not an application. Treat it accordingly: correctness over features, stability over velocity, simplicity over cleverness.
 
+## Neighborhood API Alignment
+
+This project implements and extends the [Neighborhood API](https://github.com/The-Relational-Technology-Project/neighborhood-api) — an open spec (v0.2) for sharing local events, assets, dreams, plans, and notices across neighborhood tools and communities. The spec is connective tissue, not a platform. We are one implementation of it.
+
+### Relationship to the Spec
+
+**Faithfully implement the spec.** Where the spec defines a behavior, follow it exactly. Where the spec is silent, we may extend — but extensions must not contradict or conflict with spec-defined behavior.
+
+The spec currently defines full schemas only for Events. Assets, dreams, plans, notices, and groups are named but not yet specified. When those schemas are published, we adopt them. Until then, we don't invent our own — we wait, or we contribute upstream.
+
+### Event Schema Alignment
+
+The v1 public API (`/api/v1/events`) **must** return events conforming to the Neighborhood API event schema. Internal database columns may use different names, but the API response layer transforms to spec format:
+
+| Spec Field | Type | Our DB Column | Notes |
+|------------|------|---------------|-------|
+| `id` | string | `id` (UUID) | Spec uses slugs (`evt_...`); we use UUIDs. Both are valid identifiers. |
+| `name` | string | `content` | Spec calls it `name`, not `title`. Transform on output. |
+| `start` | ISO 8601 w/ tz | `event_at` | |
+| `end` | ISO 8601 w/ tz | `end_time` | |
+| `description` | string | `description` | Direct match. |
+| `category` | string[] | `category` | Spec uses array; we store single string. Wrap in array on output. |
+| `place_id` | string | `place_id` | Direct match. |
+| `location` | object | flat columns | Spec nests `{ name, address, lat, lng }`. We store `place_name`, `venue_address`, `latitude`, `longitude` as flat columns. Nest on output. |
+| `url` | string | `link_url` | |
+| `images` | string[] | `event_image_url` | We store one image; spec allows array. Wrap in array on output. |
+| `organizer` | object | portal account | Nest `{ name }` from portal account data. |
+| `cost` | string | `price` | Free-text in both. |
+| `source` | object | constructed | Build from `source` column + portal account. Always include `publisher`, `collected_at`, `license`. |
+
+**`source` is required.** Every event response includes provenance:
+```json
+{
+  "source": {
+    "publisher": "portal-account-slug-or-name",
+    "collected_at": "2025-08-13T09:00:03Z",
+    "method": "portal",
+    "license": "CC BY 4.0"
+  }
+}
+```
+
+### Required Endpoints
+
+The spec defines these collection endpoints. Our implementation status:
+
+| Endpoint | Status | Route File |
+|----------|--------|------------|
+| `GET /meta` | **Required** | `routes/meta.ts` |
+| `GET /events` | Implemented | `routes/v1.ts` |
+| `GET /events/{id}` | Implemented | `routes/v1.ts` |
+| `GET /events.ics` | Implemented | `routes/v1.ts` |
+| `GET /events.rss` | Implemented | `routes/v1.ts` |
+| `GET /assets` | Not yet (spec pending) | — |
+| `GET /dreams` | Not yet (spec pending) | — |
+| `GET /plans` | Not yet (spec pending) | — |
+| `GET /notices` | Not yet (spec pending) | — |
+| `GET /groups` | Not yet (spec pending) | — |
+
+### The `/meta` Endpoint
+
+Every Neighborhood API instance must expose `/meta` with stewardship information:
+- **Stewards** — who maintains this feed
+- **Data sources** — what upstream sources feed into it
+- **Publisher allowlist** — which sources are trusted
+
+This is transparency infrastructure. It answers "who runs this and where does the data come from?"
+
+### Query Filters
+
+The spec defines these query parameters for collection endpoints:
+
+| Parameter | Purpose |
+|-----------|---------|
+| `start_after` | Events starting after this datetime |
+| `start_before` | Events starting before this datetime |
+| `q` | Keyword/text search |
+| `category` | Filter by category |
+| `place_id` | Filter by place |
+| `near` | Location coordinates |
+| `radius_km` | Proximity radius |
+
+Implement these where supported. Don't invent non-spec query parameters for the v1 public API without strong justification.
+
+### Extending the Spec
+
+Fiber Commons extends the Neighborhood API with capabilities the spec doesn't cover:
+
+- **Portal CRUD** — businesses submit and manage events (the spec is read-only)
+- **Admin curation** — platform operators approve/reject/edit events
+- **Webhooks** — real-time notifications for downstream consumers
+- **Analytics** — anonymous engagement counters (trending, calendar adds, interested)
+- **Internal sync** — service-to-service sync for consuming applications
+- **Image hosting** — upload, re-encode, and serve event images
+
+These extensions live under their own route prefixes (`/api/portal/*`, `/api/admin/*`, `/api/internal/*`). The spec-aligned public API (`/api/v1/*`) remains clean and spec-compliant.
+
+### What We Don't Do
+
+- **Don't fork the spec.** If the spec says `name`, we use `name` in API responses — not `title`. If the spec says `category` is an array, we return an array.
+- **Don't anticipate unspecified schemas.** Assets, dreams, plans, notices, and groups don't have schemas yet. Don't build endpoints for them based on guesses.
+- **Don't lock in.** The spec is MIT-licensed and designed for interoperability. Our extensions should be documented well enough that other implementations could adopt them if useful.
+
 ## Philosophy
 
 **Every line of code in this repo should be defensible.** Not "it works" defensible — "here's why this is the right approach and here's what we considered and rejected" defensible. This codebase will be read by skeptics. It should convert them.
