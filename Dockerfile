@@ -4,20 +4,15 @@
 FROM node:20-alpine AS base
 WORKDIR /app
 
-# Install production dependencies (with sharp native build support)
+# Install all dependencies (sharp needs build tools for native bindings)
 FROM base AS deps
 RUN apk add --no-cache python3 make g++ vips-dev
 COPY package.json ./
-RUN npm install --omit=dev
-
-# Install all dependencies for TypeScript build
-FROM base AS all-deps
-COPY package.json ./
 RUN npm install
 
-# Build
+# Build TypeScript
 FROM base AS builder
-COPY --from=all-deps /app/node_modules ./node_modules
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
 RUN ls -la dist/ && test -f dist/index.js
@@ -30,9 +25,11 @@ ENV NODE_ENV=production
 # sharp requires vips at runtime
 RUN apk add --no-cache vips
 
-# Copy pre-built production node_modules (sharp already compiled)
+# Copy node_modules from deps (sharp already compiled), then prune dev deps
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./
+RUN npm prune --omit=dev
+
 COPY --from=builder /app/dist ./dist
 
 # Run as non-root user
