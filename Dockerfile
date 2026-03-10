@@ -4,18 +4,22 @@
 FROM node:20-alpine AS base
 WORKDIR /app
 
-# Install all dependencies
-# sharp prebuilt binary resolution fails on Alpine npm, so we:
-# 1. Install without running scripts (skips sharp's broken check)
-# 2. Explicitly install the musl prebuilt binary sharp needs
-FROM base AS deps
+# Production dependencies only (for the final image)
+# sharp prebuilt binary resolution fails on Alpine npm, so we
+# skip install scripts and explicitly add the musl prebuilt binary
+FROM base AS prod-deps
 COPY package.json ./
-RUN npm install --ignore-scripts && \
-    npm install @img/sharp-linuxmusl-x64 --no-save --ignore-scripts
+RUN npm install --omit=dev --ignore-scripts && \
+    npm install @img/sharp-linuxmusl-x64 --ignore-scripts
+
+# All dependencies (for TypeScript compilation)
+FROM base AS all-deps
+COPY package.json ./
+RUN npm install --ignore-scripts
 
 # Build TypeScript
 FROM base AS builder
-COPY --from=deps /app/node_modules ./node_modules
+COPY --from=all-deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
 RUN ls -la dist/ && test -f dist/index.js
@@ -25,11 +29,8 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Copy node_modules (sharp musl binary included), then prune dev deps
-COPY --from=deps /app/node_modules ./node_modules
+COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./
-RUN npm prune --omit=dev --ignore-scripts
-
 COPY --from=builder /app/dist ./dist
 
 # Run as non-root user
