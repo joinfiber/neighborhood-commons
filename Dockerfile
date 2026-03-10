@@ -4,12 +4,14 @@
 FROM node:20-alpine AS base
 WORKDIR /app
 
-# Install all dependencies (sharp needs build tools for native bindings)
+# Install all dependencies
+# sharp prebuilt binary resolution fails on Alpine npm, so we:
+# 1. Install without running scripts (skips sharp's broken check)
+# 2. Explicitly install the musl prebuilt binary sharp needs
 FROM base AS deps
-RUN apk add --no-cache python3 make g++ vips-dev
-RUN npm install -g node-gyp
 COPY package.json ./
-RUN npm install
+RUN npm install --ignore-scripts && \
+    npm install @img/sharp-linuxmusl-x64 --no-save --ignore-scripts
 
 # Build TypeScript
 FROM base AS builder
@@ -23,13 +25,10 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-# sharp requires vips at runtime
-RUN apk add --no-cache vips
-
-# Copy node_modules from deps (sharp already compiled), then prune dev deps
+# Copy node_modules (sharp musl binary included), then prune dev deps
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./
-RUN npm prune --omit=dev
+RUN npm prune --omit=dev --ignore-scripts
 
 COPY --from=builder /app/dist ./dist
 
