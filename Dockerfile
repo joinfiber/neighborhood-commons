@@ -21,6 +21,9 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
+# sharp requires vips native libraries on Alpine
+RUN apk add --no-cache vips-dev
+
 COPY --from=builder /app/package.json ./
 RUN npm install --omit=dev
 
