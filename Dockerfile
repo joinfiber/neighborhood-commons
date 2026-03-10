@@ -7,6 +7,7 @@ WORKDIR /app
 # Install all dependencies (sharp needs build tools for native bindings)
 FROM base AS deps
 RUN apk add --no-cache python3 make g++ vips-dev
+RUN npm install -g node-gyp
 COPY package.json ./
 RUN npm install
 
