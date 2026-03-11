@@ -1,11 +1,12 @@
 /**
- * Neighborhood API v0.2 — Event Transform
+ * Event Transforms — The Fiber Commons
  *
- * Single source of truth for transforming events table rows (source='portal')
- * to the Neighborhood API event format.
+ * Single source of truth for transforming events table rows to API response formats.
+ * Every public-facing event response shape is defined and produced here.
  *
  * Used by:
- * - routes/v1/events.ts (public API responses)
+ * - routes/v1.ts (Neighborhood API responses)
+ * - routes/browse.ts (browse screen with analytics)
  * - routes/portal.ts (webhook payloads)
  * - lib/webhook-delivery.ts (webhook retry payloads)
  */
@@ -142,6 +143,82 @@ export function toRRule(recurrence: string): string | null {
     }
   }
 }
+
+// =============================================================================
+// BROWSE EVENT TRANSFORM
+// =============================================================================
+
+/** Row shape returned by the browse events query */
+export interface BrowseEventRow {
+  id: string;
+  content: string;
+  description: string | null;
+  place_name: string | null;
+  event_at: string | null;
+  end_time: string | null;
+  link_url: string | null;
+  category: string | null;
+  mode: string | null;
+  event_image_url: string | null;
+  event_image_focal_y: number | null;
+  approximate_location: unknown;
+  region: { name: string; slug: string; timezone: string } | null;
+}
+
+export interface BrowseEvent {
+  id: string;
+  content: string;
+  description: string | null;
+  place_name: string | null;
+  event_at: string | null;
+  end_time: string | null;
+  link_url: string | null;
+  region_name: string | null;
+  event_timezone: string | null;
+  rsvp_count: number;
+  calendar_add_count: number;
+  category: string | null;
+  mode: string | null;
+  event_image_url: string | null;
+  event_image_focal_y: number;
+  distance_meters?: number;
+}
+
+/** Transform a browse query row to the public browse response shape */
+export function toBrowseEvent(
+  row: BrowseEventRow,
+  opts: {
+    rsvpCount: number;
+    calendarAddCount: number;
+    distanceMeters: number | null;
+  },
+): BrowseEvent {
+  const result: BrowseEvent = {
+    id: row.id,
+    content: row.content,
+    description: row.description || null,
+    place_name: row.place_name || null,
+    event_at: row.event_at || null,
+    end_time: row.end_time || null,
+    link_url: row.link_url || null,
+    region_name: row.region?.name || null,
+    event_timezone: row.region?.timezone || null,
+    rsvp_count: opts.rsvpCount,
+    calendar_add_count: opts.calendarAddCount,
+    category: row.category || null,
+    mode: row.mode || null,
+    event_image_url: resolveEventImageUrl(row.event_image_url, config.apiBaseUrl),
+    event_image_focal_y: row.event_image_focal_y ?? 0.5,
+  };
+  if (opts.distanceMeters !== null) {
+    result.distance_meters = opts.distanceMeters;
+  }
+  return result;
+}
+
+// =============================================================================
+// NEIGHBORHOOD API TRANSFORM
+// =============================================================================
 
 /** Transform an events table row (with portal_accounts join) to Neighborhood API v0.2 format */
 export function toNeighborhoodEvent(row: PortalEventRow): NeighborhoodEvent {

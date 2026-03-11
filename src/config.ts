@@ -45,10 +45,6 @@ const envSchema = z.object({
   // Internal sync auth (service-to-service)
   COMMONS_SERVICE_KEY: z.string().min(32).optional(),
 
-  // Dual-write bridge (temporary — Phase 2 only)
-  SOCIAL_SUPABASE_URL: z.string().url().optional(),
-  SOCIAL_SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
-
   // CORS
   CORS_ORIGINS: z.string().default('https://commons.joinfiber.app,https://post.joinfiber.app'),
 
@@ -60,6 +56,9 @@ const envSchema = z.object({
 
   // Google Places API (venue search in portal)
   GOOGLE_PLACES_API_KEY: z.string().min(1).optional(),
+
+  // Default region for new portal events (UUID from regions table)
+  DEFAULT_REGION_ID: z.string().uuid().optional(),
 });
 
 function loadConfig() {
@@ -130,12 +129,6 @@ export const config = {
     serviceKey: env.COMMONS_SERVICE_KEY || '',
   },
 
-  // Dual-write bridge (temporary — removed after Phase 3)
-  socialSupabase: env.SOCIAL_SUPABASE_URL ? {
-    url: env.SOCIAL_SUPABASE_URL,
-    serviceRoleKey: env.SOCIAL_SUPABASE_SERVICE_ROLE_KEY || '',
-  } : null,
-
   apiBaseUrl: env.API_BASE_URL
     || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : ''),
 
@@ -149,15 +142,17 @@ export const config = {
     maxRetries: 3,
     maxConsecutiveFailures: 10,
     retentionDays: 30,
-    maxSubscriptions: { free: 5, pro: 25, partner: 100 } as Record<string, number>,
+    maxSubscriptionsPerKey: 5,
     encryptionKey: env.WEBHOOK_ENCRYPTION_KEY || '',
   },
 
   apiKeys: {
-    rateLimitsPerHour: { free: 1000, pro: 5000, partner: 20000 } as Record<string, number>,
+    rateLimitPerHour: 1000,
   },
 
   google: {
     placesApiKey: env.GOOGLE_PLACES_API_KEY || '',
   },
+
+  defaultRegionId: env.DEFAULT_REGION_ID || null,
 } as const;

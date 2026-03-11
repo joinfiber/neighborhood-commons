@@ -21,7 +21,8 @@ import { supabaseAdmin } from '../lib/supabase.js';
 import { createError } from '../middleware/error-handler.js';
 import { blockDatacenterIps } from '../middleware/ip-filter.js';
 import { config } from '../config.js';
-import { validateUuidParam, validateRequest, parseLocation, resolveEventImageUrl } from '../lib/helpers.js';
+import { validateUuidParam, validateRequest, parseLocation } from '../lib/helpers.js';
+import { toBrowseEvent, type BrowseEventRow } from '../lib/event-transform.js';
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -133,13 +134,11 @@ router.get(
       }
 
       // Build public response — NO user data, NO raw coordinates
-      const publicEvents = (events || []).map(event => {
-        const region = event.region as unknown as { name: string; slug: string; timezone: string } | null;
-
+      const publicEvents = ((events || []) as unknown as BrowseEventRow[]).map(event => {
         // Compute distance when viewer coords are provided (transient, never stored)
         let distanceMeters: number | null = null;
         if (hasCoords) {
-          const loc = parseLocation((event as unknown as { approximate_location?: unknown }).approximate_location);
+          const loc = parseLocation(event.approximate_location);
           if (loc) {
             const R = 6371000;
             const dLat = (loc.latitude - latitude!) * Math.PI / 180;
@@ -151,29 +150,16 @@ router.get(
           }
         }
 
-        return {
-          id: event.id,
-          content: event.content,
-          description: event.description || null,
-          place_name: event.place_name || null,
-          event_at: event.event_at || null,
-          end_time: event.end_time || null,
-          link_url: (event as unknown as { link_url?: string }).link_url || null,
-          region_name: region?.name || null,
-          event_timezone: region?.timezone || null,
-          rsvp_count: rsvpMap.get(event.id) || 0,
-          calendar_add_count: calendarMap.get(event.id) || 0,
-          category: event.category || null,
-          mode: (event as unknown as { mode?: string }).mode || null,
-          event_image_url: resolveEventImageUrl(event.event_image_url, config.apiBaseUrl),
-          event_image_focal_y: (event as unknown as { event_image_focal_y?: number }).event_image_focal_y ?? 0.5,
-          ...(distanceMeters !== null ? { distance_meters: distanceMeters } : {}),
-        };
+        return toBrowseEvent(event, {
+          rsvpCount: rsvpMap.get(event.id) || 0,
+          calendarAddCount: calendarMap.get(event.id) || 0,
+          distanceMeters,
+        });
       });
 
       // Sort by proximity when coordinates are provided
       if (hasCoords) {
-        publicEvents.sort((a: any, b: any) => {
+        publicEvents.sort((a, b) => {
           const aDist = a.distance_meters ?? Infinity;
           const bDist = b.distance_meters ?? Infinity;
           return aDist - bDist;

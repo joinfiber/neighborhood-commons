@@ -5,7 +5,7 @@ Public events data infrastructure. Open, minimal, correct.
 ## Current Status (March 2026)
 
 ### What's Live
-- **API**: Deployed to Railway at `commons.joinfiber.app` — 89 events serving via `/api/events` and `/api/v1/events`
+- **API**: Deployed to Railway at `commons.joinfiber.app` — 89 events serving via `/api/v1/events` (canonical), `/api/events` redirects to v1
 - **Portal**: React SPA served from same Express server (same-origin, no CORS) — business login, event CRUD, admin dashboard
 - **Database**: Dedicated Supabase project (`fiber-commons`) with events, portal_accounts, regions, event_series, event_analytics, etc.
 - **Images**: Served from Cloudflare R2 via portal image proxy route
@@ -36,7 +36,7 @@ Public events data infrastructure. Open, minimal, correct.
 - Google Places API proxied through `/api/places/search` (server-side key, not exposed to client)
 
 ### Key Bug Fixes Applied
-- **Column name mismatch** (migration 003): portal_accounts had migration column names (`venue_name`, `place_id`, `website_url`) but code expected social app names (`default_venue_name`, `default_place_id`, `website`). Fixed via rename migration + `SELECT *` safety net.
+- **Column name mismatch** (migration 003): portal_accounts had migration column names (`venue_name`, `place_id`, `website_url`) but code expected social app names (`default_venue_name`, `default_place_id`, `website`). Fixed via rename migration. Portal account queries now use explicit column list (`PORTAL_ACCOUNT_SELECT`).
 - **OTP digit count**: Supabase sends 8-digit codes; portal form expected 6. Fixed in LoginScreen.tsx.
 - **Railway watch patterns**: Added `portal/**` and `railway.toml` to watchPatterns so portal changes trigger builds.
 
@@ -55,6 +55,7 @@ Optional (configured):
 - `CRON_SECRET` — for cron endpoint auth
 - `COMMONS_SERVICE_KEY` — for internal sync auth (Phase 3)
 - `CORS_ORIGINS` — defaults to `https://commons.joinfiber.app,https://post.joinfiber.app`
+- `DEFAULT_REGION_ID` — UUID of the default region for new portal events (from regions table)
 
 ### Migrations
 - `001_initial_schema.sql` — Full schema (events, portal_accounts, regions, etc.)

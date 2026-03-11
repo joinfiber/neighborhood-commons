@@ -41,13 +41,3 @@ export function createUserClient(token: string) {
     },
   });
 }
-
-/**
- * Optional: Social Supabase client for dual-write bridge (Phase 2 only).
- * Null when bridge is not configured.
- */
-export const socialSupabaseAdmin = config.socialSupabase
-  ? createClient(config.socialSupabase.url, config.socialSupabase.serviceRoleKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    })
-  : null;

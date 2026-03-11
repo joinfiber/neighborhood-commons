@@ -11,15 +11,14 @@
  * excluded from public feeds until the admin approves the account.
  *
  * Events write directly to the `events` table (source='portal').
- * No sync bridge — portal events ARE events. The optional dual-write
- * bridge (socialSupabaseAdmin) syncs to the social Supabase for Phase 2.
+ * No sync bridge — portal events ARE events.
  */
 
 import { Router, json as expressJson } from 'express';
 import { z } from 'zod';
 import sharp from 'sharp';
 import { EVENT_CATEGORY_KEYS } from '../lib/categories.js';
-import { supabaseAdmin, socialSupabaseAdmin } from '../lib/supabase.js';
+import { supabaseAdmin } from '../lib/supabase.js';
 import { createError } from '../middleware/error-handler.js';
 import { requirePortalAuth } from '../middleware/auth.js';
 import { validateRequest, validateUuidParam, resolveEventImageUrl } from '../lib/helpers.js';
@@ -33,12 +32,7 @@ import { sanitizeUrl, checkApprovedDomain } from '../lib/url-sanitizer.js';
 import { writeLimiter, enumerationLimiter } from '../middleware/rate-limit.js';
 import { blockDatacenterIps } from '../middleware/ip-filter.js';
 
-const PHILADELPHIA_REGION_ID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
-
-// Portal account select — use * to handle column name variations between
-// migration schema versions (venue_name vs default_venue_name, etc.)
-// Migration 003 normalizes these, but * is safe regardless.
-const ACCOUNT_SELECT = '*';
+const PORTAL_ACCOUNT_SELECT = 'id, email, business_name, auth_user_id, status, default_venue_name, default_place_id, default_address, default_latitude, default_longitude, website, phone, last_login_at, created_at, updated_at';
 
 // =============================================================================
 // FORMAT CONVERSION HELPERS
@@ -181,7 +175,7 @@ export function portalInputToInsert(
     visibility: 'public',
     status: accountStatus === 'active' ? 'published' : 'pending_review',
     is_business: true,
-    region_id: PHILADELPHIA_REGION_ID,
+    region_id: config.defaultRegionId,
   };
 }
 
@@ -365,11 +359,6 @@ export async function createEventSeries(
     void dispatchSeriesWebhooks(publishedEvents);
   }
 
-  // Dual-write bridge: sync to social Supabase if configured
-  if (socialSupabaseAdmin && rows.length > 0) {
-    void Promise.resolve(socialSupabaseAdmin.from('events').upsert(rows)).catch(() => {});
-  }
-
   const results = (events || []).map((e) => {
     const { date } = fromTimestamptz(e.event_at, e.event_timezone || timezone);
     return { id: e.id, event_date: date };
@@ -413,11 +402,6 @@ export async function deleteSeriesEvents(seriesId: string): Promise<number> {
       cost: null, recurrence: null,
       source: { publisher: 'fiber', collected_at: new Date().toISOString(), method: 'portal', license: 'free-use-with-attribution' },
     });
-  }
-
-  // Dual-write bridge: delete from social Supabase if configured
-  if (socialSupabaseAdmin) {
-    void Promise.resolve(socialSupabaseAdmin.from('events').delete().in('id', ids)).catch(() => {});
   }
 
   console.log(`[PORTAL] Series ${seriesId} deleted: ${events.length} events`);
@@ -657,7 +641,7 @@ router.get('/whoami', enumerationLimiter, async (req, res, next) => {
 
     const { data: account, error: whoamiErr } = await supabaseAdmin
       .from('portal_accounts')
-      .select(ACCOUNT_SELECT)
+      .select(PORTAL_ACCOUNT_SELECT)
       .eq('auth_user_id', userId)
       .in('status', ['active', 'pending'])
       .maybeSingle();
@@ -703,7 +687,7 @@ router.post('/account/claim', writeLimiter, async (req, res, next) => {
 
     const { data: account, error: lookupError } = await supabaseAdmin
       .from('portal_accounts')
-      .select(ACCOUNT_SELECT)
+      .select(PORTAL_ACCOUNT_SELECT)
       .ilike('email', normalizedEmail)
       .in('status', ['active', 'pending'])
       .maybeSingle();
@@ -754,7 +738,7 @@ router.get('/account', enumerationLimiter, async (req, res, next) => {
 
     const { data: account, error } = await getUserClient(req)
       .from('portal_accounts')
-      .select(ACCOUNT_SELECT)
+      .select(PORTAL_ACCOUNT_SELECT)
       .eq('auth_user_id', userId)
       .maybeSingle();
 
@@ -814,7 +798,7 @@ router.patch('/account/profile', writeLimiter, async (req, res, next) => {
       .from('portal_accounts')
       .update(update)
       .eq('id', accountId)
-      .select(ACCOUNT_SELECT)
+      .select(PORTAL_ACCOUNT_SELECT)
       .single();
 
     if (error) {
@@ -1073,11 +1057,6 @@ router.post('/events', writeLimiter, async (req, res, next) => {
       })();
     }
 
-    // Dual-write bridge: sync to social Supabase if configured
-    if (socialSupabaseAdmin) {
-      void Promise.resolve(socialSupabaseAdmin.from('events').upsert(insertData)).catch(() => {});
-    }
-
     res.status(201).json({ event: toPortalEvent(event) });
   } catch (err) {
     next(err);
@@ -1251,11 +1230,6 @@ router.patch('/events/:id', writeLimiter, async (req, res, next) => {
       }
     })();
 
-    // Dual-write bridge: sync to social Supabase if configured
-    if (socialSupabaseAdmin) {
-      void Promise.resolve(socialSupabaseAdmin.from('events').upsert({ id: req.params.id, ...update })).catch(() => {});
-    }
-
     res.json({ event: toPortalEvent(event) });
   } catch (err) {
     next(err);
@@ -1325,11 +1299,6 @@ router.delete('/events/:id', writeLimiter, async (req, res, next) => {
       cost: null, recurrence: null,
       source: { publisher: 'fiber', collected_at: new Date().toISOString(), method: 'portal', license: 'free-use-with-attribution' },
     });
-
-    // Dual-write bridge: delete from social Supabase if configured
-    if (socialSupabaseAdmin) {
-      void Promise.resolve(socialSupabaseAdmin.from('events').delete().eq('id', req.params.id)).catch(() => {});
-    }
 
     res.json({ success: true });
   } catch (err) {
