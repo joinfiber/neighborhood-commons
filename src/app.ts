@@ -41,8 +41,9 @@ export function createApp(): Express {
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
-          styleSrc: ["'self'", "'unsafe-inline'"],
-          scriptSrc: ["'self'", 'https://challenges.cloudflare.com'],
+          styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+          fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+          scriptSrc: ["'self'", 'https://challenges.cloudflare.com', 'https://static.cloudflareinsights.com'],
           frameSrc: ["'self'", 'https://challenges.cloudflare.com'],
           connectSrc: ["'self'", config.supabase.url, 'https://places.googleapis.com'],
           imgSrc: ["'self'", 'data:', 'https:'],
@@ -88,6 +89,7 @@ export function createApp(): Express {
 
   // ─── Commons Admin ───────────────────────────────────────────────
   app.use('/api/admin', adminRoutes);
+  app.use('/api/portal/admin', adminRoutes);
 
   // ─── Neighborhood API v1 ─────────────────────────────────────────
   app.use('/api/v1/events', v1Limiter, v1Routes);
