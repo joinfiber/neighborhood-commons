@@ -26,6 +26,7 @@ import metaRoutes from './routes/meta.js';
 import internalRoutes from './routes/internal.js';
 import cronRoutes from './routes/cron.js';
 import placesRoutes from './routes/places.js';
+import developerRoutes from './routes/developers.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -74,6 +75,7 @@ export function createApp(): Express {
   app.use('/api/v1', publicCors);
   app.use('/api/meta', publicCors);
   app.use('/.well-known', publicCors);
+  app.use('/api/developers', publicCors);
 
   // Restricted CORS for portal, admin, webhooks, internal routes
   app.use('/api/portal', privateCors);
@@ -127,6 +129,9 @@ export function createApp(): Express {
 
   // ─── Cron jobs ───────────────────────────────────────────────────
   app.use('/api/cron', cronRoutes);
+
+  // ─── Developer Registration ─────────────────────────────────────
+  app.use('/api/v1/developers', developerRoutes);
 
   // ─── Places (venue search for portal) ──────────────────────────
   app.use('/api/places', placesRoutes);
