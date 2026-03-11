@@ -302,7 +302,7 @@ router.get('/accounts/:id', enumerationLimiter, async (req, res, next) => {
 
     const { data: account, error } = await supabaseAdmin
       .from('portal_accounts')
-      .select('id, auth_user_id, email, business_name, phone, website, default_venue_name, default_place_id, default_address, default_latitude, default_longitude, status, claimed_at, created_at, updated_at')
+      .select('*')
       .eq('id', req.params.id)
       .maybeSingle();
 

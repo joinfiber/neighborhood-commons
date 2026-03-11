@@ -35,6 +35,11 @@ import { blockDatacenterIps } from '../middleware/ip-filter.js';
 
 const PHILADELPHIA_REGION_ID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 
+// Portal account select — use * to handle column name variations between
+// migration schema versions (venue_name vs default_venue_name, etc.)
+// Migration 003 normalizes these, but * is safe regardless.
+const ACCOUNT_SELECT = '*';
+
 // =============================================================================
 // FORMAT CONVERSION HELPERS
 // =============================================================================
@@ -568,21 +573,24 @@ router.post('/auth/register', blockDatacenterIps, enumerationLimiter, async (req
     }
 
     // Create pending account
-    const { error: insertErr } = await supabaseAdmin
+    const { data: inserted, error: insertErr } = await supabaseAdmin
       .from('portal_accounts')
       .insert({
         email,
         business_name,
         status: 'pending',
-      });
+      })
+      .select('id, email')
+      .single();
 
     if (insertErr) {
       if (insertErr.code === '23505') {
         throw createError('An account with this email already exists', 409, 'CONFLICT');
       }
-      console.error('[PORTAL] Register error:', insertErr.message);
+      console.error('[PORTAL] Register insert error:', insertErr.message, insertErr.code);
       throw createError('Failed to register', 500, 'SERVER_ERROR');
     }
+    console.log(`[PORTAL] Account row created: id=${inserted?.id}, email=${email.substring(0, 3)}***`);
 
     // Send OTP from server side — supabaseAdmin uses service_role key
     // which bypasses Turnstile captcha requirement on GoTrue
@@ -647,12 +655,16 @@ router.get('/whoami', enumerationLimiter, async (req, res, next) => {
       return;
     }
 
-    const { data: account } = await supabaseAdmin
+    const { data: account, error: whoamiErr } = await supabaseAdmin
       .from('portal_accounts')
-      .select('id, auth_user_id, email, business_name, phone, website, default_venue_name, default_place_id, default_address, default_latitude, default_longitude, status, claimed_at, created_at, updated_at')
+      .select(ACCOUNT_SELECT)
       .eq('auth_user_id', userId)
       .in('status', ['active', 'pending'])
       .maybeSingle();
+
+    if (whoamiErr) {
+      console.error('[PORTAL] Whoami lookup error:', whoamiErr.message);
+    }
 
     if (account) {
       void (async () => {
@@ -686,19 +698,23 @@ router.post('/account/claim', writeLimiter, async (req, res, next) => {
     const email = req.user?.email;
     if (!userId || !email) throw createError('Unauthorized', 401, 'UNAUTHORIZED');
 
+    const normalizedEmail = email.toLowerCase().trim();
+    console.log(`[PORTAL] Claim attempt: email=${normalizedEmail.substring(0, 3)}***, userId=${userId.substring(0, 8)}...`);
+
     const { data: account, error: lookupError } = await supabaseAdmin
       .from('portal_accounts')
-      .select('id, auth_user_id, email, business_name, phone, website, default_venue_name, default_place_id, default_address, default_latitude, default_longitude, status, claimed_at, created_at, updated_at')
-      .ilike('email', email.toLowerCase().trim())
+      .select(ACCOUNT_SELECT)
+      .ilike('email', normalizedEmail)
       .in('status', ['active', 'pending'])
       .maybeSingle();
 
     if (lookupError) {
-      console.error('[PORTAL] Account lookup error:', lookupError.message);
+      console.error('[PORTAL] Account claim lookup error:', lookupError.message, lookupError.code);
       throw createError('Failed to look up account', 500, 'SERVER_ERROR');
     }
 
     if (!account) {
+      console.warn(`[PORTAL] Claim failed: no portal_accounts row for email=${normalizedEmail.substring(0, 3)}***`);
       throw createError('No portal account found for this email', 404, 'NOT_FOUND');
     }
 
@@ -738,7 +754,7 @@ router.get('/account', enumerationLimiter, async (req, res, next) => {
 
     const { data: account, error } = await getUserClient(req)
       .from('portal_accounts')
-      .select('id, auth_user_id, email, business_name, phone, website, default_venue_name, default_place_id, default_address, default_latitude, default_longitude, status, claimed_at, created_at, updated_at')
+      .select(ACCOUNT_SELECT)
       .eq('auth_user_id', userId)
       .maybeSingle();
 
@@ -798,7 +814,7 @@ router.patch('/account/profile', writeLimiter, async (req, res, next) => {
       .from('portal_accounts')
       .update(update)
       .eq('id', accountId)
-      .select('id, auth_user_id, email, business_name, phone, website, default_venue_name, default_place_id, default_address, default_latitude, default_longitude, status, claimed_at, created_at, updated_at')
+      .select(ACCOUNT_SELECT)
       .single();
 
     if (error) {
