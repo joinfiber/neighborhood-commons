@@ -1,0 +1,397 @@
+# Neighborhood Commons API
+
+> Open neighborhood event data. No API key required to read. CC BY 4.0.
+
+Base URL: https://commons.joinfiber.app
+Spec: Neighborhood API v0.2 (https://github.com/The-Relational-Technology-Project/neighborhood-api)
+
+## Quick Start
+
+```bash
+# List upcoming events (no auth needed)
+curl "https://commons.joinfiber.app/api/v1/events?limit=5"
+
+# Filter by category and location
+curl "https://commons.joinfiber.app/api/v1/events?category=live-music&near=39.95,-75.16&radius_km=5"
+
+# Subscribe in a calendar app
+https://commons.joinfiber.app/api/v1/events.ics
+
+# RSS feed
+https://commons.joinfiber.app/api/v1/events.rss
+```
+
+## Authentication
+
+No authentication required for reading events, feeds, or metadata.
+
+Optional: pass an `X-API-Key` header for a dedicated rate limit bucket (1000 req/hr per key instead of per IP). An API key is required for webhook subscriptions.
+
+Get a free API key: POST to `/api/v1/developers/register/send-otp` with your email, verify with the OTP, receive your key immediately. No approval required.
+
+## Rate Limits
+
+- 1000 requests/hour per IP address (or per API key if provided)
+- Standard `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset` headers on every response
+- Webhook write endpoints: 10/min
+- Enumeration endpoints: 5/min
+
+## Error Format
+
+All errors return:
+```json
+{ "error": { "code": "ERROR_CODE", "message": "Human-readable explanation" } }
+```
+
+Status codes: 400 (bad request), 401 (no/invalid auth), 403 (forbidden), 404 (not found), 409 (conflict), 429 (rate limited), 500 (server error).
+
+---
+
+## Endpoints
+
+### GET /api/v1/events — List Events
+
+Query parameters:
+- `start_after` (string) — YYYY-MM-DD. Events starting on or after this date.
+- `start_before` (string) — YYYY-MM-DD. Events starting before this date.
+- `category` (string) — Filter by category slug (e.g., live-music, comedy, markets).
+- `q` (string) — Text search in title and description. Max 200 chars.
+- `near` (string) — Geo filter center: "lat,lng" (e.g., "39.95,-75.16").
+- `radius_km` (number) — Radius from `near` in km. 0.1–100, default 10.
+- `limit` (number) — Results per page. 1–200, default 50.
+- `offset` (number) — Pagination offset. Default 0.
+
+Response (200):
+```json
+{
+  "meta": { "total": 42, "limit": 50, "offset": 0, "spec": "neighborhood-api-v0.2", "license": "CC-BY-4.0" },
+  "events": [
+    {
+      "id": "uuid",
+      "name": "Jazz Night at South",
+      "start": "2026-03-14T19:00:00-04:00",
+      "end": "2026-03-14T22:00:00-04:00",
+      "description": "Live jazz trio...",
+      "category": ["live-music"],
+      "place_id": "ChIJ...",
+      "location": { "name": "South Jazz Kitchen", "address": "600 N Broad St, Philadelphia", "lat": 39.9632, "lng": -75.1551 },
+      "url": "https://example.com/tickets",
+      "images": ["https://..."],
+      "organizer": { "name": "South Jazz Kitchen" },
+      "cost": "Free",
+      "recurrence": "weekly",
+      "source": { "publisher": "South Jazz Kitchen", "collected_at": "2026-03-10T12:00:00Z", "method": "portal", "license": "CC BY 4.0" }
+    }
+  ]
+}
+```
+
+Auth: None (optional X-API-Key).
+
+### GET /api/v1/events/{id} — Single Event
+
+Path: `id` is a UUID.
+
+Response (200):
+```json
+{ "event": { ...same shape as list... } }
+```
+
+Auth: None.
+
+### GET /api/v1/events.ics — iCalendar Feed
+
+Returns `text/calendar` (RFC 5545). Up to 200 upcoming published events. Each VEVENT includes UID, DTSTART, DTEND, SUMMARY, DESCRIPTION, LOCATION, URL, GEO, RRULE as applicable.
+
+Auth: None.
+
+### GET /api/v1/events.rss — RSS Feed
+
+Returns `application/rss+xml` (RSS 2.0). Up to 50 upcoming published events.
+
+Auth: None.
+
+### GET /api/v1/events/terms — License & Terms
+
+Response (200):
+```json
+{
+  "version": "2.0",
+  "summary": "Neighborhood event data, free to use under CC BY 4.0.",
+  "license": { "name": "Creative Commons Attribution 4.0 International", "spdx": "CC-BY-4.0", "url": "https://creativecommons.org/licenses/by/4.0/" },
+  "guidelines": [
+    "Attribution: Credit 'Neighborhood Commons' or link to this API.",
+    "No surveillance: Don't use this data for ad targeting, behavioral profiling, or user tracking.",
+    "Building products with this data is encouraged."
+  ],
+  "rate_limit": "1000 requests/hour per IP. Use X-API-Key header for a dedicated rate limit bucket.",
+  "contact": "hello@joinfiber.app"
+}
+```
+
+Auth: None.
+
+### GET /api/v1/meta — Feed Metadata
+
+Response (200):
+```json
+{
+  "name": "Neighborhood Commons",
+  "description": "Open neighborhood event data.",
+  "spec": "neighborhood-api-v0.2",
+  "stewards": [{ "name": "Fiber", "url": "https://joinfiber.app", "contact": "hello@joinfiber.app", "role": "maintainer" }],
+  "data_sources": [{ "name": "Portal", "method": "portal", "description": "Events submitted directly by venue owners and promoters." }],
+  "resources": ["events"],
+  "license": { "name": "Creative Commons Attribution 4.0 International", "spdx": "CC-BY-4.0" }
+}
+```
+
+Auth: None.
+
+### GET /api/v1/meta/regions — List Regions
+
+Response (200, cached 1hr):
+```json
+{ "regions": [{ "id": "uuid", "name": "Philadelphia", "slug": "philadelphia", "timezone": "America/New_York", "latitude": 39.95, "longitude": -75.16 }] }
+```
+
+Auth: None.
+
+### GET /api/v1/meta/categories — List Categories
+
+Response (200, cached 30min):
+```json
+{ "categories": [{ "slug": "live-music", "key": "LIVE_MUSIC", "count": 12 }] }
+```
+
+Auth: None.
+
+### GET /.well-known/neighborhood — API Discovery
+
+Response (200):
+```json
+{
+  "name": "Neighborhood Commons",
+  "version": "0.2",
+  "license": "CC-BY-4.0",
+  "events_url": "https://commons.joinfiber.app/api/v1/events",
+  "ical_url": "https://commons.joinfiber.app/api/v1/events.ics",
+  "rss_url": "https://commons.joinfiber.app/api/v1/events.rss",
+  "terms_url": "https://commons.joinfiber.app/api/v1/events/terms"
+}
+```
+
+Auth: None.
+
+---
+
+## API Key Registration
+
+No admin approval required. Verify your email, get a key immediately.
+
+### POST /api/v1/developers/register/send-otp — Request Verification Code
+
+Body:
+```json
+{ "email": "dev@example.com" }
+```
+
+Response (200):
+```json
+{ "success": true, "message": "Verification code sent to your email." }
+```
+
+Error: 409 if an API key already exists for this email.
+
+### POST /api/v1/developers/register/verify-otp — Verify & Get Key
+
+Body:
+```json
+{ "email": "dev@example.com", "token": "12345678", "name": "My App" }
+```
+
+Response (201):
+```json
+{
+  "api_key": { "id": "uuid", "raw_key": "fib_a1b2c3d4...", "name": "My App", "rate_limit_per_hour": 1000, "created_at": "2026-03-11T..." },
+  "message": "Save your raw_key — it will not be shown again."
+}
+```
+
+Error: 401 (invalid OTP), 409 (key already exists).
+
+### GET /api/v1/developers/me — Your Key Info
+
+Headers: `X-API-Key: fib_...` (required)
+
+Response (200):
+```json
+{
+  "api_key": { "id": "uuid", "name": "My App", "owner_email": "dev@example.com", "rate_limit_per_hour": 1000, "webhook_count": 2, "created_at": "2026-03-11T..." }
+}
+```
+
+### POST /api/v1/developers/keys/rotate — Rotate Key
+
+Requires current API key + OTP re-verification. Call `/register/send-otp` first.
+
+Headers: `X-API-Key: fib_...` (required, current key)
+
+Body:
+```json
+{ "email": "dev@example.com", "token": "12345678" }
+```
+
+Response (200):
+```json
+{
+  "api_key": { "id": "uuid", "raw_key": "fib_newkey...", "name": "...", "rate_limit_per_hour": 1000, "created_at": "..." },
+  "message": "Save your new raw_key — the old key has been deactivated."
+}
+```
+
+Webhook subscriptions are automatically migrated to the new key.
+
+---
+
+## Webhooks
+
+Real-time notifications when events are created, updated, or deleted. Requires an API key.
+
+Event types: `event.created`, `event.updated`, `event.deleted`
+
+### POST /api/v1/webhooks — Create Subscription
+
+Headers: `X-API-Key: fib_...` (required)
+
+Body:
+```json
+{ "url": "https://yourapp.com/webhooks/commons", "event_types": ["event.created", "event.updated"] }
+```
+
+Response (201):
+```json
+{
+  "subscription": { "id": "uuid", "url": "https://...", "event_types": ["event.created", "event.updated"], "status": "active", "created_at": "..." },
+  "signing_secret": "64-char-hex-string",
+  "note": "Save the signing_secret — it will not be shown again."
+}
+```
+
+Constraints: URL must be HTTPS. Max 5 subscriptions per API key. SSRF-protected.
+
+### GET /api/v1/webhooks — List Subscriptions
+
+Headers: `X-API-Key: fib_...` (required)
+
+Response (200):
+```json
+{
+  "subscriptions": [
+    { "id": "uuid", "url": "...", "event_types": [...], "status": "active", "consecutive_failures": 0, "last_success_at": "...", "last_failure_at": null, "created_at": "...", "updated_at": "..." }
+  ]
+}
+```
+
+### PATCH /api/v1/webhooks/{id} — Update Subscription
+
+Headers: `X-API-Key: fib_...` (required)
+
+Body (all fields optional):
+```json
+{ "url": "https://...", "event_types": [...], "status": "active" }
+```
+
+Setting `status` to `"active"` resets `consecutive_failures` to 0.
+
+### DELETE /api/v1/webhooks/{id} — Delete Subscription
+
+Headers: `X-API-Key: fib_...` (required)
+
+Response (200):
+```json
+{ "success": true }
+```
+
+### POST /api/v1/webhooks/{id}/test — Send Test Delivery
+
+Headers: `X-API-Key: fib_...` (required)
+
+Sends a signed test payload to your endpoint with event type `event.created`.
+
+### GET /api/v1/webhooks/{id}/deliveries — Delivery History
+
+Headers: `X-API-Key: fib_...` (required)
+
+Query parameters:
+- `status` (string) — Filter: pending, delivered, failed, retrying.
+- `limit` (number) — 1–100, default 25.
+- `offset` (number) — Default 0.
+
+Response (200):
+```json
+{
+  "deliveries": [
+    { "id": "uuid", "event_type": "event.created", "event_id": "uuid", "status": "delivered", "http_status": 200, "attempt_number": 1, "created_at": "...", "delivered_at": "..." }
+  ],
+  "meta": { "total": 10, "limit": 25, "offset": 0 }
+}
+```
+
+### Webhook Payload Format
+
+```json
+{
+  "event_type": "event.created",
+  "event": { ...full event object... },
+  "timestamp": "2026-03-14T12:00:00.000Z",
+  "delivery_id": "42"
+}
+```
+
+Headers sent: `X-Fiber-Signature` (HMAC-SHA256), `X-Fiber-Event` (event type), `Content-Type: application/json`.
+
+### Verifying Webhook Signatures
+
+```javascript
+const crypto = require('crypto');
+function verify(body, signature, secret) {
+  const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(JSON.stringify(body)).digest('hex');
+  return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+}
+```
+
+### Delivery Behavior
+
+- Your endpoint must respond 2xx within 10 seconds.
+- Failed deliveries retry 3 times with backoff: 1 min, 5 min, 25 min.
+- After 10 consecutive failures, the subscription is auto-disabled.
+- Re-enable with PATCH: `{ "status": "active" }`.
+- Delivery logs retained 30 days.
+
+---
+
+## Event Schema
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | string | UUID |
+| name | string | Event title |
+| start | string | ISO 8601 with timezone offset |
+| end | string or null | End time |
+| description | string or null | Plain text |
+| category | string[] | Slugified categories (e.g., ["live-music"]) |
+| place_id | string or null | Google Places ID |
+| location | object | { name, address, lat, lng } |
+| url | string or null | Ticket or event page URL |
+| images | string[] | Image URLs (may be empty) |
+| organizer | object | { name } |
+| cost | string or null | "Free", "$10", "$5-15" |
+| recurrence | string or null | Recurrence pattern (e.g., "weekly") |
+| source | object | { publisher, collected_at, method, license } |
+
+## License
+
+All event data: Creative Commons Attribution 4.0 International (CC BY 4.0).
+Attribution: Credit "Neighborhood Commons" or link to the API.
+Contact: hello@joinfiber.app

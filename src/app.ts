@@ -76,6 +76,7 @@ export function createApp(): Express {
   app.use('/api/meta', publicCors);
   app.use('/.well-known', publicCors);
   app.use('/api/developers', publicCors);
+  app.use('/llms.txt', publicCors);
 
   // Restricted CORS for portal, admin, webhooks, internal routes
   app.use('/api/portal', privateCors);
@@ -97,6 +98,11 @@ export function createApp(): Express {
   // ─── Health check (no auth) ──────────────────────────────────────
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', service: 'neighborhood-commons', timestamp: new Date().toISOString() });
+  });
+
+  // ─── AI-readable docs ─────────────────────────────────────────────
+  app.get('/llms.txt', (_req, res) => {
+    res.sendFile(path.join(__dirname, '../public/llms.txt'), { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
   });
 
   // ─── Public Data API ─────────────────────────────────────────────
