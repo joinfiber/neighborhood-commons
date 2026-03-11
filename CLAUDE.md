@@ -2,6 +2,31 @@
 
 Public events data infrastructure. Open, minimal, correct.
 
+## Current Status (March 2026)
+
+### What's Live
+- **API**: Deployed to Railway at `commons.joinfiber.app` — 89 events serving via `/api/events` and `/api/v1/events`
+- **Portal**: React SPA served from same Express server (same-origin, no CORS) — business login, event CRUD, admin dashboard
+- **Database**: Dedicated Supabase project (`fiber-commons`) with events, portal_accounts, regions, event_series, event_analytics, etc.
+- **Images**: Served from Cloudflare R2 via portal image proxy route
+
+### Pending Setup (Supabase Dashboard)
+1. **Auth → URL Configuration**: Set Site URL to `https://commons.joinfiber.app`, add to Redirect URLs
+2. **Auth → SMTP Settings**: Configure Mailgun SMTP (smtp.mailgun.org:587) for branded email delivery
+3. **Auth → Email Templates**: Paste branded templates from `docs/supabase-email-templates.md` (Confirm Signup + Magic Link use `{{ .Token }}` for 8-digit OTP, not magic links)
+
+### Architecture
+- Single Railway service: Express API + static portal SPA in one Docker container
+- Portal built via multi-stage Dockerfile (`portal-builder` stage), output copied to `./portal` in runner
+- `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_TURNSTILE_SITE_KEY` baked into SPA at build time via Docker ARGs
+- `VITE_API_URL` intentionally empty — same-origin requests
+- Google Places API proxied through `/api/places/search` (server-side key, not exposed to client)
+
+### What's Next (from design doc)
+- Phase 2: Cut over public traffic (portal domain, v1 API consumers, dual-write bridge)
+- Phase 3: Social app migration (plans table, commons_cache, sync process)
+- See `docs/design/TABLE_SPLIT_AND_EVENTS_SERVER.md` for full plan
+
 ## What This Is
 
 A standalone API serving structured public event data — concerts, comedy, markets, community gatherings. Businesses submit events through a portal; admins curate; the API serves them to anyone. No accounts required to read. No tracking of individuals. The data is the product.
