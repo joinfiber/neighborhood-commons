@@ -57,7 +57,7 @@ const changesSchema = z.object({
 
 const PUBLIC_EVENT_SELECT = 'id, content, description, place_name, venue_address, event_at, end_time, category, link_url, event_image_url, event_image_focal_y, latitude, longitude, created_at, updated_at, region:regions (name, slug, timezone)';
 
-const PUBLIC_EVENT_DETAIL_SELECT = 'id, content, description, place_name, venue_address, place_id, event_at, end_time, category, custom_category, mode, link_url, event_image_url, event_image_focal_y, latitude, longitude, recurrence, price, created_at, updated_at, region:regions (name, slug, timezone)';
+const PUBLIC_EVENT_DETAIL_SELECT = 'id, content, description, place_name, venue_address, place_id, event_at, end_time, category, custom_category, broadcast_mode, link_url, event_image_url, event_image_focal_y, latitude, longitude, recurrence, price, created_at, updated_at, region:regions (name, slug, timezone)';
 
 // =============================================================================
 // ROUTES
@@ -167,69 +167,11 @@ router.get('/', browseLimiter, async (req, res, next) => {
 });
 
 /**
- * GET /api/events/:id — Single event detail
- * Cached for 1 hour.
- */
-router.get('/:id', browseLimiter, async (req, res, next) => {
-  try {
-    validateUuidParam(req.params.id, 'event id');
-    const id = req.params.id;
-
-    const { data: event, error } = await supabaseAdmin
-      .from('events')
-      .select(PUBLIC_EVENT_DETAIL_SELECT)
-      .eq('id', id)
-      .eq('status', 'published')
-      .maybeSingle();
-
-    if (error) {
-      console.error('[PUBLIC] Event detail error:', error.message);
-      throw createError('Failed to fetch event', 500, 'SERVER_ERROR');
-    }
-
-    if (!event) {
-      throw createError('Event not found', 404, 'NOT_FOUND');
-    }
-
-    const region = event.region as unknown as { name: string; slug: string; timezone: string } | null;
-
-    const publicEvent = {
-      id: event.id,
-      content: event.content,
-      description: event.description || null,
-      place_name: event.place_name || null,
-      venue_address: (event as unknown as { venue_address?: string }).venue_address || null,
-      place_id: (event as unknown as { place_id?: string }).place_id || null,
-      event_at: event.event_at || null,
-      end_time: event.end_time || null,
-      category: event.category || null,
-      custom_category: (event as unknown as { custom_category?: string }).custom_category || null,
-      mode: (event as unknown as { mode?: string }).mode || null,
-      link_url: (event as unknown as { link_url?: string }).link_url || null,
-      event_image_url: resolveEventImageUrl(event.event_image_url, config.apiBaseUrl),
-      event_image_focal_y: (event as unknown as { event_image_focal_y?: number }).event_image_focal_y ?? 0.5,
-      latitude: (event as unknown as { latitude?: number }).latitude || null,
-      longitude: (event as unknown as { longitude?: number }).longitude || null,
-      recurrence: (event as unknown as { recurrence?: string }).recurrence || null,
-      price: (event as unknown as { price?: string }).price || null,
-      region_name: region?.name || null,
-      region_slug: region?.slug || null,
-      event_timezone: region?.timezone || null,
-      created_at: (event as unknown as { created_at?: string }).created_at || null,
-      updated_at: (event as unknown as { updated_at?: string }).updated_at || null,
-    };
-
-    res.set('Cache-Control', 'public, max-age=3600');
-    res.json({ event: publicEvent });
-  } catch (err) {
-    next(err);
-  }
-});
-
-/**
  * GET /api/events/changes — Public changes endpoint
  * Lightweight alternative to /api/internal/events/sync for consumers
  * that don't have a service key. Lower rate limit, fewer fields.
+ *
+ * NOTE: Must be defined BEFORE /:id to avoid Express matching "changes" as a UUID.
  */
 router.get('/changes', changesLimiter, async (req, res, next) => {
   try {
@@ -287,6 +229,66 @@ router.get('/changes', changesLimiter, async (req, res, next) => {
       sync_cursor: syncCursor,
       has_more: (events || []).length >= limit,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/events/:id — Single event detail
+ * Cached for 1 hour.
+ */
+router.get('/:id', browseLimiter, async (req, res, next) => {
+  try {
+    validateUuidParam(req.params.id, 'event id');
+    const id = req.params.id;
+
+    const { data: event, error } = await supabaseAdmin
+      .from('events')
+      .select(PUBLIC_EVENT_DETAIL_SELECT)
+      .eq('id', id)
+      .eq('status', 'published')
+      .maybeSingle();
+
+    if (error) {
+      console.error('[PUBLIC] Event detail error:', error.message);
+      throw createError('Failed to fetch event', 500, 'SERVER_ERROR');
+    }
+
+    if (!event) {
+      throw createError('Event not found', 404, 'NOT_FOUND');
+    }
+
+    const region = event.region as unknown as { name: string; slug: string; timezone: string } | null;
+
+    const publicEvent = {
+      id: event.id,
+      content: event.content,
+      description: event.description || null,
+      place_name: event.place_name || null,
+      venue_address: (event as unknown as { venue_address?: string }).venue_address || null,
+      place_id: (event as unknown as { place_id?: string }).place_id || null,
+      event_at: event.event_at || null,
+      end_time: event.end_time || null,
+      category: event.category || null,
+      custom_category: (event as unknown as { custom_category?: string }).custom_category || null,
+      broadcast_mode: (event as unknown as { broadcast_mode?: string }).broadcast_mode || null,
+      link_url: (event as unknown as { link_url?: string }).link_url || null,
+      event_image_url: resolveEventImageUrl(event.event_image_url, config.apiBaseUrl),
+      event_image_focal_y: (event as unknown as { event_image_focal_y?: number }).event_image_focal_y ?? 0.5,
+      latitude: (event as unknown as { latitude?: number }).latitude || null,
+      longitude: (event as unknown as { longitude?: number }).longitude || null,
+      recurrence: (event as unknown as { recurrence?: string }).recurrence || null,
+      price: (event as unknown as { price?: string }).price || null,
+      region_name: region?.name || null,
+      region_slug: region?.slug || null,
+      event_timezone: region?.timezone || null,
+      created_at: (event as unknown as { created_at?: string }).created_at || null,
+      updated_at: (event as unknown as { updated_at?: string }).updated_at || null,
+    };
+
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.json({ event: publicEvent });
   } catch (err) {
     next(err);
   }
