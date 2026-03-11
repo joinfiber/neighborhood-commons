@@ -12,6 +12,7 @@
 import { Router } from 'express';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { createError } from '../middleware/error-handler.js';
+import { parseLocation } from '../lib/helpers.js';
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -57,7 +58,7 @@ router.get('/regions', async (_req, res, next) => {
   try {
     const { data: regions, error } = await supabaseAdmin
       .from('regions')
-      .select('id, name, slug, timezone, latitude, longitude')
+      .select('id, name, slug, timezone, centroid')
       .eq('is_active', true)
       .order('name', { ascending: true });
 
@@ -66,8 +67,21 @@ router.get('/regions', async (_req, res, next) => {
       throw createError('Failed to fetch regions', 500, 'DATABASE_ERROR');
     }
 
+    // Transform PostGIS centroid to flat lat/lng for API consumers
+    const result = (regions || []).map((r) => {
+      const coords = parseLocation(r.centroid);
+      return {
+        id: r.id,
+        name: r.name,
+        slug: r.slug,
+        timezone: r.timezone,
+        latitude: coords?.latitude ?? null,
+        longitude: coords?.longitude ?? null,
+      };
+    });
+
     res.set('Cache-Control', 'public, max-age=3600');
-    res.json({ regions: regions || [] });
+    res.json({ regions: result });
   } catch (err) {
     next(err);
   }

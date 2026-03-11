@@ -1,4 +1,4 @@
-# Fiber Commons
+# Neighborhood Commons
 
 Public events data infrastructure. Open, minimal, correct.
 
@@ -64,9 +64,22 @@ Optional (configured):
 
 ## What This Is
 
-A standalone API serving structured public event data — concerts, comedy, markets, community gatherings. Businesses submit events through a portal; admins curate; the API serves them to anyone. No accounts required to read. No tracking of individuals. The data is the product.
+A digital sandwich board for the neighborhood. Businesses post events — concerts, comedy, markets, community gatherings — and every event and IRL app in the city can show them. One post, every audience.
+
+The portal is where business owners come to manage their events. It must be instantly understandable: sign up, post your event, done. No jargon, no complexity. If a coffee shop owner can't figure it out in two minutes, we've failed.
+
+The API serves structured public event data to anyone. No accounts required to read. No tracking of individuals. The data is the product.
 
 This is infrastructure, not an application. Treat it accordingly: correctness over features, stability over velocity, simplicity over cleverness.
+
+### Steady-State Work
+
+Week to week, the work here is:
+1. **Input fresh event data** — new events from portal users and admin entry
+2. **Edit and curate existing data** — keep listings accurate, approve pending submissions
+3. **Improve the portal for business users** — this is the primary development surface; make it clearer, faster, more useful for the people posting events
+
+Everything else — API changes, new spec endpoints, infrastructure — is occasional and should be done carefully, because downstream consumers depend on stability.
 
 ## Neighborhood API Alignment
 
@@ -154,7 +167,7 @@ Implement these where supported. Don't invent non-spec query parameters for the 
 
 ### Extending the Spec
 
-Fiber Commons extends the Neighborhood API with capabilities the spec doesn't cover:
+Neighborhood Commons extends the Neighborhood API with capabilities the spec doesn't cover:
 
 - **Portal CRUD** — businesses submit and manage events (the spec is read-only)
 - **Admin curation** — platform operators approve/reject/edit events
@@ -328,16 +341,43 @@ This repo has 8 runtime dependencies. That's already a lot. Before adding a nint
 
 Don't add: ORMs, logging frameworks, DI containers, "utility" libraries, anything that adds abstractions we don't need.
 
-## Testing (When Added)
+## Testing
 
-Tests should prove the system works correctly, not prove the developer was thorough. Focus on:
+**Tests are not optional. They expand alongside every change.** Other apps depend on this data. A silent column mismatch or a broken transform means bad data flowing to every downstream consumer. Tests are the only thing standing between a code change and corrupted data in every event and IRL app pulling from this API.
 
-1. **Auth boundaries.** Can an unauthenticated user access portal routes? Can a portal user access admin routes? Can a service key access portal routes?
-2. **Validation boundaries.** What happens with missing fields, extra fields, wrong types, boundary values?
-3. **Business logic correctness.** Event lifecycle (create → approve → publish → webhook). Counter dedup (same IP twice → counted once). Account state transitions.
-4. **Security properties.** No secrets in error responses. No stack traces in production. Rate limits enforced. SSRF protection blocks private IPs.
+### Run Before Every Push
 
-Don't test: Express routing mechanics, Supabase client internals, Zod schema parsing (Zod has its own tests).
+```
+npx vitest run
+```
+
+All tests must pass. No exceptions, no skipping. This takes <1 second.
+
+### Test Philosophy
+
+Tests should find real bugs, not prove the developer was thorough. If a test can't fail in a way that matters, delete it.
+
+The schema alignment test (`tests/schema-alignment.test.ts`) is the most important test in this repo. It statically scans every Supabase query in `src/` and verifies that every column name actually exists in the database schema. Supabase/PostgREST silently returns null for nonexistent columns — no error, no warning, just missing data. This test turns silent data loss into loud failures. **On its first run, it found 6 real column-name bugs across 3 files.**
+
+### What We Test
+
+| Test File | What It Catches |
+|-----------|----------------|
+| `schema-alignment.test.ts` | Column name mismatches between code and database. **Update the `SCHEMA` constant when migrations change columns.** |
+| `event-transform.test.ts` | Neighborhood API spec violations — wrong field names, wrong nesting, wrong types in the public API response |
+| `validation.test.ts` | Input validation failures — missing fields, wrong types, injection attempts getting past the front door |
+| `security.test.ts` | Security regressions — API key hashing, error response shape, URL resolution, geo parsing |
+
+### When Adding Code
+
+- **New route or query?** The schema alignment test picks up new column references automatically. If you reference a column that doesn't exist, it fails.
+- **New migration?** Update the `SCHEMA` constant in `schema-alignment.test.ts` first. Add the column there before writing the code that uses it.
+- **New transform or helper?** Add unit tests in the appropriate test file.
+- **New table?** Add it to `SCHEMA`. The "schema definition covers all tables" test will catch you if you forget.
+
+### What Not To Test
+
+Don't test Express routing mechanics, Supabase client internals, or Zod schema parsing. Don't write tests that just assert the code does what you can see it does. Tests should catch bugs that would otherwise reach production silently.
 
 ## Migrations
 

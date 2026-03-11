@@ -145,7 +145,7 @@ router.get('/me', requireApiKey, async (req, res, next) => {
       .from('webhook_subscriptions')
       .select('id', { count: 'exact', head: true })
       .eq('api_key_id', keyId)
-      .eq('is_active', true);
+      .eq('status', 'active');
 
     res.json({
       api_key: {

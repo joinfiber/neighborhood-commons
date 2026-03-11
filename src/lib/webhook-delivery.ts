@@ -140,8 +140,7 @@ async function deliverWebhook(
         .from('webhook_deliveries')
         .update({
           status: 'delivered',
-          http_status: response.status,
-          delivered_at: new Date().toISOString(),
+          status_code: response.status,
         })
         .eq('id', deliveryId);
 
@@ -175,7 +174,7 @@ async function handleDeliveryFailure(
     .update({
       status: canRetry ? 'retrying' : 'failed',
       error_message: errorMessage.substring(0, 500),
-      attempt_number: attemptNumber,
+      attempt: attemptNumber,
       next_retry_at: canRetry
         ? new Date(Date.now() + retryDelayMs).toISOString()
         : null,
@@ -229,7 +228,7 @@ export async function deliverTestWebhook(
 export async function retryFailedWebhooks(): Promise<number> {
   const { data: deliveries } = await supabaseAdmin
     .from('webhook_deliveries')
-    .select('id, subscription_id, event_type, event_id, attempt_number')
+    .select('id, subscription_id, event_type, event_id, attempt')
     .eq('status', 'retrying')
     .lte('next_retry_at', new Date().toISOString())
     .limit(50);
@@ -271,7 +270,7 @@ export async function retryFailedWebhooks(): Promise<number> {
 
     // Re-transform and deliver with incremented attempt number
     const eventData = toNeighborhoodEvent(event as unknown as PortalEventRow);
-    void deliverWebhook(sub as WebhookSub, d.id, d.event_type, eventData, d.attempt_number + 1);
+    void deliverWebhook(sub as WebhookSub, d.id, d.event_type, eventData, d.attempt + 1);
     retried++;
   }
 
