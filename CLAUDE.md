@@ -9,11 +9,24 @@ Public events data infrastructure. Open, minimal, correct.
 - **Portal**: React SPA served from same Express server (same-origin, no CORS) — business login, event CRUD, admin dashboard
 - **Database**: Dedicated Supabase project (`fiber-commons`) with events, portal_accounts, regions, event_series, event_analytics, etc.
 - **Images**: Served from Cloudflare R2 via portal image proxy route
+- **Auth**: Supabase email OTP (8-digit codes), Mailgun SMTP configured, branded templates deployed
+- **Admin**: Working — `COMMONS_ADMIN_USER_IDS` set in Railway, admin dashboard accessible
 
-### Pending Setup (Supabase Dashboard)
-1. **Auth → URL Configuration**: Set Site URL to `https://commons.joinfiber.app`, add to Redirect URLs
-2. **Auth → SMTP Settings**: Configure Mailgun SMTP (smtp.mailgun.org:587) for branded email delivery
-3. **Auth → Email Templates**: Paste branded templates from `docs/supabase-email-templates.md` (Confirm Signup + Magic Link use `{{ .Token }}` for 8-digit OTP, not magic links)
+### Completed Setup
+- [x] Auth → URL Configuration: Site URL set to `https://commons.joinfiber.app`
+- [x] Auth → SMTP Settings: Mailgun SMTP configured (smtp.mailgun.org:587)
+- [x] Auth → Email Templates: Branded templates from `docs/supabase-email-templates.md`
+- [x] Migration 003 applied: portal_accounts column names aligned with code
+- [x] Admin user ID configured in Railway (`COMMONS_ADMIN_USER_IDS`)
+- [x] New user signup flow working (register → OTP → claim → dashboard)
+
+### What Needs Doing Next
+1. **Populate portal_accounts**: Existing business accounts from social Supabase need to be copied to Commons. Write a one-time script that reads from social DB and inserts into Commons (preserving UUIDs so `creator_account_id` FKs on events still work).
+2. **Verify existing events**: 89 events are in the DB but confirm their `creator_account_id` values match portal_accounts rows.
+3. **Captcha**: `CAPTCHA_ENABLED` is currently `false`. Set `TURNSTILE_SECRET_KEY` in Railway and flip to `true` when ready.
+4. **Phase 2**: Cut over public traffic (portal domain, v1 API consumers)
+5. **Phase 3**: Social app migration (plans table, commons_cache, sync process)
+6. See `docs/design/TABLE_SPLIT_AND_EVENTS_SERVER.md` for full plan
 
 ### Architecture
 - Single Railway service: Express API + static portal SPA in one Docker container
@@ -22,10 +35,31 @@ Public events data infrastructure. Open, minimal, correct.
 - `VITE_API_URL` intentionally empty — same-origin requests
 - Google Places API proxied through `/api/places/search` (server-side key, not exposed to client)
 
-### What's Next (from design doc)
-- Phase 2: Cut over public traffic (portal domain, v1 API consumers, dual-write bridge)
-- Phase 3: Social app migration (plans table, commons_cache, sync process)
-- See `docs/design/TABLE_SPLIT_AND_EVENTS_SERVER.md` for full plan
+### Key Bug Fixes Applied
+- **Column name mismatch** (migration 003): portal_accounts had migration column names (`venue_name`, `place_id`, `website_url`) but code expected social app names (`default_venue_name`, `default_place_id`, `website`). Fixed via rename migration + `SELECT *` safety net.
+- **OTP digit count**: Supabase sends 8-digit codes; portal form expected 6. Fixed in LoginScreen.tsx.
+- **Railway watch patterns**: Added `portal/**` and `railway.toml` to watchPatterns so portal changes trigger builds.
+
+### Railway Environment Variables
+Required:
+- `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` — Commons Supabase instance
+- `AUDIT_SALT` — for audit log hashing (min 16 chars)
+- `COMMONS_ADMIN_USER_IDS` — comma-separated Supabase auth UUIDs
+
+Optional (configured):
+- `TURNSTILE_SECRET_KEY` — Cloudflare Turnstile (captcha currently disabled)
+- `CAPTCHA_ENABLED` — set to `true` to enforce captcha
+- `MAILGUN_API_KEY`, `MAILGUN_DOMAIN` — for portal emails
+- `COMMONS_R2_ACCOUNT_ID`, `COMMONS_R2_ACCESS_KEY_ID`, `COMMONS_R2_SECRET_ACCESS_KEY`, `COMMONS_R2_BUCKET_NAME`
+- `GOOGLE_PLACES_API_KEY` — for venue search
+- `CRON_SECRET` — for cron endpoint auth
+- `COMMONS_SERVICE_KEY` — for internal sync auth (Phase 3)
+- `CORS_ORIGINS` — defaults to `https://commons.joinfiber.app,https://post.joinfiber.app`
+
+### Migrations
+- `001_initial_schema.sql` — Full schema (events, portal_accounts, regions, etc.)
+- `002_add_regions_updated_at.sql` — Add updated_at to regions
+- `003_align_portal_account_columns.sql` — Rename portal_accounts columns to match code + add last_login_at
 
 ## What This Is
 
