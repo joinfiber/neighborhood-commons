@@ -130,24 +130,12 @@ const imageUploadSchema = z.object({
 const createApiKeySchema = z.object({
   name: z.string().min(1).max(100),
   contact_email: z.string().email().max(200),
-  tier: z.enum(['free', 'pro', 'partner']).default('free'),
 });
 
 const updateApiKeySchema = z.object({
   name: z.string().min(1).max(100).optional(),
-  tier: z.enum(['free', 'pro', 'partner']).optional(),
   status: z.enum(['active', 'revoked']).optional(),
 });
-
-// =============================================================================
-// CONSTANTS
-// =============================================================================
-
-const TIER_RATE_LIMITS: Record<string, number> = {
-  free: 1000,
-  pro: 5000,
-  partner: 20000,
-};
 
 const SUPPORTED_MAGIC_BYTES: Record<string, string> = {
   'ffd8ff': 'image/jpeg',
@@ -360,7 +348,7 @@ router.post('/accounts', writeLimiter, async (req, res, next) => {
       throw createError('Failed to create account', 500, 'SERVER_ERROR');
     }
 
-    console.log(`[COMMONS-ADMIN] Account seeded: ${account.business_name} (${account.email})`);
+    console.log(`[COMMONS-ADMIN] Account seeded: ${account.business_name} (${account.email.substring(0, 3)}***)`);
     res.status(201).json({ account });
   } catch (err) {
     next(err);
@@ -463,7 +451,7 @@ router.post('/accounts/:id/approve', writeLimiter, async (req, res, next) => {
 
     auditPortalAction('portal_account_approved', req.user?.id || 'unknown', req.params.id,
       { events_published: publishedCount, business_name: account.business_name });
-    console.log(`[COMMONS-ADMIN] Account approved: ${account.business_name} (${account.email}), ${publishedCount} events published`);
+    console.log(`[COMMONS-ADMIN] Account approved: ${account.business_name} (${account.email.substring(0, 3)}***), ${publishedCount} events published`);
     res.json({ account: updated, events_published: publishedCount });
   } catch (err) {
     next(err);
@@ -512,7 +500,7 @@ router.post('/accounts/:id/reject', writeLimiter, async (req, res, next) => {
 
     auditPortalAction('portal_account_rejected', req.user?.id || 'unknown', req.params.id,
       { events_deleted: deletedCount, business_name: account.business_name });
-    console.log(`[COMMONS-ADMIN] Account rejected: ${account.business_name} (${account.email}), ${deletedCount} events deleted`);
+    console.log(`[COMMONS-ADMIN] Account rejected: ${account.business_name} (${account.email.substring(0, 3)}***), ${deletedCount} events deleted`);
     res.json({ success: true, events_deleted: deletedCount });
   } catch (err) {
     next(err);
@@ -555,7 +543,7 @@ router.post('/accounts/:id/suspend', writeLimiter, async (req, res, next) => {
 
     auditPortalAction('portal_account_suspended', req.user?.id || 'unknown', req.params.id,
       { events_suspended: eventsSuspended, business_name: account.business_name });
-    console.log(`[COMMONS-ADMIN] Account suspended: ${account.business_name} (${account.email}), ${eventsSuspended} events suspended`);
+    console.log(`[COMMONS-ADMIN] Account suspended: ${account.business_name} (${account.email.substring(0, 3)}***), ${eventsSuspended} events suspended`);
     res.json({ success: true, events_suspended: eventsSuspended });
   } catch (err) {
     next(err);
@@ -605,7 +593,7 @@ router.post('/accounts/:id/reactivate', writeLimiter, async (req, res, next) => 
 
     auditPortalAction('portal_account_reactivated', req.user?.id || 'unknown', req.params.id,
       { events_reactivated: eventsReactivated, business_name: account.business_name });
-    console.log(`[COMMONS-ADMIN] Account reactivated: ${account.business_name} (${account.email}), ${eventsReactivated} events republished`);
+    console.log(`[COMMONS-ADMIN] Account reactivated: ${account.business_name} (${account.email.substring(0, 3)}***), ${eventsReactivated} events republished`);
     res.json({ success: true, events_reactivated: eventsReactivated });
   } catch (err) {
     next(err);
@@ -1018,10 +1006,9 @@ router.post('/events/:id/image', imageBodyLimit, writeLimiter, async (req, res, 
  */
 router.post('/api-keys', writeLimiter, async (req, res, next) => {
   try {
-    const { name, contact_email, tier } = validateRequest(createApiKeySchema, req.body);
-    const rateLimitPerHour = TIER_RATE_LIMITS[tier] || 1000;
+    const { name, contact_email } = validateRequest(createApiKeySchema, req.body);
 
-    const key = await generateAndStoreKey(name, contact_email, tier, rateLimitPerHour);
+    const key = await generateAndStoreKey(name, contact_email);
 
     res.status(201).json({
       api_key: {
@@ -1029,8 +1016,7 @@ router.post('/api-keys', writeLimiter, async (req, res, next) => {
         raw_key: key.raw_key,
         name: key.name,
         contact_email,
-        tier,
-        rate_limit_per_hour: rateLimitPerHour,
+        rate_limit_per_hour: 1000,
         status: 'active',
         created_at: key.created_at,
       },
@@ -1049,7 +1035,7 @@ router.get('/api-keys', enumerationLimiter, async (_req, res, next) => {
   try {
     const { data: keys, error } = await supabaseAdmin
       .from('api_keys')
-      .select('id, key_prefix, name, contact_email, tier, rate_limit_per_hour, status, last_used_at, created_at')
+      .select('id, key_prefix, name, contact_email, rate_limit_per_hour, status, last_used_at, created_at')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -1065,7 +1051,7 @@ router.get('/api-keys', enumerationLimiter, async (_req, res, next) => {
 
 /**
  * PATCH /admin/api-keys/:id
- * Update API key name, tier, or status.
+ * Update API key name or status.
  */
 router.patch('/api-keys/:id', writeLimiter, async (req, res, next) => {
   try {
@@ -1077,16 +1063,11 @@ router.patch('/api-keys/:id', writeLimiter, async (req, res, next) => {
       throw createError('No fields to update', 400, 'VALIDATION_ERROR');
     }
 
-    const payload: Record<string, unknown> = { ...updates };
-    if (updates.tier) {
-      payload.rate_limit_per_hour = TIER_RATE_LIMITS[updates.tier] || 1000;
-    }
-
     const { data: apiKey, error } = await supabaseAdmin
       .from('api_keys')
-      .update(payload)
+      .update(updates)
       .eq('id', id)
-      .select('id, key_prefix, name, contact_email, tier, rate_limit_per_hour, status, last_used_at, created_at')
+      .select('id, key_prefix, name, contact_email, rate_limit_per_hour, status, last_used_at, created_at')
       .single();
 
     if (error) {

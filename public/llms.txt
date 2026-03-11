@@ -77,9 +77,9 @@ Response (200):
       "location": { "name": "South Jazz Kitchen", "address": "600 N Broad St, Philadelphia", "lat": 39.9632, "lng": -75.1551 },
       "url": "https://example.com/tickets",
       "images": ["https://..."],
-      "organizer": { "name": "South Jazz Kitchen" },
+      "organizer": { "name": "South Jazz Kitchen", "phone": null },
       "cost": "Free",
-      "recurrence": "weekly",
+      "recurrence": { "rrule": "weekly" },
       "source": { "publisher": "South Jazz Kitchen", "collected_at": "2026-03-10T12:00:00Z", "method": "portal", "license": "CC BY 4.0" }
     }
   ]
@@ -137,12 +137,14 @@ Response (200):
 ```json
 {
   "name": "Neighborhood Commons",
-  "description": "Open neighborhood event data.",
+  "description": "Open neighborhood event data. Started and maintained by Fiber, flourishes because of you.",
   "spec": "neighborhood-api-v0.2",
+  "spec_url": "https://github.com/The-Relational-Technology-Project/neighborhood-api",
   "stewards": [{ "name": "Fiber", "url": "https://joinfiber.app", "contact": "hello@joinfiber.app", "role": "maintainer" }],
   "data_sources": [{ "name": "Portal", "method": "portal", "description": "Events submitted directly by venue owners and promoters." }],
   "resources": ["events"],
-  "license": { "name": "Creative Commons Attribution 4.0 International", "spdx": "CC-BY-4.0" }
+  "license": { "name": "Creative Commons Attribution 4.0 International", "spdx": "CC-BY-4.0", "url": "https://creativecommons.org/licenses/by/4.0/" },
+  "terms_url": "https://commons.joinfiber.app/api/v1/events/terms"
 }
 ```
 
@@ -332,7 +334,7 @@ Response (200):
 ```json
 {
   "deliveries": [
-    { "id": "uuid", "event_type": "event.created", "event_id": "uuid", "status": "delivered", "http_status": 200, "attempt_number": 1, "created_at": "...", "delivered_at": "..." }
+    { "id": "42", "event_type": "event.created", "event_id": "uuid", "status": "delivered", "status_code": 200, "error_message": null, "attempt": 1, "next_retry_at": null, "created_at": "..." }
   ],
   "meta": { "total": 10, "limit": 25, "offset": 0 }
 }
@@ -385,9 +387,9 @@ function verify(body, signature, secret) {
 | location | object | { name, address, lat, lng } |
 | url | string or null | Ticket or event page URL |
 | images | string[] | Image URLs (may be empty) |
-| organizer | object | { name } |
+| organizer | object | { name, phone: null } |
 | cost | string or null | "Free", "$10", "$5-15" |
-| recurrence | string or null | Recurrence pattern (e.g., "weekly") |
+| recurrence | object or null | { rrule: "weekly" } when recurring, null otherwise |
 | source | object | { publisher, collected_at, method, license } |
 
 ## License

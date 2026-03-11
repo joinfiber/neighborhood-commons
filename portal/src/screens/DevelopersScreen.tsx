@@ -391,6 +391,35 @@ ${API_BASE}/api/v1/events.ics`}
           <RegisterCard />
         </Section>
 
+        {/* Manage Your Key */}
+        <Section title="Manage Your Key" id="manage-key">
+          <Endpoint method="GET" path="/api/v1/developers/me" desc="View your API key info and webhook count." auth="API Key" />
+          <Endpoint method="POST" path="/api/v1/developers/keys/rotate" desc="Rotate your API key. Requires email re-verification via OTP." auth="API Key" />
+          <div style={styles.card}>
+            <div style={labelStyle}>Check your key</div>
+            <div style={{ ...codeStyle, marginBottom: '16px' }}>
+              {`curl -H "X-API-Key: fib_..." \\
+  "${API_BASE}/api/v1/developers/me"`}
+            </div>
+            <div style={labelStyle}>Rotate a compromised key</div>
+            <div style={codeStyle}>
+              {`# Step 1: Request OTP (reuses the registration endpoint)
+curl -X POST ${API_BASE}/api/v1/developers/register/send-otp \\
+  -H "Content-Type: application/json" \\
+  -d '{ "email": "your@email.com" }'
+
+# Step 2: Rotate with OTP + current key
+curl -X POST ${API_BASE}/api/v1/developers/keys/rotate \\
+  -H "X-API-Key: fib_current_key..." \\
+  -H "Content-Type: application/json" \\
+  -d '{ "email": "your@email.com", "token": "12345678" }'`}
+            </div>
+            <div style={{ marginTop: '12px', fontSize: '12px', color: colors.dim }}>
+              Webhook subscriptions are automatically migrated to the new key.
+            </div>
+          </div>
+        </Section>
+
         {/* Authentication */}
         <Section title="Authentication" id="auth">
           <div style={styles.card}>
@@ -565,7 +594,7 @@ curl -H "X-API-Key: fib_..." \\
               { name: 'location', type: 'object', desc: '{ name, address, lat, lng }' },
               { name: 'url', type: 'string|null', desc: 'Ticket or event page URL' },
               { name: 'images', type: 'string[]', desc: 'Image URLs (may be empty)' },
-              { name: 'organizer', type: 'object', desc: '{ name }' },
+              { name: 'organizer', type: 'object', desc: '{ name, phone }' },
               { name: 'cost', type: 'string|null', desc: '"Free", "$10", "$5-15", etc.' },
               { name: 'recurrence', type: 'object|null', desc: '{ rrule: "FREQ=WEEKLY" } or null' },
               { name: 'source', type: 'object', desc: '{ publisher, collected_at, method, license }' },

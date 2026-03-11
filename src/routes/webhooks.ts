@@ -321,7 +321,7 @@ router.get('/:id/deliveries', enumerationLimiter, async (req, res, next) => {
     // Query deliveries
     let query = supabaseAdmin
       .from('webhook_deliveries')
-      .select('id, event_type, event_id, status, http_status, error_message, attempt_number, next_retry_at, created_at, delivered_at', { count: 'exact' })
+      .select('id, event_type, event_id, status, status_code, error_message, attempt, next_retry_at, created_at', { count: 'exact' })
       .eq('subscription_id', id)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
