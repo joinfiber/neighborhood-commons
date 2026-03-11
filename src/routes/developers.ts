@@ -137,7 +137,7 @@ router.post('/register/verify-otp', enumerationLimiter, async (req, res, next) =
       .single();
 
     if (insertErr) {
-      console.error('[DEVELOPERS] Key insert failed:', insertErr.message);
+      console.error('[DEVELOPERS] Key insert failed:', insertErr.message, insertErr.code, insertErr.details, insertErr.hint);
       throw createError('Failed to create API key', 500, 'SERVER_ERROR');
     }
 
