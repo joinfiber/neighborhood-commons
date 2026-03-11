@@ -90,7 +90,7 @@ export function LoginScreen({
         color: colors.amber,
         marginBottom: '20px',
       }}>
-        fiber bulletin
+        fiber commons
       </div>
 
       <h1 style={{
@@ -183,15 +183,15 @@ export function LoginScreen({
         {screen === 'otp' ? (
           <div>
             <p style={{ color: colors.muted, fontSize: '13px', marginBottom: '16px', textAlign: 'center' }}>
-              Enter the 6-digit code sent to{' '}
+              Enter the 8-digit code sent to{' '}
               <strong style={{ color: colors.cream }}>{email}</strong>
             </p>
             <form onSubmit={handleOtpSubmit}>
               <input
                 type="text"
-                placeholder="000000"
+                placeholder="00000000"
                 value={otpCode}
-                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 8))}
                 style={{
                   ...styles.input,
                   textAlign: 'center',
@@ -200,14 +200,14 @@ export function LoginScreen({
                   fontFamily: 'monospace',
                 }}
                 disabled={loading}
-                maxLength={6}
+                maxLength={8}
                 autoFocus
                 required
               />
               <button
                 type="submit"
                 style={{ ...styles.buttonPrimary, marginTop: '8px' }}
-                disabled={loading || otpCode.length !== 6}
+                disabled={loading || otpCode.length !== 8}
               >
                 {loading ? 'Verifying...' : 'Sign In'}
               </button>
