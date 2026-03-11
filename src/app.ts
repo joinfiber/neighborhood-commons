@@ -57,15 +57,31 @@ export function createApp(): Express {
     })
   );
 
-  // CORS
-  app.use(
-    cors({
-      origin: config.cors.origins,
-      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key', 'X-Cron-Secret'],
-      credentials: true,
-    })
-  );
+  // CORS — public API is open to all origins; portal/admin routes are restricted
+  const publicCors = cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'X-API-Key'],
+  });
+  const privateCors = cors({
+    origin: config.cors.origins,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key', 'X-Cron-Secret'],
+    credentials: true,
+  });
+
+  // Open CORS for public read endpoints
+  app.use('/api/v1', publicCors);
+  app.use('/api/meta', publicCors);
+  app.use('/.well-known', publicCors);
+
+  // Restricted CORS for portal, admin, webhooks, internal routes
+  app.use('/api/portal', privateCors);
+  app.use('/api/admin', privateCors);
+  app.use('/api/webhooks', privateCors);
+  app.use('/api/internal', privateCors);
+  app.use('/api/cron', privateCors);
+  app.use('/api/places', privateCors);
 
   // Response compression
   app.use(compression());
