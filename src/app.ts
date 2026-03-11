@@ -1,8 +1,8 @@
 /**
- * Fiber Commons — Express Application
+ * Neighborhood Commons — Express Application
  *
- * Standalone public events data service.
- * Serves structured, openly accessible event data for a place.
+ * Open neighborhood event data service.
+ * Started and maintained by Fiber. CC BY 4.0.
  */
 
 import path from 'path';
@@ -18,7 +18,6 @@ import { globalLimiter } from './middleware/rate-limit.js';
 
 // Routes
 import publicRoutes from './routes/public.js';
-import browseRoutes from './routes/browse.js';
 import portalRoutes from './routes/portal.js';
 import adminRoutes from './routes/admin.js';
 import v1Routes, { v1Limiter, icsHandler, rssHandler } from './routes/v1.js';
@@ -78,14 +77,11 @@ export function createApp(): Express {
 
   // ─── Health check (no auth) ──────────────────────────────────────
   app.get('/health', (_req, res) => {
-    res.json({ status: 'ok', service: 'fiber-commons', timestamp: new Date().toISOString() });
+    res.json({ status: 'ok', service: 'neighborhood-commons', timestamp: new Date().toISOString() });
   });
 
   // ─── Public Data API ─────────────────────────────────────────────
   app.use('/api/events', publicRoutes);
-
-  // ─── Browse (anonymous counters) ─────────────────────────────────
-  app.use('/api/browse', browseRoutes);
 
   // ─── Portal (business CRUD) ──────────────────────────────────────
   app.use('/api/portal', portalRoutes);
@@ -120,13 +116,13 @@ export function createApp(): Express {
   // ─── .well-known discovery ───────────────────────────────────────
   app.get('/.well-known/neighborhood', (_req, res) => {
     res.json({
-      name: 'Fiber Commons',
+      name: 'Neighborhood Commons',
       version: '0.2',
+      license: 'CC-BY-4.0',
       events_url: `${config.apiBaseUrl}/api/v1/events`,
       ical_url: `${config.apiBaseUrl}/api/v1/events.ics`,
       rss_url: `${config.apiBaseUrl}/api/v1/events.rss`,
       terms_url: `${config.apiBaseUrl}/api/v1/events/terms`,
-      docs_url: `${config.apiBaseUrl}/api/v1/developers`,
     });
   });
 

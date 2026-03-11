@@ -1,5 +1,5 @@
 /**
- * Public Event Aliases — The Fiber Commons
+ * Public Event Aliases — Neighborhood Commons
  *
  * /api/events redirects to /api/v1/events (the canonical public API).
  * /api/events/changes is the only unique endpoint here — a lightweight

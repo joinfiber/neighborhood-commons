@@ -1,5 +1,5 @@
 /**
- * Portal Routes — The Fiber Commons
+ * Portal Routes — Neighborhood Commons
  *
  * Business event portal CRUD — powers the portal React SPA.
  * Businesses authenticate via Supabase email OTP and manage events here.
@@ -400,7 +400,7 @@ export async function deleteSeriesEvents(seriesId: string): Promise<number> {
       location: { name: '', address: null, lat: null, lng: null },
       url: null, images: [], organizer: { name: '', phone: null },
       cost: null, recurrence: null,
-      source: { publisher: 'fiber', collected_at: new Date().toISOString(), method: 'portal', license: 'free-use-with-attribution' },
+      source: { publisher: 'fiber', collected_at: new Date().toISOString(), method: 'portal', license: 'CC BY 4.0' },
     });
   }
 
@@ -1297,7 +1297,7 @@ router.delete('/events/:id', writeLimiter, async (req, res, next) => {
       location: { name: '', address: null, lat: null, lng: null },
       url: null, images: [], organizer: { name: '', phone: null },
       cost: null, recurrence: null,
-      source: { publisher: 'fiber', collected_at: new Date().toISOString(), method: 'portal', license: 'free-use-with-attribution' },
+      source: { publisher: 'fiber', collected_at: new Date().toISOString(), method: 'portal', license: 'CC BY 4.0' },
     });
 
     res.json({ success: true });

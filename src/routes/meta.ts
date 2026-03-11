@@ -21,9 +21,8 @@ const router: ReturnType<typeof Router> = Router();
  */
 router.get('/', (_req, res) => {
   res.json({
-    name: 'Fiber Commons',
-    description: 'Hyperlocal event data for Philadelphia, powered by venues and promoters.',
-    region: 'philadelphia',
+    name: 'Neighborhood Commons',
+    description: 'Open neighborhood event data. Started and maintained by Fiber, flourishes because of you.',
     spec: 'neighborhood-api-v0.2',
     spec_url: 'https://github.com/The-Relational-Technology-Project/neighborhood-api',
     stewards: [
@@ -31,18 +30,22 @@ router.get('/', (_req, res) => {
         name: 'Fiber',
         url: 'https://joinfiber.app',
         contact: 'hello@joinfiber.app',
-        role: 'publisher',
+        role: 'maintainer',
       },
     ],
     data_sources: [
       {
-        name: 'Fiber Portal',
+        name: 'Portal',
         method: 'portal',
         description: 'Events submitted directly by venue owners and promoters.',
       },
     ],
     resources: ['events'],
-    license: 'free-use-with-attribution',
+    license: {
+      name: 'Creative Commons Attribution 4.0 International',
+      spdx: 'CC-BY-4.0',
+      url: 'https://creativecommons.org/licenses/by/4.0/',
+    },
     terms_url: 'https://commons.joinfiber.app/api/v1/events/terms',
   });
 });

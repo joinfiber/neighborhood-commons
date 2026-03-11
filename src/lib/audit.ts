@@ -1,5 +1,5 @@
 /**
- * Security Audit Logging — The Fiber Commons
+ * Security Audit Logging — Neighborhood Commons
  *
  * Privacy-preserving audit trail for portal actions.
  * All user IDs are one-way hashed to prevent PII exposure in logs

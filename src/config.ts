@@ -1,7 +1,7 @@
 /**
  * Commons API Configuration
  *
- * Centralized config for The Fiber Commons service.
+ * Centralized config for Neighborhood Commons.
  * All environment variables are validated at boot.
  */
 
@@ -106,7 +106,7 @@ export const config = {
   mailgun: {
     apiKey: env.MAILGUN_API_KEY || '',
     domain: env.MAILGUN_DOMAIN || '',
-    from: env.MAILGUN_DOMAIN ? `Fiber Commons <noreply@${env.MAILGUN_DOMAIN}>` : '',
+    from: env.MAILGUN_DOMAIN ? `Neighborhood Commons <noreply@${env.MAILGUN_DOMAIN}>` : '',
   },
 
   r2: {

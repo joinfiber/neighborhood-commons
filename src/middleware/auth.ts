@@ -1,5 +1,5 @@
 /**
- * Authentication Middleware — The Fiber Commons
+ * Authentication Middleware — Neighborhood Commons
  *
  * Two auth models:
  * 1. requirePortalAuth — Supabase JWT from portal businesses

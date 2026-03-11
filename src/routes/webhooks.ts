@@ -260,7 +260,7 @@ router.post('/:id/test', writeLimiter, async (req, res, next) => {
       name: 'Test Event',
       start: new Date().toISOString(),
       end: null,
-      description: 'This is a test webhook delivery from Fiber Commons.',
+      description: 'This is a test webhook delivery from Neighborhood Commons.',
       category: ['test'],
       place_id: null,
       location: { name: 'Test Venue', address: null, lat: null, lng: null },
@@ -273,7 +273,7 @@ router.post('/:id/test', writeLimiter, async (req, res, next) => {
         publisher: 'fiber' as const,
         collected_at: new Date().toISOString(),
         method: 'portal' as const,
-        license: 'free-use-with-attribution' as const,
+        license: 'CC BY 4.0' as const,
       },
     };
 

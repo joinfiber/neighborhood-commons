@@ -1,5 +1,5 @@
 /**
- * Admin Routes — The Fiber Commons
+ * Admin Routes — Neighborhood Commons
  *
  * Portal admin endpoints for managing business accounts, events,
  * and API keys. All routes require Commons Admin authentication
@@ -955,7 +955,7 @@ router.delete('/events/:id', writeLimiter, async (req, res, next) => {
       location: { name: '', address: null, lat: null, lng: null },
       url: null, images: [], organizer: { name: '', phone: null },
       cost: null, recurrence: null,
-      source: { publisher: 'fiber', collected_at: new Date().toISOString(), method: 'portal', license: 'free-use-with-attribution' },
+      source: { publisher: 'fiber', collected_at: new Date().toISOString(), method: 'portal', license: 'CC BY 4.0' },
     });
 
     res.json({ success: true });

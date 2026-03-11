@@ -1,5 +1,5 @@
 /**
- * Supabase Clients — The Fiber Commons
+ * Supabase Clients — Neighborhood Commons
  *
  * Two clients:
  * 1. supabaseAdmin (service role) — all writes, internal operations

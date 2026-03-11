@@ -1,8 +1,8 @@
 /**
  * Public Events API — Neighborhood API v0.2
  *
- * Read-only public API for consuming Fiber Commons events.
- * No authentication required. Rate-limited by IP / API key tier.
+ * Read-only public API for Neighborhood Commons events.
+ * No authentication required. Rate-limited by IP (1000/hr).
  *
  * Reads directly from the events table (source='portal').
  *
@@ -125,9 +125,8 @@ router.get('/', async (req, res, next) => {
         total: count || 0,
         limit: params.limit,
         offset: params.offset,
-        publisher: 'fiber',
-        region: 'philadelphia',
         spec: 'neighborhood-api-v0.2',
+        license: 'CC-BY-4.0',
       },
       events: (events || []).map((e) => toNeighborhoodEvent(e as unknown as PortalEventRow)),
     });
@@ -139,14 +138,18 @@ router.get('/', async (req, res, next) => {
 router.get('/terms', (_req, res) => {
   res.json({
     version: '2.0',
-    summary: 'This data is free to use. Please attribute Fiber where you use it. Don\'t use it for ads or tracking. If you\'re building something cool with it, we\'d love to hear about it.',
+    summary: 'Neighborhood event data, free to use under CC BY 4.0. Started and maintained by Fiber.',
+    license: {
+      name: 'Creative Commons Attribution 4.0 International',
+      spdx: 'CC-BY-4.0',
+      url: 'https://creativecommons.org/licenses/by/4.0/',
+    },
     guidelines: [
-      'Attribution: Display "Powered by Fiber" or "Event data from Fiber" somewhere visible.',
+      'Attribution: Credit "Neighborhood Commons" or link to this API.',
       'No surveillance: Don\'t use this data for ad targeting, behavioral profiling, or user tracking.',
-      'No reselling the raw data feed. Building products with it is encouraged.',
+      'Building products with this data is encouraged.',
     ],
-    rate_limit: '1000 requests/hour per IP. Use X-API-Key header for dedicated rate limit bucket.',
-    license: 'free-use-with-attribution',
+    rate_limit: '1000 requests/hour per IP. Use X-API-Key header for a dedicated rate limit bucket.',
     contact: 'hello@joinfiber.app',
   });
 });
@@ -232,10 +235,10 @@ export async function icsHandler(_req: import('express').Request, res: import('e
     const lines: string[] = [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
-      'PRODID:-//Fiber//Events//EN',
+      'PRODID:-//Neighborhood Commons//Events//EN',
       'CALSCALE:GREGORIAN',
       'METHOD:PUBLISH',
-      'X-WR-CALNAME:Fiber Commons Events',
+      'X-WR-CALNAME:Neighborhood Commons Events',
     ];
 
     for (const row of events || []) {
@@ -265,7 +268,7 @@ export async function icsHandler(_req: import('express').Request, res: import('e
     lines.push('END:VCALENDAR');
 
     res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
-    res.setHeader('Content-Disposition', 'attachment; filename="fiber-commons-events.ics"');
+    res.setHeader('Content-Disposition', 'attachment; filename="neighborhood-commons-events.ics"');
     res.send(lines.join('\r\n'));
   } catch (err) {
     next(err);
@@ -306,9 +309,9 @@ export async function rssHandler(_req: import('express').Request, res: import('e
     const rss = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-    <title>Fiber Commons Events</title>
+    <title>Neighborhood Commons Events</title>
     <link>${baseUrl}/api/v1/events</link>
-    <description>Hyperlocal event data for Philadelphia</description>
+    <description>Open neighborhood event data. CC BY 4.0.</description>
     <language>en-us</language>
     <atom:link href="${baseUrl}/api/v1/events.rss" rel="self" type="application/rss+xml"/>
 ${items}

@@ -1,5 +1,5 @@
 /**
- * Shared Helper Functions — The Fiber Commons
+ * Shared Helper Functions — Neighborhood Commons
  *
  * Common utilities used across multiple route handlers.
  * Subset of the social API helpers, containing only what

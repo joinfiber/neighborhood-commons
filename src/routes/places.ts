@@ -1,5 +1,5 @@
 /**
- * Places API — The Fiber Commons
+ * Places API — Neighborhood Commons
  *
  * Google Places API proxy for portal venue search.
  * Authenticated (portal users only).

@@ -1,5 +1,5 @@
 /**
- * Mailgun Client — The Fiber Commons
+ * Mailgun Client — Neighborhood Commons
  *
  * Sends transactional emails via Mailgun API.
  * Simplified from the social API — only the core sendEmail function.

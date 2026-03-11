@@ -1,5 +1,5 @@
 /**
- * API Key Middleware — The Fiber Commons
+ * API Key Middleware — Neighborhood Commons
  *
  * Optional API key extraction. If present and valid, attaches key info
  * to the request for rate limit keying. If absent, requests proceed

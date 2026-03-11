@@ -1,5 +1,5 @@
 /**
- * Rate Limiting — The Fiber Commons
+ * Rate Limiting — Neighborhood Commons
  *
  * IP-based rate limiting for public endpoints.
  * Portal auth'd routes get higher limits.
@@ -12,16 +12,6 @@ import type { Request } from 'express';
 export const globalLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 120,
-  keyGenerator: (req: Request) => req.ip || 'unknown',
-  message: { error: { code: 'RATE_LIMIT', message: 'Too many requests' } },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-/** Browse endpoints (public, IP-based) */
-export const browseLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 30,
   keyGenerator: (req: Request) => req.ip || 'unknown',
   message: { error: { code: 'RATE_LIMIT', message: 'Too many requests' } },
   standardHeaders: true,

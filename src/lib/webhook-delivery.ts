@@ -1,5 +1,5 @@
 /**
- * Webhook Delivery Engine — The Fiber Commons
+ * Webhook Delivery Engine — Neighborhood Commons
  *
  * Dispatches webhook notifications when portal events are created/updated/deleted.
  * Fire-and-forget from the main request path (no latency impact).

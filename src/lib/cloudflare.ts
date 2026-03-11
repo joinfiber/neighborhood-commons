@@ -1,5 +1,5 @@
 /**
- * Cloudflare R2 Client — The Fiber Commons
+ * Cloudflare R2 Client — Neighborhood Commons
  *
  * Handles R2 bucket operations (upload, get, delete) for the
  * fiber-commons-images bucket. Event images only — no photo

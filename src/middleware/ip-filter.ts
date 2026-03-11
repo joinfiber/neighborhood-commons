@@ -1,5 +1,5 @@
 /**
- * IP Filter Middleware — The Fiber Commons
+ * IP Filter Middleware — Neighborhood Commons
  *
  * Blocks requests from known datacenter IP ranges on sensitive endpoints.
  * Simplified version: no audit logging dependency (Commons doesn't have the

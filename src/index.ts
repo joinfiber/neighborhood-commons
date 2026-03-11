@@ -1,8 +1,8 @@
 /**
- * The Fiber Commons — API Server
+ * Neighborhood Commons — API Server
  *
- * Standalone public events data service.
- * Serves structured, openly accessible event data for a place.
+ * Open neighborhood event data service.
+ * Started and maintained by Fiber. CC BY 4.0.
  */
 
 import { config } from './config.js';
@@ -11,7 +11,7 @@ import { createApp } from './app.js';
 const app = createApp();
 
 const server = app.listen(config.port, () => {
-  console.log(`[COMMONS] Fiber Commons API running on port ${config.port}`);
+  console.log(`[COMMONS] Neighborhood Commons running on port ${config.port}`);
   console.log(`[COMMONS] CORS origins: ${config.cors.origins.join(', ')}`);
 });
 
