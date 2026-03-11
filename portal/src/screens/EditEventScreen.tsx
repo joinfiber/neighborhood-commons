@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { styles, colors } from '../lib/styles';
-import { fetchEvent, updateEvent, deleteEvent, deleteEventSeries, uploadEventImage } from '../lib/api';
+import { fetchEvent, updateEvent, updateEventSeries, deleteEvent, deleteEventSeries, uploadEventImage } from '../lib/api';
 import type { PortalEvent, EventFormData } from '../lib/types';
 import { EventForm } from '../components/EventForm';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -18,6 +18,8 @@ export function EditEventScreen({ id, onBack, onUpdated, onDeleted }: EditEventS
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDeleteType, setConfirmDeleteType] = useState<'event' | 'series' | null>(null);
+  const [seriesEditChoice, setSeriesEditChoice] = useState<null | { data: EventFormData }>(null);
+  const [seriesResult, setSeriesResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -31,8 +33,43 @@ export function EditEventScreen({ id, onBack, onUpdated, onDeleted }: EditEventS
 
   async function handleSubmit(data: EventFormData) {
     if (!event) return;
+
+    // If this is a series event, ask which scope to apply
+    if (event.series_id) {
+      setSeriesEditChoice({ data });
+      return;
+    }
+
+    return applyUpdate(data, 'single');
+  }
+
+  async function applyUpdate(data: EventFormData, scope: 'single' | 'all_upcoming') {
+    if (!event) return;
     setSubmitting(true);
+    setSeriesEditChoice(null);
+    setSeriesResult(null);
     const { image, ...params } = data;
+
+    if (scope === 'all_upcoming' && event.series_id) {
+      const res = await updateEventSeries(event.series_id, params);
+      if (res.error) {
+        setSubmitting(false);
+        return { error: res.error.message };
+      }
+
+      // Image upload applies to this instance only (series image would need per-instance upload)
+      if (image) {
+        const raw = image.replace(/^data:[^;]+;base64,/, '');
+        await uploadEventImage(event.id, raw);
+      }
+
+      setSubmitting(false);
+      setSeriesResult(`Updated ${res.data!.updated} of ${res.data!.total} upcoming events`);
+      setTimeout(() => onUpdated(), 1500);
+      return;
+    }
+
+    // Single instance update
     const res = await updateEvent(event.id, params);
     if (res.error) {
       setSubmitting(false);
@@ -160,7 +197,7 @@ export function EditEventScreen({ id, onBack, onUpdated, onDeleted }: EditEventS
             justifyContent: 'space-between',
             alignItems: 'center',
           }}>
-            <span>Part of a series (instance {event.series_instance_number})</span>
+            <span>Part of a recurring series (instance {event.series_instance_number})</span>
             <button
               type="button"
               className="btn-text"
@@ -170,6 +207,20 @@ export function EditEventScreen({ id, onBack, onUpdated, onDeleted }: EditEventS
             >
               Delete entire series
             </button>
+          </div>
+        )}
+
+        {seriesResult && (
+          <div style={{
+            background: '#1a2a18',
+            border: '1px solid #2a3a28',
+            color: '#4ade80',
+            padding: '10px 14px',
+            borderRadius: '8px',
+            fontSize: '13px',
+            marginBottom: '16px',
+          }}>
+            {seriesResult}
           </div>
         )}
 
@@ -223,6 +274,63 @@ export function EditEventScreen({ id, onBack, onUpdated, onDeleted }: EditEventS
             onConfirm={handleConfirmDelete}
             onCancel={() => setConfirmDeleteType(null)}
           />
+        )}
+
+        {seriesEditChoice && (
+          <div style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+          }}>
+            <div style={{
+              background: colors.surface, border: `1px solid ${colors.border}`,
+              borderRadius: '12px', padding: '24px', maxWidth: '380px', width: '90%',
+            }}>
+              <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', color: colors.cream }}>
+                Edit recurring event
+              </h3>
+              <p style={{ margin: '0 0 20px 0', fontSize: '13px', color: colors.muted, lineHeight: 1.6 }}>
+                This event is part of a series. Apply your changes to just this instance, or all upcoming events?
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => void applyUpdate(seriesEditChoice.data, 'single')}
+                  disabled={submitting}
+                  style={{
+                    ...styles.buttonPrimary,
+                    background: colors.bg, border: `1px solid ${colors.border}`,
+                    color: colors.text, fontSize: '13px', padding: '10px 16px',
+                    cursor: 'pointer', borderRadius: '8px',
+                  }}
+                >
+                  This event only
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void applyUpdate(seriesEditChoice.data, 'all_upcoming')}
+                  disabled={submitting}
+                  style={{
+                    ...styles.buttonPrimary,
+                    fontSize: '13px', padding: '10px 16px',
+                    cursor: 'pointer', borderRadius: '8px',
+                  }}
+                >
+                  {submitting ? 'Updating...' : 'All upcoming events'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSeriesEditChoice(null)}
+                  disabled={submitting}
+                  style={{
+                    background: 'none', border: 'none', color: colors.dim,
+                    fontSize: '12px', cursor: 'pointer', padding: '8px',
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

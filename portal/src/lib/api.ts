@@ -149,6 +149,13 @@ export async function updateEvent(id: string, params: Partial<CreateEventParams>
   });
 }
 
+export async function updateEventSeries(seriesId: string, params: Partial<CreateEventParams> & { force?: boolean }) {
+  return apiRequest<{ updated: number; total: number }>(`/api/portal/events/series/${seriesId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(params),
+  });
+}
+
 export async function deleteEvent(id: string) {
   return apiRequest<{ success: boolean }>(`/api/portal/events/${id}`, { method: 'DELETE' });
 }

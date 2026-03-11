@@ -296,11 +296,28 @@ export async function createEventSeries(
 
   const adminUserId = getAdminUserId();
 
-  // Create an event_series row for browse dedup
+  // Snapshot the template fields so we can detect per-instance customizations later
+  const baseEventData: Record<string, unknown> = {};
+  const templateKeys = [
+    'content', 'description', 'place_name', 'venue_address', 'place_id',
+    'latitude', 'longitude', 'category', 'custom_category', 'price',
+    'link_url', 'event_image_focal_y',
+  ];
+  for (const key of templateKeys) {
+    if (key in templateData) baseEventData[key] = templateData[key];
+  }
+
+  // Create an event_series row
   const recurrenceRule = { frequency: recurrence, count: dates.length };
   const { data: series, error: seriesErr } = await supabaseAdmin
     .from('event_series')
-    .insert({ user_id: adminUserId, recurrence_rule: recurrenceRule })
+    .insert({
+      creator_account_id: templateData.creator_account_id as string,
+      user_id: adminUserId,
+      recurrence,
+      recurrence_rule: recurrenceRule,
+      base_event_data: baseEventData,
+    })
     .select('id')
     .single();
 
@@ -1090,6 +1107,217 @@ router.get('/events/:id', enumerationLimiter, async (req, res, next) => {
     }
 
     res.json({ event: toPortalEvent(event) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * PATCH /api/portal/events/series/:seriesId
+ * Update all future instances of a series.
+ * Compares each instance against base_event_data to detect customizations;
+ * customized fields are preserved unless the caller sends force=true.
+ * NOTE: Must be defined before /events/:id to avoid route conflict.
+ */
+router.patch('/events/series/:seriesId', writeLimiter, async (req, res, next) => {
+  try {
+    validateUuidParam(req.params.seriesId, 'series ID');
+    const accountId = await getPortalAccountId(req);
+    const data = validateRequest(updateEventSchema, req.body);
+    const force = req.body.force === true;
+
+    // Verify ownership: at least one event in the series belongs to this account
+    const { data: check } = await getUserClient(req)
+      .from('events')
+      .select('id')
+      .eq('series_id', req.params.seriesId)
+      .eq('creator_account_id', accountId)
+      .eq('source', 'portal')
+      .limit(1)
+      .maybeSingle();
+
+    if (!check) {
+      throw createError('Series not found', 404, 'NOT_FOUND');
+    }
+
+    // Fetch the series base_event_data for customization detection
+    const { data: series } = await supabaseAdmin
+      .from('event_series')
+      .select('base_event_data')
+      .eq('id', req.params.seriesId)
+      .maybeSingle();
+
+    const baseData = (series?.base_event_data as Record<string, unknown>) || {};
+
+    // Fetch all future instances in the series
+    const now = new Date().toISOString();
+    const { data: futureEvents, error: fetchErr } = await supabaseAdmin
+      .from('events')
+      .select(PORTAL_SELECT)
+      .eq('series_id', req.params.seriesId)
+      .eq('source', 'portal')
+      .gte('event_at', now)
+      .order('event_at', { ascending: true });
+
+    if (fetchErr) {
+      console.error('[PORTAL] Series fetch error:', fetchErr.message);
+      throw createError('Failed to fetch series events', 500, 'SERVER_ERROR');
+    }
+
+    if (!futureEvents || futureEvents.length === 0) {
+      throw createError('No upcoming events in this series', 404, 'NOT_FOUND');
+    }
+
+    // Build the update payload from the request (same logic as single-event PATCH)
+    // We use the first future event's timezone as reference
+    const refEvent = futureEvents[0]!;
+    const tz = data.event_timezone || (refEvent.event_timezone as string) || 'America/New_York';
+
+    const templateUpdate: Record<string, unknown> = {};
+    if (data.title !== undefined) templateUpdate.content = data.title;
+    if (data.venue_name !== undefined) templateUpdate.place_name = data.venue_name;
+    if (data.address !== undefined) templateUpdate.venue_address = data.address || null;
+    if (data.place_id !== undefined) templateUpdate.place_id = data.place_id || null;
+    if (data.latitude !== undefined) templateUpdate.latitude = data.latitude ?? null;
+    if (data.longitude !== undefined) templateUpdate.longitude = data.longitude ?? null;
+    if (data.latitude !== undefined || data.longitude !== undefined) {
+      const lat = data.latitude ?? null;
+      const lng = data.longitude ?? null;
+      templateUpdate.approximate_location = lat != null && lng != null
+        ? `POINT(${lng} ${lat})`
+        : null;
+    }
+    if (data.event_timezone !== undefined) templateUpdate.event_timezone = data.event_timezone;
+    if (data.category !== undefined) {
+      templateUpdate.category = data.category;
+      if (data.category !== 'other') templateUpdate.custom_category = null;
+    }
+    if (data.custom_category !== undefined && data.category === 'other') {
+      templateUpdate.custom_category = data.custom_category?.trim() || null;
+    }
+    if (data.description !== undefined) templateUpdate.description = data.description || null;
+    if (data.price !== undefined) templateUpdate.price = data.price || null;
+    if (data.ticket_url !== undefined) {
+      templateUpdate.link_url = data.ticket_url ? (checkApprovedDomain(data.ticket_url), sanitizeUrl(data.ticket_url)) : null;
+    }
+    if (data.image_focal_y !== undefined) templateUpdate.event_image_focal_y = data.image_focal_y;
+
+    // Time changes: apply to each instance relative to its own date
+    const hasTimeChange = data.start_time !== undefined || data.end_time !== undefined;
+
+    if (Object.keys(templateUpdate).length === 0 && !hasTimeChange) {
+      throw createError('No fields to update', 400, 'VALIDATION_ERROR');
+    }
+
+    // Map DB column names back to base_event_data keys for comparison
+    const columnToBaseKey: Record<string, string> = {
+      content: 'content', place_name: 'place_name', venue_address: 'venue_address',
+      place_id: 'place_id', latitude: 'latitude', longitude: 'longitude',
+      category: 'category', custom_category: 'custom_category',
+      description: 'description', price: 'price', link_url: 'link_url',
+      event_image_focal_y: 'event_image_focal_y',
+    };
+
+    let updatedCount = 0;
+
+    for (const ev of futureEvents) {
+      // Per-instance update: start with template, then filter out customized fields
+      const instanceUpdate: Record<string, unknown> = { ...templateUpdate };
+
+      if (!force) {
+        // Check each field: if the instance value differs from base_event_data,
+        // that field was customized — skip it
+        for (const [col, baseKey] of Object.entries(columnToBaseKey)) {
+          if (!(col in instanceUpdate)) continue;
+          const baseVal = baseData[baseKey];
+          const instanceVal = (ev as Record<string, unknown>)[col];
+          // If instance differs from base template, it's been customized — preserve it
+          if (baseVal !== undefined && instanceVal !== baseVal) {
+            delete instanceUpdate[col];
+          }
+        }
+      }
+
+      // Apply time changes per-instance (preserving each instance's date)
+      if (hasTimeChange) {
+        const instanceTz = (ev as Record<string, unknown>).event_timezone as string || tz;
+        const parsed = ev.event_at ? fromTimestamptz(ev.event_at as string, instanceTz) : null;
+        const instanceDate = parsed?.date;
+
+        if (instanceDate) {
+          if (data.start_time !== undefined) {
+            const newTime = data.start_time || parsed?.time;
+            if (newTime) {
+              instanceUpdate.event_at = toTimestamptz(instanceDate, newTime, instanceTz);
+            }
+          }
+          if (data.end_time !== undefined) {
+            if (data.end_time) {
+              const eventAtRef = (instanceUpdate.event_at as string | undefined) || (ev.event_at as string);
+              let endTimeTs = toTimestamptz(instanceDate, data.end_time, instanceTz);
+              if (eventAtRef && new Date(endTimeTs) <= new Date(eventAtRef)) {
+                const nextDay = new Date(instanceDate);
+                nextDay.setDate(nextDay.getDate() + 1);
+                endTimeTs = toTimestamptz(nextDay.toISOString().split('T')[0]!, data.end_time, instanceTz);
+              }
+              instanceUpdate.end_time = endTimeTs;
+            } else {
+              instanceUpdate.end_time = null;
+            }
+          }
+        }
+      }
+
+      if (Object.keys(instanceUpdate).length === 0) continue;
+
+      const { error: updateErr } = await supabaseAdmin
+        .from('events')
+        .update(instanceUpdate)
+        .eq('id', (ev as Record<string, unknown>).id as string);
+
+      if (updateErr) {
+        console.error(`[PORTAL] Series instance update error (${(ev as Record<string, unknown>).id}):`, updateErr.message);
+      } else {
+        updatedCount++;
+      }
+    }
+
+    // Update base_event_data on the series row so future comparisons reflect the new template
+    const newBase = { ...baseData };
+    for (const [col, baseKey] of Object.entries(columnToBaseKey)) {
+      if (col in templateUpdate) {
+        newBase[baseKey] = templateUpdate[col];
+      }
+    }
+    await supabaseAdmin
+      .from('event_series')
+      .update({ base_event_data: newBase })
+      .eq('id', req.params.seriesId);
+
+    console.log(`[PORTAL] Series ${req.params.seriesId} updated: ${updatedCount}/${futureEvents.length} future instances`);
+    auditPortalAction('portal_event_updated', accountId, req.params.seriesId,
+      { series: true, updated: updatedCount, total: futureEvents.length });
+
+    // Dispatch webhooks for updated events (fire-and-forget)
+    void (async () => {
+      try {
+        for (const ev of futureEvents) {
+          const { data: row } = await supabaseAdmin
+            .from('events')
+            .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name)`)
+            .eq('id', (ev as Record<string, unknown>).id as string)
+            .maybeSingle();
+          if (row && (row as Record<string, unknown>).status === 'published') {
+            void dispatchWebhooks('event.updated', (ev as Record<string, unknown>).id as string,
+              toNeighborhoodEvent(row as unknown as PortalEventRow));
+          }
+        }
+      } catch (err) {
+        console.error('[PORTAL] Series webhook dispatch error:', err instanceof Error ? err.message : err);
+      }
+    })();
+
+    res.json({ updated: updatedCount, total: futureEvents.length });
   } catch (err) {
     next(err);
   }
