@@ -243,7 +243,7 @@ router.get('/accounts', enumerationLimiter, async (_req, res, next) => {
   try {
     const { data: accounts, error } = await supabaseAdmin
       .from('portal_accounts')
-      .select('*')
+      .select('id, email, business_name, auth_user_id, status, default_venue_name, default_place_id, default_address, default_latitude, default_longitude, website, phone, logo_url, description, last_login_at, created_at, updated_at')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -290,7 +290,7 @@ router.get('/accounts/:id', enumerationLimiter, async (req, res, next) => {
 
     const { data: account, error } = await supabaseAdmin
       .from('portal_accounts')
-      .select('*')
+      .select('id, email, business_name, auth_user_id, status, default_venue_name, default_place_id, default_address, default_latitude, default_longitude, website, phone, logo_url, description, last_login_at, claimed_at, created_at, updated_at')
       .eq('id', req.params.id)
       .maybeSingle();
 

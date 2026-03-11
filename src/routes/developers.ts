@@ -45,19 +45,8 @@ router.post('/register/send-otp', enumerationLimiter, async (req, res, next) => 
   try {
     const { email } = validateRequest(sendOtpSchema, req.body);
 
-    // Check if an active key already exists for this email
-    const { data: existing } = await supabaseAdmin
-      .from('api_keys')
-      .select('id')
-      .eq('contact_email', email)
-      .eq('status', 'active')
-      .maybeSingle();
-
-    if (existing) {
-      throw createError('An API key already exists for this email. Use the rotate endpoint to get a new key.', 409, 'ALREADY_EXISTS');
-    }
-
-    // Send OTP via Supabase auth (same mechanism as portal)
+    // Always send OTP regardless of whether a key exists — prevents email enumeration.
+    // The verify-otp endpoint checks for duplicates before issuing a key.
     const { error: otpErr } = await supabaseAdmin.auth.signInWithOtp({ email });
     if (otpErr) {
       console.error('[DEVELOPERS] OTP send failed:', otpErr.message);
@@ -65,7 +54,7 @@ router.post('/register/send-otp', enumerationLimiter, async (req, res, next) => 
     }
 
     console.log(`[DEVELOPERS] OTP sent to ${email.substring(0, 3)}***`);
-    res.json({ success: true, message: 'Verification code sent to your email.' });
+    res.json({ success: true, message: 'If eligible, a verification code was sent to your email.' });
   } catch (err) {
     next(err);
   }
