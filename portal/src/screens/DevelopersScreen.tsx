@@ -4,16 +4,15 @@ interface DevelopersScreenProps {
   onBack: () => void;
 }
 
-const API_BASE = 'https://api.joinfiber.app';
+const API_BASE = 'https://commons.joinfiber.app';
 
 const EXAMPLE_RESPONSE = `{
   "meta": {
     "total": 42,
     "limit": 50,
     "offset": 0,
-    "publisher": "fiber",
-    "region": "philadelphia",
-    "spec": "neighborhood-api-v0.2"
+    "spec": "neighborhood-api-v0.2",
+    "license": "CC-BY-4.0"
   },
   "events": [
     {
@@ -33,16 +32,15 @@ const EXAMPLE_RESPONSE = `{
       "url": "https://example.com/tickets",
       "images": ["https://..."],
       "organizer": {
-        "name": "South Jazz Kitchen",
-        "phone": null
+        "name": "South Jazz Kitchen"
       },
       "cost": "Free",
       "recurrence": { "rrule": "FREQ=WEEKLY" },
       "source": {
-        "publisher": "fiber",
+        "publisher": "South Jazz Kitchen",
         "collected_at": "2026-03-10T12:00:00Z",
         "method": "portal",
-        "license": "free-use-with-attribution"
+        "license": "CC BY 4.0"
       }
     }
   ]
@@ -186,10 +184,10 @@ export function DevelopersScreen({ onBack }: DevelopersScreenProps) {
         <div style={{ marginBottom: '32px' }}>
           <button type="button" style={{ ...styles.buttonText, marginBottom: '16px' }} onClick={onBack}>← Back to login</button>
           <h1 style={{ fontSize: '28px', fontWeight: 300, color: colors.cream, letterSpacing: '0.04em', marginBottom: '8px' }}>
-            Build with Fiber Events
+            Build with Neighborhood Commons
           </h1>
           <p style={{ fontSize: '15px', color: colors.muted, lineHeight: 1.6 }}>
-            Free, structured event data for Philadelphia. No API key required for basic access — register for one to unlock webhooks.
+            Open neighborhood event data, licensed CC BY 4.0. No API key required — pass one in the X-API-Key header for a dedicated rate limit bucket.
           </p>
         </div>
 
@@ -199,43 +197,25 @@ export function DevelopersScreen({ onBack }: DevelopersScreenProps) {
             {`# No API key needed — just fetch events
 curl "${API_BASE}/api/v1/events?limit=5"
 
-# With an API key (required for webhooks)
-curl -H "X-API-Key: fib_..." "${API_BASE}/api/v1/events?limit=5"`}
+# Filter by category and location
+curl "${API_BASE}/api/v1/events?category=live-music&near=39.95,-75.16&radius_km=5"
+
+# Subscribe in your calendar
+${API_BASE}/api/v1/events.ics`}
           </div>
         </Section>
 
-        {/* Get an API Key */}
-        <Section title="Get an API Key" id="api-key">
+        {/* Rate Limits */}
+        <Section title="Rate Limits" id="rate-limits">
           <div style={styles.card}>
-            <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: colors.text, lineHeight: 1.7 }}>
-              Register with your email to get an API key. We'll send a verification code — no password needed.
+            <p style={{ margin: '0 0 12px 0', fontSize: '14px', color: colors.text, lineHeight: 1.7 }}>
+              All access is rate limited to <strong style={{ color: colors.cream }}>1,000 requests/hour</strong> per IP address.
+              Pass an optional <code style={{ color: colors.amber, fontSize: '13px' }}>X-API-Key</code> header to get a dedicated rate limit bucket
+              (useful if you share an IP with other consumers).
             </p>
-
-            <div style={labelStyle}>Step 1: Request a verification code</div>
-            <div style={{ ...codeStyle, marginBottom: '16px' }}>
-              {`curl -X POST ${API_BASE}/api/v1/developers/register/send-otp \\
-  -H "Content-Type: application/json" \\
-  -d '{"email": "you@example.com"}'`}
-            </div>
-
-            <div style={labelStyle}>Step 2: Verify and get your key</div>
-            <div style={{ ...codeStyle, marginBottom: '16px' }}>
-              {`curl -X POST ${API_BASE}/api/v1/developers/register/verify-otp \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "email": "you@example.com",
-    "token": "123456",
-    "name": "My App Name"
-  }'`}
-            </div>
-
-            <div style={{ background: colors.bg, border: `1px solid ${colors.amber}33`, borderRadius: '8px', padding: '12px', fontSize: '13px', color: colors.amber }}>
-              Save your <strong>raw_key</strong> immediately — it will not be shown again. If you lose it, use the key rotation endpoint to get a new one.
-            </div>
-          </div>
-
-          <div style={{ ...styles.card, marginTop: '12px', fontSize: '13px', color: colors.muted }}>
-            Rate limit: <strong style={{ color: colors.cream }}>1,000 requests/hour</strong> per API key or IP address.
+            <p style={{ margin: 0, fontSize: '13px', color: colors.muted }}>
+              Standard <code style={{ color: colors.amber, fontSize: '12px' }}>RateLimit-*</code> headers are included in every response.
+            </p>
           </div>
         </Section>
 
@@ -243,11 +223,16 @@ curl -H "X-API-Key: fib_..." "${API_BASE}/api/v1/events?limit=5"`}
         <Section title="Authentication" id="auth">
           <div style={styles.card}>
             <p style={{ margin: '0 0 12px 0', fontSize: '14px', color: colors.text, lineHeight: 1.7 }}>
-              Pass your API key in the <code style={{ color: colors.amber, fontSize: '13px' }}>X-API-Key</code> header.
-              Rate limit is 1,000 requests/hour (per API key or IP). An API key is required for webhooks.
+              No authentication required. The API is fully public.
+              Optionally pass an API key in the <code style={{ color: colors.amber, fontSize: '13px' }}>X-API-Key</code> header
+              for a dedicated rate limit bucket. An API key is required for webhook subscriptions.
             </p>
             <div style={codeStyle}>
-              {`curl -H "X-API-Key: fib_a1b2c3d4e5f6..." \\
+              {`# No key needed
+curl "${API_BASE}/api/v1/events?limit=10"
+
+# With optional API key
+curl -H "X-API-Key: fib_a1b2c3d4e5f6..." \\
   "${API_BASE}/api/v1/events?limit=10"`}
             </div>
           </div>
@@ -262,15 +247,6 @@ curl -H "X-API-Key: fib_..." "${API_BASE}/api/v1/events?limit=5"`}
           <Endpoint method="GET" path="/api/v1/events/terms" desc="Usage terms and rate limit info." />
           <Endpoint method="GET" path="/api/v1/meta" desc="Feed metadata: stewards, data sources, supported resources." />
           <Endpoint method="GET" path="/.well-known/neighborhood" desc="API discovery endpoint (Neighborhood API v0.2 spec)." />
-        </Section>
-
-        {/* Developer Endpoints */}
-        <Section title="Developer Endpoints" id="developer-endpoints">
-          <Endpoint method="POST" path="/api/v1/developers/register/send-otp" desc="Send a verification code to register for an API key." />
-          <Endpoint method="POST" path="/api/v1/developers/register/verify-otp" desc="Verify code and receive your API key." />
-          <Endpoint method="GET" path="/api/v1/developers/me" desc="Get your API key info, webhook count, and today's usage." auth="API Key" />
-          <Endpoint method="GET" path="/api/v1/developers/usage" desc="Usage analytics: daily request counts and tier info." auth="API Key" />
-          <Endpoint method="POST" path="/api/v1/developers/keys/rotate" desc="Rotate your API key (requires re-verifying email via OTP)." auth="API Key" />
         </Section>
 
         {/* Webhook Endpoints */}
@@ -313,7 +289,7 @@ curl -H "X-API-Key: fib_..." "${API_BASE}/api/v1/events?limit=5"`}
           <div style={styles.card}>
             <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: colors.text, lineHeight: 1.7 }}>
               Subscribe to real-time notifications when events are created, updated, or deleted.
-              Fiber will POST a signed JSON payload to your HTTPS endpoint.
+              The server will POST a signed JSON payload to your HTTPS endpoint.
             </p>
 
             <div style={labelStyle}>Event types</div>
@@ -329,14 +305,14 @@ curl -H "X-API-Key: fib_..." "${API_BASE}/api/v1/events?limit=5"`}
   -H "X-API-Key: fib_..." \\
   -H "Content-Type: application/json" \\
   -d '{
-    "url": "https://yourapp.com/webhooks/fiber",
+    "url": "https://yourapp.com/webhooks/commons",
     "event_types": ["event.created", "event.updated"]
   }'`}
             </div>
 
             <div style={{ background: colors.bg, border: `1px solid ${colors.amber}33`, borderRadius: '8px', padding: '12px', fontSize: '13px', color: colors.amber, marginBottom: '16px' }}>
               Save the <strong>signing_secret</strong> from the response — it will not be shown again.
-              Use it to verify that incoming webhooks are actually from Fiber.
+              Use it to verify that incoming webhooks are authentic.
             </div>
 
             <div style={labelStyle}>Webhook payload</div>
@@ -403,36 +379,6 @@ curl -H "X-API-Key: fib_..." \\
           </div>
         </Section>
 
-        {/* Usage Analytics */}
-        <Section title="Usage Analytics" id="usage">
-          <div style={styles.card}>
-            <p style={{ margin: '0 0 12px 0', fontSize: '14px', color: colors.text, lineHeight: 1.7 }}>
-              Track your API usage and see daily request counts.
-            </p>
-            <div style={codeStyle}>
-              {`curl -H "X-API-Key: fib_..." \\
-  "${API_BASE}/api/v1/developers/usage?days=7"
-
-# Response:
-{
-  "usage": {
-    "today": 142,
-    "last_7_days": 3200,
-    "last_30_days": 12500,
-    "daily": [
-      { "date": "2026-03-08", "requests": 142 },
-      { "date": "2026-03-07", "requests": 520 }
-    ]
-  },
-  "limits": {
-    "tier": "free",
-    "rate_limit_per_hour": 1000
-  }
-}`}
-            </div>
-          </div>
-        </Section>
-
         {/* Event Schema */}
         <Section title="Event Schema" id="schema">
           <div style={styles.card}>
@@ -472,9 +418,9 @@ curl -H "X-API-Key: fib_..." \\
         <Section title="Error Responses" id="errors">
           <div style={styles.card}>
             {[
+              { code: '400', desc: 'Malformed request (missing fields, invalid types)' },
               { code: '401', desc: 'Invalid or missing API key (for key-required endpoints)' },
               { code: '404', desc: 'Resource not found' },
-              { code: '409', desc: 'API key already exists for this email' },
               { code: '429', desc: 'Rate limit exceeded' },
               { code: '500', desc: 'Server error' },
             ].map((e, i, arr) => (
@@ -496,18 +442,18 @@ curl -H "X-API-Key: fib_..." \\
         </Section>
 
         {/* Terms */}
-        <Section title="Terms" id="terms">
+        <Section title="Terms & License" id="terms">
           <div style={styles.card}>
             <p style={{ margin: '0 0 12px 0', fontSize: '14px', color: colors.text, lineHeight: 1.7 }}>
-              This data is free to use. Please attribute Fiber where you use it.
-              Don't use it for ads or tracking. If you're building something cool with it,
-              we'd love to hear about it.
+              All event data is licensed under{' '}
+              <strong style={{ color: colors.cream }}>Creative Commons Attribution 4.0 International (CC BY 4.0)</strong>.
+              You are free to share, adapt, and build with this data.
             </p>
             <ul style={{ margin: 0, padding: '0 0 0 16px', fontSize: '13px', color: colors.muted, lineHeight: 1.8 }}>
-              <li>Attribution: Display <strong style={{ color: colors.cream }}>"Powered by Fiber"</strong> somewhere visible</li>
+              <li>Attribution: Credit <strong style={{ color: colors.cream }}>"Neighborhood Commons"</strong> or link to the API</li>
               <li>Rate limit: <strong style={{ color: colors.cream }}>1,000 requests/hour</strong> per API key or IP</li>
               <li>No surveillance, tracking, or profiling of event attendees</li>
-              <li>No reselling the raw data feed. Building products with it is encouraged.</li>
+              <li>Building products with this data is encouraged</li>
             </ul>
           </div>
         </Section>
@@ -525,7 +471,7 @@ curl -H "X-API-Key: fib_..." \\
               {' '}— an open format for sharing local events, assets, and plans across community tools.
             </p>
             <p style={{ margin: 0, fontSize: '12px', color: colors.dim, lineHeight: 1.6 }}>
-              Steward: Fiber · Region: Philadelphia · Resources: events
+              Steward: Fiber (maintainer) · Region: Philadelphia · Resources: events · License: CC BY 4.0
             </p>
           </div>
         </Section>
@@ -533,7 +479,7 @@ curl -H "X-API-Key: fib_..." \\
         {/* Contact */}
         <div style={{ textAlign: 'center', padding: '24px 0' }}>
           <p style={{ color: colors.muted, fontSize: '14px', marginBottom: '6px' }}>
-            Building something with this data? Need a higher tier?
+            Building something with this data?
           </p>
           <p style={{ color: colors.dim, fontSize: '13px' }}>
             We'd love to hear about it — <span style={{ color: colors.amber }}>hello@joinfiber.app</span>
