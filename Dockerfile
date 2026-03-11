@@ -50,6 +50,7 @@ COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=api-builder /app/package.json ./
 COPY --from=api-builder /app/dist ./dist
 COPY --from=portal-builder /app/portal/dist ./portal
+COPY public ./public
 
 # Run as non-root user
 RUN addgroup -g 1001 -S nodejs && adduser -S fiber -u 1001
