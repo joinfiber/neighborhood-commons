@@ -11,7 +11,6 @@
 
 import { Router, json as expressJson } from 'express';
 import { z } from 'zod';
-import { randomBytes, createHash } from 'crypto';
 import sharp from 'sharp';
 import { EVENT_CATEGORY_KEYS } from '../lib/categories.js';
 import { supabaseAdmin } from '../lib/supabase.js';
@@ -23,6 +22,7 @@ import { uploadToR2 } from '../lib/cloudflare.js';
 import { config } from '../config.js';
 import { dispatchWebhooks } from '../lib/webhook-delivery.js';
 import { auditPortalAction, hashId } from '../lib/audit.js';
+import { generateAndStoreKey } from '../lib/api-keys.js';
 import { toNeighborhoodEvent, type PortalEventRow } from '../lib/event-transform.js';
 import { sanitizeUrl, checkApprovedDomain } from '../lib/url-sanitizer.js';
 import {
@@ -1019,32 +1019,21 @@ router.post('/events/:id/image', imageBodyLimit, writeLimiter, async (req, res, 
 router.post('/api-keys', writeLimiter, async (req, res, next) => {
   try {
     const { name, contact_email, tier } = validateRequest(createApiKeySchema, req.body);
-
-    const rawKey = `fib_${randomBytes(16).toString('hex')}`;
-    const keyHash = createHash('sha256').update(rawKey).digest('hex');
-    const keyPrefix = rawKey.substring(0, 12);
     const rateLimitPerHour = TIER_RATE_LIMITS[tier] || 1000;
 
-    const { data: apiKey, error } = await supabaseAdmin
-      .from('api_keys')
-      .insert({
-        key_hash: keyHash,
-        key_prefix: keyPrefix,
-        name,
+    const key = await generateAndStoreKey(name, contact_email, tier, rateLimitPerHour);
+
+    res.status(201).json({
+      api_key: {
+        id: key.id,
+        raw_key: key.raw_key,
+        name: key.name,
         contact_email,
         tier,
         rate_limit_per_hour: rateLimitPerHour,
-      })
-      .select('id, key_prefix, name, contact_email, tier, rate_limit_per_hour, status, created_at')
-      .single();
-
-    if (error) {
-      console.error('[COMMONS-ADMIN] API key create error:', error.message);
-      throw createError('Failed to create API key', 500, 'SERVER_ERROR');
-    }
-
-    res.status(201).json({
-      api_key: { ...apiKey, raw_key: rawKey },
+        status: 'active',
+        created_at: key.created_at,
+      },
       note: 'Save the raw_key — it will not be shown again.',
     });
   } catch (err) {

@@ -6,7 +6,6 @@
  * No admin approval required.
  */
 
-import { createHash, randomBytes } from 'crypto';
 import { Router } from 'express';
 import { z } from 'zod';
 import { supabaseAdmin } from '../lib/supabase.js';
@@ -14,6 +13,7 @@ import { validateRequest } from '../lib/helpers.js';
 import { createError } from '../middleware/error-handler.js';
 import { enumerationLimiter, writeLimiter } from '../middleware/rate-limit.js';
 import { requireApiKey } from '../middleware/api-key.js';
+import { generateAndStoreKey } from '../lib/api-keys.js';
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -35,20 +35,6 @@ const rotateKeySchema = z.object({
   email: z.string().email().max(320),
   token: z.string().min(6).max(8),
 });
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Generate a prefixed API key: fib_<32 random hex chars> */
-function generateApiKey(): string {
-  return 'fib_' + randomBytes(16).toString('hex');
-}
-
-/** SHA-256 hash of a raw key for storage (plaintext key is never persisted) */
-function hashKey(rawKey: string): string {
-  return createHash('sha256').update(rawKey).digest('hex');
-}
 
 // ---------------------------------------------------------------------------
 // POST /developers/register/send-otp
@@ -118,38 +104,25 @@ router.post('/register/verify-otp', enumerationLimiter, async (req, res, next) =
       throw createError('Invalid or expired verification code', 401, 'INVALID_OTP');
     }
 
-    // Generate API key, hash it, store the hash (never the plaintext)
-    const rawKey = generateApiKey();
-    const keyHash = hashKey(rawKey);
-    const keyPrefix = rawKey.substring(0, 12);
-
-    const { data: keyRow, error: insertErr } = await supabaseAdmin
-      .from('api_keys')
-      .insert({
-        key_hash: keyHash,
-        key_prefix: keyPrefix,
-        name: name.trim(),
-        tier: 'free',
-        rate_limit_per_hour: 1000,
-        contact_email: email,
-      })
-      .select('id, name, created_at')
-      .single();
-
-    if (insertErr) {
-      console.error('[DEVELOPERS] Key insert failed:', insertErr.message, insertErr.code, insertErr.details, insertErr.hint);
+    // Generate and store the API key
+    let key;
+    try {
+      key = await generateAndStoreKey(name.trim(), email);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[DEVELOPERS] Key insert failed:', msg);
       throw createError('Failed to create API key', 500, 'SERVER_ERROR');
     }
 
-    console.log(`[DEVELOPERS] Key created for ${email.substring(0, 3)}***: ${keyRow.name}`);
+    console.log(`[DEVELOPERS] Key created for ${email.substring(0, 3)}***: ${key.name}`);
 
     res.status(201).json({
       api_key: {
-        id: keyRow.id,
-        raw_key: rawKey,
-        name: keyRow.name,
+        id: key.id,
+        raw_key: key.raw_key,
+        name: key.name,
         rate_limit_per_hour: 1000,
-        created_at: keyRow.created_at,
+        created_at: key.created_at,
       },
       message: 'Save your raw_key — it will not be shown again.',
     });
@@ -240,25 +213,11 @@ router.post('/keys/rotate', writeLimiter, requireApiKey, async (req, res, next) 
       .update({ status: 'revoked' })
       .eq('id', keyId);
 
-    // Create new key (preserves webhook subscriptions by migrating the FK)
-    const newRawKey = generateApiKey();
-    const newKeyHash = hashKey(newRawKey);
-    const newKeyPrefix = newRawKey.substring(0, 12);
-
-    const { data: newKey, error: insertErr } = await supabaseAdmin
-      .from('api_keys')
-      .insert({
-        key_hash: newKeyHash,
-        key_prefix: newKeyPrefix,
-        name: keyInfo.contact_email,
-        tier: 'free',
-        rate_limit_per_hour: 1000,
-        contact_email: keyInfo.contact_email,
-      })
-      .select('id, name, created_at')
-      .single();
-
-    if (insertErr) {
+    // Create new key
+    let newKey;
+    try {
+      newKey = await generateAndStoreKey(keyInfo.contact_email, keyInfo.contact_email);
+    } catch (err: unknown) {
       // Re-activate old key if new one fails
       await supabaseAdmin
         .from('api_keys')
@@ -278,7 +237,7 @@ router.post('/keys/rotate', writeLimiter, requireApiKey, async (req, res, next) 
     res.json({
       api_key: {
         id: newKey.id,
-        raw_key: newRawKey,
+        raw_key: newKey.raw_key,
         name: newKey.name,
         rate_limit_per_hour: 1000,
         created_at: newKey.created_at,
