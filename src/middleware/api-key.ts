@@ -9,8 +9,14 @@
  * not as a gate on public data.
  */
 
+import { createHash } from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 import { supabaseAdmin } from '../lib/supabase.js';
+
+/** Hash an incoming raw API key to match the stored key_hash column. */
+function hashApiKey(rawKey: string): string {
+  return createHash('sha256').update(rawKey).digest('hex');
+}
 
 /**
  * Optional API key extraction. Does not reject requests without a key.
@@ -25,11 +31,12 @@ export async function optionalApiKey(req: Request, _res: Response, next: NextFun
   }
 
   try {
+    const keyHash = hashApiKey(apiKey);
     const { data: keyInfo } = await supabaseAdmin
       .from('api_keys')
       .select('id')
-      .eq('key', apiKey)
-      .eq('is_active', true)
+      .eq('key_hash', keyHash)
+      .eq('status', 'active')
       .maybeSingle();
 
     if (keyInfo) {
@@ -54,11 +61,12 @@ export async function requireApiKey(req: Request, res: Response, next: NextFunct
   }
 
   try {
+    const keyHash = hashApiKey(apiKey);
     const { data: keyInfo } = await supabaseAdmin
       .from('api_keys')
       .select('id')
-      .eq('key', apiKey)
-      .eq('is_active', true)
+      .eq('key_hash', keyHash)
+      .eq('status', 'active')
       .maybeSingle();
 
     if (!keyInfo) {

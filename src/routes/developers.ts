@@ -6,7 +6,7 @@
  * No admin approval required.
  */
 
-import crypto from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import { Router } from 'express';
 import { z } from 'zod';
 import { supabaseAdmin } from '../lib/supabase.js';
@@ -42,7 +42,12 @@ const rotateKeySchema = z.object({
 
 /** Generate a prefixed API key: fib_<32 random hex chars> */
 function generateApiKey(): string {
-  return 'fib_' + crypto.randomBytes(16).toString('hex');
+  return 'fib_' + randomBytes(16).toString('hex');
+}
+
+/** SHA-256 hash of a raw key for storage (plaintext key is never persisted) */
+function hashKey(rawKey: string): string {
+  return createHash('sha256').update(rawKey).digest('hex');
 }
 
 // ---------------------------------------------------------------------------
@@ -58,8 +63,8 @@ router.post('/register/send-otp', enumerationLimiter, async (req, res, next) => 
     const { data: existing } = await supabaseAdmin
       .from('api_keys')
       .select('id')
-      .eq('owner_email', email)
-      .eq('is_active', true)
+      .eq('contact_email', email)
+      .eq('status', 'active')
       .maybeSingle();
 
     if (existing) {
@@ -93,8 +98,8 @@ router.post('/register/verify-otp', enumerationLimiter, async (req, res, next) =
     const { data: existing } = await supabaseAdmin
       .from('api_keys')
       .select('id')
-      .eq('owner_email', email)
-      .eq('is_active', true)
+      .eq('contact_email', email)
+      .eq('status', 'active')
       .maybeSingle();
 
     if (existing) {
@@ -113,18 +118,20 @@ router.post('/register/verify-otp', enumerationLimiter, async (req, res, next) =
       throw createError('Invalid or expired verification code', 401, 'INVALID_OTP');
     }
 
-    // Generate API key and store it
+    // Generate API key, hash it, store the hash (never the plaintext)
     const rawKey = generateApiKey();
+    const keyHash = hashKey(rawKey);
+    const keyPrefix = rawKey.substring(0, 12);
 
     const { data: keyRow, error: insertErr } = await supabaseAdmin
       .from('api_keys')
       .insert({
-        key: rawKey,
+        key_hash: keyHash,
+        key_prefix: keyPrefix,
         name: name.trim(),
         tier: 'free',
         rate_limit_per_hour: 1000,
-        owner_email: email,
-        is_active: true,
+        contact_email: email,
       })
       .select('id, name, created_at')
       .single();
@@ -163,7 +170,7 @@ router.get('/me', requireApiKey, async (req, res, next) => {
 
     const { data: keyInfo, error } = await supabaseAdmin
       .from('api_keys')
-      .select('id, name, owner_email, rate_limit_per_hour, created_at')
+      .select('id, name, contact_email, rate_limit_per_hour, created_at')
       .eq('id', keyId)
       .single();
 
@@ -182,7 +189,7 @@ router.get('/me', requireApiKey, async (req, res, next) => {
       api_key: {
         id: keyInfo.id,
         name: keyInfo.name,
-        owner_email: keyInfo.owner_email,
+        contact_email: keyInfo.contact_email,
         rate_limit_per_hour: keyInfo.rate_limit_per_hour,
         webhook_count: webhookCount || 0,
         created_at: keyInfo.created_at,
@@ -208,11 +215,11 @@ router.post('/keys/rotate', writeLimiter, requireApiKey, async (req, res, next) 
     // Verify the key belongs to this email
     const { data: keyInfo } = await supabaseAdmin
       .from('api_keys')
-      .select('id, owner_email')
+      .select('id, contact_email')
       .eq('id', keyId)
       .single();
 
-    if (!keyInfo || keyInfo.owner_email !== email) {
+    if (!keyInfo || keyInfo.contact_email !== email) {
       throw createError('Email does not match this API key', 403, 'FORBIDDEN');
     }
 
@@ -227,23 +234,26 @@ router.post('/keys/rotate', writeLimiter, requireApiKey, async (req, res, next) 
       throw createError('Invalid or expired verification code', 401, 'INVALID_OTP');
     }
 
-    // Deactivate old key
+    // Revoke old key
     await supabaseAdmin
       .from('api_keys')
-      .update({ is_active: false })
+      .update({ status: 'revoked' })
       .eq('id', keyId);
 
     // Create new key (preserves webhook subscriptions by migrating the FK)
     const newRawKey = generateApiKey();
+    const newKeyHash = hashKey(newRawKey);
+    const newKeyPrefix = newRawKey.substring(0, 12);
+
     const { data: newKey, error: insertErr } = await supabaseAdmin
       .from('api_keys')
       .insert({
-        key: newRawKey,
-        name: keyInfo.owner_email,
+        key_hash: newKeyHash,
+        key_prefix: newKeyPrefix,
+        name: keyInfo.contact_email,
         tier: 'free',
         rate_limit_per_hour: 1000,
-        owner_email: keyInfo.owner_email,
-        is_active: true,
+        contact_email: keyInfo.contact_email,
       })
       .select('id, name, created_at')
       .single();
@@ -252,7 +262,7 @@ router.post('/keys/rotate', writeLimiter, requireApiKey, async (req, res, next) 
       // Re-activate old key if new one fails
       await supabaseAdmin
         .from('api_keys')
-        .update({ is_active: true })
+        .update({ status: 'active' })
         .eq('id', keyId);
       throw createError('Failed to create new key', 500, 'SERVER_ERROR');
     }
