@@ -23,11 +23,7 @@ const router: ReturnType<typeof Router> = Router();
 // All webhook routes require an API key
 router.use(requireApiKey);
 
-const MAX_SUBSCRIPTIONS_PER_KEY: Record<string, number> = {
-  free: 5,
-  pro: 25,
-  partner: 100,
-};
+const MAX_SUBSCRIPTIONS_PER_KEY = 5;
 
 const EVENT_TYPES = ['event.created', 'event.updated', 'event.deleted'] as const;
 
@@ -57,7 +53,6 @@ const updateWebhookSchema = z.object({
 router.post('/', writeLimiter, async (req, res, next) => {
   try {
     const apiKeyId = req.apiKeyInfo!.id;
-    const tier = req.apiKeyInfo!.tier;
     const { url, event_types } = validateRequest(createWebhookSchema, req.body);
 
     // SSRF protection: validate URL resolves to a public IP
@@ -77,9 +72,8 @@ router.post('/', writeLimiter, async (req, res, next) => {
       .select('id', { count: 'exact', head: true })
       .eq('api_key_id', apiKeyId);
 
-    const maxSubs = MAX_SUBSCRIPTIONS_PER_KEY[tier] || 5;
-    if ((count || 0) >= maxSubs) {
-      throw createError(`Subscription limit reached (${maxSubs} for ${tier} tier)`, 429, 'SUBSCRIPTION_LIMIT');
+    if ((count || 0) >= MAX_SUBSCRIPTIONS_PER_KEY) {
+      throw createError(`Subscription limit reached (${MAX_SUBSCRIPTIONS_PER_KEY} per key)`, 429, 'SUBSCRIPTION_LIMIT');
     }
 
     // Generate signing secret

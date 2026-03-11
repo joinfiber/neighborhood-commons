@@ -25,8 +25,6 @@ declare global {
       supabaseClient?: SupabaseClient<any, 'public', any>;
       apiKeyInfo?: {
         id: string;
-        tier: string;
-        rate_limit_per_hour: number;
       };
     }
   }
