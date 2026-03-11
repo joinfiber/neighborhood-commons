@@ -18,30 +18,14 @@ import { supabaseAdmin } from '../lib/supabase.js';
 import { createError } from '../middleware/error-handler.js';
 import { validateRequest } from '../lib/helpers.js';
 import { toNeighborhoodEvent, toRRule, type PortalEventRow } from '../lib/event-transform.js';
-import { requireApiKey } from '../middleware/api-key.js';
+import { optionalApiKey } from '../middleware/api-key.js';
 
 const router: ReturnType<typeof Router> = Router();
 
-// Terms are public — no key needed to learn how to get one
-router.get('/terms', (_req, res) => {
-  res.json({
-    version: '2.0',
-    summary: 'This data is free to use. Please attribute Fiber where you use it. Don\'t use it for ads or tracking. If you\'re building something cool with it, we\'d love to hear about it.',
-    guidelines: [
-      'Attribution: Display "Powered by Fiber" or "Event data from Fiber" somewhere visible.',
-      'No surveillance: Don\'t use this data for ad targeting, behavioral profiling, or user tracking.',
-      'No reselling the raw data feed. Building products with it is encouraged.',
-    ],
-    api_key: 'Required. Free. 1000 requests/hour. Contact hello@joinfiber.app to get one.',
-    license: 'free-use-with-attribution',
-    contact: 'hello@joinfiber.app',
-  });
-});
+// Extract API key if present (for rate limit keying), but don't require it
+router.use(optionalApiKey);
 
-// All other v1 access requires a valid API key
-router.use(requireApiKey);
-
-// 1000 requests/hr per API key
+// 1000 requests/hr — keyed by API key if present, otherwise by IP
 export const v1Limiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 1000,
@@ -150,6 +134,21 @@ router.get('/', async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+router.get('/terms', (_req, res) => {
+  res.json({
+    version: '2.0',
+    summary: 'This data is free to use. Please attribute Fiber where you use it. Don\'t use it for ads or tracking. If you\'re building something cool with it, we\'d love to hear about it.',
+    guidelines: [
+      'Attribution: Display "Powered by Fiber" or "Event data from Fiber" somewhere visible.',
+      'No surveillance: Don\'t use this data for ad targeting, behavioral profiling, or user tracking.',
+      'No reselling the raw data feed. Building products with it is encouraged.',
+    ],
+    rate_limit: '1000 requests/hour per IP. Use X-API-Key header for dedicated rate limit bucket.',
+    license: 'free-use-with-attribution',
+    contact: 'hello@joinfiber.app',
+  });
 });
 
 /**
