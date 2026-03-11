@@ -282,7 +282,7 @@ export function EditEventScreen({ id, onBack, onUpdated, onDeleted }: EditEventS
             display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
           }}>
             <div style={{
-              background: colors.surface, border: `1px solid ${colors.border}`,
+              background: colors.card, border: `1px solid ${colors.border}`,
               borderRadius: '12px', padding: '24px', maxWidth: '380px', width: '90%',
             }}>
               <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', color: colors.cream }}>
