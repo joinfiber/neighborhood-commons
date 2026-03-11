@@ -1,5 +1,5 @@
 /**
- * The Fiber Commons — Express Application
+ * Fiber Commons — Express Application
  *
  * Standalone public events data service.
  * Serves structured, openly accessible event data for a place.

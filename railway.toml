@@ -5,7 +5,8 @@ watchPatterns = [
   "src/**",
   "portal/**",
   "package.json",
-  "Dockerfile"
+  "Dockerfile",
+  "railway.toml"
 ]
 
 [deploy]
