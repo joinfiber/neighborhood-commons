@@ -90,7 +90,7 @@ export function LoginScreen({
         color: colors.amber,
         marginBottom: '20px',
       }}>
-        fiber commons
+        neighborhood commons
       </div>
 
       <h1 style={{
@@ -109,7 +109,7 @@ export function LoginScreen({
       <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '32px' }}>
         {[
           'Post your happy hours, classes, open gym, specials — anything you want neighbors to know about',
-          'People nearby discover your events on Fiber',
+          'People nearby discover your events in Neighborhood Commons',
           'Other event apps can pull your data in — for free',
           'Post once, reach everywhere',
         ].map((text, i) => (
@@ -135,7 +135,7 @@ export function LoginScreen({
         lineHeight: 1.5,
         marginBottom: '32px',
       }}>
-        Free to post. Free forever. We verify every business to keep Fiber honest — usually within 24 hours.
+        Free to post. Free forever. We verify every business to keep things honest — usually within 24 hours.
       </p>
 
       {onShowDevelopers && (

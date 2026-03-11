@@ -1,4 +1,4 @@
-# Supabase Email Templates — Fiber Commons
+# Supabase Email Templates — Neighborhood Commons
 
 ## Setup Instructions
 
@@ -12,7 +12,7 @@
 
 ## 1. Confirm Signup
 
-Subject: `Your Fiber Commons code`
+Subject: `Your Neighborhood Commons code`
 
 ```html
 <!DOCTYPE html>
@@ -20,7 +20,7 @@ Subject: `Your Fiber Commons code`
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Your Fiber Commons code</title>
+  <title>Your Neighborhood Commons code</title>
 </head>
 <body style="margin:0;padding:0;background-color:#0f0f0e;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#0f0f0e;">
@@ -31,7 +31,7 @@ Subject: `Your Fiber Commons code`
           <!-- Header -->
           <tr>
             <td style="padding:0 0 32px 0;">
-              <span style="font-size:13px;font-weight:300;letter-spacing:0.12em;text-transform:uppercase;color:#D4A853;">fiber commons</span>
+              <span style="font-size:13px;font-weight:300;letter-spacing:0.12em;text-transform:uppercase;color:#D4A853;">neighborhood commons</span>
             </td>
           </tr>
 
@@ -40,7 +40,7 @@ Subject: `Your Fiber Commons code`
             <td style="background-color:#181715;border:1px solid #2a2825;border-radius:14px;padding:32px 28px;">
 
               <p style="margin:0 0 8px 0;font-size:20px;font-weight:300;color:#f5f0e8;letter-spacing:0.02em;">
-                Welcome to Fiber
+                Welcome to Neighborhood Commons
               </p>
               <p style="margin:0 0 28px 0;font-size:14px;color:#7a7670;line-height:1.5;">
                 Enter this code to verify your email and finish creating your account.
@@ -56,7 +56,7 @@ Subject: `Your Fiber Commons code`
               </table>
 
               <p style="margin:24px 0 0 0;font-size:12px;color:#4a4740;line-height:1.5;">
-                This code expires in 1 hour. If you didn't sign up for Fiber Commons, you can safely ignore this email.
+                This code expires in 1 hour. If you didn't sign up for Neighborhood Commons, you can safely ignore this email.
               </p>
 
             </td>
@@ -66,7 +66,7 @@ Subject: `Your Fiber Commons code`
           <tr>
             <td style="padding:28px 0 0 0;text-align:center;">
               <p style="margin:0;font-size:11px;color:#4a4740;line-height:1.5;">
-                Fiber Commons — open event data for your neighborhood
+                Neighborhood Commons — open event data for your neighborhood
               </p>
             </td>
           </tr>
@@ -102,7 +102,7 @@ Subject: `Your sign-in code`
           <!-- Header -->
           <tr>
             <td style="padding:0 0 32px 0;">
-              <span style="font-size:13px;font-weight:300;letter-spacing:0.12em;text-transform:uppercase;color:#D4A853;">fiber commons</span>
+              <span style="font-size:13px;font-weight:300;letter-spacing:0.12em;text-transform:uppercase;color:#D4A853;">neighborhood commons</span>
             </td>
           </tr>
 
@@ -137,7 +137,7 @@ Subject: `Your sign-in code`
           <tr>
             <td style="padding:28px 0 0 0;text-align:center;">
               <p style="margin:0;font-size:11px;color:#4a4740;line-height:1.5;">
-                Fiber Commons — open event data for your neighborhood
+                Neighborhood Commons — open event data for your neighborhood
               </p>
             </td>
           </tr>
@@ -173,7 +173,7 @@ Subject: `Confirm your new email`
           <!-- Header -->
           <tr>
             <td style="padding:0 0 32px 0;">
-              <span style="font-size:13px;font-weight:300;letter-spacing:0.12em;text-transform:uppercase;color:#D4A853;">fiber commons</span>
+              <span style="font-size:13px;font-weight:300;letter-spacing:0.12em;text-transform:uppercase;color:#D4A853;">neighborhood commons</span>
             </td>
           </tr>
 
@@ -208,7 +208,7 @@ Subject: `Confirm your new email`
           <tr>
             <td style="padding:28px 0 0 0;text-align:center;">
               <p style="margin:0;font-size:11px;color:#4a4740;line-height:1.5;">
-                Fiber Commons — open event data for your neighborhood
+                Neighborhood Commons — open event data for your neighborhood
               </p>
             </td>
           </tr>
@@ -244,7 +244,7 @@ Subject: `Reset your password`
           <!-- Header -->
           <tr>
             <td style="padding:0 0 32px 0;">
-              <span style="font-size:13px;font-weight:300;letter-spacing:0.12em;text-transform:uppercase;color:#D4A853;">fiber commons</span>
+              <span style="font-size:13px;font-weight:300;letter-spacing:0.12em;text-transform:uppercase;color:#D4A853;">neighborhood commons</span>
             </td>
           </tr>
 
@@ -279,7 +279,7 @@ Subject: `Reset your password`
           <tr>
             <td style="padding:28px 0 0 0;text-align:center;">
               <p style="margin:0;font-size:11px;color:#4a4740;line-height:1.5;">
-                Fiber Commons — open event data for your neighborhood
+                Neighborhood Commons — open event data for your neighborhood
               </p>
             </td>
           </tr>
