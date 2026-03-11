@@ -1,0 +1,170 @@
+/* =============================================================================
+   Portal CSS — interactive states, animations, and utility classes.
+   Layout and static tokens remain in lib/styles.ts (inline CSSProperties).
+   ============================================================================= */
+
+:root {
+  --color-amber: #D4A853;
+  --color-amber-dim: #D4A85318;
+  --color-amber-border: #D4A85344;
+  --color-bg: #0f0f0e;
+  --color-card: #181715;
+  --color-border: #2a2825;
+  --color-cream: #f5f0e8;
+  --color-text: #d4d0c8;
+  --color-muted: #7a7670;
+  --color-dim: #4a4740;
+  --color-error: #D4725C;
+  --color-success: #7A9E7E;
+  --color-success-dim: #7A9E7E18;
+}
+
+/* =============================================================================
+   Animations (moved from runtime-injected <style> in styles.ts)
+   ============================================================================= */
+
+@keyframes drift {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-45%) translateY(20px); }
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-up { animation: fadeUp 0.35s ease both; }
+
+/* =============================================================================
+   Interactive form states
+   ============================================================================= */
+
+input:focus, select:focus, textarea:focus {
+  border-color: var(--color-amber) !important;
+  outline: none;
+}
+
+input::placeholder, textarea::placeholder {
+  color: var(--color-dim);
+}
+
+/* =============================================================================
+   Interactive rows (replaces onMouseOver/onMouseOut DOM manipulation)
+   ============================================================================= */
+
+.interactive-row {
+  transition: border-color 0.15s;
+}
+
+.interactive-row:hover {
+  border-color: var(--color-amber-border) !important;
+}
+
+/* =============================================================================
+   Dropdown items (PlaceAutocomplete, selects)
+   ============================================================================= */
+
+.dropdown-item {
+  transition: background 0.1s;
+}
+
+.dropdown-item:hover {
+  background: var(--color-bg) !important;
+}
+
+/* =============================================================================
+   Button interactive states
+   ============================================================================= */
+
+.btn-primary {
+  transition: opacity 0.15s, transform 0.15s;
+}
+
+.btn-primary:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.btn-secondary {
+  transition: border-color 0.15s;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  border-color: var(--color-amber-border) !important;
+}
+
+.btn-text:hover {
+  color: var(--color-cream) !important;
+}
+
+/* =============================================================================
+   Skeleton loading
+   ============================================================================= */
+
+@keyframes skeletonPulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.6; }
+}
+
+.skeleton {
+  background: var(--color-border);
+  animation: skeletonPulse 1.5s ease-in-out infinite;
+}
+
+/* =============================================================================
+   Dialog overlay
+   ============================================================================= */
+
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: fadeUp 0.15s ease both;
+}
+
+/* =============================================================================
+   Toast animations
+   ============================================================================= */
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(-12px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes toastOut {
+  from { opacity: 1; transform: translateX(-50%) translateY(0); }
+  to { opacity: 0; transform: translateX(-50%) translateY(-12px); }
+}
+
+.toast-enter {
+  animation: toastIn 0.25s ease both;
+}
+
+.toast-exit {
+  animation: toastOut 0.2s ease both;
+}
+
+/* =============================================================================
+   Focus-visible for keyboard navigation
+   ============================================================================= */
+
+:focus-visible {
+  outline: 2px solid var(--color-amber);
+  outline-offset: 2px;
+}
+
+button:focus:not(:focus-visible) {
+  outline: none;
+}

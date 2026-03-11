@@ -57,6 +57,9 @@ const envSchema = z.object({
 
   // Webhook encryption key (optional — for encrypted signing secrets)
   WEBHOOK_ENCRYPTION_KEY: z.string().min(32).optional(),
+
+  // Google Places API (venue search in portal)
+  GOOGLE_PLACES_API_KEY: z.string().min(1).optional(),
 });
 
 function loadConfig() {
@@ -152,5 +155,9 @@ export const config = {
 
   apiKeys: {
     rateLimitsPerHour: { free: 1000, pro: 5000, partner: 20000 } as Record<string, number>,
+  },
+
+  google: {
+    placesApiKey: env.GOOGLE_PLACES_API_KEY || '',
   },
 } as const;

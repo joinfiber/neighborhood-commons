@@ -5,6 +5,8 @@
  * Serves structured, openly accessible event data for a place.
  */
 
+import path from 'path';
+import { fileURLToPath } from 'url';
 import express, { Express } from 'express';
 import compression from 'compression';
 import cors from 'cors';
@@ -24,6 +26,9 @@ import webhookRoutes from './routes/webhooks.js';
 import metaRoutes from './routes/meta.js';
 import internalRoutes from './routes/internal.js';
 import cronRoutes from './routes/cron.js';
+import placesRoutes from './routes/places.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export function createApp(): Express {
   const app = express();
@@ -38,7 +43,9 @@ export function createApp(): Express {
         directives: {
           defaultSrc: ["'self'"],
           styleSrc: ["'self'", "'unsafe-inline'"],
-          scriptSrc: ["'self'"],
+          scriptSrc: ["'self'", 'https://challenges.cloudflare.com'],
+          frameSrc: ["'self'", 'https://challenges.cloudflare.com'],
+          connectSrc: ["'self'", config.supabase.url, 'https://places.googleapis.com'],
           imgSrc: ["'self'", 'data:', 'https:'],
         },
       },
@@ -107,6 +114,9 @@ export function createApp(): Express {
   // ─── Cron jobs ───────────────────────────────────────────────────
   app.use('/api/cron', cronRoutes);
 
+  // ─── Places (venue search for portal) ──────────────────────────
+  app.use('/api/places', placesRoutes);
+
   // ─── .well-known discovery ───────────────────────────────────────
   app.get('/.well-known/neighborhood', (_req, res) => {
     res.json({
@@ -120,8 +130,23 @@ export function createApp(): Express {
     });
   });
 
-  // ─── Error handler (must be last) ────────────────────────────────
+  // ─── Error handler (API errors) ──────────────────────────────────
   app.use(errorHandler);
+
+  // ─── Portal SPA (static files) ─────────────────────────────────
+  // Serve the built portal frontend. Must be after API routes
+  // so /api/* is handled by Express, not the SPA.
+  const portalDir = path.resolve(__dirname, '../portal');
+  app.use(express.static(portalDir, { maxAge: '1h' }));
+
+  // SPA fallback: any non-API route serves index.html
+  // (supports client-side hash routing)
+  app.get('*', (_req, res, next) => {
+    if (_req.path.startsWith('/api/')) return next();
+    res.sendFile(path.join(portalDir, 'index.html'), (err) => {
+      if (err) next(); // portal not built yet — 404 is fine
+    });
+  });
 
   return app;
 }
