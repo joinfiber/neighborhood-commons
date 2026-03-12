@@ -127,9 +127,9 @@ The short version:
 
 This project was built using [Claude Code](https://claude.com/claude-code) as a pair programmer. The commit history reflects this — every commit is co-authored. CLAUDE.md serves as both the development guide for human contributors and the shared context for AI-assisted development.
 
-This is a positive vision of what AI-assisted development looks like: a non-engineer with a clear idea and strong opinions about correctness, working with an AI that brings software engineering discipline. The result is infrastructure that's more carefully built than most projects with larger teams — because every decision had to be articulated and defended, not just implemented.
+This is a positive vision of what AI-assisted development looks like: a non-engineer with a clear idea and strong opinions about correctness, working with an AI that brings software engineering discipline. The result here is, hopefully, useful infrastructure that sits at an underexplored intersection of commercial and public interest. The guiding principle is simple: all flourishing is mutual.
 
-Judge the output.
+Please judge the output.
 
 ## License
 

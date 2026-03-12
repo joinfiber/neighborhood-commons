@@ -634,7 +634,7 @@ router.post('/auth/register', blockDatacenterIps, enumerationLimiter, async (req
           console.error('[PORTAL] Re-register error:', updateErr.message);
           throw createError('Failed to register', 500, 'SERVER_ERROR');
         }
-        console.log(`[PORTAL] Account re-registered: ${business_name} (${email})`);
+        console.log(`[PORTAL] Account re-registered: ${business_name} (${email.substring(0, 3)}***)`);
         await supabaseAdmin.auth.signInWithOtp({ email }).catch((e) =>
           console.error('[PORTAL] OTP send failed after re-register:', e.message));
         res.status(201).json({ success: true });
@@ -671,7 +671,7 @@ router.post('/auth/register', blockDatacenterIps, enumerationLimiter, async (req
       console.error('[PORTAL] OTP send failed after register:', otpErr.message);
     }
 
-    console.log(`[PORTAL] Account registered (pending): ${business_name} (${email})`);
+    console.log(`[PORTAL] Account registered (pending): ${business_name} (${email.substring(0, 3)}***)`);
     res.status(201).json({ success: true });
   } catch (err) {
     next(err);
@@ -954,6 +954,7 @@ const updateEventSchema = z.object({
   price: z.string().max(100).optional().nullable(),
   ticket_url: z.string().url().max(2000).optional().or(z.literal('')).nullable(),
   image_focal_y: z.number().min(0).max(1).optional(),
+  force: z.boolean().optional(),
 });
 
 async function getPortalAccount(req: import('express').Request): Promise<{ id: string; status: string }> {
@@ -1194,7 +1195,7 @@ router.patch('/events/series/:seriesId', writeLimiter, async (req, res, next) =>
     validateUuidParam(req.params.seriesId, 'series ID');
     const accountId = await getPortalAccountId(req);
     const data = validateRequest(updateEventSchema, req.body);
-    const force = req.body.force === true;
+    const force = data.force === true;
 
     // Verify ownership: at least one event in the series belongs to this account
     const { data: check } = await getUserClient(req)

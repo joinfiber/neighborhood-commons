@@ -3,13 +3,21 @@
  *
  * IP-based rate limiting for public endpoints.
  * Portal auth'd routes get higher limits.
+ *
+ * Disabled in test mode (INTEGRATION_TEST=true) so integration tests
+ * can exercise routes without hitting shared in-memory counters.
  */
 
 import rateLimit from 'express-rate-limit';
-import type { Request } from 'express';
+import type { Request, Response, NextFunction } from 'express';
+
+const isTest = process.env.INTEGRATION_TEST === 'true';
+
+/** No-op middleware for test mode — lets requests through without counting */
+const passthrough = (_req: Request, _res: Response, next: NextFunction) => next();
 
 /** Global rate limiter (IP-based) */
-export const globalLimiter = rateLimit({
+export const globalLimiter = isTest ? passthrough : rateLimit({
   windowMs: 60 * 1000,
   max: 120,
   keyGenerator: (req: Request) => req.ip || 'unknown',
@@ -19,7 +27,7 @@ export const globalLimiter = rateLimit({
 });
 
 /** Write endpoints (stricter) */
-export const writeLimiter = rateLimit({
+export const writeLimiter = isTest ? passthrough : rateLimit({
   windowMs: 60 * 1000,
   max: 10,
   keyGenerator: (req: Request) => req.ip || 'unknown',
@@ -29,7 +37,7 @@ export const writeLimiter = rateLimit({
 });
 
 /** Portal CRUD (auth'd, per-user) */
-export const portalLimiter = rateLimit({
+export const portalLimiter = isTest ? passthrough : rateLimit({
   windowMs: 60 * 1000,
   max: 30,
   keyGenerator: (req: Request) => req.user?.id || req.ip || 'unknown',
@@ -39,7 +47,7 @@ export const portalLimiter = rateLimit({
 });
 
 /** Enumeration protection (auth check, registration) */
-export const enumerationLimiter = rateLimit({
+export const enumerationLimiter = isTest ? passthrough : rateLimit({
   windowMs: 60 * 1000,
   max: 5,
   keyGenerator: (req: Request) => req.ip || 'unknown',
