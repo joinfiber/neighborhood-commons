@@ -179,6 +179,36 @@ Recommended approach for a mobile app:
 4. **Images**: Event image URLs are stable. Cache them with your HTTP client (Dio, etc.)
 5. **Offline**: Serve from local cache. Sync when connectivity returns.
 
+## Webhooks
+
+Subscribe to real-time event notifications. Requires an API key (free, self-service — see `/api/v1/developers/register/send-otp`).
+
+```bash
+# Create a subscription
+curl -X POST "https://commons.joinfiber.app/api/v1/webhooks" \
+  -H "X-API-Key: nc_yourkey" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://yourapp.com/webhooks", "event_types": ["event.created", "event.updated"]}'
+```
+
+Event types: `event.created`, `event.updated`, `event.deleted`, `event.series_created`
+
+**Verifying signatures:** Every delivery includes an `X-NC-Signature` header (HMAC-SHA256). Verify it:
+
+```javascript
+const crypto = require('crypto');
+function verify(rawBody, signatureHeader, secret) {
+  const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+  return crypto.timingSafeEqual(Buffer.from(signatureHeader), Buffer.from(expected));
+}
+```
+
+**Security:** Webhook URLs must be HTTPS and resolve to public IP addresses. SSRF protection blocks private ranges (RFC 1918), cloud metadata endpoints, and IPv6 private addresses. Signing secrets are encrypted at rest on the server.
+
+**Reliability:** Failed deliveries retry 3 times (1 min, 5 min, 25 min backoff). After 10 consecutive failures, the subscription is auto-disabled. Re-enable with `PATCH /api/v1/webhooks/{id}` setting `status: "active"`.
+
+Max 5 subscriptions per API key.
+
 ## Error Format
 
 All errors follow the same shape:
@@ -191,6 +221,15 @@ All errors follow the same shape:
   }
 }
 ```
+
+## Security
+
+- All inputs validated with Zod schemas before processing
+- Row Level Security (RLS) enabled on every database table
+- Image uploads re-encoded through Sharp (strips EXIF metadata, blocks polyglot payloads)
+- No individual user tracking on public endpoints
+- API keys stored as SHA-256 hashes (plaintext returned once, never stored)
+- Rate limits enforced per route, not just globally
 
 ## License
 

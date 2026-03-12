@@ -371,6 +371,12 @@ function verify(body, signature, secret) {
 - Re-enable with PATCH: `{ "status": "active" }`.
 - Delivery logs retained 30 days.
 
+### Security
+
+- Webhook signing secrets are encrypted at rest (AES-256-GCM) on the server.
+- Webhook URLs are validated for SSRF before every delivery: DNS resolution, RFC 1918 block, cloud metadata block (169.254.169.254), IPv6 private range block. URLs must be HTTPS.
+- API keys are stored as SHA-256 hashes — the plaintext key is returned once on creation and never stored.
+
 ---
 
 ## Event Schema

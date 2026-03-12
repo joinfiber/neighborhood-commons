@@ -144,6 +144,25 @@ Don't add middleware that breaks this chain. Don't add middleware that condition
 - Never construct raw SQL. Every query goes through PostgREST. If PostgREST can't express the query, write an RPC function in a migration.
 - Every RPC function: `SECURITY DEFINER`, `SET search_path = public, extensions`, and `REVOKE EXECUTE FROM PUBLIC, authenticated, anon` unless explicitly public.
 
+### Row Level Security (RLS)
+
+**Every table has RLS enabled.** The Supabase anon key is embedded in the portal SPA and can be extracted by anyone. Without RLS, the anon role can read/write tables directly via PostgREST, bypassing Express entirely.
+
+| Table | RLS | Access Pattern |
+|-------|-----|----------------|
+| `events` | Policies: anon/authenticated read all; authenticated portal users write own | Portal uses `createUserClient(token)` — RLS enforces `creator_account_id` ownership |
+| `portal_accounts` | Policies: authenticated read/update own (via `auth.uid()`) | Portal uses `createUserClient(token)`; admin uses `supabaseAdmin` |
+| `event_series` | Enabled, no policies (service role only) | Only accessed via `supabaseAdmin` in cron/admin |
+| `regions` | Policies: public read | Read-only for all roles; admin writes via `supabaseAdmin` |
+| `api_keys` | Enabled, no policies (deny all non-service) | Only accessed via `supabaseAdmin` in Express |
+| `audit_logs` | Enabled, no policies (deny all non-service) | Fire-and-forget insert via `supabaseAdmin` |
+| `webhook_subscriptions` | Enabled, no policies (deny all non-service) | Only accessed via `supabaseAdmin` in webhook routes |
+| `webhook_deliveries` | Enabled, no policies (deny all non-service) | Only accessed via `supabaseAdmin` in delivery engine |
+
+Tables with "no policies" rely on RLS's default-deny behavior: with RLS enabled and zero policies granting access, `anon` and `authenticated` roles are blocked. The `service_role` bypasses RLS entirely, so `supabaseAdmin` continues working unchanged.
+
+**Never disable RLS on any table.** If a table is server-only, enable RLS with no policies — that's the safest configuration.
+
 ### Route Files
 
 Each route file is self-contained: schemas at the top, constants, helper functions, then route handlers, then the export. No cross-route imports. Shared logic lives in `lib/`.
@@ -291,6 +310,10 @@ The test suite is designed around the question: **what would silently break the 
 | `schema-alignment.test.ts` | Column name mismatches between code and database. Supabase/PostgREST silently returns null for nonexistent columns — this test turns silent data loss into loud failures. Found 6 real bugs on its first run. **Update the `SCHEMA` constant when migrations change columns.** |
 | `event-transform.test.ts` | Neighborhood API spec violations — wrong field names, wrong nesting, wrong types in the public API response. If these fail, every consumer of the API gets the wrong shape. |
 | `api-integration.test.ts` | End-to-end Express app tests — HTTP requests through the real middleware stack. Verifies status codes, response shapes, error formats, auth rejection, CORS headers, and content negotiation. |
+| `portal-crud.test.ts` | Portal auth enforcement, input validation (dates, times, categories, UUIDs, coordinates, recurrence patterns, field lengths), event CRUD lifecycle, registration, image upload rejection. |
+| `url-validation.test.ts` | SSRF protection — protocol enforcement, blocked hostnames, RFC 1918 ranges, cloud metadata IPs (169.254.169.254), IPv6 private ranges, IPv4-mapped addresses, DNS failure behavior (fail closed). |
+| `image-validation.test.ts` | Image upload security — magic byte validation (accept JPEG/PNG/WebP, reject GIF/BMP/SVG/PDF/EXE/HTML polyglots), Sharp re-encoding pipeline (dimension capping, metadata stripping, format normalization, truncated file rejection). |
+| `webhook-signing.test.ts` | Webhook HMAC-SHA256 signing (consistency, tamper detection, consumer verification), AES-256-GCM secret encryption (round-trip, random IV, tamper rejection, truncation rejection). |
 | `validation.test.ts` | Input validation failures — missing fields, wrong types, injection attempts getting past the front door. |
 | `security.test.ts` | Security regressions — API key hashing, error response shape, URL resolution, geo parsing. |
 
@@ -298,7 +321,9 @@ The test suite is designed around the question: **what would silently break the 
 
 - **New route or query?** The schema alignment test picks up new column references automatically. If you reference a column that doesn't exist, it fails.
 - **New migration?** Update the `SCHEMA` constant in `schema-alignment.test.ts` first. Add the column there before writing the code that uses it.
-- **New endpoint?** Add integration tests in `api-integration.test.ts` that verify the response shape, status codes, and error handling.
+- **New public endpoint?** Add integration tests in `api-integration.test.ts` that verify the response shape, status codes, and error handling.
+- **New portal endpoint?** Add integration tests in `portal-crud.test.ts` — auth enforcement, input validation, and response shape.
+- **Changed auth, RLS, rate limits, or access patterns?** Update this file (CLAUDE.md), `public/llms.txt`, and `docs/consumer-guide.md` in the same commit. The docs are the contract.
 - **New transform or helper?** Add unit tests in the appropriate test file.
 - **New table?** Add it to `SCHEMA`. The test will catch you if you forget.
 
@@ -338,6 +363,9 @@ COMMONS_R2_*=           # Cloudflare R2 credentials for image hosting
 CRON_SECRET=            # For cron endpoint auth (min 16 chars)
 COMMONS_SERVICE_KEY=    # For internal sync auth (min 32 chars)
 DEFAULT_REGION_ID=      # UUID of default region for new portal events
+WEBHOOK_ENCRYPTION_KEY= # AES-256-GCM key for webhook signing secrets at rest (64 hex chars / 32 bytes)
+                        # Generate: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+                        # Without this, webhook signing secrets are stored in plaintext
 ```
 
 ## What Not To Do
