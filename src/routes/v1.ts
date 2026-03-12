@@ -61,14 +61,18 @@ router.get('/', async (req, res, next) => {
 
     const today = new Date().toISOString();
 
+    // Over-fetch to compensate for series dedup reducing the result set.
+    // Series events sharing the same series_id collapse to one entry.
+    const fetchLimit = params.limit * 3;
+
     let query = supabaseAdmin
       .from('events')
-      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, portal_accounts!events_creator_account_id_fkey(business_name)', { count: 'exact' })
+      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, portal_accounts!events_creator_account_id_fkey(business_name), event_series!events_series_id_fkey(recurrence)', { count: 'exact' })
       .eq('source', 'portal')
       .eq('status', 'published')
       .gte('event_at', today) // Only future/today events
       .order('event_at', { ascending: true })
-      .range(params.offset, params.offset + params.limit - 1);
+      .range(params.offset, params.offset + fetchLimit - 1);
 
     // Date range filters (compare against event_at, using ET boundary)
     if (params.start_after) {
@@ -120,6 +124,10 @@ router.get('/', async (req, res, next) => {
       throw createError('Failed to fetch events', 500, 'SERVER_ERROR');
     }
 
+    // Deduplicate series: keep only the nearest upcoming instance per series_id
+    const deduped = deduplicateSeries((events || []) as unknown as Record<string, unknown>[]);
+    const page = deduped.slice(0, params.limit);
+
     res.json({
       meta: {
         total: count || 0,
@@ -128,7 +136,7 @@ router.get('/', async (req, res, next) => {
         spec: 'neighborhood-api-v0.2',
         license: 'CC-BY-4.0',
       },
-      events: (events || []).map((e) => toNeighborhoodEvent(e as unknown as PortalEventRow)),
+      events: page.map((e) => toNeighborhoodEvent(e as unknown as PortalEventRow)),
     });
   } catch (err) {
     next(err);
@@ -213,7 +221,27 @@ function escapeXml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, portal_accounts!events_creator_account_id_fkey(business_name)';
+const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, portal_accounts!events_creator_account_id_fkey(business_name), event_series!events_series_id_fkey(recurrence)';
+
+/** Deduplicate series events: keep only the nearest upcoming instance per series_id.
+ *  Carries the series recurrence pattern onto the kept instance. */
+function deduplicateSeries(events: Record<string, unknown>[]): Record<string, unknown>[] {
+  const seenSeries = new Set<string>();
+  const deduped: Record<string, unknown>[] = [];
+  for (const row of events) {
+    const seriesId = row.series_id as string | null;
+    if (seriesId) {
+      if (seenSeries.has(seriesId)) continue;
+      seenSeries.add(seriesId);
+      const seriesData = row.event_series as Record<string, unknown> | null;
+      if (seriesData?.recurrence && seriesData.recurrence !== 'none') {
+        row.recurrence = seriesData.recurrence;
+      }
+    }
+    deduped.push(row);
+  }
+  return deduped;
+}
 
 /**
  * GET /api/v1/events.ics
@@ -232,6 +260,8 @@ export async function icsHandler(_req: import('express').Request, res: import('e
 
     if (error) throw createError('Failed to fetch events', 500, 'SERVER_ERROR');
 
+    const deduped = deduplicateSeries((events || []) as unknown as Record<string, unknown>[]);
+
     const lines: string[] = [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
@@ -241,7 +271,7 @@ export async function icsHandler(_req: import('express').Request, res: import('e
       'X-WR-CALNAME:Neighborhood Commons Events',
     ];
 
-    for (const row of events || []) {
+    for (const row of deduped) {
       const tz = (row.event_timezone as string) || 'America/New_York';
       const dtStart = toICalDate(row.event_at as string, tz);
       const dtEnd = row.end_time ? toICalDate(row.end_time as string, tz) : null;
@@ -292,9 +322,10 @@ export async function rssHandler(_req: import('express').Request, res: import('e
 
     if (error) throw createError('Failed to fetch events', 500, 'SERVER_ERROR');
 
+    const deduped = deduplicateSeries((events || []) as unknown as Record<string, unknown>[]);
     const baseUrl = 'https://commons.joinfiber.app';
 
-    const items = (events || []).map((row) => {
+    const items = deduped.map((row) => {
       const ev = toNeighborhoodEvent(row as unknown as PortalEventRow);
       return `    <item>
       <title>${escapeXml(ev.name)}</title>

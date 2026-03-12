@@ -1,6 +1,14 @@
 import { useMemo, useEffect } from 'react';
 import { colors } from '../lib/styles';
-import { getOrdinalWeekday, toOrdinalRecurrence, getNextDates, parseOrdinalRecurrence } from '../lib/recurrence';
+import {
+  getOrdinalWeekday,
+  toOrdinalRecurrence,
+  getNextDates,
+  parseOrdinalRecurrence,
+  parseWeeklyDays,
+  toWeeklyDaysRecurrence,
+  formatWeeklyDaysLabel,
+} from '../lib/recurrence';
 
 /** Default instance count when a recurrence pattern is first selected */
 const PATTERN_DEFAULTS: Record<string, number> = {
@@ -10,6 +18,18 @@ const PATTERN_DEFAULTS: Record<string, number> = {
   monthly: 4,
 };
 const ORDINAL_DEFAULT = 4;
+const WEEKLY_DAYS_DEFAULT = 8;
+
+/** Day labels for the day-of-week picker, starting Monday */
+const DAY_PICKER_ORDER = [
+  { idx: 1, label: 'M' },
+  { idx: 2, label: 'T' },
+  { idx: 3, label: 'W' },
+  { idx: 4, label: 'Th' },
+  { idx: 5, label: 'F' },
+  { idx: 6, label: 'Sa' },
+  { idx: 0, label: 'Su' },
+];
 
 interface RecurrencePickerProps {
   value: string;
@@ -25,6 +45,9 @@ interface Option {
 }
 
 export function RecurrencePicker({ value, onChange, eventDate, instanceCount, onInstanceCountChange }: RecurrencePickerProps) {
+  const isWeeklyDays = parseWeeklyDays(value) !== null;
+  const selectedDays = parseWeeklyDays(value) || [];
+
   const baseOptions: Option[] = [
     { value: 'none', label: 'None' },
     { value: 'daily', label: 'Daily' },
@@ -53,8 +76,21 @@ export function RecurrencePicker({ value, onChange, eventDate, instanceCount, on
 
   const options = ordinalOption ? [...baseOptions, ordinalOption] : baseOptions;
 
+  // "Custom days" is a meta-option that activates the day picker
+  const customDaysLabel = isWeeklyDays && selectedDays.length > 0
+    ? formatWeeklyDaysLabel(selectedDays)
+    : 'Custom days';
+
   const isUntilCancelled = instanceCount === 0;
-  const previewCount = isUntilCancelled ? 5 : (instanceCount > 0 ? instanceCount - 1 : 5);
+  // For weekly_days, preview shows individual event dates (weeks * days selected)
+  // Cap at ~14 to keep the preview manageable
+  const previewCount = useMemo(() => {
+    if (isUntilCancelled) return isWeeklyDays ? 10 : 5;
+    if (isWeeklyDays) {
+      return Math.min(14, (instanceCount - 1) * selectedDays.length);
+    }
+    return instanceCount > 0 ? instanceCount - 1 : 5;
+  }, [isUntilCancelled, isWeeklyDays, instanceCount, selectedDays.length]);
 
   const nextDates = useMemo(() => {
     if (!eventDate || value === 'none') return [];
@@ -62,6 +98,36 @@ export function RecurrencePicker({ value, onChange, eventDate, instanceCount, on
   }, [eventDate, value, previewCount]);
 
   const showDurationRow = value !== 'none';
+
+  function handleDayToggle(dayIdx: number) {
+    const current = new Set(selectedDays);
+    if (current.has(dayIdx)) {
+      current.delete(dayIdx);
+    } else {
+      current.add(dayIdx);
+    }
+    if (current.size === 0) {
+      onChange('none');
+    } else {
+      onChange(toWeeklyDaysRecurrence([...current]));
+    }
+  }
+
+  const pillStyle = (active: boolean) => ({
+    display: 'inline-flex' as const,
+    alignItems: 'center' as const,
+    borderRadius: '16px',
+    padding: '5px 12px',
+    fontSize: '12px',
+    cursor: 'pointer' as const,
+    transition: 'all 0.15s',
+    border: '1px solid',
+    userSelect: 'none' as const,
+    fontFamily: 'inherit',
+    background: active ? colors.amberDim : 'transparent',
+    color: active ? colors.amber : colors.dim,
+    borderColor: active ? colors.amberBorder : colors.border,
+  });
 
   return (
     <div>
@@ -74,33 +140,71 @@ export function RecurrencePicker({ value, onChange, eventDate, instanceCount, on
               type="button"
               onClick={() => {
                 onChange(opt.value);
-                // Set sensible default count when switching patterns
                 if (opt.value !== 'none') {
                   const def = parseOrdinalRecurrence(opt.value) ? ORDINAL_DEFAULT : (PATTERN_DEFAULTS[opt.value] || 4);
                   onInstanceCountChange(def);
                 }
               }}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                borderRadius: '16px',
-                padding: '5px 12px',
-                fontSize: '12px',
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-                border: '1px solid',
-                userSelect: 'none' as const,
-                fontFamily: 'inherit',
-                background: active ? colors.amberDim : 'transparent',
-                color: active ? colors.amber : colors.dim,
-                borderColor: active ? colors.amberBorder : colors.border,
-              }}
+              style={pillStyle(active)}
             >
               {opt.label}
             </button>
           );
         })}
+        {/* Custom days toggle */}
+        <button
+          type="button"
+          onClick={() => {
+            if (isWeeklyDays) {
+              onChange('none');
+            } else {
+              // Default to the event date's day of week
+              const d = eventDate ? new Date(eventDate + 'T12:00:00') : null;
+              const dayIdx = d && !isNaN(d.getTime()) ? d.getDay() : 1; // fallback to Monday
+              onChange(toWeeklyDaysRecurrence([dayIdx]));
+              onInstanceCountChange(WEEKLY_DAYS_DEFAULT);
+            }
+          }}
+          style={pillStyle(isWeeklyDays)}
+        >
+          {customDaysLabel}
+        </button>
       </div>
+
+      {/* Day-of-week picker — shown when "Custom days" is active */}
+      {isWeeklyDays && (
+        <div style={{ marginTop: '8px', display: 'flex', gap: '4px' }}>
+          {DAY_PICKER_ORDER.map(({ idx, label }) => {
+            const active = selectedDays.includes(idx);
+            return (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => handleDayToggle(idx)}
+                style={{
+                  width: '34px',
+                  height: '34px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                  border: '1px solid',
+                  fontFamily: 'inherit',
+                  background: active ? colors.amberDim : 'transparent',
+                  color: active ? colors.amber : colors.dim,
+                  borderColor: active ? colors.amberBorder : colors.border,
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Duration row: count stepper + until cancelled */}
       {showDurationRow && (
@@ -136,11 +240,11 @@ export function RecurrencePicker({ value, onChange, eventDate, instanceCount, on
             <span style={{
               fontSize: '12px',
               color: isUntilCancelled ? colors.dim : colors.amber,
-              minWidth: '50px',
+              minWidth: '60px',
               textAlign: 'center',
               fontWeight: 500,
             }}>
-              {isUntilCancelled ? '-' : `${instanceCount} times`}
+              {isUntilCancelled ? '-' : `${instanceCount} ${isWeeklyDays ? 'weeks' : 'times'}`}
             </span>
             <button
               type="button"
@@ -164,22 +268,8 @@ export function RecurrencePicker({ value, onChange, eventDate, instanceCount, on
           {/* Until cancelled toggle */}
           <button
             type="button"
-            onClick={() => onInstanceCountChange(isUntilCancelled ? (PATTERN_DEFAULTS[value] || 4) : 0)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              borderRadius: '16px',
-              padding: '5px 12px',
-              fontSize: '12px',
-              cursor: 'pointer',
-              transition: 'all 0.15s',
-              border: '1px solid',
-              userSelect: 'none' as const,
-              fontFamily: 'inherit',
-              background: isUntilCancelled ? colors.amberDim : 'transparent',
-              color: isUntilCancelled ? colors.amber : colors.dim,
-              borderColor: isUntilCancelled ? colors.amberBorder : colors.border,
-            }}
+            onClick={() => onInstanceCountChange(isUntilCancelled ? (PATTERN_DEFAULTS[value] || WEEKLY_DAYS_DEFAULT) : 0)}
+            style={pillStyle(isUntilCancelled)}
           >
             Until cancelled
           </button>

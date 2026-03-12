@@ -129,12 +129,23 @@ export function toRRule(recurrence: string): string | null {
     case 'biweekly': return 'FREQ=WEEKLY;INTERVAL=2';
     case 'monthly': return 'FREQ=MONTHLY';
     default: {
+      const dayMap: Record<string, string> = {
+        monday: 'MO', tuesday: 'TU', wednesday: 'WE', thursday: 'TH',
+        friday: 'FR', saturday: 'SA', sunday: 'SU',
+      };
+      const abbrMap: Record<string, string> = {
+        sun: 'SU', mon: 'MO', tue: 'TU', wed: 'WE', thu: 'TH', fri: 'FR', sat: 'SA',
+      };
+
+      // weekly_days:mon,tue,wed,thu → FREQ=WEEKLY;BYDAY=MO,TU,WE,TH
+      const wdMatch = recurrence.match(/^weekly_days:([a-z,]+)$/);
+      if (wdMatch && wdMatch[1]) {
+        const rruleDays = wdMatch[1].split(',').map(d => abbrMap[d]).filter(Boolean);
+        if (rruleDays.length > 0) return `FREQ=WEEKLY;BYDAY=${rruleDays.join(',')}`;
+      }
+
       const match = recurrence.match(/^ordinal_weekday:(\d):(\w+)$/);
       if (match) {
-        const dayMap: Record<string, string> = {
-          monday: 'MO', tuesday: 'TU', wednesday: 'WE', thursday: 'TH',
-          friday: 'FR', saturday: 'SA', sunday: 'SU',
-        };
         const day = match[2] ? dayMap[match[2]] : undefined;
         if (day) return `FREQ=MONTHLY;BYDAY=${match[1]}${day}`;
       }

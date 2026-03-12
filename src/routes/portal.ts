@@ -198,10 +198,30 @@ const DEFAULT_LIMITS: Record<string, number> = {
   daily: 30, weekly: 8, biweekly: 4, monthly: 4,
 };
 const DEFAULT_ORDINAL_LIMIT = 4;
+const DEFAULT_WEEKLY_DAYS_LIMIT = 8; // 8 weeks of specific-day events
 const ONGOING_LIMITS: Record<string, number> = {
   daily: 90, weekly: 26, biweekly: 12, monthly: 12,
 };
 const ONGOING_ORDINAL_LIMIT = 12;
+const ONGOING_WEEKLY_DAYS_LIMIT = 26; // ~6 months of specific-day events
+
+const DAY_ABBR_TO_INDEX: Record<string, number> = {
+  sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6,
+};
+
+/** Parse a weekly_days:mon,tue,wed pattern. Returns sorted day indices or null. */
+function parseWeeklyDays(recurrence: string): number[] | null {
+  const m = recurrence.match(/^weekly_days:([a-z,]+)$/);
+  if (!m || !m[1]) return null;
+  const days = m[1].split(',');
+  const indices: number[] = [];
+  for (const d of days) {
+    const idx = DAY_ABBR_TO_INDEX[d];
+    if (idx === undefined) return null;
+    indices.push(idx);
+  }
+  return indices.sort((a, b) => a - b);
+}
 
 function getNthWeekdayOfMonth(year: number, month: number, dayOfWeek: number, n: number): Date | null {
   const first = new Date(year, month, 1, 12, 0, 0);
@@ -232,6 +252,27 @@ function generateInstanceDates(startDate: string, recurrence: string, instanceCo
     if (instanceCount !== undefined && instanceCount > 0) return instanceCount;
     if (instanceCount === 0) return ongoingLimit;
     return defaultLimit;
+  }
+
+  // weekly_days pattern: generate dates for specific days of the week
+  // instanceCount means "weeks" for this pattern — multiply by days per week
+  const weeklyDays = parseWeeklyDays(recurrence);
+  if (weeklyDays) {
+    const weeks = resolveLimit(DEFAULT_WEEKLY_DAYS_LIMIT, ONGOING_WEEKLY_DAYS_LIMIT);
+    const totalEvents = weeks * weeklyDays.length;
+    // Walk forward day by day, collecting dates that match the target days
+    const cursor = new Date(start);
+    cursor.setDate(cursor.getDate() + 1); // start from next day (startDate already included)
+    const maxDays = weeks * 7 + 7; // safety bound
+    let walked = 0;
+    while (dates.length < totalEvents && walked < maxDays) {
+      if (weeklyDays.includes(cursor.getDay())) {
+        dates.push(formatDateStr(cursor));
+      }
+      cursor.setDate(cursor.getDate() + 1);
+      walked++;
+    }
+    return dates;
   }
 
   const ordMatch = recurrence.match(/^ordinal_weekday:([1-5]):(\w+)$/);
@@ -847,7 +888,7 @@ const createEventSchema = z.object({
   custom_category: z.string().max(30).optional(),
   recurrence: z.string()
     .regex(
-      /^(none|daily|weekly|biweekly|monthly|ordinal_weekday:[1-5]:(monday|tuesday|wednesday|thursday|friday|saturday|sunday))$/,
+      /^(none|daily|weekly|biweekly|monthly|ordinal_weekday:[1-5]:(monday|tuesday|wednesday|thursday|friday|saturday|sunday)|weekly_days:(mon|tue|wed|thu|fri|sat|sun)(,(mon|tue|wed|thu|fri|sat|sun))*)$/,
       'Invalid recurrence pattern',
     )
     .default('none'),
@@ -874,7 +915,7 @@ const updateEventSchema = z.object({
   custom_category: z.string().max(30).optional().nullable(),
   recurrence: z.string()
     .regex(
-      /^(none|daily|weekly|biweekly|monthly|ordinal_weekday:[1-5]:(monday|tuesday|wednesday|thursday|friday|saturday|sunday))$/,
+      /^(none|daily|weekly|biweekly|monthly|ordinal_weekday:[1-5]:(monday|tuesday|wednesday|thursday|friday|saturday|sunday)|weekly_days:(mon|tue|wed|thu|fri|sat|sun)(,(mon|tue|wed|thu|fri|sat|sun))*)$/,
       'Invalid recurrence pattern',
     )
     .optional(),

@@ -224,6 +224,12 @@ describe('toRRule', () => {
     expect(toRRule('ordinal_weekday:3:tuesday')).toBe('FREQ=MONTHLY;BYDAY=3TU');
   });
 
+  it('maps weekly_days patterns to BYDAY', () => {
+    expect(toRRule('weekly_days:mon,tue,wed,thu')).toBe('FREQ=WEEKLY;BYDAY=MO,TU,WE,TH');
+    expect(toRRule('weekly_days:fri,sat')).toBe('FREQ=WEEKLY;BYDAY=FR,SA');
+    expect(toRRule('weekly_days:sun')).toBe('FREQ=WEEKLY;BYDAY=SU');
+  });
+
   it('returns null for "none"', () => {
     expect(toRRule('none')).toBeNull();
   });
