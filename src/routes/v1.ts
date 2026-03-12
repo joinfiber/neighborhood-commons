@@ -277,7 +277,7 @@ export async function icsHandler(_req: import('express').Request, res: import('e
       const dtEnd = row.end_time ? toICalDate(row.end_time as string, tz) : null;
 
       lines.push('BEGIN:VEVENT');
-      lines.push(`UID:${row.id}@neighborhoodcommons.org`);
+      lines.push(`UID:${row.id}@commons.joinfiber.app`);
       lines.push(`DTSTART;TZID=${tz}:${dtStart}`);
       if (dtEnd) lines.push(`DTEND;TZID=${tz}:${dtEnd}`);
       lines.push(`SUMMARY:${escapeICalText(row.content as string)}`);
