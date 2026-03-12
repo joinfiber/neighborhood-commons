@@ -268,6 +268,8 @@ router.post('/:id/test', writeLimiter, async (req, res, next) => {
       images: [],
       organizer: { name: 'Neighborhood Commons', phone: null as null },
       cost: null,
+      series_id: null,
+      series_instance_number: null,
       recurrence: null,
       source: {
         publisher: 'neighborhood-commons' as const,

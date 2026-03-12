@@ -29,6 +29,8 @@ function makeRow(overrides: Partial<PortalEventRow> = {}): PortalEventRow {
     category: 'live_music',
     custom_category: null,
     recurrence: 'weekly',
+    series_id: null,
+    series_instance_number: null,
     price: 'Free',
     link_url: 'https://example.com/tickets',
     event_image_url: 'https://images.example.com/jazz.jpg',
@@ -105,6 +107,21 @@ describe('toNeighborhoodEvent', () => {
   it('falls back to place_name for organizer when no portal account', () => {
     const event = toNeighborhoodEvent(makeRow({ portal_accounts: null }));
     expect(event.organizer.name).toBe('South Jazz Kitchen');
+  });
+
+  it('includes series_id and series_instance_number when present', () => {
+    const event = toNeighborhoodEvent(makeRow({
+      series_id: 'series-uuid-abc',
+      series_instance_number: 3,
+    }));
+    expect(event.series_id).toBe('series-uuid-abc');
+    expect(event.series_instance_number).toBe(3);
+  });
+
+  it('returns null for series fields on non-series events', () => {
+    const event = toNeighborhoodEvent(makeRow());
+    expect(event.series_id).toBeNull();
+    expect(event.series_instance_number).toBeNull();
   });
 
   it('wraps recurrence as { rrule } object', () => {

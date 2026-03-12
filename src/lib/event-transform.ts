@@ -34,6 +34,8 @@ export interface PortalEventRow {
   category: string;
   custom_category: string | null;
   recurrence: string;
+  series_id: string | null;
+  series_instance_number: number | null;
   price: string | null;
   link_url: string | null;
   event_image_url: string | null;
@@ -62,6 +64,8 @@ export interface NeighborhoodEvent {
     phone: null;
   };
   cost: string | null;
+  series_id: string | null;
+  series_instance_number: number | null;
   recurrence: { rrule: string } | null;
   source: {
     publisher: string;
@@ -183,6 +187,8 @@ export function toNeighborhoodEvent(row: PortalEventRow): NeighborhoodEvent {
       phone: null,
     },
     cost: row.price || null,
+    series_id: row.series_id || null,
+    series_instance_number: row.series_instance_number || null,
     recurrence: rrule ? { rrule } : null,
     source: {
       publisher: row.portal_accounts?.business_name || 'Neighborhood Commons',

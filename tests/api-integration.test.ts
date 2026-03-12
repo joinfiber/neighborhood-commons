@@ -232,6 +232,10 @@ describe('GET /api/v1/events', () => {
     // Recurrence as rrule object
     expect(event.recurrence).toEqual({ rrule: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH' });
 
+    // Series fields (null for non-series events)
+    expect(event.series_id).toBeNull();
+    expect(event.series_instance_number).toBeNull();
+
     // Cost mapping: price → cost
     expect(event.cost).toBe('$1 off drafts');
     expect(event).not.toHaveProperty('price');
@@ -287,6 +291,26 @@ describe('GET /api/v1/events/:id', () => {
 
     const body = await res.json();
     expect(body.error.code).toBe('NOT_FOUND');
+  });
+
+  it('propagates series recurrence onto non-first instances', async () => {
+    mockResponses.set('events', {
+      data: makeDbRow({
+        id: 'instance-3',
+        series_id: 'series-uuid-1',
+        series_instance_number: 3,
+        recurrence: 'none',
+        event_series: { recurrence: 'weekly_days:mon,tue,wed,thu' },
+      }),
+      error: null,
+    });
+
+    const res = await fetch(`${baseUrl}/api/v1/events/instance-3`);
+    const body = await res.json();
+
+    expect(body.event.series_id).toBe('series-uuid-1');
+    expect(body.event.series_instance_number).toBe(3);
+    expect(body.event.recurrence).toEqual({ rrule: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH' });
   });
 });
 
@@ -470,18 +494,23 @@ describe('series deduplication', () => {
         makeDbRow({
           id: 'instance-1',
           series_id: seriesId,
+          series_instance_number: 1,
           event_at: '2026-03-16T21:00:00.000Z',
           event_series: { recurrence: 'weekly_days:mon,tue,wed,thu' },
         }),
         makeDbRow({
           id: 'instance-2',
           series_id: seriesId,
+          series_instance_number: 2,
+          recurrence: 'none',
           event_at: '2026-03-17T21:00:00.000Z',
           event_series: { recurrence: 'weekly_days:mon,tue,wed,thu' },
         }),
         makeDbRow({
           id: 'instance-3',
           series_id: seriesId,
+          series_instance_number: 3,
+          recurrence: 'none',
           event_at: '2026-03-18T21:00:00.000Z',
           event_series: { recurrence: 'weekly_days:mon,tue,wed,thu' },
         }),
@@ -507,10 +536,12 @@ describe('series deduplication', () => {
     const seriesEvent = body.events.find((e: Record<string, unknown>) => e.id === 'instance-1');
     expect(seriesEvent).toBeDefined();
     expect(seriesEvent.recurrence).toEqual({ rrule: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH' });
+    expect(seriesEvent.series_id).toBe('series-uuid-1');
 
     // The standalone event should be present
     const standalone = body.events.find((e: Record<string, unknown>) => e.id === 'standalone-event');
     expect(standalone).toBeDefined();
     expect(standalone.recurrence).toBeNull();
+    expect(standalone.series_id).toBeNull();
   });
 });

@@ -172,7 +172,7 @@ router.get('/:id', async (req, res, next) => {
 
     const { data: event, error } = await supabaseAdmin
       .from('events')
-      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, portal_accounts!events_creator_account_id_fkey(business_name)')
+      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, series_instance_number, portal_accounts!events_creator_account_id_fkey(business_name), event_series!events_series_id_fkey(recurrence)')
       .eq('id', id)
       .eq('source', 'portal')
       .eq('status', 'published')
@@ -187,7 +187,14 @@ router.get('/:id', async (req, res, next) => {
       throw createError('Event not found', 404, 'NOT_FOUND');
     }
 
-    res.json({ event: toNeighborhoodEvent(event as unknown as PortalEventRow) });
+    // Carry series recurrence onto the instance (DB only stores it on instance #1)
+    const row = event as unknown as Record<string, unknown>;
+    const seriesData = row.event_series as Record<string, unknown> | null;
+    if (seriesData?.recurrence && seriesData.recurrence !== 'none') {
+      row.recurrence = seriesData.recurrence;
+    }
+
+    res.json({ event: toNeighborhoodEvent(row as unknown as PortalEventRow) });
   } catch (err) {
     next(err);
   }

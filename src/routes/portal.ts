@@ -25,9 +25,9 @@ import { validateRequest, validateUuidParam, resolveEventImageUrl } from '../lib
 import { uploadToR2, getFromR2 } from '../lib/cloudflare.js';
 import { config } from '../config.js';
 import { verifyTurnstile } from '../lib/captcha.js';
-import { dispatchWebhooks } from '../lib/webhook-delivery.js';
+import { dispatchWebhooks, dispatchSeriesCreatedWebhook } from '../lib/webhook-delivery.js';
 import { auditPortalAction } from '../lib/audit.js';
-import { toNeighborhoodEvent, type PortalEventRow } from '../lib/event-transform.js';
+import { toNeighborhoodEvent, toRRule, type PortalEventRow } from '../lib/event-transform.js';
 import { sanitizeUrl, checkApprovedDomain } from '../lib/url-sanitizer.js';
 import { writeLimiter, enumerationLimiter } from '../middleware/rate-limit.js';
 import { blockDatacenterIps } from '../middleware/ip-filter.js';
@@ -415,6 +415,29 @@ export async function createEventSeries(
   const publishedEvents = (events || []).filter((e) => e.status === 'published');
   if (publishedEvents.length > 0) {
     void dispatchSeriesWebhooks(publishedEvents);
+
+    // Consolidated series webhook — one event instead of N individual event.created webhooks.
+    // Consumers who subscribe to event.series_created can use this instead.
+    const rrule = toRRule(recurrence);
+    if (rrule) {
+      const instances = publishedEvents.map((e, i) => ({
+        id: e.id,
+        start: e.event_at,
+        series_instance_number: i + 1,
+      }));
+      // Build template from first instance
+      const { data: templateRow } = await supabaseAdmin
+        .from('events')
+        .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name)`)
+        .eq('id', publishedEvents[0]!.id)
+        .maybeSingle();
+      if (templateRow) {
+        const tpl = templateRow as unknown as Record<string, unknown>;
+        tpl.recurrence = recurrence; // Ensure template carries the series recurrence
+        const template = toNeighborhoodEvent(tpl as unknown as PortalEventRow);
+        void dispatchSeriesCreatedWebhook(series.id, template, instances, rrule);
+      }
+    }
   }
 
   const results = (events || []).map((e) => {
@@ -457,7 +480,7 @@ export async function deleteSeriesEvents(seriesId: string): Promise<number> {
       category: [], place_id: null,
       location: { name: '', address: null, lat: null, lng: null },
       url: null, images: [], organizer: { name: '', phone: null },
-      cost: null, recurrence: null,
+      cost: null, series_id: null, series_instance_number: null, recurrence: null,
       source: { publisher: 'fiber', collected_at: new Date().toISOString(), method: 'portal', license: 'CC BY 4.0' },
     });
   }
@@ -472,11 +495,17 @@ export async function dispatchSeriesWebhooks(events: Array<{ id: string }>): Pro
     try {
       const { data: row } = await supabaseAdmin
         .from('events')
-        .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name)`)
+        .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name), event_series!events_series_id_fkey(recurrence)`)
         .eq('id', e.id)
         .maybeSingle();
       if (!row) continue;
-      const eventData = toNeighborhoodEvent(row as unknown as PortalEventRow);
+      // Carry series recurrence onto every instance (DB only stores it on instance #1)
+      const r = row as unknown as Record<string, unknown>;
+      const seriesData = r.event_series as Record<string, unknown> | null;
+      if (seriesData?.recurrence && seriesData.recurrence !== 'none') {
+        r.recurrence = seriesData.recurrence;
+      }
+      const eventData = toNeighborhoodEvent(r as unknown as PortalEventRow);
       void dispatchWebhooks('event.created', e.id, eventData);
     } catch (err) {
       console.error('[PORTAL] Webhook dispatch error:', err instanceof Error ? err.message : err);
@@ -1565,7 +1594,7 @@ router.delete('/events/:id', writeLimiter, async (req, res, next) => {
       category: [], place_id: null,
       location: { name: '', address: null, lat: null, lng: null },
       url: null, images: [], organizer: { name: '', phone: null },
-      cost: null, recurrence: null,
+      cost: null, series_id: null, series_instance_number: null, recurrence: null,
       source: { publisher: 'fiber', collected_at: new Date().toISOString(), method: 'portal', license: 'CC BY 4.0' },
     });
 
