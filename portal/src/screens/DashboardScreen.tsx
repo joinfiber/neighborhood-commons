@@ -143,7 +143,7 @@ export function DashboardScreen({ account, onCreateEvent, onEditEvent, onSignOut
           }}>
             <strong style={{ color: colors.amber }}>Account verification in progress</strong>
             <br />
-            Your events are saved and ready to go — they'll appear on Fiber once we verify your business. This usually takes less than 24 hours.
+            Your events are saved and ready to go — they'll appear once we verify your business. This usually takes less than 24 hours.
           </div>
         )}
 

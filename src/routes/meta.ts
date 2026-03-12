@@ -23,12 +23,12 @@ const router: ReturnType<typeof Router> = Router();
 router.get('/', (_req, res) => {
   res.json({
     name: 'Neighborhood Commons',
-    description: 'Open neighborhood event data. Started and maintained by Fiber, flourishes because of you.',
+    description: 'Open neighborhood event data, flourishes because of you.',
     spec: 'neighborhood-api-v0.2',
     spec_url: 'https://github.com/The-Relational-Technology-Project/neighborhood-api',
     stewards: [
       {
-        name: 'Fiber',
+        name: 'Neighborhood Commons',
         url: 'https://joinfiber.app',
         contact: 'hello@joinfiber.app',
         role: 'maintainer',

@@ -21,8 +21,8 @@ This is infrastructure, not an application. The data is the product.
 
 ```bash
 # Clone and install
-git clone https://github.com/joinfiber/fiber-commons.git
-cd fiber-commons
+git clone https://github.com/joinfiber/neighborhood-commons.git
+cd neighborhood-commons
 npm install
 cd portal && npm install && cd ..
 

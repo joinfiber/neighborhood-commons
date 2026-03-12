@@ -4,7 +4,7 @@
  * Shared key generation and storage logic. Used by both admin routes
  * and developer self-registration. One function, one INSERT shape.
  *
- * Keys are fib_<32 hex chars>. The raw key is returned once to the
+ * Keys are nc_<32 hex chars>. The raw key is returned once to the
  * caller; only the SHA-256 hash is stored in the database.
  */
 
@@ -21,9 +21,9 @@ export interface GeneratedKey extends StoredKey {
   raw_key: string;
 }
 
-/** Generate a prefixed API key: fib_<32 random hex chars> */
+/** Generate a prefixed API key: nc_<32 random hex chars> */
 function generateRawKey(): string {
-  return 'fib_' + randomBytes(16).toString('hex');
+  return 'nc_' + randomBytes(16).toString('hex');
 }
 
 /** SHA-256 hash of a raw key for storage */

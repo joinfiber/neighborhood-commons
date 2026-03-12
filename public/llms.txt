@@ -137,10 +137,10 @@ Response (200):
 ```json
 {
   "name": "Neighborhood Commons",
-  "description": "Open neighborhood event data. Started and maintained by Fiber, flourishes because of you.",
+  "description": "Open neighborhood event data, flourishes because of you.",
   "spec": "neighborhood-api-v0.2",
   "spec_url": "https://github.com/The-Relational-Technology-Project/neighborhood-api",
-  "stewards": [{ "name": "Fiber", "url": "https://joinfiber.app", "contact": "hello@joinfiber.app", "role": "maintainer" }],
+  "stewards": [{ "name": "Neighborhood Commons", "url": "https://joinfiber.app", "contact": "hello@joinfiber.app", "role": "maintainer" }],
   "data_sources": [{ "name": "Portal", "method": "portal", "description": "Events submitted directly by venue owners and promoters." }],
   "resources": ["events"],
   "license": { "name": "Creative Commons Attribution 4.0 International", "spdx": "CC-BY-4.0", "url": "https://creativecommons.org/licenses/by/4.0/" },
@@ -215,7 +215,7 @@ Body:
 Response (201):
 ```json
 {
-  "api_key": { "id": "uuid", "raw_key": "fib_a1b2c3d4...", "name": "My App", "rate_limit_per_hour": 1000, "created_at": "2026-03-11T..." },
+  "api_key": { "id": "uuid", "raw_key": "nc_a1b2c3d4...", "name": "My App", "rate_limit_per_hour": 1000, "created_at": "2026-03-11T..." },
   "message": "Save your raw_key — it will not be shown again."
 }
 ```
@@ -224,7 +224,7 @@ Error: 401 (invalid OTP), 409 (key already exists).
 
 ### GET /api/v1/developers/me — Your Key Info
 
-Headers: `X-API-Key: fib_...` (required)
+Headers: `X-API-Key: nc_...` (required)
 
 Response (200):
 ```json
@@ -237,7 +237,7 @@ Response (200):
 
 Requires current API key + OTP re-verification. Call `/register/send-otp` first.
 
-Headers: `X-API-Key: fib_...` (required, current key)
+Headers: `X-API-Key: nc_...` (required, current key)
 
 Body:
 ```json
@@ -247,7 +247,7 @@ Body:
 Response (200):
 ```json
 {
-  "api_key": { "id": "uuid", "raw_key": "fib_newkey...", "name": "...", "rate_limit_per_hour": 1000, "created_at": "..." },
+  "api_key": { "id": "uuid", "raw_key": "nc_newkey...", "name": "...", "rate_limit_per_hour": 1000, "created_at": "..." },
   "message": "Save your new raw_key — the old key has been deactivated."
 }
 ```
@@ -264,7 +264,7 @@ Event types: `event.created`, `event.updated`, `event.deleted`
 
 ### POST /api/v1/webhooks — Create Subscription
 
-Headers: `X-API-Key: fib_...` (required)
+Headers: `X-API-Key: nc_...` (required)
 
 Body:
 ```json
@@ -284,7 +284,7 @@ Constraints: URL must be HTTPS. Max 5 subscriptions per API key. SSRF-protected.
 
 ### GET /api/v1/webhooks — List Subscriptions
 
-Headers: `X-API-Key: fib_...` (required)
+Headers: `X-API-Key: nc_...` (required)
 
 Response (200):
 ```json
@@ -297,7 +297,7 @@ Response (200):
 
 ### PATCH /api/v1/webhooks/{id} — Update Subscription
 
-Headers: `X-API-Key: fib_...` (required)
+Headers: `X-API-Key: nc_...` (required)
 
 Body (all fields optional):
 ```json
@@ -308,7 +308,7 @@ Setting `status` to `"active"` resets `consecutive_failures` to 0.
 
 ### DELETE /api/v1/webhooks/{id} — Delete Subscription
 
-Headers: `X-API-Key: fib_...` (required)
+Headers: `X-API-Key: nc_...` (required)
 
 Response (200):
 ```json
@@ -317,13 +317,13 @@ Response (200):
 
 ### POST /api/v1/webhooks/{id}/test — Send Test Delivery
 
-Headers: `X-API-Key: fib_...` (required)
+Headers: `X-API-Key: nc_...` (required)
 
 Sends a signed test payload to your endpoint with event type `event.created`.
 
 ### GET /api/v1/webhooks/{id}/deliveries — Delivery History
 
-Headers: `X-API-Key: fib_...` (required)
+Headers: `X-API-Key: nc_...` (required)
 
 Query parameters:
 - `status` (string) — Filter: pending, delivered, failed, retrying.
@@ -351,7 +351,7 @@ Response (200):
 }
 ```
 
-Headers sent: `X-Fiber-Signature` (HMAC-SHA256), `X-Fiber-Event` (event type), `Content-Type: application/json`.
+Headers sent: `X-NC-Signature` (HMAC-SHA256), `X-NC-Event` (event type), `Content-Type: application/json`.
 
 ### Verifying Webhook Signatures
 

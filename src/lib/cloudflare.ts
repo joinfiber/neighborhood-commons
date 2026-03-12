@@ -2,7 +2,7 @@
  * Cloudflare R2 Client — Neighborhood Commons
  *
  * Handles R2 bucket operations (upload, get, delete) for the
- * fiber-commons-images bucket. Event images only — no photo
+ * neighborhood-commons-images bucket. Event images only — no photo
  * permissions, KV, or social features.
  *
  * Uses the S3-compatible API with AWS Signature V4.

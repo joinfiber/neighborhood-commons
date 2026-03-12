@@ -33,11 +33,11 @@ const envSchema = z.object({
   MAILGUN_API_KEY: z.string().min(1).optional(),
   MAILGUN_DOMAIN: z.string().min(1).optional(),
 
-  // Cloudflare R2 (fiber-commons-images bucket)
+  // Cloudflare R2 (neighborhood-commons-images bucket)
   COMMONS_R2_ACCOUNT_ID: z.string().min(1).optional(),
   COMMONS_R2_ACCESS_KEY_ID: z.string().min(1).optional(),
   COMMONS_R2_SECRET_ACCESS_KEY: z.string().min(1).optional(),
-  COMMONS_R2_BUCKET_NAME: z.string().default('fiber-commons-images'),
+  COMMONS_R2_BUCKET_NAME: z.string().default('neighborhood-commons-images'),
 
   // Cron secret
   CRON_SECRET: z.string().min(16).optional(),

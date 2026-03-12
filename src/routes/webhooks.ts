@@ -266,11 +266,11 @@ router.post('/:id/test', writeLimiter, async (req, res, next) => {
       location: { name: 'Test Venue', address: null, lat: null, lng: null },
       url: null,
       images: [],
-      organizer: { name: 'Fiber', phone: null as null },
+      organizer: { name: 'Neighborhood Commons', phone: null as null },
       cost: null,
       recurrence: null,
       source: {
-        publisher: 'fiber' as const,
+        publisher: 'neighborhood-commons' as const,
         collected_at: new Date().toISOString(),
         method: 'portal' as const,
         license: 'CC BY 4.0' as const,

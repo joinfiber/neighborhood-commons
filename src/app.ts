@@ -2,7 +2,7 @@
  * Neighborhood Commons — Express Application
  *
  * Open neighborhood event data service.
- * Started and maintained by Fiber. CC BY 4.0.
+ * CC BY 4.0.
  */
 
 import path from 'path';

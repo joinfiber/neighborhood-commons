@@ -98,7 +98,7 @@ def verify_webhook(body, signature, secret):
 # In your webhook handler:
 @app.route('/webhooks', methods=['POST'])
 def handle_webhook():
-    sig = request.headers.get('X-Fiber-Signature')
+    sig = request.headers.get('X-NC-Signature')
     if not verify_webhook(request.json, sig, YOUR_SECRET):
         abort(401)
     # Process the event...
@@ -398,7 +398,7 @@ ${API_BASE}/api/v1/events.ics`}
           <div style={styles.card}>
             <div style={labelStyle}>Check your key</div>
             <div style={{ ...codeStyle, marginBottom: '16px' }}>
-              {`curl -H "X-API-Key: fib_..." \\
+              {`curl -H "X-API-Key: nc_..." \\
   "${API_BASE}/api/v1/developers/me"`}
             </div>
             <div style={labelStyle}>Rotate a compromised key</div>
@@ -410,7 +410,7 @@ curl -X POST ${API_BASE}/api/v1/developers/register/send-otp \\
 
 # Step 2: Rotate with OTP + current key
 curl -X POST ${API_BASE}/api/v1/developers/keys/rotate \\
-  -H "X-API-Key: fib_current_key..." \\
+  -H "X-API-Key: nc_current_key..." \\
   -H "Content-Type: application/json" \\
   -d '{ "email": "your@email.com", "token": "12345678" }'`}
             </div>
@@ -433,7 +433,7 @@ curl -X POST ${API_BASE}/api/v1/developers/keys/rotate \\
 curl "${API_BASE}/api/v1/events?limit=10"
 
 # With optional API key
-curl -H "X-API-Key: fib_a1b2c3d4e5f6..." \\
+curl -H "X-API-Key: nc_a1b2c3d4e5f6..." \\
   "${API_BASE}/api/v1/events?limit=10"`}
             </div>
           </div>
@@ -503,7 +503,7 @@ curl -H "X-API-Key: fib_a1b2c3d4e5f6..." \\
             <div style={labelStyle}>Create a subscription</div>
             <div style={{ ...codeStyle, marginBottom: '16px' }}>
               {`curl -X POST ${API_BASE}/api/v1/webhooks \\
-  -H "X-API-Key: fib_..." \\
+  -H "X-API-Key: nc_..." \\
   -H "Content-Type: application/json" \\
   -d '{
     "url": "https://yourapp.com/webhooks/commons",
@@ -522,8 +522,8 @@ curl -H "X-API-Key: fib_a1b2c3d4e5f6..." \\
             </div>
             <div style={{ fontSize: '12px', color: colors.dim, marginBottom: '16px' }}>
               Headers include:{' '}
-              <code style={{ color: colors.muted }}>X-Fiber-Signature</code>,{' '}
-              <code style={{ color: colors.muted }}>X-Fiber-Event</code>,{' '}
+              <code style={{ color: colors.muted }}>X-NC-Signature</code>,{' '}
+              <code style={{ color: colors.muted }}>X-NC-Event</code>,{' '}
               <code style={{ color: colors.muted }}>Content-Type: application/json</code>
             </div>
 
@@ -541,7 +541,7 @@ curl -H "X-API-Key: fib_a1b2c3d4e5f6..." \\
         <Section title="Webhook Signature Verification" id="signature">
           <div style={styles.card}>
             <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: colors.text, lineHeight: 1.7 }}>
-              Every webhook includes an <code style={{ color: colors.amber, fontSize: '13px' }}>X-Fiber-Signature</code> header.
+              Every webhook includes an <code style={{ color: colors.amber, fontSize: '13px' }}>X-NC-Signature</code> header.
               Verify it with your signing secret to ensure the payload hasn't been tampered with.
             </p>
 
@@ -560,11 +560,11 @@ curl -H "X-API-Key: fib_a1b2c3d4e5f6..." \\
               Debug webhook issues by viewing delivery history for any subscription.
             </p>
             <div style={codeStyle}>
-              {`curl -H "X-API-Key: fib_..." \\
+              {`curl -H "X-API-Key: nc_..." \\
   "${API_BASE}/api/v1/webhooks/{subscription_id}/deliveries?limit=10"
 
 # Filter by status
-curl -H "X-API-Key: fib_..." \\
+curl -H "X-API-Key: nc_..." \\
   "${API_BASE}/api/v1/webhooks/{subscription_id}/deliveries?status=failed"`}
             </div>
             <div style={{ marginTop: '12px', fontSize: '13px', color: colors.muted }}>
@@ -672,7 +672,7 @@ curl -H "X-API-Key: fib_..." \\
               {' '}— an open format for sharing local events, assets, and plans across community tools.
             </p>
             <p style={{ margin: 0, fontSize: '12px', color: colors.dim, lineHeight: 1.6 }}>
-              Steward: Fiber (maintainer) · Region: Philadelphia · Resources: events · License: CC BY 4.0
+              Steward: Neighborhood Commons · Region: Philadelphia · Resources: events · License: CC BY 4.0
             </p>
           </div>
         </Section>

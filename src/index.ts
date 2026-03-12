@@ -2,7 +2,7 @@
  * Neighborhood Commons — API Server
  *
  * Open neighborhood event data service.
- * Started and maintained by Fiber. CC BY 4.0.
+ * CC BY 4.0.
  */
 
 import { config } from './config.js';

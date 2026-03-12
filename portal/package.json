@@ -1,7 +1,7 @@
 {
-  "name": "fiber-commons-portal",
+  "name": "neighborhood-commons-portal",
   "version": "0.1.0",
-  "description": "Fiber Commons Portal — business event management UI",
+  "description": "Neighborhood Commons Portal — business event management UI",
   "private": true,
   "type": "module",
   "scripts": {

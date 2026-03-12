@@ -6,7 +6,7 @@
  *
  * HMAC-SHA256 signing:
  *   signature = HMAC-SHA256(signing_secret, JSON.stringify(payload))
- *   Header: X-Fiber-Signature: sha256=<hex>
+ *   Header: X-NC-Signature: sha256=<hex>
  *
  * Retry: 3 attempts with exponential backoff (1min, 5min, 25min).
  * Auto-disable: subscription disabled after 10 consecutive failures.
@@ -123,9 +123,9 @@ async function deliverWebhook(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Fiber-Signature': `sha256=${signature}`,
-        'X-Fiber-Event': eventType,
-        'User-Agent': 'Fiber-Webhooks/1.0',
+        'X-NC-Signature': `sha256=${signature}`,
+        'X-NC-Event': eventType,
+        'User-Agent': 'Neighborhood-Commons/1.0',
       },
       body,
       signal: controller.signal,

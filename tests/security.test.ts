@@ -43,26 +43,26 @@ describe('error handler shape', () => {
 
 describe('API key hashing', () => {
   it('produces consistent SHA-256 hashes', () => {
-    const key = 'fib_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4';
+    const key = 'nc_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4';
     const hash1 = hashApiKey(key);
     const hash2 = hashApiKey(key);
     expect(hash1).toBe(hash2);
   });
 
   it('produces the correct SHA-256 hex digest', () => {
-    const key = 'fib_test';
+    const key = 'nc_test';
     const expected = createHash('sha256').update(key).digest('hex');
     expect(hashApiKey(key)).toBe(expected);
   });
 
   it('different keys produce different hashes', () => {
-    const hash1 = hashApiKey('fib_key1');
-    const hash2 = hashApiKey('fib_key2');
+    const hash1 = hashApiKey('nc_key1');
+    const hash2 = hashApiKey('nc_key2');
     expect(hash1).not.toBe(hash2);
   });
 
   it('hash is 64 characters (256 bits hex)', () => {
-    const hash = hashApiKey('fib_anything');
+    const hash = hashApiKey('nc_anything');
     expect(hash.length).toBe(64);
     expect(/^[0-9a-f]{64}$/.test(hash)).toBe(true);
   });
@@ -73,22 +73,22 @@ describe('API key hashing', () => {
 // ---------------------------------------------------------------------------
 
 describe('API key format', () => {
-  it('generated keys have fib_ prefix', async () => {
+  it('generated keys have nc_ prefix', async () => {
     // We can't call generateAndStoreKey without a DB, but we can verify the format
     // by checking the prefix convention is documented and consistent.
-    const prefix = 'fib_';
-    expect(prefix.length).toBe(4);
-    // A raw key is fib_ + 32 hex chars = 36 chars total
-    const exampleKey = 'fib_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4';
-    expect(exampleKey.startsWith('fib_')).toBe(true);
-    expect(exampleKey.length).toBe(36);
+    const prefix = 'nc_';
+    expect(prefix.length).toBe(3);
+    // A raw key is nc_ + 32 hex chars = 35 chars total
+    const exampleKey = 'nc_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4';
+    expect(exampleKey.startsWith('nc_')).toBe(true);
+    expect(exampleKey.length).toBe(35);
   });
 
   it('key prefix (first 12 chars) is stored for display', () => {
-    const rawKey = 'fib_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4';
-    const prefix = rawKey.substring(0, 12);
-    expect(prefix).toBe('fib_a1b2c3d4');
-    expect(prefix.length).toBe(12);
+    const rawKey = 'nc_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4';
+    const prefix = rawKey.substring(0, 11);
+    expect(prefix).toBe('nc_a1b2c3d4');
+    expect(prefix.length).toBe(11);
   });
 });
 

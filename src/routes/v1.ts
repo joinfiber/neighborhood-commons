@@ -146,7 +146,7 @@ router.get('/', async (req, res, next) => {
 router.get('/terms', (_req, res) => {
   res.json({
     version: '2.0',
-    summary: 'Neighborhood event data, free to use under CC BY 4.0. Started and maintained by Fiber.',
+    summary: 'Neighborhood event data, free to use under CC BY 4.0.',
     license: {
       name: 'Creative Commons Attribution 4.0 International',
       spdx: 'CC-BY-4.0',
@@ -277,7 +277,7 @@ export async function icsHandler(_req: import('express').Request, res: import('e
       const dtEnd = row.end_time ? toICalDate(row.end_time as string, tz) : null;
 
       lines.push('BEGIN:VEVENT');
-      lines.push(`UID:${row.id}@joinfiber.app`);
+      lines.push(`UID:${row.id}@neighborhoodcommons.org`);
       lines.push(`DTSTART;TZID=${tz}:${dtStart}`);
       if (dtEnd) lines.push(`DTEND;TZID=${tz}:${dtEnd}`);
       lines.push(`SUMMARY:${escapeICalText(row.content as string)}`);
