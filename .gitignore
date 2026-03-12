@@ -21,3 +21,7 @@ Thumbs.db
 
 # Test
 coverage
+
+# Internal tools
+scripts/
+fiber-field.html

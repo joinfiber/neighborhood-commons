@@ -1,70 +1,12 @@
-# Neighborhood Commons
+# Neighborhood Commons — Development Guide
 
-Public events data infrastructure. Open, minimal, correct.
+Open neighborhood event data infrastructure. Built on the [Neighborhood API](https://github.com/The-Relational-Technology-Project/neighborhood-api) spec.
 
-## Current Status (March 2026)
-
-### What's Live
-- **API**: Deployed to Railway at `commons.joinfiber.app` — 89 events serving via `/api/v1/events` (canonical), `/api/events` redirects to v1
-- **Portal**: React SPA served from same Express server (same-origin, no CORS) — business login, event CRUD, admin dashboard
-- **Database**: Dedicated Supabase project (`fiber-commons`) with events, portal_accounts, regions, event_series, event_analytics, etc.
-- **Images**: Served from Cloudflare R2 via portal image proxy route
-- **Auth**: Supabase email OTP (8-digit codes), Mailgun SMTP configured, branded templates deployed
-- **Admin**: Working — `COMMONS_ADMIN_USER_IDS` set in Railway, admin dashboard accessible
-
-### Completed Setup
-- [x] Auth → URL Configuration: Site URL set to `https://commons.joinfiber.app`
-- [x] Auth → SMTP Settings: Mailgun SMTP configured (smtp.mailgun.org:587)
-- [x] Auth → Email Templates: Branded templates from `docs/supabase-email-templates.md`
-- [x] Migration 003 applied: portal_accounts column names aligned with code
-- [x] Admin user ID configured in Railway (`COMMONS_ADMIN_USER_IDS`)
-- [x] New user signup flow working (register → OTP → claim → dashboard)
-
-### What Needs Doing Next
-1. **Populate portal_accounts**: Existing business accounts from social Supabase need to be copied to Commons. Write a one-time script that reads from social DB and inserts into Commons (preserving UUIDs so `creator_account_id` FKs on events still work).
-2. **Verify existing events**: 89 events are in the DB but confirm their `creator_account_id` values match portal_accounts rows.
-3. **Captcha**: `CAPTCHA_ENABLED` is currently `false`. Set `TURNSTILE_SECRET_KEY` in Railway and flip to `true` when ready.
-4. **Phase 2**: Cut over public traffic (portal domain, v1 API consumers)
-5. **Phase 3**: Social app migration (plans table, commons_cache, sync process)
-6. See `docs/design/TABLE_SPLIT_AND_EVENTS_SERVER.md` for full plan
-
-### Architecture
-- Single Railway service: Express API + static portal SPA in one Docker container
-- Portal built via multi-stage Dockerfile (`portal-builder` stage), output copied to `./portal` in runner
-- `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_TURNSTILE_SITE_KEY` baked into SPA at build time via Docker ARGs
-- `VITE_API_URL` intentionally empty — same-origin requests
-- Google Places API proxied through `/api/places/search` (server-side key, not exposed to client)
-
-### Key Bug Fixes Applied
-- **Column name mismatch** (migration 003): portal_accounts had migration column names (`venue_name`, `place_id`, `website_url`) but code expected social app names (`default_venue_name`, `default_place_id`, `website`). Fixed via rename migration. Portal account queries now use explicit column list (`PORTAL_ACCOUNT_SELECT`).
-- **OTP digit count**: Supabase sends 8-digit codes; portal form expected 6. Fixed in LoginScreen.tsx.
-- **Railway watch patterns**: Added `portal/**` and `railway.toml` to watchPatterns so portal changes trigger builds.
-
-### Railway Environment Variables
-Required:
-- `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` — Commons Supabase instance
-- `AUDIT_SALT` — for audit log hashing (min 16 chars)
-- `COMMONS_ADMIN_USER_IDS` — comma-separated Supabase auth UUIDs
-
-Optional (configured):
-- `TURNSTILE_SECRET_KEY` — Cloudflare Turnstile (captcha currently disabled)
-- `CAPTCHA_ENABLED` — set to `true` to enforce captcha
-- `MAILGUN_API_KEY`, `MAILGUN_DOMAIN` — for portal emails
-- `COMMONS_R2_ACCOUNT_ID`, `COMMONS_R2_ACCESS_KEY_ID`, `COMMONS_R2_SECRET_ACCESS_KEY`, `COMMONS_R2_BUCKET_NAME`
-- `GOOGLE_PLACES_API_KEY` — for venue search
-- `CRON_SECRET` — for cron endpoint auth
-- `COMMONS_SERVICE_KEY` — for internal sync auth (Phase 3)
-- `CORS_ORIGINS` — defaults to `https://commons.joinfiber.app,https://post.joinfiber.app`
-- `DEFAULT_REGION_ID` — UUID of the default region for new portal events (from regions table)
-
-### Migrations
-- `001_initial_schema.sql` — Full schema (events, portal_accounts, regions, etc.)
-- `002_add_regions_updated_at.sql` — Add updated_at to regions
-- `003_align_portal_account_columns.sql` — Rename portal_accounts columns to match code + add last_login_at
+This document is the shared backdrop for development — whether you're a human contributor, an AI pair programmer, or both. It captures architecture decisions, security rules, and the philosophy behind the project. Read it before writing code.
 
 ## What This Is
 
-A digital sandwich board for the neighborhood. Businesses post events — concerts, comedy, markets, community gatherings — and every event and IRL app in the city can show them. One post, every audience.
+A digital sandwich board for the neighborhood. Businesses post events — concerts, comedy, markets, community gatherings — and every app in the city can show them. One post, every audience.
 
 The portal is where business owners come to manage their events. It must be instantly understandable: sign up, post your event, done. No jargon, no complexity. If a coffee shop owner can't figure it out in two minutes, we've failed.
 
@@ -81,15 +23,17 @@ Week to week, the work here is:
 
 Everything else — API changes, new spec endpoints, infrastructure — is occasional and should be done carefully, because downstream consumers depend on stability.
 
-## Neighborhood API Alignment
+## The Neighborhood API
 
-This project implements and extends the [Neighborhood API](https://github.com/The-Relational-Technology-Project/neighborhood-api) — an open spec (v0.2) for sharing local events, assets, dreams, plans, and notices across neighborhood tools and communities. The spec is connective tissue, not a platform. We are one implementation of it.
+This project implements and extends the [Neighborhood API](https://github.com/The-Relational-Technology-Project/neighborhood-api) — an open spec for sharing local events, assets, dreams, plans, and notices across neighborhood tools and communities. The spec is connective tissue, not a platform. We are one implementation of it. The [Relational Technology Project](https://relationaltechproject.org) stewards the spec.
+
+The idea: any neighborhood tool — an event app, a community board, a local newspaper's website, a civic dashboard — can publish and consume from the same open format. No single platform owns the data. Stewards maintain feeds. Tools remix and display. The neighborhood benefits.
 
 ### Relationship to the Spec
 
 **Faithfully implement the spec.** Where the spec defines a behavior, follow it exactly. Where the spec is silent, we may extend — but extensions must not contradict or conflict with spec-defined behavior.
 
-The spec currently defines full schemas only for Events. Assets, dreams, plans, notices, and groups are named but not yet specified. When those schemas are published, we adopt them. Until then, we don't invent our own — we wait, or we contribute upstream.
+The spec currently defines full schemas for Events. Assets, dreams, plans, notices, and groups are named but not yet fully specified. When those schemas are published, we adopt them. Until then, we don't invent our own — we wait, or we contribute upstream.
 
 ### Event Schema Alignment
 
@@ -97,19 +41,19 @@ The v1 public API (`/api/v1/events`) **must** return events conforming to the Ne
 
 | Spec Field | Type | Our DB Column | Notes |
 |------------|------|---------------|-------|
-| `id` | string | `id` (UUID) | Spec uses slugs (`evt_...`); we use UUIDs. Both are valid identifiers. |
+| `id` | string | `id` (UUID) | Spec uses slugs (`evt_...`); we use UUIDs. Both valid. |
 | `name` | string | `content` | Spec calls it `name`, not `title`. Transform on output. |
 | `start` | ISO 8601 w/ tz | `event_at` | |
 | `end` | ISO 8601 w/ tz | `end_time` | |
 | `description` | string | `description` | Direct match. |
-| `category` | string[] | `category` | Spec uses array; we store single string. Wrap in array on output. |
+| `category` | string[] | `category` | Spec uses array; we store single string. Wrap on output. |
 | `place_id` | string | `place_id` | Direct match. |
-| `location` | object | flat columns | Spec nests `{ name, address, lat, lng }`. We store `place_name`, `venue_address`, `latitude`, `longitude` as flat columns. Nest on output. |
+| `location` | object | flat columns | Spec nests `{ name, address, lat, lng }`. We store flat. Nest on output. |
 | `url` | string | `link_url` | |
-| `images` | string[] | `event_image_url` | We store one image; spec allows array. Wrap in array on output. |
+| `images` | string[] | `event_image_url` | We store one image; spec allows array. Wrap on output. |
 | `organizer` | object | portal account | Nest `{ name }` from portal account data. |
 | `cost` | string | `price` | Free-text in both. |
-| `source` | object | constructed | Build from `source` column + portal account. Always include `publisher`, `collected_at`, `license`. |
+| `source` | object | constructed | Build from `source` column + portal account. |
 
 **`source` is required.** Every event response includes provenance:
 ```json
@@ -125,11 +69,9 @@ The v1 public API (`/api/v1/events`) **must** return events conforming to the Ne
 
 ### Required Endpoints
 
-The spec defines these collection endpoints. Our implementation status:
-
 | Endpoint | Status | Route File |
 |----------|--------|------------|
-| `GET /meta` | **Required** | `routes/meta.ts` |
+| `GET /meta` | Implemented | `routes/meta.ts` |
 | `GET /events` | Implemented | `routes/v1.ts` |
 | `GET /events/{id}` | Implemented | `routes/v1.ts` |
 | `GET /events.ics` | Implemented | `routes/v1.ts` |
@@ -139,15 +81,6 @@ The spec defines these collection endpoints. Our implementation status:
 | `GET /plans` | Not yet (spec pending) | — |
 | `GET /notices` | Not yet (spec pending) | — |
 | `GET /groups` | Not yet (spec pending) | — |
-
-### The `/meta` Endpoint
-
-Every Neighborhood API instance must expose `/meta` with stewardship information:
-- **Stewards** — who maintains this feed
-- **Data sources** — what upstream sources feed into it
-- **Publisher allowlist** — which sources are trusted
-
-This is transparency infrastructure. It answers "who runs this and where does the data come from?"
 
 ### Query Filters
 
@@ -163,7 +96,7 @@ The spec defines these query parameters for collection endpoints:
 | `near` | Location coordinates |
 | `radius_km` | Proximity radius |
 
-Implement these where supported. Don't invent non-spec query parameters for the v1 public API without strong justification.
+Don't invent non-spec query parameters for the v1 public API without strong justification.
 
 ### Extending the Spec
 
@@ -171,8 +104,7 @@ Neighborhood Commons extends the Neighborhood API with capabilities the spec doe
 
 - **Portal CRUD** — businesses submit and manage events (the spec is read-only)
 - **Admin curation** — platform operators approve/reject/edit events
-- **Webhooks** — real-time notifications for downstream consumers
-- **Analytics** — anonymous engagement counters (trending, calendar adds, interested)
+- **Webhooks** — real-time push notifications for downstream consumers
 - **Internal sync** — service-to-service sync for consuming applications
 - **Image hosting** — upload, re-encode, and serve event images
 
@@ -181,8 +113,8 @@ These extensions live under their own route prefixes (`/api/portal/*`, `/api/adm
 ### What We Don't Do
 
 - **Don't fork the spec.** If the spec says `name`, we use `name` in API responses — not `title`. If the spec says `category` is an array, we return an array.
-- **Don't anticipate unspecified schemas.** Assets, dreams, plans, notices, and groups don't have schemas yet. Don't build endpoints for them based on guesses.
-- **Don't lock in.** The spec is MIT-licensed and designed for interoperability. Our extensions should be documented well enough that other implementations could adopt them if useful.
+- **Don't anticipate unspecified schemas.** Assets, dreams, plans, notices, and groups don't have full schemas yet. Don't build endpoints for them based on guesses.
+- **Don't lock in.** The spec is MIT-licensed and designed for interoperability. Our extensions should be documented well enough that other implementations could adopt them.
 
 ## Philosophy
 
@@ -191,8 +123,9 @@ These extensions live under their own route prefixes (`/api/portal/*`, `/api/adm
 - **Fewer things, done completely.** One auth model, fully implemented. One validation approach, used everywhere. One error shape, no exceptions. Don't add a feature unless you're willing to own its security surface, its edge cases, and its maintenance burden forever.
 - **Public data, private infrastructure.** Events are public. Everything else — IP addresses, user identities, access patterns, business email addresses — is private by default and must be justified to store, log, or transmit.
 - **No magic, no tricks.** Every behavior should be traceable from the route handler to the database query to the response. No ORMs, no middleware that silently transforms data, no "smart" defaults that surprise readers.
+- **The data enables surprising things.** This API doesn't know what downstream consumers will build. A social app might show nearby events. A civic dashboard might track neighborhood vitality. Someone might crowdsource pool attendance patterns from open swim listings. Design for data atoms that can be recombined in ways we haven't imagined.
 
-## Architecture Rules
+## Architecture
 
 ### Request Flow
 
@@ -298,7 +231,7 @@ When adding a new route, choose the appropriate limiter. If none fits, create a 
 
 - **No individual user tracking on public endpoints.** Browse counters use IP hashes with 24-hour TTL. After cleanup, there is zero record that any individual viewed any event.
 - **Audit logs hash actor identities.** `hashId(userId)` produces a one-way hash. Given a user ID, you can find their audit trail. Given an audit trail, you cannot recover the user ID. This is deliberate.
-- **Location data is transient.** Latitude/longitude in requests is used for distance calculation and discarded. The `find_user_region` RPC accepts coordinates and returns a region name — coordinates are never stored in the query.
+- **Location data is transient.** Latitude/longitude in requests is used for distance calculation and discarded.
 
 ## Code Quality
 
@@ -307,7 +240,7 @@ When adding a new route, choose the appropriate limiter. If none fits, create a 
 - Files: `kebab-case.ts`
 - Functions: `camelCase` — verb-first (`validateRequest`, `dispatchWebhooks`, `hashId`)
 - Constants: `UPPER_SNAKE_CASE` for true constants (`EVENT_CATEGORIES`, `PAGE_LIMIT`)
-- Types: `PascalCase` (`PortalEventRow`, `EventCategory`, `VibeSummary`)
+- Types: `PascalCase` (`PortalEventRow`, `EventCategory`)
 - Route params: validated immediately, never passed through raw
 - Log prefixes: `[UPPERCASE]` matching the domain (`[PORTAL]`, `[ADMIN]`, `[WEBHOOKS]`, `[CRON]`)
 
@@ -317,23 +250,15 @@ Write comments for:
 - **Why**, never **what**. If the code needs a "what" comment, the code is unclear — fix the code.
 - **Security decisions.** Why this auth model, why this rate limit, why this validation.
 - **Non-obvious constraints.** Database column limits, external API quirks, timezone edge cases.
-- **Algorithm explanation.** Trending score formula, geographic distance approximation, retry backoff calculation.
 
 Don't write comments for:
 - Function signatures (TypeScript handles this)
 - Import groups
-- "End of section" markers
 - Anything a competent reader can infer in 3 seconds
-
-### File Size
-
-Route files may be long (portal.ts is 1,400 lines). That's fine — a route file is a complete unit. Don't split a route file into multiple files to hit an arbitrary line limit. Split only when you have genuinely distinct domains.
-
-Lib files should be focused. One concern per file. If a lib file exceeds 300 lines, it's probably doing two things.
 
 ### Dependencies
 
-This repo has 8 runtime dependencies. That's already a lot. Before adding a ninth:
+This repo has 8 runtime dependencies. That's deliberate. Before adding a ninth:
 
 1. Can you do it with Node.js built-ins? (`crypto`, `http`, `url`, `fs`)
 2. Can you do it in 50 lines of code in a lib file?
@@ -343,37 +268,39 @@ Don't add: ORMs, logging frameworks, DI containers, "utility" libraries, anythin
 
 ## Testing
 
-**Tests are not optional. They expand alongside every change.** Other apps depend on this data. A silent column mismatch or a broken transform means bad data flowing to every downstream consumer. Tests are the only thing standing between a code change and corrupted data in every event and IRL app pulling from this API.
+**Tests are not optional. They expand alongside every change.** Other apps depend on this data. A silent column mismatch or a broken transform means bad data flowing to every downstream consumer. Tests are the only thing standing between a code change and corrupted data in every app pulling from this API.
 
 ### Run Before Every Push
 
 ```
-npx vitest run
+npm run test:run
 ```
 
-All tests must pass. No exceptions, no skipping. This takes <1 second.
+All tests must pass. No exceptions, no skipping.
 
 ### Test Philosophy
 
 Tests should find real bugs, not prove the developer was thorough. If a test can't fail in a way that matters, delete it.
 
-The schema alignment test (`tests/schema-alignment.test.ts`) is the most important test in this repo. It statically scans every Supabase query in `src/` and verifies that every column name actually exists in the database schema. Supabase/PostgREST silently returns null for nonexistent columns — no error, no warning, just missing data. This test turns silent data loss into loud failures. **On its first run, it found 6 real column-name bugs across 3 files.**
+The test suite is designed around the question: **what would silently break the experience of people discovering and attending neighborhood events?** Bad data in the API response. A broken transform that drops the venue address. A column rename that silently nulls out every event description. An auth change that locks business owners out of their own listings. These are the failures that matter, and these are what the tests catch.
 
 ### What We Test
 
 | Test File | What It Catches |
 |-----------|----------------|
-| `schema-alignment.test.ts` | Column name mismatches between code and database. **Update the `SCHEMA` constant when migrations change columns.** |
-| `event-transform.test.ts` | Neighborhood API spec violations — wrong field names, wrong nesting, wrong types in the public API response |
-| `validation.test.ts` | Input validation failures — missing fields, wrong types, injection attempts getting past the front door |
-| `security.test.ts` | Security regressions — API key hashing, error response shape, URL resolution, geo parsing |
+| `schema-alignment.test.ts` | Column name mismatches between code and database. Supabase/PostgREST silently returns null for nonexistent columns — this test turns silent data loss into loud failures. Found 6 real bugs on its first run. **Update the `SCHEMA` constant when migrations change columns.** |
+| `event-transform.test.ts` | Neighborhood API spec violations — wrong field names, wrong nesting, wrong types in the public API response. If these fail, every consumer of the API gets the wrong shape. |
+| `api-integration.test.ts` | End-to-end Express app tests — HTTP requests through the real middleware stack. Verifies status codes, response shapes, error formats, auth rejection, CORS headers, and content negotiation. |
+| `validation.test.ts` | Input validation failures — missing fields, wrong types, injection attempts getting past the front door. |
+| `security.test.ts` | Security regressions — API key hashing, error response shape, URL resolution, geo parsing. |
 
 ### When Adding Code
 
 - **New route or query?** The schema alignment test picks up new column references automatically. If you reference a column that doesn't exist, it fails.
 - **New migration?** Update the `SCHEMA` constant in `schema-alignment.test.ts` first. Add the column there before writing the code that uses it.
+- **New endpoint?** Add integration tests in `api-integration.test.ts` that verify the response shape, status codes, and error handling.
 - **New transform or helper?** Add unit tests in the appropriate test file.
-- **New table?** Add it to `SCHEMA`. The "schema definition covers all tables" test will catch you if you forget.
+- **New table?** Add it to `SCHEMA`. The test will catch you if you forget.
 
 ### What Not To Test
 
@@ -388,11 +315,36 @@ Don't test Express routing mechanics, Supabase client internals, or Zod schema p
 - Never modify an existing migration. Create a new one.
 - Test migrations against a fresh Supabase instance before merging.
 
+## Environment Setup
+
+Required environment variables (see `src/config.ts` for Zod validation):
+
+```bash
+SUPABASE_URL=           # Your Supabase project URL
+SUPABASE_ANON_KEY=      # Supabase anon/public key
+SUPABASE_SERVICE_ROLE_KEY= # Supabase service role key (server-side only)
+AUDIT_SALT=             # For audit log hashing (min 16 chars)
+```
+
+Optional:
+```bash
+COMMONS_ADMIN_USER_IDS= # Comma-separated Supabase auth UUIDs for admin access
+GOOGLE_PLACES_API_KEY=  # Venue search in portal
+TURNSTILE_SECRET_KEY=   # Cloudflare Turnstile (captcha)
+CAPTCHA_ENABLED=false   # Set to true when Turnstile is configured
+MAILGUN_API_KEY=        # Portal emails
+MAILGUN_DOMAIN=         # Mailgun sending domain
+COMMONS_R2_*=           # Cloudflare R2 credentials for image hosting
+CRON_SECRET=            # For cron endpoint auth (min 16 chars)
+COMMONS_SERVICE_KEY=    # For internal sync auth (min 32 chars)
+DEFAULT_REGION_ID=      # UUID of default region for new portal events
+```
+
 ## What Not To Do
 
 - **Don't add user accounts.** This is a public data service. If you need user-specific features, that belongs in the consuming application, not here.
 - **Don't add social features.** No likes, no comments, no follows, no feeds. The social layer lives elsewhere.
-- **Don't add caching layers.** HTTP cache headers are fine. Application-level caching (Redis, in-memory) adds complexity we don't need at this scale. If we need it, we'll know — and we'll add it deliberately.
+- **Don't add caching layers.** HTTP cache headers are fine. Application-level caching adds complexity we don't need at this scale.
 - **Don't add GraphQL.** The REST API is simple and sufficient. GraphQL adds parsing complexity, introspection surface, and query cost analysis that we'd need to secure.
 - **Don't over-abstract.** Three similar database queries are better than a "query builder" helper. Four similar route handlers are better than a "route factory." Abstractions are justified when they prevent bugs, not when they prevent typing.
 - **Don't "improve" working code.** If you're fixing a bug, fix the bug. Don't also rename variables, add types, refactor helpers, or clean up adjacent code. One concern per change.
