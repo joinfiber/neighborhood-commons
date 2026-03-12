@@ -60,7 +60,7 @@ const createEventSchema = z.object({
   custom_category: z.string().max(30).optional(),
   recurrence: z.string()
     .regex(
-      /^(none|daily|weekly|biweekly|monthly|ordinal_weekday:[1-5]:(monday|tuesday|wednesday|thursday|friday|saturday|sunday))$/,
+      /^(none|daily|weekly|biweekly|monthly|ordinal_weekday:[1-5]:(monday|tuesday|wednesday|thursday|friday|saturday|sunday)|weekly_days:(mon|tue|wed|thu|fri|sat|sun)(,(mon|tue|wed|thu|fri|sat|sun))*)$/,
       'Invalid recurrence pattern',
     )
     .default('none'),
@@ -87,7 +87,7 @@ const updateEventSchema = z.object({
   custom_category: z.string().max(30).optional().nullable(),
   recurrence: z.string()
     .regex(
-      /^(none|daily|weekly|biweekly|monthly|ordinal_weekday:[1-5]:(monday|tuesday|wednesday|thursday|friday|saturday|sunday))$/,
+      /^(none|daily|weekly|biweekly|monthly|ordinal_weekday:[1-5]:(monday|tuesday|wednesday|thursday|friday|saturday|sunday)|weekly_days:(mon|tue|wed|thu|fri|sat|sun)(,(mon|tue|wed|thu|fri|sat|sun))*)$/,
       'Invalid recurrence pattern',
     )
     .optional(),
