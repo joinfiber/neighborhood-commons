@@ -96,13 +96,14 @@ router.post('/', writeLimiter, async (req, res, next) => {
 
     // Return signing secret ONCE — consumer must save it
     // RPC returns full row; pick only public fields
+    const sub = subscription as Record<string, unknown>;
     res.status(201).json({
       subscription: {
-        id: subscription.id,
-        url: subscription.url,
-        event_types: subscription.event_types,
-        status: subscription.status,
-        created_at: subscription.created_at,
+        id: sub.id,
+        url: sub.url,
+        event_types: sub.event_types,
+        status: sub.status,
+        created_at: sub.created_at,
         signing_secret: signingSecret,
       },
       note: 'Save the signing_secret — it will not be shown again.',
