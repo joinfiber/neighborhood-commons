@@ -161,16 +161,21 @@ async function deliverWebhook(
 
   const body = JSON.stringify(payload);
 
-  // Prefer encrypted secret; fall back to plaintext during migration
+  // SECURITY: Require encrypted secret in production. No plaintext fallback —
+  // if decryption fails, skip delivery rather than risk using a stale/compromised value.
   let secret: string;
-  if (sub.signing_secret_encrypted && isEncryptionConfigured()) {
-    try {
-      secret = decryptSecret(sub.signing_secret_encrypted as unknown as Buffer);
-    } catch (err) {
-      console.error('[WEBHOOKS] Decrypt failed, falling back to plaintext:', err instanceof Error ? err.message : err);
-      secret = sub.signing_secret;
+  if (isEncryptionConfigured()) {
+    if (!sub.signing_secret_encrypted) {
+      console.error(`[WEBHOOKS] Subscription ${sub.id} missing encrypted secret — skipping delivery`);
+      await supabaseAdmin
+        .from('webhook_deliveries')
+        .update({ status: 'failed', error_message: 'Missing encrypted signing secret' })
+        .eq('id', deliveryId);
+      return;
     }
+    secret = decryptSecret(sub.signing_secret_encrypted as unknown as Buffer);
   } else {
+    // Dev/test: encryption not configured, use plaintext
     secret = sub.signing_secret;
   }
 
@@ -237,13 +242,16 @@ async function deliverRawWebhook(
   const eventType = (payload.event_type as string) || 'unknown';
 
   let secret: string;
-  if (sub.signing_secret_encrypted && isEncryptionConfigured()) {
-    try {
-      secret = decryptSecret(sub.signing_secret_encrypted as unknown as Buffer);
-    } catch (err) {
-      console.error('[WEBHOOKS] Decrypt failed, falling back to plaintext:', err instanceof Error ? err.message : err);
-      secret = sub.signing_secret;
+  if (isEncryptionConfigured()) {
+    if (!sub.signing_secret_encrypted) {
+      console.error(`[WEBHOOKS] Subscription ${sub.id} missing encrypted secret — skipping delivery`);
+      await supabaseAdmin
+        .from('webhook_deliveries')
+        .update({ status: 'failed', error_message: 'Missing encrypted signing secret' })
+        .eq('id', deliveryId);
+      return;
     }
+    secret = decryptSecret(sub.signing_secret_encrypted as unknown as Buffer);
   } else {
     secret = sub.signing_secret;
   }

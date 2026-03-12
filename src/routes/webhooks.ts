@@ -66,45 +66,43 @@ router.post('/', writeLimiter, async (req, res, next) => {
       );
     }
 
-    // Check subscription limit
-    const { count } = await supabaseAdmin
-      .from('webhook_subscriptions')
-      .select('id', { count: 'exact', head: true })
-      .eq('api_key_id', apiKeyId);
-
-    if ((count || 0) >= MAX_SUBSCRIPTIONS_PER_KEY) {
-      throw createError(`Subscription limit reached (${MAX_SUBSCRIPTIONS_PER_KEY} per key)`, 429, 'SUBSCRIPTION_LIMIT');
-    }
-
     // Generate signing secret
     const signingSecret = randomBytes(32).toString('hex');
 
-    // Dual-write: store both plaintext and encrypted (until plaintext column is dropped)
-    const insertData: Record<string, unknown> = {
-      api_key_id: apiKeyId,
-      url,
-      event_types,
-      signing_secret: signingSecret,
+    // Atomic count + insert via RPC — prevents concurrent requests exceeding the limit
+    const rpcParams: Record<string, unknown> = {
+      p_api_key_id: apiKeyId,
+      p_url: url,
+      p_event_types: event_types,
+      p_signing_secret: signingSecret,
+      p_max_subscriptions: MAX_SUBSCRIPTIONS_PER_KEY,
     };
     if (isEncryptionConfigured()) {
-      insertData.signing_secret_encrypted = encryptSecret(signingSecret);
+      rpcParams.p_signing_secret_encrypted = encryptSecret(signingSecret);
     }
 
     const { data: subscription, error } = await supabaseAdmin
-      .from('webhook_subscriptions')
-      .insert(insertData)
-      .select('id, url, event_types, status, created_at')
+      .rpc('create_webhook_subscription', rpcParams)
       .single();
 
     if (error) {
+      // RPC raises P0001 for limit exceeded
+      if (error.message?.includes('Subscription limit reached')) {
+        throw createError(`Subscription limit reached (${MAX_SUBSCRIPTIONS_PER_KEY} per key)`, 429, 'SUBSCRIPTION_LIMIT');
+      }
       console.error('[WEBHOOKS] Create error:', error.message);
       throw createError('Failed to create webhook', 500, 'SERVER_ERROR');
     }
 
     // Return signing secret ONCE — consumer must save it
+    // RPC returns full row; pick only public fields
     res.status(201).json({
       subscription: {
-        ...subscription,
+        id: subscription.id,
+        url: subscription.url,
+        event_types: subscription.event_types,
+        status: subscription.status,
+        created_at: subscription.created_at,
         signing_secret: signingSecret,
       },
       note: 'Save the signing_secret — it will not be shown again.',

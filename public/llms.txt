@@ -356,9 +356,11 @@ Headers sent: `X-NC-Signature` (HMAC-SHA256), `X-NC-Event` (event type), `Conten
 ### Verifying Webhook Signatures
 
 ```javascript
+// IMPORTANT: Verify against the raw HTTP request body, not JSON.stringify(parsed).
+// Re-serializing a parsed object may reorder keys or alter whitespace.
 const crypto = require('crypto');
-function verify(body, signature, secret) {
-  const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(JSON.stringify(body)).digest('hex');
+function verify(rawBody, signature, secret) {
+  const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
   return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
 }
 ```

@@ -889,7 +889,8 @@ router.patch('/account/profile', writeLimiter, async (req, res, next) => {
       throw createError('No fields to update', 400, 'VALIDATION_ERROR');
     }
 
-    const { data: account, error } = await supabaseAdmin
+    // SECURITY: Use user-context client so RLS enforces ownership
+    const { data: account, error } = await getUserClient(req)
       .from('portal_accounts')
       .update(update)
       .eq('id', accountId)
@@ -918,7 +919,13 @@ const createEventSchema = z.object({
   place_id: z.string().max(500).optional(),
   latitude: z.number().min(-90).max(90).optional(),
   longitude: z.number().min(-180).max(180).optional(),
-  event_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD'),
+  event_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD')
+    .refine((d) => {
+      const date = new Date(d + 'T00:00:00');
+      const max = new Date();
+      max.setFullYear(max.getFullYear() + 2);
+      return !isNaN(date.getTime()) && date <= max;
+    }, { message: 'Event date cannot be more than 2 years in the future' }),
   start_time: z.string().regex(/^\d{2}:\d{2}$/, 'Start time must be HH:MM'),
   end_time: z.string().regex(/^\d{2}:\d{2}$/, 'End time must be HH:MM').optional(),
   category: z.enum(EVENT_CATEGORY_KEYS as [string, ...string[]]),
@@ -948,7 +955,14 @@ const updateEventSchema = z.object({
   place_id: z.string().max(500).optional(),
   latitude: z.number().min(-90).max(90).optional().nullable(),
   longitude: z.number().min(-180).max(180).optional().nullable(),
-  event_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD').optional(),
+  event_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD')
+    .refine((d) => {
+      const date = new Date(d + 'T00:00:00');
+      const max = new Date();
+      max.setFullYear(max.getFullYear() + 2);
+      return !isNaN(date.getTime()) && date <= max;
+    }, { message: 'Event date cannot be more than 2 years in the future' })
+    .optional(),
   start_time: z.string().regex(/^\d{2}:\d{2}$/, 'Start time must be HH:MM').optional(),
   end_time: z.string().regex(/^\d{2}:\d{2}$/, 'End time must be HH:MM').optional().nullable(),
   category: z.enum(EVENT_CATEGORY_KEYS as [string, ...string[]]).optional(),
