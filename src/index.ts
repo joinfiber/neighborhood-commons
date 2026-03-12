@@ -13,6 +13,9 @@ const app = createApp();
 const server = app.listen(config.port, () => {
   console.log(`[COMMONS] Neighborhood Commons running on port ${config.port}`);
   console.log(`[COMMONS] CORS origins: ${config.cors.origins.join(', ')}`);
+  if (!config.captcha.enabled) {
+    console.warn('[COMMONS] CAPTCHA disabled — registration protected by rate limiting only. Set CAPTCHA_ENABLED=true and TURNSTILE_SECRET_KEY for production.');
+  }
 });
 
 // Graceful shutdown

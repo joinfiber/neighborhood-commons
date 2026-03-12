@@ -41,6 +41,14 @@ function isPrivateIPv4(ip: string): boolean {
   if (a === 169 && b === 254) return true;
   // Current network: 0.0.0.0/8
   if (a === 0) return true;
+  // RFC 6598: 100.64.0.0/10 — shared address space / CGNAT
+  if (a === 100 && b >= 64 && b <= 127) return true;
+  // IETF protocol assignments: 192.0.0.0/24
+  if (a === 192 && b === 0 && parts[2] === 0) return true;
+  // Benchmark testing: 198.18.0.0/15
+  if (a === 198 && (b === 18 || b === 19)) return true;
+  // Reserved for future use: 240.0.0.0/4
+  if (a >= 240) return true;
 
   return false;
 }

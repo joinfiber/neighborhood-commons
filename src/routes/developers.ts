@@ -11,7 +11,7 @@ import { z } from 'zod';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { validateRequest } from '../lib/helpers.js';
 import { createError } from '../middleware/error-handler.js';
-import { enumerationLimiter, writeLimiter } from '../middleware/rate-limit.js';
+import { enumerationLimiter, writeLimiter, verifyOtpLimiter } from '../middleware/rate-limit.js';
 import { requireApiKey } from '../middleware/api-key.js';
 import { generateAndStoreKey } from '../lib/api-keys.js';
 
@@ -65,7 +65,7 @@ router.post('/register/send-otp', enumerationLimiter, async (req, res, next) => 
 // Verify code and receive your API key.
 // ---------------------------------------------------------------------------
 
-router.post('/register/verify-otp', enumerationLimiter, async (req, res, next) => {
+router.post('/register/verify-otp', enumerationLimiter, verifyOtpLimiter, async (req, res, next) => {
   try {
     const { email, token, name } = validateRequest(verifyOtpSchema, req.body);
 
@@ -169,7 +169,7 @@ router.get('/me', requireApiKey, async (req, res, next) => {
 // Requires current X-API-Key header.
 // ---------------------------------------------------------------------------
 
-router.post('/keys/rotate', writeLimiter, requireApiKey, async (req, res, next) => {
+router.post('/keys/rotate', writeLimiter, verifyOtpLimiter, requireApiKey, async (req, res, next) => {
   try {
     const { email, token } = validateRequest(rotateKeySchema, req.body);
     const keyId = req.apiKeyInfo!.id;

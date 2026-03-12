@@ -6,6 +6,7 @@
  * the Commons service needs.
  */
 
+import { createHmac, timingSafeEqual } from 'crypto';
 import { type ZodType, type ZodTypeDef } from 'zod';
 import { createError } from '../middleware/error-handler.js';
 
@@ -64,6 +65,24 @@ export function resolveEventImageUrl(raw: string | null | undefined, apiBaseUrl:
     return `${apiBaseUrl}/api/portal/events/${id}/image`;
   }
   return raw;
+}
+
+// =============================================================================
+// CRYPTO HELPERS
+// =============================================================================
+
+/**
+ * Constant-time string comparison that does not leak length.
+ *
+ * SECURITY: A naive length-check-then-timingSafeEqual approach leaks the
+ * expected secret length via timing. This function HMACs both values with
+ * a fixed key to normalize them to 32-byte digests, then compares those.
+ * The HMAC key is not a secret — its purpose is length normalization.
+ */
+export function constantTimeCompare(a: string, b: string): boolean {
+  const hmacA = createHmac('sha256', 'length-normalizer').update(a).digest();
+  const hmacB = createHmac('sha256', 'length-normalizer').update(b).digest();
+  return timingSafeEqual(hmacA, hmacB);
 }
 
 // =============================================================================

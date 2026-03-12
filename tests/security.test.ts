@@ -6,7 +6,7 @@
  * a security regression.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { createHash } from 'crypto';
 import { createError } from '../src/middleware/error-handler.js';
 import { hashApiKey } from '../src/lib/api-keys.js';
@@ -89,6 +89,39 @@ describe('API key format', () => {
     const prefix = rawKey.substring(0, 11);
     expect(prefix).toBe('nc_a1b2c3d4');
     expect(prefix.length).toBe(11);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Constant-time secret comparison
+// ---------------------------------------------------------------------------
+
+describe('constantTimeCompare', () => {
+  let constantTimeCompare: (a: string, b: string) => boolean;
+
+  beforeAll(async () => {
+    const mod = await import('../src/lib/helpers.js');
+    constantTimeCompare = mod.constantTimeCompare;
+  });
+
+  it('returns true for matching strings', () => {
+    expect(constantTimeCompare('my-secret-key', 'my-secret-key')).toBe(true);
+  });
+
+  it('returns false for different strings', () => {
+    expect(constantTimeCompare('correct-key', 'wrong-key')).toBe(false);
+  });
+
+  it('returns false for different-length strings (no length leak)', () => {
+    expect(constantTimeCompare('short', 'much-longer-string')).toBe(false);
+  });
+
+  it('returns false for empty vs non-empty', () => {
+    expect(constantTimeCompare('', 'something')).toBe(false);
+  });
+
+  it('returns true for two empty strings', () => {
+    expect(constantTimeCompare('', '')).toBe(true);
   });
 });
 

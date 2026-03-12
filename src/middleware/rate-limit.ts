@@ -55,3 +55,20 @@ export const enumerationLimiter = isTest ? passthrough : rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+/**
+ * OTP verification — compounds IP + email to prevent distributed
+ * brute-force against a single email's OTP code. 5-minute window
+ * matches Supabase OTP expiry so the limiter resets with new codes.
+ */
+export const verifyOtpLimiter = isTest ? passthrough : rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 5,
+  keyGenerator: (req: Request) => {
+    const email = ((req.body as Record<string, unknown>)?.email as string || '').toLowerCase().trim();
+    return `otp:${req.ip || 'unknown'}:${email}`;
+  },
+  message: { error: { code: 'RATE_LIMIT', message: 'Too many verification attempts' } },
+  standardHeaders: true,
+  legacyHeaders: false,
+});

@@ -114,7 +114,7 @@ export const config = {
     accessKeyId: env.COMMONS_R2_ACCESS_KEY_ID || '',
     secretAccessKey: env.COMMONS_R2_SECRET_ACCESS_KEY || '',
     bucketName: env.COMMONS_R2_BUCKET_NAME,
-    enabled: !!(env.COMMONS_R2_ACCOUNT_ID && env.COMMONS_R2_ACCESS_KEY_ID),
+    enabled: !!(env.COMMONS_R2_ACCOUNT_ID && env.COMMONS_R2_ACCESS_KEY_ID && env.COMMONS_R2_SECRET_ACCESS_KEY),
   },
 
   cors: {

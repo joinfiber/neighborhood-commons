@@ -33,7 +33,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export function createApp(): Express {
   const app = express();
 
-  // Trust proxy (Railway/cloud)
+  // SECURITY: trust proxy = 1 is Railway's recommended setting. Railway adds
+  // exactly one proxy hop, so Express reads the rightmost X-Forwarded-For entry
+  // (the one Railway injected). An attacker-prepended XFF value is ignored.
+  // Changing this without understanding Railway's proxy topology breaks rate limiting.
   app.set('trust proxy', 1);
 
   // Security headers

@@ -139,6 +139,72 @@ describe('private IPv4 blocking', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Additional reserved IPv4 ranges (RFC 6598, IETF, benchmark, reserved)
+// ---------------------------------------------------------------------------
+
+describe('additional reserved IPv4 ranges', () => {
+  it('blocks 100.64.0.1 (RFC 6598 CGNAT)', async () => {
+    mockLookup.mockResolvedValueOnce({ address: '100.64.0.1', family: 4 });
+    await expect(validateWebhookUrl('https://evil.com/webhook'))
+      .rejects.toThrow('private IP');
+  });
+
+  it('blocks 100.127.255.255 (RFC 6598 end)', async () => {
+    mockLookup.mockResolvedValueOnce({ address: '100.127.255.255', family: 4 });
+    await expect(validateWebhookUrl('https://evil.com/webhook'))
+      .rejects.toThrow('private IP');
+  });
+
+  it('allows 100.63.255.255 (just below CGNAT range)', async () => {
+    mockLookup.mockResolvedValueOnce({ address: '100.63.255.255', family: 4 });
+    await expect(validateWebhookUrl('https://example.com/webhook'))
+      .resolves.toBeUndefined();
+  });
+
+  it('allows 100.128.0.1 (just above CGNAT range)', async () => {
+    mockLookup.mockResolvedValueOnce({ address: '100.128.0.1', family: 4 });
+    await expect(validateWebhookUrl('https://example.com/webhook'))
+      .resolves.toBeUndefined();
+  });
+
+  it('blocks 192.0.0.1 (IETF protocol assignments)', async () => {
+    mockLookup.mockResolvedValueOnce({ address: '192.0.0.1', family: 4 });
+    await expect(validateWebhookUrl('https://evil.com/webhook'))
+      .rejects.toThrow('private IP');
+  });
+
+  it('blocks 198.18.0.1 (benchmark testing)', async () => {
+    mockLookup.mockResolvedValueOnce({ address: '198.18.0.1', family: 4 });
+    await expect(validateWebhookUrl('https://evil.com/webhook'))
+      .rejects.toThrow('private IP');
+  });
+
+  it('blocks 198.19.255.255 (benchmark testing end)', async () => {
+    mockLookup.mockResolvedValueOnce({ address: '198.19.255.255', family: 4 });
+    await expect(validateWebhookUrl('https://evil.com/webhook'))
+      .rejects.toThrow('private IP');
+  });
+
+  it('allows 198.20.0.1 (just above benchmark range)', async () => {
+    mockLookup.mockResolvedValueOnce({ address: '198.20.0.1', family: 4 });
+    await expect(validateWebhookUrl('https://example.com/webhook'))
+      .resolves.toBeUndefined();
+  });
+
+  it('blocks 240.0.0.1 (reserved/future use)', async () => {
+    mockLookup.mockResolvedValueOnce({ address: '240.0.0.1', family: 4 });
+    await expect(validateWebhookUrl('https://evil.com/webhook'))
+      .rejects.toThrow('private IP');
+  });
+
+  it('blocks 255.255.255.255 (broadcast)', async () => {
+    mockLookup.mockResolvedValueOnce({ address: '255.255.255.255', family: 4 });
+    await expect(validateWebhookUrl('https://evil.com/webhook'))
+      .rejects.toThrow('private IP');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Private IPv6 ranges
 // ---------------------------------------------------------------------------
 

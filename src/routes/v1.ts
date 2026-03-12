@@ -94,7 +94,7 @@ router.get('/', async (req, res, next) => {
 
     // Text search
     if (params.q) {
-      const sanitized = params.q.replace(/[,.()"\\%_]/g, ' ').trim();
+      const sanitized = params.q.replace(/[,.()"\\%_;:'`*]/g, ' ').trim();
       if (sanitized.length > 0) {
         query = query.or(`content.ilike.%${sanitized}%,description.ilike.%${sanitized}%`);
       }
@@ -336,11 +336,11 @@ export async function rssHandler(_req: import('express').Request, res: import('e
       const ev = toNeighborhoodEvent(row as unknown as PortalEventRow);
       return `    <item>
       <title>${escapeXml(ev.name)}</title>
-      <description>${escapeXml(ev.description || '')}</description>
+      <description><![CDATA[${(ev.description || '').replace(/]]>/g, ']]]]><![CDATA[>')}]]></description>
       <link>${baseUrl}/api/v1/events/${ev.id}</link>
       <guid isPermaLink="false">${ev.id}</guid>
       <pubDate>${new Date(ev.start).toUTCString()}</pubDate>
-      <category>${ev.category.join(', ')}</category>
+      <category>${escapeXml(ev.category.join(', '))}</category>
     </item>`;
     }).join('\n');
 

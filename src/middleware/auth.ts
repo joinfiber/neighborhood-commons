@@ -8,10 +8,10 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { timingSafeEqual } from 'crypto';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { createUserClient, supabaseAdmin } from '../lib/supabase.js';
 import { config } from '../config.js';
+import { constantTimeCompare } from '../lib/helpers.js';
 
 // Extend Express Request
 declare global {
@@ -110,8 +110,7 @@ export function requireServiceKey(req: Request, res: Response, next: NextFunctio
     return;
   }
 
-  if (!token || token.length !== config.internal.serviceKey.length ||
-      !timingSafeEqual(Buffer.from(token), Buffer.from(config.internal.serviceKey))) {
+  if (!token || !constantTimeCompare(token, config.internal.serviceKey)) {
     res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Invalid service key' } });
     return;
   }

@@ -4,8 +4,8 @@
  * Verifies cron secret header for scheduled job endpoints.
  */
 
-import { timingSafeEqual } from 'crypto';
 import { config } from '../config.js';
+import { constantTimeCompare } from '../lib/helpers.js';
 import type { Request, Response, NextFunction } from 'express';
 
 export function requireCronSecret(req: Request, res: Response, next: NextFunction): void {
@@ -16,11 +16,7 @@ export function requireCronSecret(req: Request, res: Response, next: NextFunctio
     return;
   }
 
-  if (
-    typeof secret !== 'string' ||
-    secret.length !== config.cron.secret.length ||
-    !timingSafeEqual(Buffer.from(secret), Buffer.from(config.cron.secret))
-  ) {
+  if (typeof secret !== 'string' || !constantTimeCompare(secret, config.cron.secret)) {
     res.status(403).json({ error: 'Invalid cron secret' });
     return;
   }

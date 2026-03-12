@@ -34,6 +34,9 @@ import { blockDatacenterIps } from '../middleware/ip-filter.js';
 
 const PORTAL_ACCOUNT_SELECT = 'id, email, business_name, auth_user_id, status, default_venue_name, default_place_id, default_address, default_latitude, default_longitude, website, phone, last_login_at, created_at, updated_at';
 
+/** IANA timezone set — built once at module load for Zod validation */
+const VALID_TIMEZONES = new Set(Intl.supportedValuesOf('timeZone'));
+
 // =============================================================================
 // FORMAT CONVERSION HELPERS
 // =============================================================================
@@ -798,6 +801,11 @@ router.post('/account/claim', writeLimiter, async (req, res, next) => {
       throw createError('This account has already been claimed', 409, 'CONFLICT');
     }
 
+    // SAFETY: .is('auth_user_id', null) makes this atomic at the DB level.
+    // If a concurrent request claims this account between our SELECT and this
+    // UPDATE, the WHERE condition fails and PostgREST returns zero rows —
+    // preventing a double-claim race. The SELECT above is for user-facing
+    // error messages only; this UPDATE is the source of truth.
     const { data: claimed, error: claimError } = await supabaseAdmin
       .from('portal_accounts')
       .update({ auth_user_id: userId, claimed_at: new Date().toISOString() })
@@ -922,7 +930,10 @@ const createEventSchema = z.object({
     )
     .default('none'),
   instance_count: z.number().int().min(0).max(52).optional(),
-  event_timezone: z.string().max(50).default('America/New_York'),
+  event_timezone: z.string().max(50).refine(
+    (tz) => VALID_TIMEZONES.has(tz),
+    { message: 'Invalid timezone. Use IANA format (e.g., America/New_York)' },
+  ).default('America/New_York'),
   description: z.string().max(2000).optional(),
   price: z.string().max(100).optional(),
   ticket_url: z.string().url().max(2000).optional().or(z.literal('')),
@@ -949,7 +960,10 @@ const updateEventSchema = z.object({
     )
     .optional(),
   instance_count: z.number().int().min(0).max(52).optional(),
-  event_timezone: z.string().max(50).optional(),
+  event_timezone: z.string().max(50).refine(
+    (tz) => VALID_TIMEZONES.has(tz),
+    { message: 'Invalid timezone. Use IANA format (e.g., America/New_York)' },
+  ).optional(),
   description: z.string().max(2000).optional().nullable(),
   price: z.string().max(100).optional().nullable(),
   ticket_url: z.string().url().max(2000).optional().or(z.literal('')).nullable(),
