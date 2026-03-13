@@ -54,7 +54,8 @@ Status codes: 400 (bad request), 401 (no/invalid auth), 403 (forbidden), 404 (no
 Query parameters:
 - `start_after` (string) — YYYY-MM-DD. Events starting on or after this date.
 - `start_before` (string) — YYYY-MM-DD. Events starting before this date.
-- `category` (string) — Filter by category slug (e.g., live-music, comedy, markets).
+- `category` (string) — Filter by category slug (e.g., live-music, comedy, film-screenings).
+- `tag` (string, repeatable) — Filter by experience tag. Multiple tags use AND semantics (e.g., `?tag=outdoor&tag=free`).
 - `q` (string) — Text search in title and description. Max 200 chars.
 - `near` (string) — Geo filter center: "lat,lng" (e.g., "39.95,-75.16").
 - `radius_km` (number) — Radius from `near` in km. 0.1–100, default 10.
@@ -73,6 +74,7 @@ Response (200):
       "end": "2026-03-14T22:00:00-04:00",
       "description": "Live jazz trio...",
       "category": ["live-music"],
+      "tags": ["outdoor", "free", "all-ages"],
       "place_id": "ChIJ...",
       "location": { "name": "South Jazz Kitchen", "address": "600 N Broad St, Philadelphia", "lat": 39.9632, "lng": -75.1551 },
       "url": "https://example.com/tickets",
@@ -392,6 +394,7 @@ function verify(rawBody, signature, secret) {
 | end | string or null | End time |
 | description | string or null | Plain text |
 | category | string[] | Slugified categories (e.g., ["live-music"]) |
+| tags | string[] | Experience/setting/access tags from a shared pool of 29 tags (e.g., ["outdoor", "free", "all-ages"]). Curated per category. May be empty. |
 | place_id | string or null | Google Places ID |
 | location | object | { name, address, lat, lng } |
 | url | string or null | Ticket or event page URL |

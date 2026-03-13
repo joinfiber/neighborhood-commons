@@ -14,6 +14,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import rateLimit from 'express-rate-limit';
 import { EVENT_CATEGORIES } from '../lib/categories.js';
+import { ALL_TAG_SLUGS } from '../lib/tags.js';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { createError } from '../middleware/error-handler.js';
 import { validateRequest } from '../lib/helpers.js';
@@ -44,6 +45,7 @@ const listSchema = z.object({
   start_after: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   start_before: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   category: z.string().max(50).optional(),
+  tag: z.union([z.string().max(50), z.array(z.string().max(50))]).optional(),
   q: z.string().max(200).optional(),
   near: z.string().regex(/^-?\d+\.?\d*,-?\d+\.?\d*$/).optional(),
   radius_km: z.coerce.number().min(0.1).max(100).optional(),
@@ -67,7 +69,7 @@ router.get('/', async (req, res, next) => {
 
     let query = supabaseAdmin
       .from('events')
-      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, start_time_required, portal_accounts!events_creator_account_id_fkey(business_name), event_series!events_series_id_fkey(recurrence)', { count: 'exact' })
+      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, start_time_required, tags, portal_accounts!events_creator_account_id_fkey(business_name), event_series!events_series_id_fkey(recurrence)', { count: 'exact' })
       .eq('source', 'portal')
       .eq('status', 'published')
       // Visibility: include events still relevant to browse feeds.
@@ -117,6 +119,15 @@ router.get('/', async (req, res, next) => {
           .lte('latitude', lat + latDelta)
           .gte('longitude', lng - lngDelta)
           .lte('longitude', lng + lngDelta);
+      }
+    }
+
+    // Tag filtering (AND semantics: event must have ALL specified tags)
+    if (params.tag) {
+      const tags = Array.isArray(params.tag) ? params.tag : [params.tag];
+      const validTags = tags.filter((t) => (ALL_TAG_SLUGS as string[]).includes(t));
+      if (validTags.length > 0) {
+        query = query.contains('tags', validTags);
       }
     }
 
@@ -193,7 +204,7 @@ router.get('/:id', async (req, res, next) => {
 
     const { data: event, error } = await supabaseAdmin
       .from('events')
-      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, series_instance_number, start_time_required, portal_accounts!events_creator_account_id_fkey(business_name), event_series!events_series_id_fkey(recurrence)')
+      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, series_instance_number, start_time_required, tags, portal_accounts!events_creator_account_id_fkey(business_name), event_series!events_series_id_fkey(recurrence)')
       .eq('id', id)
       .eq('source', 'portal')
       .eq('status', 'published')
@@ -249,7 +260,7 @@ function escapeXml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, start_time_required, portal_accounts!events_creator_account_id_fkey(business_name), event_series!events_series_id_fkey(recurrence)';
+const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, start_time_required, tags, portal_accounts!events_creator_account_id_fkey(business_name), event_series!events_series_id_fkey(recurrence)';
 
 /** Deduplicate series events: keep only the nearest upcoming instance per series_id.
  *  Carries the series recurrence pattern onto the kept instance. */

@@ -44,7 +44,7 @@ const SCHEMA: Record<string, string[]> = {
     'creator_account_id', 'user_id', 'is_business', 'visibility', 'status',
     'broadcast_mode', 'discovery_radius_meters', 'recurrence', 'series_id',
     'series_instance_number', 'becomes_visible_at', 'expires_at', 'ended_at',
-    'start_time_required', 'created_at', 'updated_at',
+    'start_time_required', 'tags', 'created_at', 'updated_at',
   ],
   event_series: [
     'id', 'creator_account_id', 'recurrence', 'base_event_data',

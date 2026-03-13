@@ -44,6 +44,7 @@ export interface PortalEvent {
   image_focal_y: number;
   status: string;
   start_time_required: boolean;
+  tags: string[];
   series_id: string | null;
   series_instance_number: number | null;
   created_at: string;
@@ -142,6 +143,7 @@ export interface EventFormData {
   price?: string;
   ticket_url?: string;
   start_time_required?: boolean;
+  tags?: string[];
   image?: string | null;
   image_focal_y?: number;
 }

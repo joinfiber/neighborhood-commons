@@ -9,6 +9,8 @@ import { PlaceAutocomplete } from './PlaceAutocomplete';
 import { ImageUpload } from './ImageUpload';
 import { ImageCropPreview } from './ImageCropPreview';
 import { EventPreviews } from './EventPreviews';
+import { TagPicker } from './TagPicker';
+import { getTagsForCategory } from '../lib/tags';
 
 interface EventFormProps {
   mode: 'create' | 'edit' | 'admin-create';
@@ -43,6 +45,7 @@ export function EventForm({
   const [recurrence, setRecurrence] = useState(initialValues.recurrence || 'none');
   const [instanceCount, setInstanceCount] = useState(initialValues.instance_count || 4);
   const [startTimeRequired, setStartTimeRequired] = useState(initialValues.start_time_required ?? true);
+  const [tags, setTags] = useState<string[]>(initialValues.tags || []);
   const [description, setDescription] = useState(initialValues.description || '');
   const [price, setPrice] = useState(initialValues.price || '');
   const [ticketUrl, setTicketUrl] = useState(initialValues.ticket_url || '');
@@ -53,6 +56,13 @@ export function EventForm({
   const [imageFocalY, setImageFocalY] = useState(initialValues.image_focal_y ?? 0.5);
 
   const [error, setError] = useState<string | null>(null);
+
+  function handleCategoryChange(newCategory: string) {
+    setCategory(newCategory);
+    // Keep only tags that are valid in the new category
+    const allowed = getTagsForCategory(newCategory) as string[];
+    setTags((prev) => prev.filter((t) => allowed.includes(t)));
+  }
 
   function handlePlaceSelect(place: PlaceResult) {
     setVenueName(place.name);
@@ -83,6 +93,7 @@ export function EventForm({
       custom_category: category === 'other' ? customCategory || undefined : undefined,
       instance_count: recurrence !== 'none' ? instanceCount : undefined,
       start_time_required: startTimeRequired,
+      tags: tags.length > 0 ? tags : undefined,
       description: description || undefined,
       price: price || undefined,
       ticket_url: ticketUrl || undefined,
@@ -197,7 +208,7 @@ export function EventForm({
           {/* Category */}
           <div style={{ marginBottom: '16px' }}>
             <label style={styles.formLabel}>Category</label>
-            <CategoryPicker value={category} onChange={setCategory} />
+            <CategoryPicker value={category} onChange={handleCategoryChange} />
           </div>
 
           {/* Custom category */}
@@ -211,6 +222,14 @@ export function EventForm({
                 placeholder="e.g., Book club"
                 maxLength={50}
               />
+            </div>
+          )}
+
+          {/* Tags */}
+          {category && (
+            <div style={{ marginBottom: '16px' }}>
+              <label style={styles.formLabel}>Tags <span style={{ color: colors.dim, fontWeight: 400 }}>(optional)</span></label>
+              <TagPicker category={category} value={tags} onChange={setTags} />
             </div>
           )}
 

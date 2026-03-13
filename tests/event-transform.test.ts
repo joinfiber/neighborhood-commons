@@ -8,6 +8,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { toNeighborhoodEvent, toIso, slugifyCategory, toRRule, type PortalEventRow } from '../src/lib/event-transform.js';
+import { validateTags } from '../src/lib/tags.js';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -32,6 +33,7 @@ function makeRow(overrides: Partial<PortalEventRow> = {}): PortalEventRow {
     series_id: null,
     series_instance_number: null,
     start_time_required: true,
+    tags: ['outdoor', 'free'],
     price: 'Free',
     link_url: 'https://example.com/tickets',
     event_image_url: 'https://images.example.com/jazz.jpg',
@@ -264,5 +266,50 @@ describe('toRRule', () => {
 
   it('returns null for unknown patterns', () => {
     expect(toRRule('yearly')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tags
+// ---------------------------------------------------------------------------
+
+describe('toNeighborhoodEvent — tags', () => {
+  it('passes through tags array', () => {
+    const event = toNeighborhoodEvent(makeRow({ tags: ['outdoor', 'free', 'all-ages'] }));
+    expect(event.tags).toEqual(['outdoor', 'free', 'all-ages']);
+  });
+
+  it('returns empty array when tags is null', () => {
+    const event = toNeighborhoodEvent(makeRow({ tags: null }));
+    expect(event.tags).toEqual([]);
+  });
+
+  it('returns empty array when tags is empty', () => {
+    const event = toNeighborhoodEvent(makeRow({ tags: [] }));
+    expect(event.tags).toEqual([]);
+  });
+});
+
+describe('validateTags', () => {
+  it('filters tags to those allowed for the category', () => {
+    const result = validateTags(['outdoor', 'free', 'tasting'], 'live_music');
+    expect(result).toContain('outdoor');
+    expect(result).toContain('free');
+    expect(result).not.toContain('tasting');
+  });
+
+  it('enforces age tag mutual exclusivity', () => {
+    const result = validateTags(['all-ages', '21-plus', 'outdoor'], 'live_music');
+    expect(result.filter((t) => ['all-ages', '18-plus', '21-plus'].includes(t))).toHaveLength(1);
+    expect(result).toContain('outdoor');
+  });
+
+  it('allows all tags for "other" category', () => {
+    const result = validateTags(['outdoor', 'tasting', 'volunteer', 'acoustic'], 'other');
+    expect(result).toEqual(['outdoor', 'tasting', 'volunteer', 'acoustic']);
+  });
+
+  it('returns empty array for empty input', () => {
+    expect(validateTags([], 'live_music')).toEqual([]);
   });
 });
