@@ -233,7 +233,7 @@ export function EventForm({
                 type="checkbox"
                 checked={startTimeRequired}
                 onChange={(e) => setStartTimeRequired(e.target.checked)}
-                style={{ marginTop: '3px', accentColor: colors.accent }}
+                style={{ marginTop: '3px', accentColor: colors.amber }}
               />
               <div>
                 <span style={{ ...styles.formLabel, marginBottom: 0 }}>Attendees need to arrive at the start time</span>
