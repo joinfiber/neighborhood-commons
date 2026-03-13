@@ -82,6 +82,7 @@ Response (200):
       "organizer": { "name": "South Jazz Kitchen", "phone": null },
       "cost": "Free",
       "start_time_required": true,
+      "wheelchair_accessible": true,
       "recurrence": { "rrule": "weekly" },
       "source": { "publisher": "South Jazz Kitchen", "collected_at": "2026-03-10T12:00:00Z", "method": "portal", "license": "CC BY 4.0" }
     }
@@ -403,6 +404,7 @@ function verify(rawBody, signature, secret) {
 | cost | string or null | "Free", "$10", "$5-15" |
 | recurrence | object or null | { rrule: "weekly" } when recurring, null otherwise |
 | start_time_required | boolean | Default true. When true, event should be hidden from browse feeds after its start time. When false (open-window events like happy hours), keep showing until end time. If false and no end time, consumer decides fallback (e.g., start + 3h). |
+| wheelchair_accessible | boolean or null | Resolved from event-level override or venue default. true = accessible, false = not accessible, null = unknown. |
 | source | object | { publisher, collected_at, method, license } |
 
 ## License

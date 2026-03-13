@@ -17,6 +17,7 @@ export interface PortalAccount {
   last_login_at: string | null;
   phone: string | null;
   website: string | null;
+  wheelchair_accessible: boolean | null;
   status: string;
   created_at: string;
   event_count?: number;
@@ -45,6 +46,7 @@ export interface PortalEvent {
   status: string;
   start_time_required: boolean;
   tags: string[];
+  wheelchair_accessible: boolean | null;
   series_id: string | null;
   series_instance_number: number | null;
   created_at: string;
@@ -144,6 +146,7 @@ export interface EventFormData {
   ticket_url?: string;
   start_time_required?: boolean;
   tags?: string[];
+  wheelchair_accessible?: boolean | null;
   image?: string | null;
   image_focal_y?: number;
 }

@@ -20,6 +20,7 @@ interface EventFormProps {
   searchCoords?: { latitude: number; longitude: number };
   submitting?: boolean;
   submitLabel?: string;
+  accountWheelchairAccessible?: boolean | null;
 }
 
 export function EventForm({
@@ -30,6 +31,7 @@ export function EventForm({
   searchCoords,
   submitting = false,
   submitLabel,
+  accountWheelchairAccessible,
 }: EventFormProps) {
   const [title, setTitle] = useState(initialValues.title || '');
   const [venueName, setVenueName] = useState(initialValues.venue_name || '');
@@ -46,6 +48,9 @@ export function EventForm({
   const [instanceCount, setInstanceCount] = useState(initialValues.instance_count || 4);
   const [startTimeRequired, setStartTimeRequired] = useState(initialValues.start_time_required ?? true);
   const [tags, setTags] = useState<string[]>(initialValues.tags || []);
+  const [wheelchairAccessible, setWheelchairAccessible] = useState<boolean | null>(
+    initialValues.wheelchair_accessible ?? accountWheelchairAccessible ?? null,
+  );
   const [description, setDescription] = useState(initialValues.description || '');
   const [price, setPrice] = useState(initialValues.price || '');
   const [ticketUrl, setTicketUrl] = useState(initialValues.ticket_url || '');
@@ -94,6 +99,7 @@ export function EventForm({
       instance_count: recurrence !== 'none' ? instanceCount : undefined,
       start_time_required: startTimeRequired,
       tags: tags.length > 0 ? tags : undefined,
+      wheelchair_accessible: wheelchairAccessible,
       description: description || undefined,
       price: price || undefined,
       ticket_url: ticketUrl || undefined,
@@ -259,6 +265,26 @@ export function EventForm({
                 <div style={{ fontSize: '12px', color: colors.dim, marginTop: '2px' }}>
                   Uncheck for events people can join anytime, like happy hours or open swims. When checked, your event stops appearing in browse feeds after it starts.
                 </div>
+              </div>
+            </label>
+          </div>
+
+          {/* Wheelchair accessible */}
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={wheelchairAccessible === true}
+                onChange={(e) => setWheelchairAccessible(e.target.checked ? true : null)}
+                style={{ marginTop: '3px', accentColor: colors.amber }}
+              />
+              <div>
+                <span style={{ ...styles.formLabel, marginBottom: 0 }}>Wheelchair accessible</span>
+                {accountWheelchairAccessible != null && initialValues.wheelchair_accessible === undefined && (
+                  <div style={{ fontSize: '11px', color: colors.dim, marginTop: '2px' }}>
+                    From your venue settings
+                  </div>
+                )}
               </div>
             </label>
           </div>

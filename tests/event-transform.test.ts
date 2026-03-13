@@ -34,11 +34,12 @@ function makeRow(overrides: Partial<PortalEventRow> = {}): PortalEventRow {
     series_instance_number: null,
     start_time_required: true,
     tags: ['outdoor', 'free'],
+    wheelchair_accessible: null,
     price: 'Free',
     link_url: 'https://example.com/tickets',
     event_image_url: 'https://images.example.com/jazz.jpg',
     created_at: '2026-03-10T12:00:00.000Z',
-    portal_accounts: { business_name: 'South Jazz Kitchen' },
+    portal_accounts: { business_name: 'South Jazz Kitchen', wheelchair_accessible: null },
     ...overrides,
   };
 }
@@ -311,5 +312,53 @@ describe('validateTags', () => {
 
   it('returns empty array for empty input', () => {
     expect(validateTags([], 'live_music')).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Wheelchair accessibility — resolution logic
+// ---------------------------------------------------------------------------
+
+describe('toNeighborhoodEvent — wheelchair_accessible', () => {
+  it('returns null when both event and account are null', () => {
+    const event = toNeighborhoodEvent(makeRow());
+    expect(event.wheelchair_accessible).toBeNull();
+  });
+
+  it('uses event-level value when set', () => {
+    const event = toNeighborhoodEvent(makeRow({ wheelchair_accessible: true }));
+    expect(event.wheelchair_accessible).toBe(true);
+  });
+
+  it('falls back to account-level value when event is null', () => {
+    const event = toNeighborhoodEvent(makeRow({
+      wheelchair_accessible: null,
+      portal_accounts: { business_name: 'Test', wheelchair_accessible: true },
+    }));
+    expect(event.wheelchair_accessible).toBe(true);
+  });
+
+  it('event false overrides account true', () => {
+    const event = toNeighborhoodEvent(makeRow({
+      wheelchair_accessible: false,
+      portal_accounts: { business_name: 'Test', wheelchair_accessible: true },
+    }));
+    expect(event.wheelchair_accessible).toBe(false);
+  });
+
+  it('event true overrides account false', () => {
+    const event = toNeighborhoodEvent(makeRow({
+      wheelchair_accessible: true,
+      portal_accounts: { business_name: 'Test', wheelchair_accessible: false },
+    }));
+    expect(event.wheelchair_accessible).toBe(true);
+  });
+
+  it('returns null when no portal account and event is null', () => {
+    const event = toNeighborhoodEvent(makeRow({
+      wheelchair_accessible: null,
+      portal_accounts: null,
+    }));
+    expect(event.wheelchair_accessible).toBeNull();
   });
 });

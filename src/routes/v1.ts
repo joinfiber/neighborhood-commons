@@ -69,7 +69,7 @@ router.get('/', async (req, res, next) => {
 
     let query = supabaseAdmin
       .from('events')
-      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, start_time_required, tags, portal_accounts!events_creator_account_id_fkey(business_name), event_series!events_series_id_fkey(recurrence)', { count: 'exact' })
+      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, start_time_required, tags, wheelchair_accessible, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible), event_series!events_series_id_fkey(recurrence)', { count: 'exact' })
       .eq('source', 'portal')
       .eq('status', 'published')
       // Visibility: include events still relevant to browse feeds.
@@ -204,7 +204,7 @@ router.get('/:id', async (req, res, next) => {
 
     const { data: event, error } = await supabaseAdmin
       .from('events')
-      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, series_instance_number, start_time_required, tags, portal_accounts!events_creator_account_id_fkey(business_name), event_series!events_series_id_fkey(recurrence)')
+      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible), event_series!events_series_id_fkey(recurrence)')
       .eq('id', id)
       .eq('source', 'portal')
       .eq('status', 'published')
@@ -260,7 +260,7 @@ function escapeXml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, start_time_required, tags, portal_accounts!events_creator_account_id_fkey(business_name), event_series!events_series_id_fkey(recurrence)';
+const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, start_time_required, tags, wheelchair_accessible, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible), event_series!events_series_id_fkey(recurrence)';
 
 /** Deduplicate series events: keep only the nearest upcoming instance per series_id.
  *  Carries the series recurrence pattern onto the kept instance. */

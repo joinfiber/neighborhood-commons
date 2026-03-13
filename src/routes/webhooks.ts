@@ -271,6 +271,7 @@ router.post('/:id/test', writeLimiter, async (req, res, next) => {
       series_instance_number: null,
       start_time_required: true,
       tags: [],
+      wheelchair_accessible: null,
       recurrence: null,
       source: {
         publisher: 'neighborhood-commons' as const,

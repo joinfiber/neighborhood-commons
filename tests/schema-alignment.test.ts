@@ -44,7 +44,7 @@ const SCHEMA: Record<string, string[]> = {
     'creator_account_id', 'user_id', 'is_business', 'visibility', 'status',
     'broadcast_mode', 'discovery_radius_meters', 'recurrence', 'series_id',
     'series_instance_number', 'becomes_visible_at', 'expires_at', 'ended_at',
-    'start_time_required', 'tags', 'created_at', 'updated_at',
+    'start_time_required', 'tags', 'wheelchair_accessible', 'created_at', 'updated_at',
   ],
   event_series: [
     'id', 'creator_account_id', 'recurrence', 'base_event_data',
@@ -55,6 +55,7 @@ const SCHEMA: Record<string, string[]> = {
     'default_venue_name', 'default_address', 'default_place_id',
     'default_latitude', 'default_longitude', 'logo_url', 'description',
     'status', 'claimed_at', 'created_at', 'updated_at', 'last_login_at',
+    'wheelchair_accessible',
   ],
   regions: [
     'id', 'name', 'slug', 'type', 'parent_id', 'bounds', 'centroid',

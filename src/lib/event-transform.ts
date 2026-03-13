@@ -38,11 +38,12 @@ export interface PortalEventRow {
   series_instance_number: number | null;
   start_time_required: boolean;
   tags: string[] | null;
+  wheelchair_accessible: boolean | null;
   price: string | null;
   link_url: string | null;
   event_image_url: string | null;
   created_at: string;
-  portal_accounts: { business_name: string } | null;
+  portal_accounts: { business_name: string; wheelchair_accessible?: boolean | null } | null;
 }
 
 export interface NeighborhoodEvent {
@@ -70,6 +71,7 @@ export interface NeighborhoodEvent {
   series_instance_number: number | null;
   start_time_required: boolean;
   tags: string[];
+  wheelchair_accessible: boolean | null;
   recurrence: { rrule: string } | null;
   source: {
     publisher: string;
@@ -195,6 +197,7 @@ export function toNeighborhoodEvent(row: PortalEventRow): NeighborhoodEvent {
     series_instance_number: row.series_instance_number || null,
     start_time_required: row.start_time_required ?? true,
     tags: row.tags || [],
+    wheelchair_accessible: row.wheelchair_accessible ?? row.portal_accounts?.wheelchair_accessible ?? null,
     recurrence: rrule ? { rrule } : null,
     source: {
       publisher: row.portal_accounts?.business_name || 'Neighborhood Commons',
