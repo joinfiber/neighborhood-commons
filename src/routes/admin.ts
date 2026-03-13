@@ -13,10 +13,11 @@ import { Router, json as expressJson } from 'express';
 import { z } from 'zod';
 import sharp from 'sharp';
 import { EVENT_CATEGORY_KEYS } from '../lib/categories.js';
+import { validateTags } from '../lib/tags.js';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { createError } from '../middleware/error-handler.js';
 import { requireCommonsAdmin } from '../middleware/auth.js';
-import { writeLimiter, enumerationLimiter } from '../middleware/rate-limit.js';
+import { writeLimiter, portalLimiter } from '../middleware/rate-limit.js';
 import { validateRequest, validateUuidParam } from '../lib/helpers.js';
 import { uploadToR2 } from '../lib/cloudflare.js';
 import { config } from '../config.js';
@@ -194,7 +195,7 @@ async function processAndUploadImage(eventId: string, base64: string): Promise<s
  * GET /admin/stats
  * Platform statistics — total accounts, events, etc.
  */
-router.get('/stats', enumerationLimiter, async (_req, res, next) => {
+router.get('/stats', portalLimiter, async (_req, res, next) => {
   try {
     const { data: accounts } = await supabaseAdmin
       .from('portal_accounts')
@@ -239,7 +240,7 @@ router.get('/stats', enumerationLimiter, async (_req, res, next) => {
  * GET /admin/accounts
  * List all portal accounts with event counts.
  */
-router.get('/accounts', enumerationLimiter, async (_req, res, next) => {
+router.get('/accounts', portalLimiter, async (_req, res, next) => {
   try {
     const { data: accounts, error } = await supabaseAdmin
       .from('portal_accounts')
@@ -284,7 +285,7 @@ router.get('/accounts', enumerationLimiter, async (_req, res, next) => {
  * GET /admin/accounts/:id
  * Single account detail with all its events.
  */
-router.get('/accounts/:id', enumerationLimiter, async (req, res, next) => {
+router.get('/accounts/:id', portalLimiter, async (req, res, next) => {
   try {
     validateUuidParam(req.params.id, 'account ID');
 
@@ -608,7 +609,7 @@ router.post('/accounts/:id/reactivate', writeLimiter, async (req, res, next) => 
  * GET /admin/accounts/:id/activity
  * Fetch audit trail for a specific portal account.
  */
-router.get('/accounts/:id/activity', enumerationLimiter, async (req, res, next) => {
+router.get('/accounts/:id/activity', portalLimiter, async (req, res, next) => {
   try {
     validateUuidParam(req.params.id, 'account ID');
 
@@ -747,7 +748,7 @@ router.post('/accounts/:id/events', writeLimiter, async (req, res, next) => {
  * GET /admin/events
  * All events across all accounts (with business info).
  */
-router.get('/events', enumerationLimiter, async (_req, res, next) => {
+router.get('/events', portalLimiter, async (_req, res, next) => {
   try {
     const { data: events, error } = await supabaseAdmin
       .from('events')
@@ -769,6 +770,97 @@ router.get('/events', enumerationLimiter, async (_req, res, next) => {
     });
 
     res.json({ events: result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * PATCH /admin/events/batch
+ * Bulk-update multiple events (admin override, no RLS).
+ * Same field set as portal batch — safe bulk fields only.
+ *
+ * NOTE: Must be defined before /events/:id to avoid route conflict.
+ */
+const adminBatchUpdateSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(50),
+  updates: z.object({
+    category: z.enum(EVENT_CATEGORY_KEYS as [string, ...string[]]).optional(),
+    custom_category: z.string().max(30).optional().nullable(),
+    tags: z.array(z.string().max(50)).max(15).optional(),
+    wheelchair_accessible: z.boolean().nullable().optional(),
+    start_time_required: z.boolean().optional(),
+    description: z.string().max(2000).optional().nullable(),
+    price: z.string().max(100).optional().nullable(),
+  }).refine((u) => Object.keys(u).length > 0, { message: 'No fields to update' }),
+});
+
+router.patch('/events/batch', writeLimiter, async (req, res, next) => {
+  try {
+    const adminUserId = getAdminUserId();
+    const { ids, updates } = validateRequest(adminBatchUpdateSchema, req.body);
+
+    if (updates.category === 'other') {
+      if (!updates.custom_category || updates.custom_category.trim().length === 0) {
+        throw createError('Custom category is required when category is "other"', 400, 'VALIDATION_ERROR');
+      }
+    }
+
+    const dbUpdate: Record<string, unknown> = {};
+    if (updates.category !== undefined) {
+      dbUpdate.category = updates.category;
+      if (updates.category !== 'other') dbUpdate.custom_category = null;
+    }
+    if (updates.custom_category !== undefined && updates.category === 'other') {
+      dbUpdate.custom_category = updates.custom_category?.trim() || null;
+    }
+    if (updates.tags !== undefined) {
+      const category = updates.category;
+      dbUpdate.tags = category ? validateTags(updates.tags, category) : updates.tags;
+    }
+    if (updates.wheelchair_accessible !== undefined) dbUpdate.wheelchair_accessible = updates.wheelchair_accessible;
+    if (updates.start_time_required !== undefined) dbUpdate.start_time_required = updates.start_time_required;
+    if (updates.description !== undefined) dbUpdate.description = updates.description || null;
+    if (updates.price !== undefined) dbUpdate.price = updates.price || null;
+
+    const { data: updated, error } = await supabaseAdmin
+      .from('events')
+      .update(dbUpdate)
+      .in('id', ids)
+      .eq('source', 'portal')
+      .select('id, creator_account_id');
+
+    if (error) {
+      console.error('[ADMIN] Batch update error:', error.message);
+      throw createError('Failed to update events', 500, 'SERVER_ERROR');
+    }
+
+    const updatedRows = (updated || []) as { id: string; creator_account_id: string }[];
+
+    for (const row of updatedRows) {
+      auditPortalAction('portal_event_updated', adminUserId, row.id,
+        undefined, '/api/portal/admin/events/batch');
+    }
+
+    // Dispatch webhooks (fire-and-forget)
+    void (async () => {
+      try {
+        for (const row of updatedRows) {
+          const { data: full } = await supabaseAdmin
+            .from('events')
+            .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name)`)
+            .eq('id', row.id)
+            .maybeSingle();
+          if (full) {
+            void dispatchWebhooks('event.updated', row.id, toNeighborhoodEvent(full as unknown as PortalEventRow));
+          }
+        }
+      } catch (err) {
+        console.error('[ADMIN] Batch webhook dispatch error:', err instanceof Error ? err.message : err);
+      }
+    })();
+
+    res.json({ updated: updatedRows.length, ids: updatedRows.map((r) => r.id) });
   } catch (err) {
     next(err);
   }
@@ -1031,7 +1123,7 @@ router.post('/api-keys', writeLimiter, async (req, res, next) => {
  * GET /admin/api-keys
  * List all API keys.
  */
-router.get('/api-keys', enumerationLimiter, async (_req, res, next) => {
+router.get('/api-keys', portalLimiter, async (_req, res, next) => {
   try {
     const { data: keys, error } = await supabaseAdmin
       .from('api_keys')

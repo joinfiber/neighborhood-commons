@@ -252,6 +252,22 @@ export async function adminUpdateEvent(id: string, params: Partial<CreateEventPa
   });
 }
 
+export async function adminBatchUpdateEvents(ids: string[], updates: Partial<CreateEventParams>) {
+  return apiRequest<{ updated: number; ids: string[] }>('/api/portal/admin/events/batch', {
+    method: 'PATCH',
+    body: JSON.stringify({ ids, updates }),
+  });
+}
+
+export async function adminBatchDeleteEvents(ids: string[]) {
+  const results: string[] = [];
+  for (const id of ids) {
+    const res = await apiRequest<{ success: boolean }>(`/api/portal/admin/events/${id}`, { method: 'DELETE' });
+    if (res.data?.success) results.push(id);
+  }
+  return { deleted: results.length, ids: results };
+}
+
 export async function adminDeleteEvent(id: string) {
   return apiRequest<{ success: boolean }>(`/api/portal/admin/events/${id}`, { method: 'DELETE' });
 }
