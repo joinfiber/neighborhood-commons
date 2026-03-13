@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { styles, colors } from '../lib/styles';
 import { adminFetchAccount, adminUpdateEvent, adminDeleteEvent, adminUploadEventImage } from '../lib/api';
-import type { PortalEvent, EventFormData } from '../lib/types';
+import type { PortalAccount, PortalEvent, EventFormData } from '../lib/types';
 import { EventForm } from '../components/EventForm';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 
@@ -14,6 +14,7 @@ interface AdminEditEventScreenProps {
 }
 
 export function AdminEditEventScreen({ eventId, accountId, onBack, onUpdated, onDeleted }: AdminEditEventScreenProps) {
+  const [account, setAccount] = useState<PortalAccount | null>(null);
   const [event, setEvent] = useState<PortalEvent | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -25,6 +26,7 @@ export function AdminEditEventScreen({ eventId, accountId, onBack, onUpdated, on
     setLoading(true);
     adminFetchAccount(accountId).then((res) => {
       if (res.data) {
+        setAccount(res.data.account);
         const found = res.data.events.find((e) => e.id === eventId);
         if (found) setEvent(found);
         else setError('Event not found');
@@ -129,6 +131,8 @@ export function AdminEditEventScreen({ eventId, accountId, onBack, onUpdated, on
     description: event.description || '',
     price: event.price || '',
     ticket_url: event.ticket_url || '',
+    tags: event.tags || [],
+    wheelchair_accessible: event.wheelchair_accessible,
     image_focal_y: event.image_focal_y,
   };
 
@@ -162,6 +166,7 @@ export function AdminEditEventScreen({ eventId, accountId, onBack, onUpdated, on
           hasExistingImage={!!event.image_url}
           onSubmit={handleSubmit}
           submitting={submitting}
+          accountWheelchairAccessible={account?.wheelchair_accessible ?? null}
         />
 
         <button

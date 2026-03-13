@@ -71,6 +71,9 @@ export interface CreateEventParams {
   price?: string;
   ticket_url?: string;
   image_focal_y?: number;
+  start_time_required?: boolean;
+  tags?: string[];
+  wheelchair_accessible?: boolean | null;
 }
 
 export interface PlaceResult {

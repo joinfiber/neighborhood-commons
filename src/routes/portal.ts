@@ -874,6 +874,7 @@ const updateProfileSchema = z.object({
   default_longitude: z.number().min(-180).max(180).optional().nullable(),
   website: z.string().url().max(500).optional().or(z.literal('')).nullable(),
   phone: z.string().max(50).optional().nullable(),
+  wheelchair_accessible: z.boolean().nullable().optional(),
 });
 
 /**
@@ -894,6 +895,7 @@ router.patch('/account/profile', writeLimiter, async (req, res, next) => {
     if (data.default_longitude !== undefined) update.default_longitude = data.default_longitude ?? null;
     if (data.website !== undefined) update.website = data.website || null;
     if (data.phone !== undefined) update.phone = data.phone || null;
+    if (data.wheelchair_accessible !== undefined) update.wheelchair_accessible = data.wheelchair_accessible;
 
     if (Object.keys(update).length === 0) {
       throw createError('No fields to update', 400, 'VALIDATION_ERROR');

@@ -60,6 +60,7 @@ export function CreateEventScreen({ account, onBack, onCreated }: CreateEventScr
           onSubmit={handleSubmit}
           searchCoords={searchCoords}
           submitting={submitting}
+          accountWheelchairAccessible={account.wheelchair_accessible}
         />
       </div>
     </div>

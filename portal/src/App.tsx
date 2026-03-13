@@ -293,6 +293,7 @@ export default function App() {
       return (
         <EditEventScreen
           id={route.params.id}
+          accountWheelchairAccessible={account?.wheelchair_accessible ?? null}
           onBack={back}
           onUpdated={() => {
             navigate('#/');

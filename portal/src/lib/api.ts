@@ -116,6 +116,7 @@ export async function updateProfile(params: {
   default_longitude?: number | null;
   website?: string | null;
   phone?: string | null;
+  wheelchair_accessible?: boolean | null;
 }) {
   return apiRequest<{ account: PortalAccount }>('/api/portal/account/profile', {
     method: 'PATCH',

@@ -91,6 +91,7 @@ export function AdminCreateEventScreen({ preSelectedAccountId, onBack, onCreated
           onSubmit={handleSubmit}
           searchCoords={searchCoords}
           submitting={submitting}
+          accountWheelchairAccessible={selectedAccount?.wheelchair_accessible ?? null}
         />
       </div>
     </div>

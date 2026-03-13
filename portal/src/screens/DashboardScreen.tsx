@@ -207,6 +207,12 @@ export function DashboardScreen({ account, onCreateEvent, onEditEvent, onSignOut
                     <div style={{ color: colors.cream }}>{account.phone}</div>
                   </div>
                 )}
+                {account.wheelchair_accessible != null && (
+                  <div>
+                    <div style={{ color: colors.muted, fontSize: '11px', marginBottom: '2px' }}>Wheelchair Accessible</div>
+                    <div style={{ color: colors.cream }}>{account.wheelchair_accessible ? 'Yes' : 'No'}</div>
+                  </div>
+                )}
               </div>
 
               <div style={{ borderTop: `1px solid ${colors.border}`, marginTop: '14px', paddingTop: '14px', display: 'flex', justifyContent: 'flex-end' }}>

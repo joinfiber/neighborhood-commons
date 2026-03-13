@@ -7,12 +7,13 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 
 interface EditEventScreenProps {
   id: string;
+  accountWheelchairAccessible?: boolean | null;
   onBack: () => void;
   onUpdated: () => void;
   onDeleted: () => void;
 }
 
-export function EditEventScreen({ id, onBack, onUpdated, onDeleted }: EditEventScreenProps) {
+export function EditEventScreen({ id, accountWheelchairAccessible, onBack, onUpdated, onDeleted }: EditEventScreenProps) {
   const [event, setEvent] = useState<PortalEvent | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -170,6 +171,8 @@ export function EditEventScreen({ id, onBack, onUpdated, onDeleted }: EditEventS
     description: event.description || '',
     price: event.price || '',
     ticket_url: event.ticket_url || '',
+    tags: event.tags || [],
+    wheelchair_accessible: event.wheelchair_accessible,
     image_focal_y: event.image_focal_y,
   };
 
@@ -243,6 +246,7 @@ export function EditEventScreen({ id, onBack, onUpdated, onDeleted }: EditEventS
           hasExistingImage={!!event.image_url}
           onSubmit={handleSubmit}
           submitting={submitting}
+          accountWheelchairAccessible={accountWheelchairAccessible}
         />
 
         <button
