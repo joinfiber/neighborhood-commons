@@ -220,7 +220,7 @@ const dropdownStyle: React.CSSProperties = {
   padding: '10px',
   zIndex: 50,
   width: '240px',
-  boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+  boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
 };
 
 const navBtn: React.CSSProperties = {

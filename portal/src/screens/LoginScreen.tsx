@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { styles, colors } from '../lib/styles';
+import { styles, loginColors, loginStyles } from '../lib/styles';
 import { Turnstile } from '../components/Turnstile';
 
 interface LoginScreenProps {
@@ -87,7 +87,7 @@ export function LoginScreen({
         fontWeight: 300,
         letterSpacing: '0.12em',
         textTransform: 'uppercase' as const,
-        color: colors.amber,
+        color: loginColors.amber,
         marginBottom: '20px',
       }}>
         neighborhood commons
@@ -97,7 +97,7 @@ export function LoginScreen({
         fontSize: isMobile ? '26px' : '32px',
         fontWeight: 300,
         lineHeight: 1.25,
-        color: colors.cream,
+        color: loginColors.cream,
         margin: '0 0 28px 0',
         letterSpacing: '-0.01em',
       }}>
@@ -114,14 +114,14 @@ export function LoginScreen({
           'Post once, reach everywhere',
         ].map((text, i) => (
           <div key={i} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-            <span style={{ color: colors.amber, fontSize: '16px', lineHeight: '22px', flexShrink: 0 }}>—</span>
-            <span style={{ color: colors.text, fontSize: '15px', lineHeight: '22px' }}>{text}</span>
+            <span style={{ color: loginColors.amber, fontSize: '16px', lineHeight: '22px', flexShrink: 0 }}>—</span>
+            <span style={{ color: loginColors.text, fontSize: '15px', lineHeight: '22px' }}>{text}</span>
           </div>
         ))}
       </div>
 
       <p style={{
-        color: colors.muted,
+        color: loginColors.muted,
         fontSize: '14px',
         lineHeight: 1.6,
         marginBottom: '12px',
@@ -130,7 +130,7 @@ export function LoginScreen({
       </p>
 
       <p style={{
-        color: colors.dim,
+        color: loginColors.dim,
         fontSize: '13px',
         lineHeight: 1.5,
         marginBottom: '32px',
@@ -141,7 +141,7 @@ export function LoginScreen({
       {onShowDevelopers && (
         <button
           type="button"
-          style={{ ...styles.buttonText, padding: 0, fontSize: '13px', color: colors.muted }}
+          style={{ ...loginStyles.buttonText, padding: 0, fontSize: '13px', color: loginColors.muted }}
           onClick={onShowDevelopers}
         >
           Developers: grab the data →
@@ -154,11 +154,11 @@ export function LoginScreen({
 
   const loginCard = (
     <div style={{ width: '100%', maxWidth: '380px' }}>
-      <div className="fade-up" style={styles.card}>
+      <div className="fade-up" style={loginStyles.card}>
         {error && (
           <div style={{
             background: '#2a1a18',
-            color: colors.error,
+            color: loginColors.error,
             padding: '10px 14px',
             borderRadius: '8px',
             fontSize: '13px',
@@ -170,7 +170,7 @@ export function LoginScreen({
         {captchaError && !error && (
           <div style={{
             background: '#2a1a18',
-            color: colors.error,
+            color: loginColors.error,
             padding: '10px 14px',
             borderRadius: '8px',
             fontSize: '13px',
@@ -182,9 +182,9 @@ export function LoginScreen({
 
         {screen === 'otp' ? (
           <div>
-            <p style={{ color: colors.muted, fontSize: '13px', marginBottom: '16px', textAlign: 'center' }}>
+            <p style={{ color: loginColors.muted, fontSize: '13px', marginBottom: '16px', textAlign: 'center' }}>
               Enter the 8-digit code sent to{' '}
-              <strong style={{ color: colors.cream }}>{email}</strong>
+              <strong style={{ color: loginColors.cream }}>{email}</strong>
             </p>
             <form onSubmit={handleOtpSubmit}>
               <input
@@ -193,7 +193,7 @@ export function LoginScreen({
                 value={otpCode}
                 onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 8))}
                 style={{
-                  ...styles.input,
+                  ...loginStyles.input,
                   textAlign: 'center',
                   fontSize: '22px',
                   letterSpacing: '8px',
@@ -206,46 +206,46 @@ export function LoginScreen({
               />
               <button
                 type="submit"
-                style={{ ...styles.buttonPrimary, marginTop: '8px' }}
+                style={{ ...loginStyles.buttonPrimary, marginTop: '8px' }}
                 disabled={loading || otpCode.length !== 8}
               >
                 {loading ? 'Verifying...' : 'Sign In'}
               </button>
             </form>
             <div style={{ textAlign: 'center', marginTop: '12px' }}>
-              <button type="button" style={styles.buttonText} onClick={handleBack}>
+              <button type="button" style={loginStyles.buttonText} onClick={handleBack}>
                 Use different email
               </button>
             </div>
           </div>
         ) : screen === 'signup' ? (
           <div>
-            <h2 style={{ ...styles.pageTitle, textAlign: 'center', marginBottom: '4px' }}>
+            <h2 style={{ ...loginStyles.pageTitle, textAlign: 'center', marginBottom: '4px' }}>
               Let's get you set up
             </h2>
-            <p style={{ fontSize: '13px', color: colors.muted, textAlign: 'center', marginBottom: '20px' }}>
+            <p style={{ fontSize: '13px', color: loginColors.muted, textAlign: 'center', marginBottom: '20px' }}>
               Create your free business account
             </p>
             <form onSubmit={handleRegisterSubmit}>
               <div style={{ marginBottom: '12px' }}>
-                <label style={styles.formLabel}>Email</label>
+                <label style={loginStyles.formLabel}>Email</label>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  style={{ ...styles.input, color: colors.muted }}
+                  style={{ ...loginStyles.input, color: loginColors.muted }}
                   disabled={loading}
                   required
                 />
               </div>
               <div style={{ marginBottom: '12px' }}>
-                <label style={styles.formLabel}>Business name</label>
+                <label style={loginStyles.formLabel}>Business name</label>
                 <input
                   type="text"
                   placeholder="e.g. Joe's Coffee"
                   value={businessName}
                   onChange={(e) => setBusinessName(e.target.value)}
-                  style={styles.input}
+                  style={loginStyles.input}
                   disabled={loading}
                   maxLength={200}
                   autoFocus
@@ -254,21 +254,21 @@ export function LoginScreen({
               </div>
               <button
                 type="submit"
-                style={styles.buttonPrimary}
+                style={loginStyles.buttonPrimary}
                 disabled={loading || !captchaToken || !businessName.trim()}
               >
                 {loading ? 'Creating account...' : 'Create Account'}
               </button>
             </form>
             <div style={{ textAlign: 'center', marginTop: '12px' }}>
-              <button type="button" style={styles.buttonText} onClick={handleBack}>
+              <button type="button" style={loginStyles.buttonText} onClick={handleBack}>
                 ← Back
               </button>
             </div>
           </div>
         ) : (
           <div>
-            <p style={{ fontSize: '13px', color: colors.muted, textAlign: 'center', marginBottom: '20px' }}>
+            <p style={{ fontSize: '13px', color: loginColors.muted, textAlign: 'center', marginBottom: '20px' }}>
               Sign in or get started
             </p>
             <form onSubmit={handleEmailSubmit}>
@@ -277,7 +277,7 @@ export function LoginScreen({
                 placeholder="you@yourbusiness.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                style={styles.input}
+                style={loginStyles.input}
                 disabled={loading}
                 autoFocus
                 required
@@ -291,12 +291,12 @@ export function LoginScreen({
               </div>
               <button
                 type="submit"
-                style={styles.buttonPrimary}
+                style={loginStyles.buttonPrimary}
                 disabled={loading || !email.trim()}
               >
                 {loading ? 'Checking...' : 'Continue'}
               </button>
-              <p style={{ fontSize: '11px', color: colors.dim, textAlign: 'center', marginTop: '10px' }}>
+              <p style={{ fontSize: '11px', color: loginColors.dim, textAlign: 'center', marginTop: '10px' }}>
                 We'll send you a code — no password needed
               </p>
             </form>
@@ -310,7 +310,7 @@ export function LoginScreen({
 
   if (isMobile) {
     return (
-      <div style={{ ...styles.page, padding: '24px 20px' }}>
+      <div className="login-page" style={{ ...loginStyles.page, padding: '24px 20px' }}>
         <div style={styles.ambientGlow} />
         <div style={{ width: '100%', maxWidth: '420px', position: 'relative' as const, zIndex: 1 }}>
           {loginCard}
@@ -323,7 +323,7 @@ export function LoginScreen({
   }
 
   return (
-    <div style={styles.splitLayout}>
+    <div className="login-page" style={styles.splitLayout}>
       <div style={styles.ambientGlow} />
       <div style={styles.marketingColumn}>
         {marketingContent}

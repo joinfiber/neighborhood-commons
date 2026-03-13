@@ -120,7 +120,7 @@ const codeStyle: React.CSSProperties = {
   border: `1px solid ${colors.border}`,
   borderRadius: '8px',
   padding: '16px',
-  fontSize: '12px',
+  fontSize: '14px',
   fontFamily: 'monospace',
   color: colors.text,
   overflowX: 'auto',
@@ -136,7 +136,7 @@ const sectionHeading: React.CSSProperties = {
 };
 
 const labelStyle: React.CSSProperties = {
-  fontSize: '11px',
+  fontSize: '12px',
   fontWeight: 600,
   letterSpacing: '0.08em',
   textTransform: 'uppercase' as const,
@@ -149,21 +149,21 @@ function Endpoint({ method, path, desc, auth }: { method: string; path: string; 
     <div style={{ ...styles.card, marginBottom: '12px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
         <span style={{
-          fontSize: '11px',
+          fontSize: '12px',
           fontWeight: 600,
-          color: method === 'GET' ? '#4ade80' : method === 'POST' ? colors.amber : '#60a5fa',
+          color: method === 'GET' ? colors.success : method === 'POST' ? colors.amber : '#60a5fa',
           fontFamily: 'monospace',
         }}>
           {method}
         </span>
-        <span style={{ fontSize: '13px', fontFamily: 'monospace', color: colors.cream }}>{path}</span>
+        <span style={{ fontSize: '14px', fontFamily: 'monospace', color: colors.cream }}>{path}</span>
         {auth && (
-          <span style={{ fontSize: '10px', color: colors.dim, background: colors.bg, padding: '2px 6px', borderRadius: '4px' }}>
+          <span style={{ fontSize: '12px', color: colors.dim, background: colors.bg, padding: '2px 6px', borderRadius: '4px' }}>
             {auth}
           </span>
         )}
       </div>
-      <div style={{ fontSize: '13px', color: colors.muted }}>{desc}</div>
+      <div style={{ fontSize: '14px', color: colors.muted }}>{desc}</div>
     </div>
   );
 }
@@ -268,7 +268,7 @@ function RegisterCard() {
   if (step === 'done') {
     return (
       <div style={styles.card}>
-        <div style={{ fontSize: '14px', color: '#4ade80', fontWeight: 500, marginBottom: '12px' }}>
+        <div style={{ fontSize: '16px', color: colors.success, fontWeight: 500, marginBottom: '12px' }}>
           Your API key is ready
         </div>
         <div style={{
@@ -277,17 +277,17 @@ function RegisterCard() {
           borderRadius: '8px',
           padding: '12px',
           fontFamily: 'monospace',
-          fontSize: '13px',
+          fontSize: '14px',
           color: colors.cream,
           wordBreak: 'break-all',
           marginBottom: '12px',
         }}>
           {apiKey}
         </div>
-        <button type="button" onClick={handleCopy} style={{ ...styles.buttonPrimary, fontSize: '13px', padding: '8px 16px', cursor: 'pointer', borderRadius: '8px' }}>
+        <button type="button" onClick={handleCopy} style={{ ...styles.buttonPrimary, fontSize: '14px', padding: '8px 16px', cursor: 'pointer', borderRadius: '8px' }}>
           {copied ? 'Copied!' : 'Copy to clipboard'}
         </button>
-        <div style={{ marginTop: '12px', fontSize: '12px', color: colors.amber }}>
+        <div style={{ marginTop: '12px', fontSize: '14px', color: colors.amber }}>
           Save this key now — it will not be shown again.
         </div>
       </div>
@@ -297,7 +297,7 @@ function RegisterCard() {
   return (
     <div style={styles.card}>
       {error && (
-        <div style={{ background: '#2a1a18', color: colors.error, padding: '8px 12px', borderRadius: '6px', fontSize: '13px', marginBottom: '12px' }}>
+        <div style={{ background: '#fef2f2', color: colors.error, padding: '8px 12px', borderRadius: '6px', fontSize: '14px', marginBottom: '12px' }}>
           {error}
         </div>
       )}
@@ -305,17 +305,17 @@ function RegisterCard() {
       {step === 'email' && (
         <form onSubmit={(e) => { e.preventDefault(); void handleSendOtp(); }} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <div>
-            <label style={{ fontSize: '12px', color: colors.muted, display: 'block', marginBottom: '4px' }}>Your email</label>
+            <label style={{ fontSize: '14px', color: colors.muted, display: 'block', marginBottom: '4px' }}>Your email</label>
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="dev@example.com" required style={inputStyle} />
           </div>
           <div>
-            <label style={{ fontSize: '12px', color: colors.muted, display: 'block', marginBottom: '4px' }}>App or project name</label>
+            <label style={{ fontSize: '14px', color: colors.muted, display: 'block', marginBottom: '4px' }}>App or project name</label>
             <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="My Neighborhood App" required style={inputStyle} />
           </div>
           <button type="submit" disabled={loading} style={submitStyle}>
             {loading ? 'Sending...' : 'Send verification code'}
           </button>
-          <button type="button" onClick={() => { setStep('idle'); setError(''); }} style={{ background: 'none', border: 'none', color: colors.dim, fontSize: '12px', cursor: 'pointer' }}>
+          <button type="button" onClick={() => { setStep('idle'); setError(''); }} style={{ background: 'none', border: 'none', color: colors.dim, fontSize: '14px', cursor: 'pointer' }}>
             Cancel
           </button>
         </form>
@@ -323,17 +323,17 @@ function RegisterCard() {
 
       {step === 'verify' && (
         <form onSubmit={(e) => { e.preventDefault(); void handleVerify(); }} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <p style={{ margin: 0, fontSize: '13px', color: colors.muted }}>
+          <p style={{ margin: 0, fontSize: '14px', color: colors.muted }}>
             We sent a code to <strong style={{ color: colors.cream }}>{email}</strong>
           </p>
           <div>
-            <label style={{ fontSize: '12px', color: colors.muted, display: 'block', marginBottom: '4px' }}>Verification code</label>
+            <label style={{ fontSize: '14px', color: colors.muted, display: 'block', marginBottom: '4px' }}>Verification code</label>
             <input type="text" value={otp} onChange={(e) => setOtp(e.target.value)} placeholder="12345678" required maxLength={8} style={{ ...inputStyle, letterSpacing: '0.15em', textAlign: 'center', fontSize: '18px' }} />
           </div>
           <button type="submit" disabled={loading} style={submitStyle}>
             {loading ? 'Verifying...' : 'Verify & get key'}
           </button>
-          <button type="button" onClick={() => { setStep('email'); setOtp(''); setError(''); }} style={{ background: 'none', border: 'none', color: colors.dim, fontSize: '12px', cursor: 'pointer' }}>
+          <button type="button" onClick={() => { setStep('email'); setOtp(''); setError(''); }} style={{ background: 'none', border: 'none', color: colors.dim, fontSize: '14px', cursor: 'pointer' }}>
             Back
           </button>
         </form>
@@ -345,7 +345,6 @@ function RegisterCard() {
 export function DevelopersScreen({ onBack }: DevelopersScreenProps) {
   return (
     <div style={styles.page}>
-      <div style={styles.ambientGlow} />
       <div style={styles.contentWide} className="fade-up">
         {/* Header */}
         <div style={{ marginBottom: '32px' }}>
@@ -377,11 +376,11 @@ ${API_BASE}/api/v1/events.ics`}
           <div style={styles.card}>
             <p style={{ margin: '0 0 12px 0', fontSize: '14px', color: colors.text, lineHeight: 1.7 }}>
               All access is rate limited to <strong style={{ color: colors.cream }}>1,000 requests/hour</strong> per IP address.
-              Pass an optional <code style={{ color: colors.amber, fontSize: '13px' }}>X-API-Key</code> header to get a dedicated rate limit bucket
+              Pass an optional <code style={{ color: colors.amber, fontSize: '14px' }}>X-API-Key</code> header to get a dedicated rate limit bucket
               (useful if you share an IP with other consumers).
             </p>
-            <p style={{ margin: 0, fontSize: '13px', color: colors.muted }}>
-              Standard <code style={{ color: colors.amber, fontSize: '12px' }}>RateLimit-*</code> headers are included in every response.
+            <p style={{ margin: 0, fontSize: '14px', color: colors.muted }}>
+              Standard <code style={{ color: colors.amber, fontSize: '14px' }}>RateLimit-*</code> headers are included in every response.
             </p>
           </div>
         </Section>
@@ -414,7 +413,7 @@ curl -X POST ${API_BASE}/api/v1/developers/keys/rotate \\
   -H "Content-Type: application/json" \\
   -d '{ "email": "your@email.com", "token": "12345678" }'`}
             </div>
-            <div style={{ marginTop: '12px', fontSize: '12px', color: colors.dim }}>
+            <div style={{ marginTop: '12px', fontSize: '14px', color: colors.dim }}>
               Webhook subscriptions are automatically migrated to the new key.
             </div>
           </div>
@@ -425,7 +424,7 @@ curl -X POST ${API_BASE}/api/v1/developers/keys/rotate \\
           <div style={styles.card}>
             <p style={{ margin: '0 0 12px 0', fontSize: '14px', color: colors.text, lineHeight: 1.7 }}>
               No authentication required. The API is fully public.
-              Optionally pass an API key in the <code style={{ color: colors.amber, fontSize: '13px' }}>X-API-Key</code> header
+              Optionally pass an API key in the <code style={{ color: colors.amber, fontSize: '14px' }}>X-API-Key</code> header
               for a dedicated rate limit bucket. An API key is required for webhook subscriptions.
             </p>
             <div style={codeStyle}>
@@ -470,7 +469,7 @@ curl -H "X-API-Key: nc_a1b2c3d4e5f6..." \\
                 gap: '12px',
                 padding: '8px 0',
                 borderBottom: i < PARAMS.length - 1 ? `1px solid ${colors.border}` : 'none',
-                fontSize: '13px',
+                fontSize: '14px',
               }}>
                 <span style={{ fontFamily: 'monospace', color: colors.amber }}>{p.name}</span>
                 <span style={{ color: colors.dim }}>{p.type}</span>
@@ -494,7 +493,7 @@ curl -H "X-API-Key: nc_a1b2c3d4e5f6..." \\
             </p>
 
             <div style={labelStyle}>Event types</div>
-            <div style={{ marginBottom: '16px', fontSize: '13px', color: colors.muted }}>
+            <div style={{ marginBottom: '16px', fontSize: '14px', color: colors.muted }}>
               <code style={{ color: colors.amber }}>event.created</code> ·{' '}
               <code style={{ color: colors.amber }}>event.updated</code> ·{' '}
               <code style={{ color: colors.amber }}>event.deleted</code>
@@ -511,7 +510,7 @@ curl -H "X-API-Key: nc_a1b2c3d4e5f6..." \\
   }'`}
             </div>
 
-            <div style={{ background: colors.bg, border: `1px solid ${colors.amber}33`, borderRadius: '8px', padding: '12px', fontSize: '13px', color: colors.amber, marginBottom: '16px' }}>
+            <div style={{ background: colors.bg, border: `1px solid ${colors.amber}33`, borderRadius: '8px', padding: '12px', fontSize: '14px', color: colors.amber, marginBottom: '16px' }}>
               Save the <strong>signing_secret</strong> from the response — it will not be shown again.
               Use it to verify that incoming webhooks are authentic.
             </div>
@@ -520,7 +519,7 @@ curl -H "X-API-Key: nc_a1b2c3d4e5f6..." \\
             <div style={{ ...codeStyle, marginBottom: '16px' }}>
               {WEBHOOK_PAYLOAD}
             </div>
-            <div style={{ fontSize: '12px', color: colors.dim, marginBottom: '16px' }}>
+            <div style={{ fontSize: '14px', color: colors.dim, marginBottom: '16px' }}>
               Headers include:{' '}
               <code style={{ color: colors.muted }}>X-NC-Signature</code>,{' '}
               <code style={{ color: colors.muted }}>X-NC-Event</code>,{' '}
@@ -528,7 +527,7 @@ curl -H "X-API-Key: nc_a1b2c3d4e5f6..." \\
             </div>
 
             <div style={labelStyle}>Delivery behavior</div>
-            <ul style={{ margin: 0, padding: '0 0 0 16px', fontSize: '13px', color: colors.muted, lineHeight: 1.8 }}>
+            <ul style={{ margin: 0, padding: '0 0 0 16px', fontSize: '14px', color: colors.muted, lineHeight: 1.8 }}>
               <li>Your endpoint must respond with <strong style={{ color: colors.cream }}>2xx</strong> within 10 seconds</li>
               <li>Failed deliveries retry 3 times with backoff: 1 min, 5 min, 25 min</li>
               <li>After <strong style={{ color: colors.cream }}>10 consecutive failures</strong>, the subscription is auto-disabled</li>
@@ -541,7 +540,7 @@ curl -H "X-API-Key: nc_a1b2c3d4e5f6..." \\
         <Section title="Webhook Signature Verification" id="signature">
           <div style={styles.card}>
             <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: colors.text, lineHeight: 1.7 }}>
-              Every webhook includes an <code style={{ color: colors.amber, fontSize: '13px' }}>X-NC-Signature</code> header.
+              Every webhook includes an <code style={{ color: colors.amber, fontSize: '14px' }}>X-NC-Signature</code> header.
               Verify it with your signing secret to ensure the payload hasn't been tampered with.
             </p>
 
@@ -567,14 +566,14 @@ curl -H "X-API-Key: nc_a1b2c3d4e5f6..." \\
 curl -H "X-API-Key: nc_..." \\
   "${API_BASE}/api/v1/webhooks/{subscription_id}/deliveries?status=failed"`}
             </div>
-            <div style={{ marginTop: '12px', fontSize: '13px', color: colors.muted }}>
+            <div style={{ marginTop: '12px', fontSize: '14px', color: colors.muted }}>
               Delivery statuses:{' '}
-              <code style={{ color: '#4ade80' }}>delivered</code> ·{' '}
+              <code style={{ color: colors.success }}>delivered</code> ·{' '}
               <code style={{ color: colors.amber }}>pending</code> ·{' '}
               <code style={{ color: colors.amber }}>retrying</code> ·{' '}
               <code style={{ color: colors.error }}>failed</code>
             </div>
-            <div style={{ marginTop: '4px', fontSize: '12px', color: colors.dim }}>
+            <div style={{ marginTop: '4px', fontSize: '14px', color: colors.dim }}>
               Delivery logs are retained for 30 days.
             </div>
           </div>
@@ -605,7 +604,7 @@ curl -H "X-API-Key: nc_..." \\
                 gap: '12px',
                 padding: '8px 0',
                 borderBottom: i < arr.length - 1 ? `1px solid ${colors.border}` : 'none',
-                fontSize: '13px',
+                fontSize: '14px',
               }}>
                 <span style={{ fontFamily: 'monospace', color: colors.amber }}>{f.name}</span>
                 <span style={{ color: colors.dim }}>{f.type}</span>
@@ -630,13 +629,13 @@ curl -H "X-API-Key: nc_..." \\
                 gap: '16px',
                 padding: '8px 0',
                 borderBottom: i < arr.length - 1 ? `1px solid ${colors.border}` : 'none',
-                fontSize: '13px',
+                fontSize: '14px',
               }}>
                 <span style={{ fontFamily: 'monospace', color: colors.error, minWidth: '40px' }}>{e.code}</span>
                 <span style={{ color: colors.muted }}>{e.desc}</span>
               </div>
             ))}
-            <div style={{ marginTop: '8px', fontSize: '12px', color: colors.dim }}>
+            <div style={{ marginTop: '8px', fontSize: '14px', color: colors.dim }}>
               All errors return: {'{ "error": { "code": "...", "message": "..." } }'}
             </div>
           </div>
@@ -650,7 +649,7 @@ curl -H "X-API-Key: nc_..." \\
               <strong style={{ color: colors.cream }}>Creative Commons Attribution 4.0 International (CC BY 4.0)</strong>.
               You are free to share, adapt, and build with this data.
             </p>
-            <ul style={{ margin: 0, padding: '0 0 0 16px', fontSize: '13px', color: colors.muted, lineHeight: 1.8 }}>
+            <ul style={{ margin: 0, padding: '0 0 0 16px', fontSize: '14px', color: colors.muted, lineHeight: 1.8 }}>
               <li>Attribution: Credit <strong style={{ color: colors.cream }}>"Neighborhood Commons"</strong> or link to the API</li>
               <li>Rate limit: <strong style={{ color: colors.cream }}>1,000 requests/hour</strong> per API key or IP</li>
               <li>No surveillance, tracking, or profiling of event attendees</li>
@@ -662,7 +661,7 @@ curl -H "X-API-Key: nc_..." \\
         {/* Neighborhood API */}
         <Section title="Neighborhood API v0.2" id="spec">
           <div style={styles.card}>
-            <p style={{ margin: '0 0 8px 0', fontSize: '13px', color: colors.muted, lineHeight: 1.6 }}>
+            <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: colors.muted, lineHeight: 1.6 }}>
               This API follows the{' '}
               <a href="https://github.com/The-Relational-Technology-Project/neighborhood-api"
                 style={{ color: colors.amber, textDecoration: 'none' }}
@@ -671,7 +670,7 @@ curl -H "X-API-Key: nc_..." \\
               </a>
               {' '}— an open format for sharing local events, assets, and plans across community tools.
             </p>
-            <p style={{ margin: 0, fontSize: '12px', color: colors.dim, lineHeight: 1.6 }}>
+            <p style={{ margin: 0, fontSize: '14px', color: colors.dim, lineHeight: 1.6 }}>
               Steward: Neighborhood Commons · Region: Philadelphia · Resources: events · License: CC BY 4.0
             </p>
           </div>
@@ -682,7 +681,7 @@ curl -H "X-API-Key: nc_..." \\
           <p style={{ color: colors.muted, fontSize: '14px', marginBottom: '6px' }}>
             Building something with this data?
           </p>
-          <p style={{ color: colors.dim, fontSize: '13px' }}>
+          <p style={{ color: colors.dim, fontSize: '14px' }}>
             We'd love to hear about it — <span style={{ color: colors.amber }}>hello@joinfiber.app</span>
           </p>
         </div>

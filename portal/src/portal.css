@@ -4,6 +4,30 @@
    ============================================================================= */
 
 :root {
+  --color-amber: #8B7029;
+  --color-amber-dim: #8B70290a;
+  --color-amber-border: #8B702920;
+  --color-bg: #f5f4f1;
+  --color-card: #ffffff;
+  --color-border: #ddd9d2;
+  --color-cream: #1a1917;
+  --color-text: #37352f;
+  --color-muted: #6b6660;
+  --color-dim: #9e9890;
+  --color-error: #c0392b;
+  --color-success: #2d8a4e;
+  --color-success-dim: #2d8a4e0c;
+}
+
+body {
+  background: var(--color-bg);
+}
+
+/* =============================================================================
+   Login page — dark brand theme overrides
+   ============================================================================= */
+
+.login-page {
   --color-amber: #D4A853;
   --color-amber-dim: #D4A85318;
   --color-amber-border: #D4A85344;
@@ -20,7 +44,7 @@
 }
 
 /* =============================================================================
-   Animations (moved from runtime-injected <style> in styles.ts)
+   Animations
    ============================================================================= */
 
 @keyframes drift {
@@ -49,7 +73,7 @@ input::placeholder, textarea::placeholder {
 }
 
 /* =============================================================================
-   Interactive rows (replaces onMouseOver/onMouseOut DOM manipulation)
+   Interactive rows
    ============================================================================= */
 
 .interactive-row {
@@ -126,7 +150,7 @@ input::placeholder, textarea::placeholder {
 .dialog-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;

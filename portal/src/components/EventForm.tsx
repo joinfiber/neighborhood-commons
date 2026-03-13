@@ -124,11 +124,11 @@ export function EventForm({
     <>
       {error && (
         <div style={{
-          background: '#2a1a18',
+          background: '#fef2f2',
           color: colors.error,
           padding: '10px 14px',
           borderRadius: '8px',
-          fontSize: '13px',
+          fontSize: '14px',
           marginBottom: '16px',
         }}>
           {error}

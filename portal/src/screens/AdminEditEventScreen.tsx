@@ -76,7 +76,6 @@ export function AdminEditEventScreen({ eventId, accountId, onBack, onUpdated, on
   if (loading) {
     return (
       <div style={styles.page}>
-        <div style={styles.ambientGlow} />
         <div style={styles.content}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
             <button type="button" className="btn-text" style={styles.buttonText} onClick={onBack}>
@@ -84,7 +83,7 @@ export function AdminEditEventScreen({ eventId, accountId, onBack, onUpdated, on
             </button>
             <h1 style={styles.pageTitle}>Edit Event</h1>
           </div>
-          <div style={{ color: colors.dim, fontSize: '14px', padding: '24px 0' }}>Loading...</div>
+          <div style={{ color: colors.dim, fontSize: '16px', padding: '24px 0' }}>Loading...</div>
         </div>
       </div>
     );
@@ -93,7 +92,6 @@ export function AdminEditEventScreen({ eventId, accountId, onBack, onUpdated, on
   if (!event) {
     return (
       <div style={styles.page}>
-        <div style={styles.ambientGlow} />
         <div style={styles.content}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
             <button type="button" className="btn-text" style={styles.buttonText} onClick={onBack}>
@@ -102,11 +100,11 @@ export function AdminEditEventScreen({ eventId, accountId, onBack, onUpdated, on
             <h1 style={styles.pageTitle}>Edit Event</h1>
           </div>
           <div style={{
-            background: '#2a1a18',
+            background: '#fef2f2',
             color: colors.error,
             padding: '10px 14px',
             borderRadius: '8px',
-            fontSize: '13px',
+            fontSize: '14px',
           }}>
             {error || 'Event not found'}
           </div>
@@ -138,7 +136,6 @@ export function AdminEditEventScreen({ eventId, accountId, onBack, onUpdated, on
 
   return (
     <div style={styles.page}>
-      <div style={styles.ambientGlow} />
       <div style={styles.content} className="fade-up">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
           <button type="button" className="btn-text" style={styles.buttonText} onClick={onBack}>
@@ -149,11 +146,11 @@ export function AdminEditEventScreen({ eventId, accountId, onBack, onUpdated, on
 
         {error && (
           <div style={{
-            background: '#2a1a18',
+            background: '#fef2f2',
             color: colors.error,
             padding: '10px 14px',
             borderRadius: '8px',
-            fontSize: '13px',
+            fontSize: '14px',
             marginBottom: '16px',
           }}>
             {error}

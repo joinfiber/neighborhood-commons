@@ -45,7 +45,6 @@ export function CreateEventScreen({ account, onBack, onCreated }: CreateEventScr
 
   return (
     <div style={styles.page}>
-      <div style={styles.ambientGlow} />
       <div style={styles.content} className="fade-up">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
           <button type="button" className="btn-text" style={styles.buttonText} onClick={onBack}>

@@ -376,7 +376,6 @@ function OnboardingScreen({ account, onComplete, onSkip }: {
 
   return (
     <div style={styles.page}>
-      <div style={styles.ambientGlow} />
       <div style={{ ...styles.content, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '80vh' }}>
         <div className="fade-up" style={{ ...styles.card, maxWidth: '440px', width: '100%' }}>
           <h2 style={{ ...styles.pageTitle, textAlign: 'center', marginBottom: '4px' }}>
@@ -387,7 +386,7 @@ function OnboardingScreen({ account, onComplete, onSkip }: {
           </p>
 
           {err && (
-            <div style={{ background: '#2a1a18', color: colors.error, padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginBottom: '16px' }}>
+            <div style={{ background: '#fef2f2', color: colors.error, padding: '10px 14px', borderRadius: '8px', fontSize: '14px', marginBottom: '16px' }}>
               {err}
             </div>
           )}

@@ -40,10 +40,10 @@ function EventRow({ event, onClick, seriesTotal }: { event: PortalEvent; onClick
       onClick={onClick}
     >
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: '14px', color: colors.cream, fontWeight: 500 }}>
+        <div style={{ fontSize: '16px', color: colors.cream, fontWeight: 500 }}>
           {event.title}
         </div>
-        <div style={{ fontSize: '12px', color: colors.muted, marginTop: '3px' }}>
+        <div style={{ fontSize: '13px', color: colors.muted, marginTop: '3px' }}>
           {event.venue_name} · {formatDate(event.event_date)} · {formatTime(event.start_time)}
           {event.series_id && seriesTotal && (
             <span style={{ color: colors.dim }}> · {event.series_instance_number} of {seriesTotal}</span>
@@ -52,16 +52,16 @@ function EventRow({ event, onClick, seriesTotal }: { event: PortalEvent; onClick
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
         {cat && (
-          <span style={{ ...styles.pill, ...styles.pillActive, fontSize: '10px', padding: '2px 8px', cursor: 'default' }}>
+          <span style={{ ...styles.pill, ...styles.pillActive, fontSize: '11px', padding: '2px 8px', cursor: 'default' }}>
             {cat.label}
           </span>
         )}
         {event.status === 'pending_review' && (
           <span style={{
-            fontSize: '10px',
-            color: colors.amber,
-            background: colors.amberDim,
-            border: `1px solid ${colors.amberBorder}`,
+            fontSize: '11px',
+            color: '#92600a',
+            background: '#fef3cd',
+            border: '1px solid #fde68a',
             borderRadius: '12px',
             padding: '2px 8px',
           }}>
@@ -70,8 +70,8 @@ function EventRow({ event, onClick, seriesTotal }: { event: PortalEvent; onClick
         )}
         {event.series_id && (
           <span style={{
-            fontSize: '10px',
-            color: colors.dim,
+            fontSize: '11px',
+            color: colors.muted,
             background: colors.bg,
             border: `1px solid ${colors.border}`,
             borderRadius: '12px',
@@ -114,13 +114,12 @@ export function DashboardScreen({ account, onCreateEvent, onEditEvent, onSignOut
 
   return (
     <div style={styles.page}>
-      <div style={styles.ambientGlow} />
       <div style={styles.content} className="fade-up">
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
           <div>
             <h1 style={styles.pageTitle}>{account.business_name}</h1>
-            <p style={{ fontSize: '12px', color: colors.dim, marginTop: '4px' }}>
+            <p style={{ fontSize: '13px', color: colors.muted, marginTop: '4px' }}>
               {account.email}
             </p>
           </div>
@@ -132,16 +131,16 @@ export function DashboardScreen({ account, onCreateEvent, onEditEvent, onSignOut
         {/* Verification banner for pending accounts */}
         {account.status === 'pending' && (
           <div style={{
-            background: '#2a2418',
-            border: `1px solid ${colors.amberBorder}`,
+            background: '#fef3cd',
+            border: '1px solid #fde68a',
             borderRadius: '10px',
             padding: '14px 16px',
             marginBottom: '16px',
-            fontSize: '13px',
+            fontSize: '14px',
             lineHeight: 1.5,
             color: colors.text,
           }}>
-            <strong style={{ color: colors.amber }}>Account verification in progress</strong>
+            <strong style={{ color: '#92600a' }}>Account verification in progress</strong>
             <br />
             Your events are saved and ready to go — they'll appear once we verify your business. This usually takes less than 24 hours.
           </div>
@@ -163,10 +162,10 @@ export function DashboardScreen({ account, onCreateEvent, onEditEvent, onSignOut
               cursor: 'pointer',
             }}
           >
-            <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em', color: colors.dim }}>
+            <span style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.08em', color: colors.muted }}>
               Account
             </span>
-            <span style={{ fontSize: '12px', color: colors.muted }}>
+            <span style={{ fontSize: '13px', color: colors.text }}>
               {account.default_address || account.email}
               <span style={{ marginLeft: '8px', fontSize: '10px' }}>{accountExpanded ? '▲' : '▼'}</span>
             </span>
@@ -174,42 +173,42 @@ export function DashboardScreen({ account, onCreateEvent, onEditEvent, onSignOut
 
           {accountExpanded && (
             <div style={{ padding: '0 16px 16px', borderTop: `1px solid ${colors.border}` }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '13px', paddingTop: '14px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '14px', paddingTop: '14px' }}>
                 <div>
-                  <div style={{ color: colors.muted, fontSize: '11px', marginBottom: '2px' }}>Email</div>
+                  <div style={{ color: colors.muted, fontSize: '12px', marginBottom: '2px' }}>Email</div>
                   <div style={{ color: colors.cream }}>{account.email}</div>
                 </div>
                 <div>
-                  <div style={{ color: colors.muted, fontSize: '11px', marginBottom: '2px' }}>Status</div>
+                  <div style={{ color: colors.muted, fontSize: '12px', marginBottom: '2px' }}>Status</div>
                   <div style={{ color: colors.cream }}>{account.status}</div>
                 </div>
                 {account.default_venue_name && (
                   <div>
-                    <div style={{ color: colors.muted, fontSize: '11px', marginBottom: '2px' }}>Venue</div>
+                    <div style={{ color: colors.muted, fontSize: '12px', marginBottom: '2px' }}>Venue</div>
                     <div style={{ color: colors.cream }}>{account.default_venue_name}</div>
                   </div>
                 )}
                 {account.default_address && (
                   <div>
-                    <div style={{ color: colors.muted, fontSize: '11px', marginBottom: '2px' }}>Address</div>
+                    <div style={{ color: colors.muted, fontSize: '12px', marginBottom: '2px' }}>Address</div>
                     <div style={{ color: colors.cream }}>{account.default_address}</div>
                   </div>
                 )}
                 {account.website && (
                   <div>
-                    <div style={{ color: colors.muted, fontSize: '11px', marginBottom: '2px' }}>Website</div>
+                    <div style={{ color: colors.muted, fontSize: '12px', marginBottom: '2px' }}>Website</div>
                     <div style={{ color: colors.cream }}>{account.website}</div>
                   </div>
                 )}
                 {account.phone && (
                   <div>
-                    <div style={{ color: colors.muted, fontSize: '11px', marginBottom: '2px' }}>Phone</div>
+                    <div style={{ color: colors.muted, fontSize: '12px', marginBottom: '2px' }}>Phone</div>
                     <div style={{ color: colors.cream }}>{account.phone}</div>
                   </div>
                 )}
                 {account.wheelchair_accessible != null && (
                   <div>
-                    <div style={{ color: colors.muted, fontSize: '11px', marginBottom: '2px' }}>Wheelchair Accessible</div>
+                    <div style={{ color: colors.muted, fontSize: '12px', marginBottom: '2px' }}>Wheelchair Accessible</div>
                     <div style={{ color: colors.cream }}>{account.wheelchair_accessible ? 'Yes' : 'No'}</div>
                   </div>
                 )}
@@ -218,17 +217,17 @@ export function DashboardScreen({ account, onCreateEvent, onEditEvent, onSignOut
               <div style={{ borderTop: `1px solid ${colors.border}`, marginTop: '14px', paddingTop: '14px', display: 'flex', justifyContent: 'flex-end' }}>
                 {confirmSignOutAll ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '12px', color: colors.muted }}>Sign out all devices?</span>
+                    <span style={{ fontSize: '13px', color: colors.muted }}>Sign out all devices?</span>
                     <button
                       type="button"
-                      style={{ ...styles.buttonText, color: colors.error, fontSize: '12px' }}
+                      style={{ ...styles.buttonText, color: colors.error, fontSize: '13px' }}
                       onClick={() => { onSignOutEverywhere(); setConfirmSignOutAll(false); }}
                     >
                       Yes, sign out everywhere
                     </button>
                     <button
                       type="button"
-                      style={{ ...styles.buttonText, fontSize: '12px' }}
+                      style={{ ...styles.buttonText, fontSize: '13px' }}
                       onClick={() => setConfirmSignOutAll(false)}
                     >
                       Cancel
@@ -237,7 +236,7 @@ export function DashboardScreen({ account, onCreateEvent, onEditEvent, onSignOut
                 ) : (
                   <button
                     type="button"
-                    style={{ ...styles.buttonText, fontSize: '12px' }}
+                    style={{ ...styles.buttonText, fontSize: '13px' }}
                     onClick={() => setConfirmSignOutAll(true)}
                   >
                     Sign out everywhere
@@ -264,10 +263,10 @@ export function DashboardScreen({ account, onCreateEvent, onEditEvent, onSignOut
           </div>
         ) : events.length === 0 ? (
           <div style={{ ...styles.card, textAlign: 'center', padding: '48px 24px' }}>
-            <div style={{ fontSize: '15px', color: colors.cream, marginBottom: '6px' }}>
+            <div style={{ fontSize: '16px', color: colors.cream, marginBottom: '6px' }}>
               No events yet
             </div>
-            <div style={{ fontSize: '13px', color: colors.muted }}>
+            <div style={{ fontSize: '14px', color: colors.muted }}>
               Create your first event to reach the neighborhood.
             </div>
           </div>

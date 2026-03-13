@@ -116,7 +116,6 @@ export function EditEventScreen({ id, accountWheelchairAccessible, onBack, onUpd
   if (loading) {
     return (
       <div style={styles.page}>
-        <div style={styles.ambientGlow} />
         <div style={styles.content}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
             <button type="button" className="btn-text" style={styles.buttonText} onClick={onBack}>
@@ -133,7 +132,6 @@ export function EditEventScreen({ id, accountWheelchairAccessible, onBack, onUpd
   if (!event) {
     return (
       <div style={styles.page}>
-        <div style={styles.ambientGlow} />
         <div style={styles.content}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
             <button type="button" className="btn-text" style={styles.buttonText} onClick={onBack}>
@@ -142,7 +140,7 @@ export function EditEventScreen({ id, accountWheelchairAccessible, onBack, onUpd
             <h1 style={styles.pageTitle}>Edit Event</h1>
           </div>
           <div style={{
-            background: '#2a1a18',
+            background: '#fef2f2',
             color: colors.error,
             padding: '10px 14px',
             borderRadius: '8px',
@@ -178,7 +176,6 @@ export function EditEventScreen({ id, accountWheelchairAccessible, onBack, onUpd
 
   return (
     <div style={styles.page}>
-      <div style={styles.ambientGlow} />
       <div style={styles.content} className="fade-up">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
           <button type="button" className="btn-text" style={styles.buttonText} onClick={onBack}>
@@ -215,9 +212,9 @@ export function EditEventScreen({ id, accountWheelchairAccessible, onBack, onUpd
 
         {seriesResult && (
           <div style={{
-            background: '#1a2a18',
-            border: '1px solid #2a3a28',
-            color: '#4ade80',
+            background: '#f0fdf4',
+            border: '1px solid #bbf7d0',
+            color: colors.success,
             padding: '10px 14px',
             borderRadius: '8px',
             fontSize: '13px',
@@ -229,7 +226,7 @@ export function EditEventScreen({ id, accountWheelchairAccessible, onBack, onUpd
 
         {error && (
           <div style={{
-            background: '#2a1a18',
+            background: '#fef2f2',
             color: colors.error,
             padding: '10px 14px',
             borderRadius: '8px',
@@ -282,7 +279,7 @@ export function EditEventScreen({ id, accountWheelchairAccessible, onBack, onUpd
 
         {seriesEditChoice && (
           <div style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
           }}>
             <div style={{

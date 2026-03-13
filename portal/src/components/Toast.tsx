@@ -31,7 +31,7 @@ export function Toast({ message, type = 'success', onDismiss }: ToastProps) {
         top: '20px',
         left: '50%',
         transform: 'translateX(-50%)',
-        background: isSuccess ? colors.card : '#2a1a18',
+        background: isSuccess ? colors.card : '#fef2f2',
         border: `1px solid ${isSuccess ? colors.success : colors.error}`,
         borderRadius: '10px',
         padding: '12px 20px',
@@ -40,6 +40,7 @@ export function Toast({ message, type = 'success', onDismiss }: ToastProps) {
         alignItems: 'center',
         gap: '8px',
         maxWidth: '400px',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
         cursor: 'pointer',
       }}
       onClick={() => setExiting(true)}

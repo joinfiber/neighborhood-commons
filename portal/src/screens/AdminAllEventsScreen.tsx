@@ -47,13 +47,12 @@ export function AdminAllEventsScreen({ onBack, onViewAccount }: AdminAllEventsSc
 
   return (
     <div style={styles.page}>
-      <div style={styles.ambientGlow} />
       <div style={styles.contentWide} className="fade-up">
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
           <button type="button" style={styles.buttonText} onClick={onBack}>← Back</button>
           <h1 style={styles.pageTitle}>All Events</h1>
-          <span style={{ fontSize: '12px', color: colors.muted }}>({filtered.length})</span>
+          <span style={{ fontSize: '14px', color: colors.muted }}>({filtered.length})</span>
         </div>
 
         {/* Filters */}
@@ -78,7 +77,7 @@ export function AdminAllEventsScreen({ onBack, onViewAccount }: AdminAllEventsSc
           placeholder="Search events or businesses..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{ ...styles.input, marginBottom: '16px', padding: '8px 12px', fontSize: '13px' }}
+          style={{ ...styles.input, marginBottom: '16px', padding: '8px 12px', fontSize: '14px' }}
         />
 
         {loading ? (
@@ -110,23 +109,23 @@ export function AdminAllEventsScreen({ onBack, onViewAccount }: AdminAllEventsSc
                 onClick={() => event.portal_account_id && onViewAccount(event.portal_account_id)}
               >
                 <div>
-                  <div style={{ fontSize: '14px', fontWeight: 500, color: colors.cream }}>{event.title}</div>
-                  <div style={{ fontSize: '12px', color: colors.muted }}>
+                  <div style={{ fontSize: '16px', fontWeight: 500, color: colors.cream }}>{event.title}</div>
+                  <div style={{ fontSize: '14px', color: colors.muted }}>
                     {event.portal_accounts?.business_name || '—'} · {event.venue_name} · {event.event_date} · {event.start_time}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                  <span style={{ ...styles.pill, ...styles.pillInactive, fontSize: '10px', padding: '2px 8px' }}>
+                  <span style={{ ...styles.pill, ...styles.pillInactive, fontSize: '11px', padding: '2px 8px' }}>
                     {PORTAL_CATEGORIES[event.category as PortalCategory]?.label || event.category}
                   </span>
                   {event.recurrence !== 'none' && (
-                    <span style={{ fontSize: '10px', color: colors.dim }}>{event.recurrence}</span>
+                    <span style={{ fontSize: '11px', color: colors.dim }}>{event.recurrence}</span>
                   )}
                 </div>
               </button>
             ))}
             {filtered.length === 0 && (
-              <div style={{ color: colors.dim, fontSize: '13px', padding: '24px', textAlign: 'center' }}>
+              <div style={{ color: colors.dim, fontSize: '14px', padding: '24px', textAlign: 'center' }}>
                 {search ? 'No events match your search' : 'No events yet'}
               </div>
             )}

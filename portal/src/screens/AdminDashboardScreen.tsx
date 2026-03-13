@@ -25,7 +25,7 @@ function StatCard({ label, value }: { label: string; value: number }) {
       textAlign: 'center',
     }}>
       <div style={{ fontSize: '28px', fontWeight: 600, color: colors.cream }}>{value}</div>
-      <div style={{ fontSize: '11px', color: colors.muted, marginTop: '4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
+      <div style={{ fontSize: '12px', color: colors.muted, marginTop: '4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
     </div>
   );
 }
@@ -77,13 +77,13 @@ function SeedAccountForm({ onCreated }: { onCreated: () => void }) {
     }}>
       <div style={{ ...styles.sectionLabel, marginBottom: '12px' }}>Seed Account</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
-        <input type="email" placeholder="Business email" value={email} onChange={(e) => setEmail(e.target.value)} style={{ ...styles.input, padding: '8px 10px', fontSize: '13px' }} required />
-        <input type="text" placeholder="Business name" value={businessName} onChange={(e) => setBusinessName(e.target.value)} style={{ ...styles.input, padding: '8px 10px', fontSize: '13px' }} required />
-        <input type="text" placeholder="Default venue (optional)" value={venueName} onChange={(e) => setVenueName(e.target.value)} style={{ ...styles.input, padding: '8px 10px', fontSize: '13px' }} />
-        <input type="text" placeholder="Default address (optional)" value={address} onChange={(e) => setAddress(e.target.value)} style={{ ...styles.input, padding: '8px 10px', fontSize: '13px' }} />
+        <input type="email" placeholder="Business email" value={email} onChange={(e) => setEmail(e.target.value)} style={{ ...styles.input, padding: '8px 10px', fontSize: '14px' }} required />
+        <input type="text" placeholder="Business name" value={businessName} onChange={(e) => setBusinessName(e.target.value)} style={{ ...styles.input, padding: '8px 10px', fontSize: '14px' }} required />
+        <input type="text" placeholder="Default venue (optional)" value={venueName} onChange={(e) => setVenueName(e.target.value)} style={{ ...styles.input, padding: '8px 10px', fontSize: '14px' }} />
+        <input type="text" placeholder="Default address (optional)" value={address} onChange={(e) => setAddress(e.target.value)} style={{ ...styles.input, padding: '8px 10px', fontSize: '14px' }} />
       </div>
-      {error && <div style={{ color: colors.error, fontSize: '12px', marginBottom: '8px' }}>{error}</div>}
-      <button type="submit" disabled={submitting || !email || !businessName} style={{ ...styles.buttonPrimary, padding: '8px 16px', fontSize: '12px', width: 'auto' }}>
+      {error && <div style={{ color: colors.error, fontSize: '14px', marginBottom: '8px' }}>{error}</div>}
+      <button type="submit" disabled={submitting || !email || !businessName} style={{ ...styles.buttonPrimary, padding: '8px 16px', fontSize: '14px', width: 'auto' }}>
         {submitting ? 'Creating...' : 'Seed Account'}
       </button>
     </form>
@@ -131,13 +131,12 @@ export function AdminDashboardScreen({ email, onSignOut, onViewAccount, onViewAl
 
   return (
     <div style={styles.page}>
-      <div style={styles.ambientGlow} />
       <div style={styles.contentWide} className="fade-up">
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
           <div>
             <h1 style={{ ...styles.pageTitle, marginBottom: '4px' }}>fiber events</h1>
-            <div style={{ fontSize: '12px', color: colors.muted }}>{email}</div>
+            <div style={{ fontSize: '14px', color: colors.muted }}>{email}</div>
           </div>
           <button type="button" style={styles.buttonText} onClick={onSignOut}>Sign Out</button>
         </div>
@@ -194,7 +193,7 @@ export function AdminDashboardScreen({ email, onSignOut, onViewAccount, onViewAl
           placeholder="Search accounts..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{ ...styles.input, marginBottom: '12px', padding: '8px 12px', fontSize: '13px' }}
+          style={{ ...styles.input, marginBottom: '12px', padding: '8px 12px', fontSize: '14px' }}
         />
 
         {loading ? (
@@ -225,28 +224,28 @@ export function AdminDashboardScreen({ email, onSignOut, onViewAccount, onViewAl
                 onClick={() => onViewAccount(account)}
               >
                 <div>
-                  <div style={{ fontSize: '14px', fontWeight: 500, color: colors.cream }}>{account.business_name}</div>
-                  <div style={{ fontSize: '12px', color: colors.muted }}>{account.email}</div>
+                  <div style={{ fontSize: '16px', fontWeight: 500, color: colors.cream }}>{account.business_name}</div>
+                  <div style={{ fontSize: '14px', color: colors.muted }}>{account.email}</div>
                 </div>
                 <span style={{
-                  fontSize: '10px',
+                  fontSize: '11px',
                   padding: '2px 8px',
                   borderRadius: '4px',
-                  background: account.status === 'pending' ? '#2a2418' : account.claimed_at ? colors.successDim : colors.amberDim,
-                  color: account.status === 'pending' ? colors.amber : account.claimed_at ? colors.success : colors.amber,
+                  background: account.status === 'pending' ? '#fef3cd' : account.claimed_at ? colors.successDim : colors.amberDim,
+                  color: account.status === 'pending' ? '#92600a' : account.claimed_at ? colors.success : colors.amber,
                 }}>
                   {account.status === 'pending' ? 'Pending' : account.status === 'rejected' ? 'Rejected' : account.claimed_at ? 'Claimed' : 'Managed'}
                 </span>
-                <div style={{ fontSize: '12px', color: colors.muted, textAlign: 'right', minWidth: '40px' }}>
+                <div style={{ fontSize: '14px', color: colors.muted, textAlign: 'right', minWidth: '40px' }}>
                   {account.event_count || 0} events
                 </div>
-                <div style={{ fontSize: '11px', color: colors.dim, textAlign: 'right', minWidth: '60px' }}>
+                <div style={{ fontSize: '12px', color: colors.dim, textAlign: 'right', minWidth: '60px' }}>
                   {timeAgo(account.last_login_at)}
                 </div>
               </button>
             ))}
             {filtered.length === 0 && (
-              <div style={{ color: colors.dim, fontSize: '13px', padding: '24px', textAlign: 'center' }}>
+              <div style={{ color: colors.dim, fontSize: '14px', padding: '24px', textAlign: 'center' }}>
                 {search ? 'No accounts match your search' : 'No accounts yet'}
               </div>
             )}
@@ -268,13 +267,13 @@ function PendingAccountsSection({ accounts, onApprove, onReject, onViewAccount }
 
   return (
     <div style={{
-      background: '#1a1815',
-      border: `1px solid ${colors.amberBorder}`,
+      background: '#fef3cd',
+      border: `1px solid #fde68a`,
       borderRadius: '10px',
       padding: '16px',
       marginBottom: '24px',
     }}>
-      <div style={{ ...styles.sectionLabel, marginBottom: '12px', color: colors.amber }}>
+      <div style={{ ...styles.sectionLabel, marginBottom: '12px', color: '#92600a' }}>
         Pending Verification ({accounts.length})
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -289,23 +288,23 @@ function PendingAccountsSection({ accounts, onApprove, onReject, onViewAccount }
             borderRadius: '8px',
           }}>
             <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => onViewAccount(account)}>
-              <div style={{ fontSize: '14px', fontWeight: 500, color: colors.cream }}>{account.business_name}</div>
-              <div style={{ fontSize: '12px', color: colors.muted }}>
+              <div style={{ fontSize: '16px', fontWeight: 500, color: colors.cream }}>{account.business_name}</div>
+              <div style={{ fontSize: '14px', color: colors.muted }}>
                 {account.email}
                 {account.default_address && <span> · {account.default_address}</span>}
                 {account.website && <span> · {account.website}</span>}
               </div>
-              <div style={{ fontSize: '11px', color: colors.dim, marginTop: '2px' }}>
+              <div style={{ fontSize: '12px', color: colors.dim, marginTop: '2px' }}>
                 Registered {new Date(account.created_at).toLocaleDateString()}
                 {account.event_count ? ` · ${account.event_count} events created` : ''}
               </div>
             </div>
             {confirmReject === account.id ? (
               <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                <span style={{ fontSize: '11px', color: colors.error }}>Sure?</span>
+                <span style={{ fontSize: '12px', color: colors.error }}>Sure?</span>
                 <button
                   type="button"
-                  style={{ ...styles.buttonText, color: colors.error, fontSize: '12px' }}
+                  style={{ ...styles.buttonText, color: colors.error, fontSize: '14px' }}
                   disabled={actionLoading === account.id}
                   onClick={async () => {
                     setActionLoading(account.id);
@@ -318,7 +317,7 @@ function PendingAccountsSection({ accounts, onApprove, onReject, onViewAccount }
                 </button>
                 <button
                   type="button"
-                  style={{ ...styles.buttonText, fontSize: '12px' }}
+                  style={{ ...styles.buttonText, fontSize: '14px' }}
                   onClick={() => setConfirmReject(null)}
                 >
                   Cancel
@@ -334,7 +333,7 @@ function PendingAccountsSection({ accounts, onApprove, onReject, onViewAccount }
                     border: 'none',
                     borderRadius: '6px',
                     padding: '6px 14px',
-                    fontSize: '12px',
+                    fontSize: '14px',
                     fontWeight: 500,
                     cursor: 'pointer',
                   }}
@@ -349,7 +348,7 @@ function PendingAccountsSection({ accounts, onApprove, onReject, onViewAccount }
                 </button>
                 <button
                   type="button"
-                  style={{ ...styles.buttonText, color: colors.error, fontSize: '12px' }}
+                  style={{ ...styles.buttonText, color: colors.error, fontSize: '14px' }}
                   onClick={() => setConfirmReject(account.id)}
                 >
                   Reject
