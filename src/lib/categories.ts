@@ -19,6 +19,7 @@ export const EVENT_CATEGORIES = {
   market_popup:    { label: 'Market & Pop-up',    color: '#14B8A6' },
   community:       { label: 'Community',           color: '#22C55E' },
   sports:          { label: 'Sports',              color: '#3B82F6' },
+  film_screenings: { label: 'Film & Screenings',   color: '#EF4444' },
   other:           { label: 'Other',               color: '#6B7280' },
 } as const;
 

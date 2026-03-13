@@ -13,6 +13,7 @@ export const PORTAL_CATEGORIES = {
   market_popup:    { label: 'Market / Pop-up',   slug: 'market-popup' },
   community:       { label: 'Community',          slug: 'community' },
   sports:          { label: 'Sports',             slug: 'sports' },
+  film_screenings: { label: 'Film & Screenings',  slug: 'film-screenings' },
   other:           { label: 'Other',              slug: 'other' },
 } as const;
 
