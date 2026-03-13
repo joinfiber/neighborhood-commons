@@ -67,10 +67,13 @@ router.get('/', async (req, res, next) => {
 
     let query = supabaseAdmin
       .from('events')
-      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, portal_accounts!events_creator_account_id_fkey(business_name), event_series!events_series_id_fkey(recurrence)', { count: 'exact' })
+      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, start_time_required, portal_accounts!events_creator_account_id_fkey(business_name), event_series!events_series_id_fkey(recurrence)', { count: 'exact' })
       .eq('source', 'portal')
       .eq('status', 'published')
-      .gte('event_at', today) // Only future/today events
+      // Visibility: include events still relevant to browse feeds.
+      // start_time_required=true events are visible until start; =false until end_time.
+      // We over-fetch here (event_at OR end_time >= now) and filter precisely below.
+      .or(`event_at.gte.${today},end_time.gte.${today}`)
       .order('event_at', { ascending: true })
       .range(params.offset, params.offset + fetchLimit - 1);
 
@@ -124,8 +127,26 @@ router.get('/', async (req, res, next) => {
       throw createError('Failed to fetch events', 500, 'SERVER_ERROR');
     }
 
+    // Visibility filtering: respect start_time_required semantics
+    // - start_time_required=true: visible until start time
+    // - start_time_required=false: visible until end_time (or start + 3h if no end)
+    const now = new Date(today);
+    const visible = ((events || []) as unknown as Record<string, unknown>[]).filter((row) => {
+      const startTimeRequired = (row.start_time_required as boolean) ?? true;
+      const eventAt = new Date(row.event_at as string);
+      if (startTimeRequired) {
+        return eventAt >= now;
+      }
+      // Open-window event: visible until end_time, or start + 3h fallback
+      if (row.end_time) {
+        return new Date(row.end_time as string) >= now;
+      }
+      const fallback = new Date(eventAt.getTime() + 3 * 60 * 60 * 1000);
+      return fallback >= now;
+    });
+
     // Deduplicate series: keep only the nearest upcoming instance per series_id
-    const deduped = deduplicateSeries((events || []) as unknown as Record<string, unknown>[]);
+    const deduped = deduplicateSeries(visible);
     const page = deduped.slice(0, params.limit);
 
     res.json({
@@ -172,7 +193,7 @@ router.get('/:id', async (req, res, next) => {
 
     const { data: event, error } = await supabaseAdmin
       .from('events')
-      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, series_instance_number, portal_accounts!events_creator_account_id_fkey(business_name), event_series!events_series_id_fkey(recurrence)')
+      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, series_instance_number, start_time_required, portal_accounts!events_creator_account_id_fkey(business_name), event_series!events_series_id_fkey(recurrence)')
       .eq('id', id)
       .eq('source', 'portal')
       .eq('status', 'published')
@@ -228,7 +249,7 @@ function escapeXml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, portal_accounts!events_creator_account_id_fkey(business_name), event_series!events_series_id_fkey(recurrence)';
+const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, start_time_required, portal_accounts!events_creator_account_id_fkey(business_name), event_series!events_series_id_fkey(recurrence)';
 
 /** Deduplicate series events: keep only the nearest upcoming instance per series_id.
  *  Carries the series recurrence pattern onto the kept instance. */

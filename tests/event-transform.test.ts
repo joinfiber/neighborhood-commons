@@ -31,6 +31,7 @@ function makeRow(overrides: Partial<PortalEventRow> = {}): PortalEventRow {
     recurrence: 'weekly',
     series_id: null,
     series_instance_number: null,
+    start_time_required: true,
     price: 'Free',
     link_url: 'https://example.com/tickets',
     event_image_url: 'https://images.example.com/jazz.jpg',
@@ -122,6 +123,16 @@ describe('toNeighborhoodEvent', () => {
     const event = toNeighborhoodEvent(makeRow());
     expect(event.series_id).toBeNull();
     expect(event.series_instance_number).toBeNull();
+  });
+
+  it('passes through start_time_required (default true)', () => {
+    const event = toNeighborhoodEvent(makeRow());
+    expect(event.start_time_required).toBe(true);
+  });
+
+  it('passes through start_time_required = false', () => {
+    const event = toNeighborhoodEvent(makeRow({ start_time_required: false }));
+    expect(event.start_time_required).toBe(false);
   });
 
   it('wraps recurrence as { rrule } object', () => {

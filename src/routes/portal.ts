@@ -103,6 +103,7 @@ export function toPortalEvent(row: Record<string, unknown>): Record<string, unkn
     ticket_url: row.link_url,
     image_url: resolveEventImageUrl(row.event_image_url as string | null, config.apiBaseUrl),
     image_focal_y: (row.event_image_focal_y as number) ?? 0.5,
+    start_time_required: (row.start_time_required as boolean) ?? true,
     status: row.status,
     series_id: row.series_id,
     series_instance_number: row.series_instance_number,
@@ -131,6 +132,7 @@ export function portalInputToInsert(
     description?: string | null | undefined;
     price?: string | null | undefined;
     ticket_url?: string | null | undefined;
+    start_time_required?: boolean | undefined;
     image_focal_y?: number | undefined;
   },
   accountId: string,
@@ -172,6 +174,7 @@ export function portalInputToInsert(
     recurrence: data.recurrence || 'none',
     price: data.price || null,
     link_url: data.ticket_url ? (checkApprovedDomain(data.ticket_url), sanitizeUrl(data.ticket_url)) : null,
+    start_time_required: data.start_time_required ?? true,
     event_image_focal_y: data.image_focal_y ?? 0.5,
     creator_account_id: accountId,
     source: 'portal',
@@ -183,7 +186,7 @@ export function portalInputToInsert(
 }
 
 /** Columns to select when reading portal events from the events table */
-export const PORTAL_SELECT = 'id, user_id, content, description, place_name, place_id, approximate_location, event_at, end_time, event_image_url, event_image_focal_y, link_url, category, custom_category, event_timezone, venue_address, recurrence, price, latitude, longitude, creator_account_id, source, visibility, status, is_business, region_id, series_id, series_instance_number, created_at';
+export const PORTAL_SELECT = 'id, user_id, content, description, place_name, place_id, approximate_location, event_at, end_time, event_image_url, event_image_focal_y, link_url, category, custom_category, event_timezone, venue_address, recurrence, price, latitude, longitude, creator_account_id, source, visibility, status, is_business, region_id, series_id, series_instance_number, start_time_required, created_at';
 
 export function getAdminUserId(): string {
   const id = config.admin.userIds[0];
@@ -483,7 +486,7 @@ export async function deleteSeriesEvents(seriesId: string): Promise<number> {
       category: [], place_id: null,
       location: { name: '', address: null, lat: null, lng: null },
       url: null, images: [], organizer: { name: '', phone: null },
-      cost: null, series_id: null, series_instance_number: null, recurrence: null,
+      cost: null, series_id: null, series_instance_number: null, start_time_required: true, recurrence: null,
       source: { publisher: 'fiber', collected_at: new Date().toISOString(), method: 'portal', license: 'CC BY 4.0' },
     });
   }
@@ -944,6 +947,7 @@ const createEventSchema = z.object({
   description: z.string().max(2000).optional(),
   price: z.string().max(100).optional(),
   ticket_url: z.string().url().max(2000).optional().or(z.literal('')),
+  start_time_required: z.boolean().default(true),
   image_focal_y: z.number().min(0).max(1).optional(),
 });
 
@@ -981,6 +985,7 @@ const updateEventSchema = z.object({
   description: z.string().max(2000).optional().nullable(),
   price: z.string().max(100).optional().nullable(),
   ticket_url: z.string().url().max(2000).optional().or(z.literal('')).nullable(),
+  start_time_required: z.boolean().optional(),
   image_focal_y: z.number().min(0).max(1).optional(),
   force: z.boolean().optional(),
 });
@@ -1299,6 +1304,7 @@ router.patch('/events/series/:seriesId', writeLimiter, async (req, res, next) =>
     if (data.ticket_url !== undefined) {
       templateUpdate.link_url = data.ticket_url ? (checkApprovedDomain(data.ticket_url), sanitizeUrl(data.ticket_url)) : null;
     }
+    if (data.start_time_required !== undefined) templateUpdate.start_time_required = data.start_time_required;
     if (data.image_focal_y !== undefined) templateUpdate.event_image_focal_y = data.image_focal_y;
 
     // Time changes: apply to each instance relative to its own date
@@ -1313,7 +1319,7 @@ router.patch('/events/series/:seriesId', writeLimiter, async (req, res, next) =>
       content: 'content', place_name: 'place_name', venue_address: 'venue_address',
       place_id: 'place_id', latitude: 'latitude', longitude: 'longitude',
       category: 'category', custom_category: 'custom_category',
-      description: 'description', price: 'price', link_url: 'link_url',
+      description: 'description', price: 'price', link_url: 'link_url', start_time_required: 'start_time_required',
       event_image_focal_y: 'event_image_focal_y',
     };
 
@@ -1518,6 +1524,7 @@ router.patch('/events/:id', writeLimiter, async (req, res, next) => {
     if (data.ticket_url !== undefined) {
       update.link_url = data.ticket_url ? (checkApprovedDomain(data.ticket_url), sanitizeUrl(data.ticket_url)) : null;
     }
+    if (data.start_time_required !== undefined) update.start_time_required = data.start_time_required;
     if (data.image_focal_y !== undefined) update.event_image_focal_y = data.image_focal_y;
 
     if (Object.keys(update).length === 0) {
@@ -1623,7 +1630,7 @@ router.delete('/events/:id', writeLimiter, async (req, res, next) => {
       category: [], place_id: null,
       location: { name: '', address: null, lat: null, lng: null },
       url: null, images: [], organizer: { name: '', phone: null },
-      cost: null, series_id: null, series_instance_number: null, recurrence: null,
+      cost: null, series_id: null, series_instance_number: null, start_time_required: true, recurrence: null,
       source: { publisher: 'fiber', collected_at: new Date().toISOString(), method: 'portal', license: 'CC BY 4.0' },
     });
 

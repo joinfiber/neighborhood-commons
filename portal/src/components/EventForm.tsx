@@ -42,6 +42,7 @@ export function EventForm({
   const [customCategory, setCustomCategory] = useState(initialValues.custom_category || '');
   const [recurrence, setRecurrence] = useState(initialValues.recurrence || 'none');
   const [instanceCount, setInstanceCount] = useState(initialValues.instance_count || 4);
+  const [startTimeRequired, setStartTimeRequired] = useState(initialValues.start_time_required ?? true);
   const [description, setDescription] = useState(initialValues.description || '');
   const [price, setPrice] = useState(initialValues.price || '');
   const [ticketUrl, setTicketUrl] = useState(initialValues.ticket_url || '');
@@ -81,6 +82,7 @@ export function EventForm({
       end_time: endTime || undefined,
       custom_category: category === 'other' ? customCategory || undefined : undefined,
       instance_count: recurrence !== 'none' ? instanceCount : undefined,
+      start_time_required: startTimeRequired,
       description: description || undefined,
       price: price || undefined,
       ticket_url: ticketUrl || undefined,
@@ -222,6 +224,24 @@ export function EventForm({
               instanceCount={instanceCount}
               onInstanceCountChange={setInstanceCount}
             />
+          </div>
+
+          {/* Start time required */}
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={startTimeRequired}
+                onChange={(e) => setStartTimeRequired(e.target.checked)}
+                style={{ marginTop: '3px', accentColor: colors.accent }}
+              />
+              <div>
+                <span style={{ ...styles.formLabel, marginBottom: 0 }}>Attendees need to arrive at the start time</span>
+                <div style={{ fontSize: '12px', color: colors.dim, marginTop: '2px' }}>
+                  Uncheck for events people can join anytime, like happy hours or open swims. When checked, your event stops appearing in browse feeds after it starts.
+                </div>
+              </div>
+            </label>
           </div>
 
           <hr style={styles.divider} />
