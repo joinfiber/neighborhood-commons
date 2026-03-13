@@ -157,6 +157,23 @@ export async function updateEventSeries(seriesId: string, params: Partial<Create
   });
 }
 
+export async function batchUpdateEvents(ids: string[], updates: Partial<CreateEventParams>) {
+  return apiRequest<{ updated: number; ids: string[] }>('/api/portal/events/batch', {
+    method: 'PATCH',
+    body: JSON.stringify({ ids, updates }),
+  });
+}
+
+export async function batchDeleteEvents(ids: string[]) {
+  // Sequential deletes — no batch delete endpoint, but clean UX
+  const results: string[] = [];
+  for (const id of ids) {
+    const res = await apiRequest<{ success: boolean }>(`/api/portal/events/${id}`, { method: 'DELETE' });
+    if (res.data?.success) results.push(id);
+  }
+  return { deleted: results.length, ids: results };
+}
+
 export async function deleteEvent(id: string) {
   return apiRequest<{ success: boolean }>(`/api/portal/events/${id}`, { method: 'DELETE' });
 }

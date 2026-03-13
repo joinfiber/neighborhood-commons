@@ -24,4 +24,4 @@ coverage
 
 # Internal tools
 scripts/
-fiber-field.html
+field/

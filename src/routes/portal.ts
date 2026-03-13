@@ -30,7 +30,7 @@ import { dispatchWebhooks, dispatchSeriesCreatedWebhook } from '../lib/webhook-d
 import { auditPortalAction } from '../lib/audit.js';
 import { toNeighborhoodEvent, toRRule, type PortalEventRow } from '../lib/event-transform.js';
 import { sanitizeUrl, checkApprovedDomain } from '../lib/url-sanitizer.js';
-import { writeLimiter, enumerationLimiter } from '../middleware/rate-limit.js';
+import { writeLimiter, enumerationLimiter, portalLimiter } from '../middleware/rate-limit.js';
 import { blockDatacenterIps } from '../middleware/ip-filter.js';
 
 const PORTAL_ACCOUNT_SELECT = 'id, email, business_name, auth_user_id, status, default_venue_name, default_place_id, default_address, default_latitude, default_longitude, website, phone, wheelchair_accessible, last_login_at, created_at, updated_at';
@@ -728,7 +728,7 @@ router.use(requirePortalAuth);
 // WHOAMI (role detection)
 // =============================================================================
 
-router.get('/whoami', enumerationLimiter, async (req, res, next) => {
+router.get('/whoami', portalLimiter, async (req, res, next) => {
   try {
     const userId = req.user?.id;
     const email = req.user?.email;
@@ -836,7 +836,7 @@ router.post('/account/claim', writeLimiter, async (req, res, next) => {
   }
 });
 
-router.get('/account', enumerationLimiter, async (req, res, next) => {
+router.get('/account', portalLimiter, async (req, res, next) => {
   try {
     const userId = req.user?.id;
     if (!userId) throw createError('Unauthorized', 401, 'UNAUTHORIZED');
@@ -1082,7 +1082,7 @@ async function checkPortalCreationRateLimit(accountId: string): Promise<void> {
  * GET /api/portal/events
  * List all events for the authenticated business.
  */
-router.get('/events', enumerationLimiter, async (req, res, next) => {
+router.get('/events', portalLimiter, async (req, res, next) => {
   try {
     const accountId = await getPortalAccountId(req);
 
@@ -1206,7 +1206,7 @@ router.post('/events', writeLimiter, async (req, res, next) => {
  * GET /api/portal/events/:id
  * Get a single event.
  */
-router.get('/events/:id', enumerationLimiter, async (req, res, next) => {
+router.get('/events/:id', portalLimiter, async (req, res, next) => {
   try {
     validateUuidParam(req.params.id, 'event ID');
     await getPortalAccountId(req);
@@ -1446,6 +1446,104 @@ router.patch('/events/series/:seriesId', writeLimiter, async (req, res, next) =>
     })();
 
     res.json({ updated: updatedCount, total: futureEvents.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * PATCH /api/portal/events/batch
+ * Bulk-update multiple events owned by the authenticated user.
+ * Accepts an array of event IDs and a partial update payload.
+ * Only fields safe for bulk edit are accepted (no date/time/recurrence —
+ * those are per-event and should be edited individually).
+ *
+ * NOTE: Must be defined before /events/:id to avoid route conflict.
+ */
+const batchUpdateSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(50),
+  updates: z.object({
+    category: z.enum(EVENT_CATEGORY_KEYS as [string, ...string[]]).optional(),
+    custom_category: z.string().max(30).optional().nullable(),
+    tags: z.array(z.string().max(50)).max(15).optional(),
+    wheelchair_accessible: z.boolean().nullable().optional(),
+    start_time_required: z.boolean().optional(),
+    description: z.string().max(2000).optional().nullable(),
+    price: z.string().max(100).optional().nullable(),
+  }).refine((u) => Object.keys(u).length > 0, { message: 'No fields to update' }),
+});
+
+router.patch('/events/batch', writeLimiter, async (req, res, next) => {
+  try {
+    const accountId = await getPortalAccountId(req);
+    const { ids, updates } = validateRequest(batchUpdateSchema, req.body);
+
+    if (updates.category === 'other') {
+      if (!updates.custom_category || updates.custom_category.trim().length === 0) {
+        throw createError('Custom category is required when category is "other"', 400, 'VALIDATION_ERROR');
+      }
+      const wordCount = updates.custom_category.trim().split(/\s+/).length;
+      if (wordCount > 3) {
+        throw createError('Custom category must be 1-3 words', 400, 'VALIDATION_ERROR');
+      }
+    }
+
+    // Build DB update payload
+    const dbUpdate: Record<string, unknown> = {};
+    if (updates.category !== undefined) {
+      dbUpdate.category = updates.category;
+      if (updates.category !== 'other') dbUpdate.custom_category = null;
+    }
+    if (updates.custom_category !== undefined && updates.category === 'other') {
+      dbUpdate.custom_category = updates.custom_category?.trim() || null;
+    }
+    if (updates.tags !== undefined) {
+      const category = updates.category;
+      dbUpdate.tags = category ? validateTags(updates.tags, category) : updates.tags;
+    }
+    if (updates.wheelchair_accessible !== undefined) dbUpdate.wheelchair_accessible = updates.wheelchair_accessible;
+    if (updates.start_time_required !== undefined) dbUpdate.start_time_required = updates.start_time_required;
+    if (updates.description !== undefined) dbUpdate.description = updates.description || null;
+    if (updates.price !== undefined) dbUpdate.price = updates.price || null;
+
+    // [RLS] portal_events_update_own policy — only updates events owned by this user
+    const { data: updated, error } = await getUserClient(req)
+      .from('events')
+      .update(dbUpdate)
+      .in('id', ids)
+      .eq('source', 'portal')
+      .select('id');
+
+    if (error) {
+      console.error('[PORTAL] Batch update error:', error.message);
+      throw createError('Failed to update events', 500, 'SERVER_ERROR');
+    }
+
+    const updatedIds = (updated || []).map((e: { id: string }) => e.id);
+
+    for (const id of updatedIds) {
+      auditPortalAction('portal_event_updated', accountId, id, undefined, '/api/portal/events/batch');
+    }
+
+    // Dispatch webhooks (fire-and-forget)
+    void (async () => {
+      try {
+        for (const id of updatedIds) {
+          const { data: row } = await supabaseAdmin
+            .from('events')
+            .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name)`)
+            .eq('id', id)
+            .maybeSingle();
+          if (row) {
+            void dispatchWebhooks('event.updated', id, toNeighborhoodEvent(row as unknown as PortalEventRow));
+          }
+        }
+      } catch (err) {
+        console.error('[PORTAL] Batch webhook dispatch error:', err instanceof Error ? err.message : err);
+      }
+    })();
+
+    res.json({ updated: updatedIds.length, ids: updatedIds });
   } catch (err) {
     next(err);
   }
