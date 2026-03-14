@@ -10,7 +10,7 @@ import { ImageUpload } from './ImageUpload';
 import { ImageCropPreview } from './ImageCropPreview';
 import { EventPreviews } from './EventPreviews';
 import { TagPicker } from './TagPicker';
-import { getTagsForCategory } from '../lib/tags';
+import { getTagsForCategory, AGE_TAGS } from '../lib/tags';
 
 interface EventFormProps {
   mode: 'create' | 'edit' | 'admin-create';
@@ -59,6 +59,7 @@ export function EventForm({
   const [image, setImage] = useState<string | null>(initialValues.image || null);
   const [imageFocalY, setImageFocalY] = useState(initialValues.image_focal_y ?? 0.5);
 
+  const [linkError, setLinkError] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   // Expandable sections — start open if values already exist
@@ -70,7 +71,17 @@ export function EventForm({
   function handleCategoryChange(newCategory: string) {
     setCategory(newCategory);
     const allowed = getTagsForCategory(newCategory) as string[];
-    setTags((prev) => prev.filter((t) => allowed.includes(t)));
+    const ageSlugs = AGE_TAGS as string[];
+    setTags((prev) => {
+      const filtered = prev.filter((t) => allowed.includes(t));
+      // Auto-add when category has exactly one age option
+      const ageOptions = allowed.filter((t) => ageSlugs.includes(t));
+      const singleAge = ageOptions.length === 1 ? ageOptions[0] : undefined;
+      if (singleAge && !filtered.some((t) => ageSlugs.includes(t))) {
+        return [...filtered, singleAge];
+      }
+      return filtered;
+    });
   }
 
   function handlePlaceSelect(place: PlaceResult) {
@@ -106,7 +117,7 @@ export function EventForm({
       wheelchair_accessible: wheelchairAccessible,
       description: description || undefined,
       price: price || undefined,
-      ticket_url: ticketUrl || undefined,
+      ticket_url: ticketUrl ? normalizeUrl(ticketUrl) || undefined : undefined,
       image: image || null,
       image_focal_y: imageFocalY,
     };
@@ -221,44 +232,54 @@ export function EventForm({
             </div>
           </div>
 
-          {/* ── Recurrence (after times) ── */}
-          {!showRecurrence ? (
-            <div style={{ marginBottom: '16px' }}>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowRecurrence(true);
-                  if (recurrence === 'none') {
-                    setRecurrence('weekly');
-                    setInstanceCount(4);
-                  }
-                }}
-                style={expandLinkStyle}
-              >
-                + Make recurring
-              </button>
-            </div>
-          ) : (
-            <div style={{ marginBottom: '16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                <label style={{ ...styles.formLabel, marginBottom: 0 }}>Recurrence</label>
+          {/* ── Arrive-by + Recurrence (after times) ── */}
+          <div style={{ marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={startTimeRequired}
+                  onChange={(e) => setStartTimeRequired(e.target.checked)}
+                  style={{ accentColor: colors.accent }}
+                />
+                <span style={{ fontSize: '13px', color: colors.text }}>Arrive by start time</span>
+              </label>
+              {!showRecurrence ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowRecurrence(true);
+                    if (recurrence === 'none') {
+                      setRecurrence('weekly');
+                      setInstanceCount(4);
+                    }
+                  }}
+                  style={expandLinkStyle}
+                >
+                  + Make recurring
+                </button>
+              ) : (
                 <button
                   type="button"
                   onClick={() => { setShowRecurrence(false); setRecurrence('none'); }}
                   style={collapseLinkStyle}
                 >
-                  Remove
+                  Remove recurring
                 </button>
-              </div>
-              <RecurrencePicker
-                value={recurrence}
-                onChange={setRecurrence}
-                eventDate={eventDate}
-                instanceCount={instanceCount}
-                onInstanceCountChange={setInstanceCount}
-              />
+              )}
             </div>
-          )}
+            {showRecurrence && (
+              <div style={{ marginTop: '10px' }}>
+                <RecurrencePicker
+                  value={recurrence}
+                  onChange={setRecurrence}
+                  eventDate={eventDate}
+                  instanceCount={instanceCount}
+                  onInstanceCountChange={setInstanceCount}
+                />
+              </div>
+            )}
+          </div>
 
           {/* ── Category (dropdown) ── */}
           <div style={{ marginBottom: '16px' }}>
@@ -298,7 +319,17 @@ export function EventForm({
               <div style={{ marginBottom: '16px' }}>
                 <button
                   type="button"
-                  onClick={() => setShowTags(true)}
+                  onClick={() => {
+                    setShowTags(true);
+                    // Auto-select when category has exactly one age option
+                    const allowed = getTagsForCategory(category) as string[];
+                    const ageSlugs = AGE_TAGS as string[];
+                    const ageOpts = allowed.filter((t) => ageSlugs.includes(t));
+                    const singleAge = ageOpts.length === 1 ? ageOpts[0] : undefined;
+                    if (singleAge) {
+                      setTags((prev) => prev.some((t) => ageSlugs.includes(t)) ? prev : [...prev, singleAge]);
+                    }
+                  }}
                   style={expandLinkStyle}
                 >
                   + Add tags
@@ -346,32 +377,32 @@ export function EventForm({
             <div>
               <label style={styles.formLabel}>Link</label>
               <input
-                style={styles.input}
+                style={{
+                  ...styles.input,
+                  ...(linkError ? { borderColor: colors.error } : {}),
+                }}
                 value={ticketUrl}
-                onChange={(e) => setTicketUrl(e.target.value)}
-                placeholder="https://..."
+                onChange={(e) => { setTicketUrl(e.target.value); setLinkError(''); }}
+                onBlur={() => {
+                  if (!ticketUrl.trim()) { setLinkError(''); return; }
+                  const normalized = normalizeUrl(ticketUrl);
+                  if (normalized !== ticketUrl) setTicketUrl(normalized);
+                  if (!isValidUrl(normalized)) {
+                    setLinkError('Enter a URL like eventbrite.com/your-event');
+                  }
+                }}
+                placeholder="eventbrite.com/your-event"
               />
+              {linkError && (
+                <div style={{ fontSize: '11px', color: colors.error, marginTop: '4px' }}>{linkError}</div>
+              )}
             </div>
           </div>
 
           <hr style={styles.divider} />
 
-          {/* ── Checkboxes ── */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '4px', marginBottom: '20px' }}>
-            <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={startTimeRequired}
-                onChange={(e) => setStartTimeRequired(e.target.checked)}
-                style={{ marginTop: '2px', accentColor: colors.accent }}
-              />
-              <div>
-                <span style={{ fontSize: '13px', color: colors.text }}>Arrive by start time</span>
-                <div style={{ fontSize: '11px', color: colors.dim, marginTop: '1px' }}>
-                  Uncheck for drop-in events like happy hours
-                </div>
-              </div>
-            </label>
+          {/* ── Wheelchair accessible ── */}
+          <div style={{ marginTop: '4px', marginBottom: '20px' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
               <input
                 type="checkbox"
@@ -449,6 +480,22 @@ export function EventForm({
       </form>
     </>
   );
+}
+
+function normalizeUrl(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
+
+function isValidUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname.includes('.');
+  } catch {
+    return false;
+  }
 }
 
 const expandLinkStyle: React.CSSProperties = {

@@ -70,7 +70,10 @@ const createEventSchema = z.object({
   event_timezone: z.string().max(50).default('America/New_York'),
   description: z.string().max(2000).optional(),
   price: z.string().max(100).optional(),
-  ticket_url: z.string().url().max(2000).optional().or(z.literal('')),
+  ticket_url: z.preprocess(
+    (v) => (typeof v === 'string' && v && !/^https?:\/\//i.test(v) ? `https://${v}` : v),
+    z.string().url().max(2000).optional().or(z.literal('')),
+  ),
   image_focal_y: z.number().min(0).max(1).optional(),
 });
 
@@ -97,7 +100,10 @@ const updateEventSchema = z.object({
   event_timezone: z.string().max(50).optional(),
   description: z.string().max(2000).optional().nullable(),
   price: z.string().max(100).optional().nullable(),
-  ticket_url: z.string().url().max(2000).optional().or(z.literal('')).nullable(),
+  ticket_url: z.preprocess(
+    (v) => (typeof v === 'string' && v && !/^https?:\/\//i.test(v) ? `https://${v}` : v),
+    z.string().url().max(2000).optional().or(z.literal('')).nullable(),
+  ),
   image_focal_y: z.number().min(0).max(1).optional(),
 });
 

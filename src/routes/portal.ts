@@ -956,7 +956,10 @@ const createEventSchema = z.object({
   ).default('America/New_York'),
   description: z.string().max(2000).optional(),
   price: z.string().max(100).optional(),
-  ticket_url: z.string().url().max(2000).optional().or(z.literal('')),
+  ticket_url: z.preprocess(
+    (v) => (typeof v === 'string' && v && !/^https?:\/\//i.test(v) ? `https://${v}` : v),
+    z.string().url().max(2000).optional().or(z.literal('')),
+  ),
   start_time_required: z.boolean().default(true),
   tags: z.array(z.string().max(50)).max(15).default([]),
   wheelchair_accessible: z.boolean().nullable().default(null),
@@ -996,7 +999,10 @@ const updateEventSchema = z.object({
   ).optional(),
   description: z.string().max(2000).optional().nullable(),
   price: z.string().max(100).optional().nullable(),
-  ticket_url: z.string().url().max(2000).optional().or(z.literal('')).nullable(),
+  ticket_url: z.preprocess(
+    (v) => (typeof v === 'string' && v && !/^https?:\/\//i.test(v) ? `https://${v}` : v),
+    z.string().url().max(2000).optional().or(z.literal('')).nullable(),
+  ),
   start_time_required: z.boolean().optional(),
   tags: z.array(z.string().max(50)).max(15).optional(),
   wheelchair_accessible: z.boolean().nullable().optional(),
