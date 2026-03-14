@@ -269,6 +269,7 @@ router.post('/:id/test', writeLimiter, async (req, res, next) => {
       cost: null,
       series_id: null,
       series_instance_number: null,
+      series_instance_count: null,
       start_time_required: true,
       tags: [],
       wheelchair_accessible: null,

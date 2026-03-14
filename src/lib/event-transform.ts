@@ -69,6 +69,7 @@ export interface NeighborhoodEvent {
   cost: string | null;
   series_id: string | null;
   series_instance_number: number | null;
+  series_instance_count: number | null;
   start_time_required: boolean;
   tags: string[];
   wheelchair_accessible: boolean | null;
@@ -131,13 +132,15 @@ export function slugifyCategory(category: string, customCategory: string | null)
   return [category];
 }
 
-/** Map recurrence to iCal RRULE */
-export function toRRule(recurrence: string): string | null {
+/** Map recurrence to iCal RRULE. When count is provided, appends ;COUNT=N for bounded rules. */
+export function toRRule(recurrence: string, count?: number): string | null {
+  const suffix = count && count > 0 ? `;COUNT=${count}` : '';
+
   switch (recurrence) {
-    case 'daily': return 'FREQ=DAILY';
-    case 'weekly': return 'FREQ=WEEKLY';
-    case 'biweekly': return 'FREQ=WEEKLY;INTERVAL=2';
-    case 'monthly': return 'FREQ=MONTHLY';
+    case 'daily': return `FREQ=DAILY${suffix}`;
+    case 'weekly': return `FREQ=WEEKLY${suffix}`;
+    case 'biweekly': return `FREQ=WEEKLY;INTERVAL=2${suffix}`;
+    case 'monthly': return `FREQ=MONTHLY${suffix}`;
     default: {
       const dayMap: Record<string, string> = {
         monday: 'MO', tuesday: 'TU', wednesday: 'WE', thursday: 'TH',
@@ -151,13 +154,13 @@ export function toRRule(recurrence: string): string | null {
       const wdMatch = recurrence.match(/^weekly_days:([a-z,]+)$/);
       if (wdMatch && wdMatch[1]) {
         const rruleDays = wdMatch[1].split(',').map(d => abbrMap[d]).filter(Boolean);
-        if (rruleDays.length > 0) return `FREQ=WEEKLY;BYDAY=${rruleDays.join(',')}`;
+        if (rruleDays.length > 0) return `FREQ=WEEKLY;BYDAY=${rruleDays.join(',')}${suffix}`;
       }
 
       const match = recurrence.match(/^ordinal_weekday:(\d):(\w+)$/);
       if (match) {
         const day = match[2] ? dayMap[match[2]] : undefined;
-        if (day) return `FREQ=MONTHLY;BYDAY=${match[1]}${day}`;
+        if (day) return `FREQ=MONTHLY;BYDAY=${match[1]}${day}${suffix}`;
       }
       return null;
     }
@@ -195,6 +198,7 @@ export function toNeighborhoodEvent(row: PortalEventRow): NeighborhoodEvent {
     cost: row.price || null,
     series_id: row.series_id || null,
     series_instance_number: row.series_instance_number || null,
+    series_instance_count: null,
     start_time_required: row.start_time_required ?? true,
     tags: row.tags || [],
     wheelchair_accessible: row.wheelchair_accessible ?? row.portal_accounts?.wheelchair_accessible ?? null,

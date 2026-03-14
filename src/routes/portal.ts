@@ -359,7 +359,8 @@ export async function createEventSeries(
   const templateKeys = [
     'content', 'description', 'place_name', 'venue_address', 'place_id',
     'latitude', 'longitude', 'category', 'custom_category', 'price',
-    'link_url', 'event_image_focal_y',
+    'link_url', 'event_image_focal_y', 'start_time_required', 'tags',
+    'wheelchair_accessible', 'rsvp_limit',
   ];
   for (const key of templateKeys) {
     if (key in templateData) baseEventData[key] = templateData[key];
@@ -403,17 +404,9 @@ export async function createEventSeries(
       ...templateData,
       event_at: eventAt,
       end_time: endTimeTs,
-      recurrence: i === 0 ? recurrence : 'none',
+      recurrence,
       series_id: series.id,
       series_instance_number: i + 1,
-      // Future instances visible 7 days before event
-      ...(i > 0 ? {
-        becomes_visible_at: (() => {
-          const eventDate = new Date(date + 'T12:00:00');
-          eventDate.setDate(eventDate.getDate() - 7);
-          return eventDate.toISOString();
-        })(),
-      } : {}),
     };
   });
 
@@ -497,10 +490,13 @@ export async function deleteSeriesEvents(seriesId: string): Promise<number> {
       category: [], place_id: null,
       location: { name: '', address: null, lat: null, lng: null },
       url: null, images: [], organizer: { name: '', phone: null },
-      cost: null, series_id: null, series_instance_number: null, start_time_required: true, tags: [], wheelchair_accessible: null, recurrence: null,
+      cost: null, series_id: null, series_instance_number: null, series_instance_count: null, start_time_required: true, tags: [], wheelchair_accessible: null, recurrence: null,
       source: { publisher: 'fiber', collected_at: new Date().toISOString(), method: 'portal', license: 'CC BY 4.0' },
     });
   }
+
+  // Clean up the event_series row (no more events reference it)
+  await supabaseAdmin.from('event_series').delete().eq('id', seriesId);
 
   console.log(`[PORTAL] Series ${seriesId} deleted: ${events.length} events`);
   return events.length;
@@ -512,17 +508,11 @@ export async function dispatchSeriesWebhooks(events: Array<{ id: string }>): Pro
     try {
       const { data: row } = await supabaseAdmin
         .from('events')
-        .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name), event_series!events_series_id_fkey(recurrence)`)
+        .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name)`)
         .eq('id', e.id)
         .maybeSingle();
       if (!row) continue;
-      // Carry series recurrence onto every instance (DB only stores it on instance #1)
-      const r = row as unknown as Record<string, unknown>;
-      const seriesData = r.event_series as Record<string, unknown> | null;
-      if (seriesData?.recurrence && seriesData.recurrence !== 'none') {
-        r.recurrence = seriesData.recurrence;
-      }
-      const eventData = toNeighborhoodEvent(r as unknown as PortalEventRow);
+      const eventData = toNeighborhoodEvent(row as unknown as PortalEventRow);
       void dispatchWebhooks('event.created', e.id, eventData);
     } catch (err) {
       console.error('[PORTAL] Webhook dispatch error:', err instanceof Error ? err.message : err);
@@ -1783,7 +1773,7 @@ router.delete('/events/:id', writeLimiter, async (req, res, next) => {
       category: [], place_id: null,
       location: { name: '', address: null, lat: null, lng: null },
       url: null, images: [], organizer: { name: '', phone: null },
-      cost: null, series_id: null, series_instance_number: null, start_time_required: true, tags: [], wheelchair_accessible: null, recurrence: null,
+      cost: null, series_id: null, series_instance_number: null, series_instance_count: null, start_time_required: true, tags: [], wheelchair_accessible: null, recurrence: null,
       source: { publisher: 'fiber', collected_at: new Date().toISOString(), method: 'portal', license: 'CC BY 4.0' },
     });
 

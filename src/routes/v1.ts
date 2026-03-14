@@ -49,6 +49,9 @@ const listSchema = z.object({
   q: z.string().max(200).optional(),
   near: z.string().regex(/^-?\d+\.?\d*,-?\d+\.?\d*$/).optional(),
   radius_km: z.coerce.number().min(0.1).max(100).optional(),
+  collapse_series: z.enum(['true', 'false']).optional(),
+  series_id: z.string().uuid().optional(),
+  recurring: z.enum(['true', 'false']).optional(),
   limit: z.coerce.number().min(1).max(200).default(50),
   offset: z.coerce.number().min(0).default(0),
 });
@@ -62,14 +65,14 @@ router.get('/', async (req, res, next) => {
     const params = validateRequest(listSchema, req.query);
 
     const today = new Date().toISOString();
+    const collapseSeries = params.collapse_series === 'true';
 
-    // Over-fetch to compensate for series dedup reducing the result set.
-    // Series events sharing the same series_id collapse to one entry.
-    const fetchLimit = params.limit * 3;
+    // When collapsing series, over-fetch to compensate for dedup reducing the result set.
+    const fetchLimit = collapseSeries ? params.limit * 3 : params.limit;
 
     let query = supabaseAdmin
       .from('events')
-      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, start_time_required, tags, wheelchair_accessible, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible), event_series!events_series_id_fkey(recurrence)', { count: 'exact' })
+      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, start_time_required, tags, wheelchair_accessible, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible)', { count: 'exact' })
       .eq('source', 'portal')
       .eq('status', 'published')
       // Visibility: include events still relevant to browse feeds.
@@ -78,6 +81,18 @@ router.get('/', async (req, res, next) => {
       .or(`event_at.gte.${today},end_time.gte.${today}`)
       .order('event_at', { ascending: true })
       .range(params.offset, params.offset + fetchLimit - 1);
+
+    // Series filter: return only events from a specific series
+    if (params.series_id) {
+      query = query.eq('series_id', params.series_id);
+    }
+
+    // Recurring filter: recurring=true → only series events, false → only one-offs
+    if (params.recurring === 'true') {
+      query = query.neq('recurrence', 'none');
+    } else if (params.recurring === 'false') {
+      query = query.eq('recurrence', 'none');
+    }
 
     // Date range filters (compare against event_at, using ET boundary)
     if (params.start_after) {
@@ -156,13 +171,15 @@ router.get('/', async (req, res, next) => {
       return fallback >= now;
     });
 
-    // Deduplicate series: keep only the nearest upcoming instance per series_id
-    const deduped = deduplicateSeries(visible);
-    const page = deduped.slice(0, params.limit);
+    // Optionally deduplicate series: keep only the nearest upcoming instance per series_id.
+    // Default returns all instances; consumers opt in with ?collapse_series=true for browse feeds.
+    const results = collapseSeries ? deduplicateSeries(visible) : visible;
+    const page = results.slice(0, params.limit);
 
     res.json({
       meta: {
-        total: count || 0,
+        // When collapsing series, total is approximate (dedup reduces it unpredictably)
+        total: collapseSeries ? results.length : (count || 0),
         limit: params.limit,
         offset: params.offset,
         spec: 'neighborhood-api-v0.2',
@@ -204,7 +221,7 @@ router.get('/:id', async (req, res, next) => {
 
     const { data: event, error } = await supabaseAdmin
       .from('events')
-      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible), event_series!events_series_id_fkey(recurrence)')
+      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible)')
       .eq('id', id)
       .eq('source', 'portal')
       .eq('status', 'published')
@@ -219,14 +236,24 @@ router.get('/:id', async (req, res, next) => {
       throw createError('Event not found', 404, 'NOT_FOUND');
     }
 
-    // Carry series recurrence onto the instance (DB only stores it on instance #1)
+    const transformed = toNeighborhoodEvent(event as unknown as PortalEventRow);
+
+    // For series events, look up the instance count to produce a bounded RRULE
     const row = event as unknown as Record<string, unknown>;
-    const seriesData = row.event_series as Record<string, unknown> | null;
-    if (seriesData?.recurrence && seriesData.recurrence !== 'none') {
-      row.recurrence = seriesData.recurrence;
+    if (row.series_id && transformed.recurrence) {
+      const { count: instanceCount } = await supabaseAdmin
+        .from('events')
+        .select('id', { count: 'exact', head: true })
+        .eq('series_id', row.series_id as string)
+        .eq('source', 'portal');
+      if (instanceCount && instanceCount > 0) {
+        transformed.series_instance_count = instanceCount;
+        const rrule = toRRule(row.recurrence as string, instanceCount);
+        if (rrule) transformed.recurrence = { rrule };
+      }
     }
 
-    res.json({ event: toNeighborhoodEvent(row as unknown as PortalEventRow) });
+    res.json({ event: transformed });
   } catch (err) {
     next(err);
   }
@@ -260,10 +287,9 @@ function escapeXml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, start_time_required, tags, wheelchair_accessible, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible), event_series!events_series_id_fkey(recurrence)';
+const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, start_time_required, tags, wheelchair_accessible, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible)';
 
-/** Deduplicate series events: keep only the nearest upcoming instance per series_id.
- *  Carries the series recurrence pattern onto the kept instance. */
+/** Deduplicate series events: keep only the nearest upcoming instance per series_id. */
 function deduplicateSeries(events: Record<string, unknown>[]): Record<string, unknown>[] {
   const seenSeries = new Set<string>();
   const deduped: Record<string, unknown>[] = [];
@@ -272,10 +298,6 @@ function deduplicateSeries(events: Record<string, unknown>[]): Record<string, un
     if (seriesId) {
       if (seenSeries.has(seriesId)) continue;
       seenSeries.add(seriesId);
-      const seriesData = row.event_series as Record<string, unknown> | null;
-      if (seriesData?.recurrence && seriesData.recurrence !== 'none') {
-        row.recurrence = seriesData.recurrence;
-      }
     }
     deduped.push(row);
   }

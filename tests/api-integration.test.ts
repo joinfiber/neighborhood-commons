@@ -96,7 +96,6 @@ function makeDbRow(overrides: Record<string, unknown> = {}) {
     creator_account_id: 'acc-uuid-1',
     series_id: null,
     portal_accounts: { business_name: 'The Fishtown Taproom' },
-    event_series: null,
     ...overrides,
   };
 }
@@ -293,14 +292,13 @@ describe('GET /api/v1/events/:id', () => {
     expect(body.error.code).toBe('NOT_FOUND');
   });
 
-  it('propagates series recurrence onto non-first instances', async () => {
+  it('returns series recurrence directly from instance', async () => {
     mockResponses.set('events', {
       data: makeDbRow({
         id: 'instance-3',
         series_id: 'series-uuid-1',
         series_instance_number: 3,
-        recurrence: 'none',
-        event_series: { recurrence: 'weekly_days:mon,tue,wed,thu' },
+        recurrence: 'weekly_days:mon,tue,wed,thu',
       }),
       error: null,
     });
@@ -495,29 +493,26 @@ describe('series deduplication', () => {
           id: 'instance-1',
           series_id: seriesId,
           series_instance_number: 1,
+          recurrence: 'weekly_days:mon,tue,wed,thu',
           event_at: '2026-03-16T21:00:00.000Z',
-          event_series: { recurrence: 'weekly_days:mon,tue,wed,thu' },
         }),
         makeDbRow({
           id: 'instance-2',
           series_id: seriesId,
           series_instance_number: 2,
-          recurrence: 'none',
+          recurrence: 'weekly_days:mon,tue,wed,thu',
           event_at: '2026-03-17T21:00:00.000Z',
-          event_series: { recurrence: 'weekly_days:mon,tue,wed,thu' },
         }),
         makeDbRow({
           id: 'instance-3',
           series_id: seriesId,
           series_instance_number: 3,
-          recurrence: 'none',
+          recurrence: 'weekly_days:mon,tue,wed,thu',
           event_at: '2026-03-18T21:00:00.000Z',
-          event_series: { recurrence: 'weekly_days:mon,tue,wed,thu' },
         }),
         makeDbRow({
           id: 'standalone-event',
           series_id: null,
-          event_series: null,
           content: 'One-off concert',
           recurrence: 'none',
         }),
@@ -526,13 +521,17 @@ describe('series deduplication', () => {
       count: 4,
     });
 
-    const res = await fetch(`${baseUrl}/api/v1/events`);
-    const body = await res.json();
+    // Without collapse_series, all 4 events are returned
+    const resAll = await fetch(`${baseUrl}/api/v1/events`);
+    const bodyAll = await resAll.json();
+    expect(bodyAll.events.length).toBe(4);
 
-    // 3 series instances should collapse to 1, plus the standalone = 2
+    // With collapse_series=true, 3 series instances collapse to 1, plus standalone = 2
+    const res = await fetch(`${baseUrl}/api/v1/events?collapse_series=true`);
+    const body = await res.json();
     expect(body.events.length).toBe(2);
 
-    // The kept series instance should carry the recurrence from the series
+    // Each instance carries its own recurrence — no join needed
     const seriesEvent = body.events.find((e: Record<string, unknown>) => e.id === 'instance-1');
     expect(seriesEvent).toBeDefined();
     expect(seriesEvent.recurrence).toEqual({ rrule: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH' });

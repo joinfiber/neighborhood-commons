@@ -177,6 +177,31 @@ export function getNextDates(startDate: string, recurrence: string, count: numbe
   return dates;
 }
 
+/**
+ * Convert a duration preset (months) to the portal's instance_count
+ * for series creation. For weekly patterns, instance_count = weeks.
+ * For biweekly/monthly, instance_count = events.
+ */
+export function durationToInstanceCount(frequency: 'weekly' | 'biweekly' | 'monthly', months: number): number {
+  if (months === 0) return 0; // ongoing — backend applies its own limits
+  switch (frequency) {
+    case 'weekly':
+      if (months === 1) return 4;
+      if (months === 3) return 13;
+      if (months === 6) return 26;
+      return Math.round(months * 4.33);
+    case 'biweekly':
+      if (months === 1) return 2;
+      if (months === 3) return 6;
+      if (months === 6) return 13;
+      return Math.round(months * 2.17);
+    case 'monthly':
+      return Math.max(2, months);
+    default:
+      return 4;
+  }
+}
+
 /** Get the Nth occurrence of a weekday (0=Sun) in a given month/year. */
 function getNthWeekdayOfMonth(year: number, month: number, dayOfWeek: number, n: number): Date | null {
   // Find first occurrence of this weekday in the month

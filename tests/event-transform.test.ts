@@ -126,6 +126,7 @@ describe('toNeighborhoodEvent', () => {
     const event = toNeighborhoodEvent(makeRow());
     expect(event.series_id).toBeNull();
     expect(event.series_instance_number).toBeNull();
+    expect(event.series_instance_count).toBeNull();
   });
 
   it('passes through start_time_required (default true)', () => {
@@ -267,6 +268,23 @@ describe('toRRule', () => {
 
   it('returns null for unknown patterns', () => {
     expect(toRRule('yearly')).toBeNull();
+  });
+
+  it('appends COUNT when count is provided', () => {
+    expect(toRRule('weekly', 8)).toBe('FREQ=WEEKLY;COUNT=8');
+    expect(toRRule('daily', 30)).toBe('FREQ=DAILY;COUNT=30');
+    expect(toRRule('biweekly', 12)).toBe('FREQ=WEEKLY;INTERVAL=2;COUNT=12');
+    expect(toRRule('monthly', 6)).toBe('FREQ=MONTHLY;COUNT=6');
+  });
+
+  it('appends COUNT to complex patterns', () => {
+    expect(toRRule('weekly_days:mon,tue,wed,thu', 26)).toBe('FREQ=WEEKLY;BYDAY=MO,TU,WE,TH;COUNT=26');
+    expect(toRRule('ordinal_weekday:3:tuesday', 12)).toBe('FREQ=MONTHLY;BYDAY=3TU;COUNT=12');
+  });
+
+  it('omits COUNT when count is 0 or undefined', () => {
+    expect(toRRule('weekly', 0)).toBe('FREQ=WEEKLY');
+    expect(toRRule('weekly', undefined)).toBe('FREQ=WEEKLY');
   });
 });
 

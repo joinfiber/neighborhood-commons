@@ -393,7 +393,7 @@ export async function retryFailedWebhooks(): Promise<number> {
     // Fetch the event data for the retry payload
     const { data: event } = await supabaseAdmin
       .from('events')
-      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, series_id, series_instance_number, price, link_url, event_image_url, created_at, portal_accounts!events_creator_account_id_fkey(business_name), event_series!events_series_id_fkey(recurrence)')
+      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, price, link_url, event_image_url, created_at, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible)')
       .eq('id', d.event_id)
       .eq('source', 'portal')
       .maybeSingle();
@@ -406,15 +406,8 @@ export async function retryFailedWebhooks(): Promise<number> {
       continue;
     }
 
-    // Carry series recurrence onto every instance (DB only stores it on instance #1)
-    const row = event as unknown as Record<string, unknown>;
-    const seriesData = row.event_series as Record<string, unknown> | null;
-    if (seriesData?.recurrence && seriesData.recurrence !== 'none') {
-      row.recurrence = seriesData.recurrence;
-    }
-
     // Re-transform and deliver with incremented attempt number
-    const eventData = toNeighborhoodEvent(row as unknown as PortalEventRow);
+    const eventData = toNeighborhoodEvent(event as unknown as PortalEventRow);
     void deliverWebhook(sub as WebhookSub, d.id, d.event_type, eventData, d.attempt + 1);
     retried++;
   }

@@ -125,6 +125,18 @@ These extensions live under their own route prefixes (`/api/portal/*`, `/api/adm
 - **No magic, no tricks.** Every behavior should be traceable from the route handler to the database query to the response. No ORMs, no middleware that silently transforms data, no "smart" defaults that surprise readers.
 - **The data enables surprising things.** This API doesn't know what downstream consumers will build. A social app might show nearby events. A civic dashboard might track neighborhood vitality. Someone might crowdsource pool attendance patterns from open swim listings. Design for data atoms that can be recombined in ways we haven't imagined.
 
+### Two Audiences, One System
+
+This project serves two audiences simultaneously. Every decision must hold up for both.
+
+**The API serves developers and entrepreneurs.** They're building event apps, community dashboards, civic tools, newsletters. They need structured, predictable, complete data atoms. Every event instance must be self-sufficient — carrying its full story without implicit knowledge, extra joins, or undocumented carry-forward behavior. Rigidity here is a feature: spec-correct responses, bounded recurrence rules, reliable pagination, no surprises. If a developer can't trust the data shape, they'll build around us instead of on top of us.
+
+**The portal serves busy operators.** Bar managers, yoga studio owners, coffee shop staff, community organizers. They post events between pouring drinks and teaching classes. The portal must be deeply intuitive — pull up the dashboard, see your recurring events (happy hour, trivia, karaoke) and your one-offs (shows, popups), and have a clear path to edit, delete, add, or manage both. The portal is not forgiving (it still enforces data quality), but it's friendly in how it presents structure. Operators think "every Thursday for 3 months," not "12 instances of a weekly pattern." Meet them in their language.
+
+**The art is in nailing both.** Backend strict enough that the commons is a respected public resource. Portal intuitive enough that someone who's never used a CMS can post their open mic night in two minutes. Neither audience should feel the other's complexity. A bar owner never sees an RRULE. A developer never gets an event instance that requires a join to interpret. Same data, two perfect interfaces.
+
+When these goals conflict, resolve in favor of the data. The portal can always present rigid data more gently. But if the data is sloppy to make the portal easier, every downstream consumer inherits the mess.
+
 ## Architecture
 
 ### Request Flow
