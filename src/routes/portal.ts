@@ -108,6 +108,7 @@ export function toPortalEvent(row: Record<string, unknown>): Record<string, unkn
     start_time_required: (row.start_time_required as boolean) ?? true,
     tags: (row.tags as string[]) || [],
     wheelchair_accessible: row.wheelchair_accessible ?? null,
+    rsvp_limit: row.rsvp_limit ?? null,
     status: row.status,
     series_id: row.series_id,
     series_instance_number: row.series_instance_number,
@@ -139,6 +140,7 @@ export function portalInputToInsert(
     start_time_required?: boolean | undefined;
     tags?: string[] | undefined;
     wheelchair_accessible?: boolean | null | undefined;
+    rsvp_limit?: number | null | undefined;
     image_focal_y?: number | undefined;
   },
   accountId: string,
@@ -183,6 +185,7 @@ export function portalInputToInsert(
     start_time_required: data.start_time_required ?? true,
     tags: data.tags || [],
     wheelchair_accessible: data.wheelchair_accessible ?? null,
+    rsvp_limit: data.rsvp_limit ?? null,
     event_image_focal_y: data.image_focal_y ?? 0.5,
     creator_account_id: accountId,
     source: 'portal',
@@ -194,7 +197,7 @@ export function portalInputToInsert(
 }
 
 /** Columns to select when reading portal events from the events table */
-export const PORTAL_SELECT = 'id, user_id, content, description, place_name, place_id, approximate_location, event_at, end_time, event_image_url, event_image_focal_y, link_url, category, custom_category, event_timezone, venue_address, recurrence, price, latitude, longitude, creator_account_id, source, visibility, status, is_business, region_id, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, created_at';
+export const PORTAL_SELECT = 'id, user_id, content, description, place_name, place_id, approximate_location, event_at, end_time, event_image_url, event_image_focal_y, link_url, category, custom_category, event_timezone, venue_address, recurrence, price, latitude, longitude, creator_account_id, source, visibility, status, is_business, region_id, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, rsvp_limit, created_at';
 
 export function getAdminUserId(): string {
   const id = config.admin.userIds[0];
@@ -963,6 +966,7 @@ const createEventSchema = z.object({
   start_time_required: z.boolean().default(true),
   tags: z.array(z.string().max(50)).max(15).default([]),
   wheelchair_accessible: z.boolean().nullable().default(null),
+  rsvp_limit: z.number().int().min(1).max(10000).nullable().default(null),
   image_focal_y: z.number().min(0).max(1).optional(),
 });
 
@@ -1006,6 +1010,7 @@ const updateEventSchema = z.object({
   start_time_required: z.boolean().optional(),
   tags: z.array(z.string().max(50)).max(15).optional(),
   wheelchair_accessible: z.boolean().nullable().optional(),
+  rsvp_limit: z.number().int().min(1).max(10000).nullable().optional(),
   image_focal_y: z.number().min(0).max(1).optional(),
   force: z.boolean().optional(),
 });
@@ -1341,6 +1346,7 @@ router.patch('/events/series/:seriesId', writeLimiter, async (req, res, next) =>
       templateUpdate.tags = category ? validateTags(data.tags, category) : data.tags;
     }
     if (data.wheelchair_accessible !== undefined) templateUpdate.wheelchair_accessible = data.wheelchair_accessible;
+    if (data.rsvp_limit !== undefined) templateUpdate.rsvp_limit = data.rsvp_limit;
     if (data.image_focal_y !== undefined) templateUpdate.event_image_focal_y = data.image_focal_y;
 
     // Time changes: apply to each instance relative to its own date
@@ -1356,7 +1362,7 @@ router.patch('/events/series/:seriesId', writeLimiter, async (req, res, next) =>
       place_id: 'place_id', latitude: 'latitude', longitude: 'longitude',
       category: 'category', custom_category: 'custom_category',
       description: 'description', price: 'price', link_url: 'link_url', start_time_required: 'start_time_required',
-      tags: 'tags', wheelchair_accessible: 'wheelchair_accessible', event_image_focal_y: 'event_image_focal_y',
+      tags: 'tags', wheelchair_accessible: 'wheelchair_accessible', rsvp_limit: 'rsvp_limit', event_image_focal_y: 'event_image_focal_y',
     };
 
     let updatedCount = 0;
@@ -1480,6 +1486,7 @@ const batchUpdateSchema = z.object({
     custom_category: z.string().max(30).optional().nullable(),
     tags: z.array(z.string().max(50)).max(15).optional(),
     wheelchair_accessible: z.boolean().nullable().optional(),
+    rsvp_limit: z.number().int().min(1).max(10000).nullable().optional(),
     start_time_required: z.boolean().optional(),
     description: z.string().max(2000).optional().nullable(),
     price: z.string().max(100).optional().nullable(),
@@ -1515,6 +1522,7 @@ router.patch('/events/batch', writeLimiter, async (req, res, next) => {
       dbUpdate.tags = category ? validateTags(updates.tags, category) : updates.tags;
     }
     if (updates.wheelchair_accessible !== undefined) dbUpdate.wheelchair_accessible = updates.wheelchair_accessible;
+    if (updates.rsvp_limit !== undefined) dbUpdate.rsvp_limit = updates.rsvp_limit;
     if (updates.start_time_required !== undefined) dbUpdate.start_time_required = updates.start_time_required;
     if (updates.description !== undefined) dbUpdate.description = updates.description || null;
     if (updates.price !== undefined) dbUpdate.price = updates.price || null;
@@ -1664,6 +1672,7 @@ router.patch('/events/:id', writeLimiter, async (req, res, next) => {
       update.tags = category ? validateTags(data.tags, category) : data.tags;
     }
     if (data.wheelchair_accessible !== undefined) update.wheelchair_accessible = data.wheelchair_accessible;
+    if (data.rsvp_limit !== undefined) update.rsvp_limit = data.rsvp_limit;
     if (data.image_focal_y !== undefined) update.event_image_focal_y = data.image_focal_y;
 
     if (Object.keys(update).length === 0) {

@@ -47,6 +47,7 @@ export interface PortalEvent {
   start_time_required: boolean;
   tags: string[];
   wheelchair_accessible: boolean | null;
+  rsvp_limit: number | null;
   series_id: string | null;
   series_instance_number: number | null;
   created_at: string;
@@ -74,6 +75,7 @@ export interface CreateEventParams {
   start_time_required?: boolean;
   tags?: string[];
   wheelchair_accessible?: boolean | null;
+  rsvp_limit?: number | null;
 }
 
 export interface PlaceResult {
@@ -150,6 +152,7 @@ export interface EventFormData {
   start_time_required?: boolean;
   tags?: string[];
   wheelchair_accessible?: boolean | null;
+  rsvp_limit?: number | null;
   image?: string | null;
   image_focal_y?: number;
 }

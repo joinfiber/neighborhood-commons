@@ -74,6 +74,7 @@ const createEventSchema = z.object({
     (v) => (typeof v === 'string' && v && !/^https?:\/\//i.test(v) ? `https://${v}` : v),
     z.string().url().max(2000).optional().or(z.literal('')),
   ),
+  rsvp_limit: z.number().int().min(1).max(10000).nullable().default(null),
   image_focal_y: z.number().min(0).max(1).optional(),
 });
 
@@ -104,6 +105,7 @@ const updateEventSchema = z.object({
     (v) => (typeof v === 'string' && v && !/^https?:\/\//i.test(v) ? `https://${v}` : v),
     z.string().url().max(2000).optional().or(z.literal('')).nullable(),
   ),
+  rsvp_limit: z.number().int().min(1).max(10000).nullable().optional(),
   image_focal_y: z.number().min(0).max(1).optional(),
 });
 

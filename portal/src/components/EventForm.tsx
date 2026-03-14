@@ -53,6 +53,7 @@ export function EventForm({
   );
   const [description, setDescription] = useState(initialValues.description || '');
   const [price, setPrice] = useState(initialValues.price || '');
+  const [rsvpLimit, setRsvpLimit] = useState<number | null>(initialValues.rsvp_limit ?? null);
   const [ticketUrl, setTicketUrl] = useState(initialValues.ticket_url || '');
 
   const [hasExistingImage, setHasExistingImage] = useState(initialHasExistingImage);
@@ -115,6 +116,7 @@ export function EventForm({
       start_time_required: startTimeRequired,
       tags: tags.length > 0 ? tags : undefined,
       wheelchair_accessible: wheelchairAccessible,
+      rsvp_limit: rsvpLimit,
       description: description || undefined,
       price: price || undefined,
       ticket_url: ticketUrl ? normalizeUrl(ticketUrl) || undefined : undefined,
@@ -363,8 +365,8 @@ export function EventForm({
             />
           </div>
 
-          {/* ── Price + Link ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '16px' }}>
+          {/* ── Price + RSVP + Link ── */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '16px' }}>
             <div>
               <label style={styles.formLabel}>Price</label>
               <input
@@ -372,6 +374,17 @@ export function EventForm({
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
                 placeholder="Free, $10, etc."
+              />
+            </div>
+            <div>
+              <label style={styles.formLabel}>RSVP limit <span style={{ color: colors.dim, fontWeight: 400 }}>(opt.)</span></label>
+              <input
+                type="number"
+                min={1}
+                style={styles.input}
+                value={rsvpLimit ?? ''}
+                onChange={(e) => setRsvpLimit(e.target.value ? parseInt(e.target.value, 10) || null : null)}
+                placeholder="No limit"
               />
             </div>
             <div>
