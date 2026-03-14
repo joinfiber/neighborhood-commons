@@ -26,6 +26,7 @@ import { auditPortalAction, hashId } from '../lib/audit.js';
 import { generateAndStoreKey } from '../lib/api-keys.js';
 import { toNeighborhoodEvent, type PortalEventRow } from '../lib/event-transform.js';
 import { sanitizeUrl, checkApprovedDomain } from '../lib/url-sanitizer.js';
+import { geocodeEventIfNeeded, geocodeSeriesEvents } from '../lib/geocoding.js';
 import {
   toPortalEvent,
   portalInputToInsert,
@@ -704,6 +705,9 @@ router.post('/accounts/:id/events', writeLimiter, async (req, res, next) => {
         .eq('id', instances[0]!.id)
         .single();
 
+      // Fire-and-forget geocode — one lookup, update all instances
+      void geocodeSeriesEvents(instances.map((i) => i.id), insertData.venue_address as string | null, insertData.latitude as number | null, insertData.longitude as number | null, account.id);
+
       res.status(201).json({ event: event ? toPortalEvent(event) : null, series_count: instances.length });
       return;
     }
@@ -721,6 +725,9 @@ router.post('/accounts/:id/events', writeLimiter, async (req, res, next) => {
     }
 
     console.log(`[COMMONS-ADMIN] Event created for ${account.business_name}: "${data.title}" (${event.id})`);
+
+    // Fire-and-forget geocode if address present but no coordinates
+    void geocodeEventIfNeeded(event.id, insertData.venue_address as string | null, insertData.latitude as number | null, insertData.longitude as number | null, account.id);
 
     // Dispatch webhook (fire-and-forget) — admin-created events are always published
     void (async () => {
@@ -968,6 +975,11 @@ router.patch('/events/:id', writeLimiter, async (req, res, next) => {
     if (error) {
       console.error('[COMMONS-ADMIN] Event update error:', error.message);
       throw createError('Failed to update event', 500, 'SERVER_ERROR');
+    }
+
+    // Fire-and-forget geocode if address changed and no coordinates
+    if (data.address !== undefined) {
+      void geocodeEventIfNeeded(event.id, event.venue_address as string | null, event.latitude as number | null, event.longitude as number | null, event.creator_account_id as string | null);
     }
 
     // Dispatch webhook (fire-and-forget)

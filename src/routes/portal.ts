@@ -30,6 +30,7 @@ import { dispatchWebhooks, dispatchSeriesCreatedWebhook } from '../lib/webhook-d
 import { auditPortalAction } from '../lib/audit.js';
 import { toNeighborhoodEvent, toRRule, type PortalEventRow } from '../lib/event-transform.js';
 import { sanitizeUrl, checkApprovedDomain } from '../lib/url-sanitizer.js';
+import { geocodeEventIfNeeded, geocodeSeriesEvents } from '../lib/geocoding.js';
 import { writeLimiter, enumerationLimiter, portalLimiter } from '../middleware/rate-limit.js';
 import { blockDatacenterIps } from '../middleware/ip-filter.js';
 
@@ -1159,6 +1160,9 @@ router.post('/events', writeLimiter, async (req, res, next) => {
         .eq('id', instances[0]!.id)
         .single();
 
+      // Fire-and-forget geocode — one lookup, update all instances
+      void geocodeSeriesEvents(instances.map((i) => i.id), insertData.venue_address as string | null, insertData.latitude as number | null, insertData.longitude as number | null, account.id);
+
       res.status(201).json({ event: event ? toPortalEvent(event) : null, series_count: instances.length });
       return;
     }
@@ -1177,6 +1181,9 @@ router.post('/events', writeLimiter, async (req, res, next) => {
 
     console.log(`[PORTAL] Event created: "${data.title}" (${event.id}) [${account.status === 'active' ? 'published' : 'pending_review'}]`);
     auditPortalAction('portal_event_created', account.id, event.id, { title: data.title });
+
+    // Fire-and-forget geocode if address present but no coordinates
+    void geocodeEventIfNeeded(event.id, insertData.venue_address as string | null, insertData.latitude as number | null, insertData.longitude as number | null, account.id);
 
     // Dispatch webhook only for published events (skip pending_review)
     if (account.status === 'active') {
@@ -1673,6 +1680,11 @@ router.patch('/events/:id', writeLimiter, async (req, res, next) => {
 
     auditPortalAction('portal_event_updated', event.creator_account_id as string, req.params.id,
       undefined, '/api/portal/events/:id');
+
+    // Fire-and-forget geocode if address changed and no coordinates
+    if (data.address !== undefined) {
+      void geocodeEventIfNeeded(event.id, event.venue_address as string | null, event.latitude as number | null, event.longitude as number | null, event.creator_account_id as string | null);
+    }
 
     // Dispatch webhook (fire-and-forget)
     void (async () => {
