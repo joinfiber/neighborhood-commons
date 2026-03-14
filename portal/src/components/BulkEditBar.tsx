@@ -1,16 +1,16 @@
 /**
  * BulkEditBar — inline bulk-edit form for selected events.
  *
- * All fields are shown at once. Each starts in an "unchanged" state.
- * Only fields the user actually touches get included in the update.
- * Quiet, flat design — feels like part of the list, not a modal.
+ * All fields shown at once. Each starts "unchanged."
+ * Only fields the user touches get sent.
+ * Description + price are the high-frequency bulk fields;
+ * category/accessible/arrive-by are less common but still useful.
  */
 
 import { useState } from 'react';
-import { PORTAL_CATEGORIES, PORTAL_CATEGORY_KEYS, type PortalCategory } from '../lib/categories';
+import { PORTAL_CATEGORIES, PORTAL_CATEGORY_KEYS } from '../lib/categories';
 import { colors } from '../lib/styles';
 
-// Sentinel value meaning "don't change this field"
 const UNCHANGED = '__unchanged__';
 
 interface BulkEditBarProps {
@@ -24,11 +24,27 @@ export function BulkEditBar({ selectedCount, onApply, onCancel, applying }: Bulk
   const [category, setCategory] = useState(UNCHANGED);
   const [wheelchair, setWheelchair] = useState(UNCHANGED);
   const [startTimeReq, setStartTimeReq] = useState(UNCHANGED);
+  const [description, setDescription] = useState(UNCHANGED);
+  const [price, setPrice] = useState(UNCHANGED);
 
   const dirty =
     category !== UNCHANGED ||
     wheelchair !== UNCHANGED ||
-    startTimeReq !== UNCHANGED;
+    startTimeReq !== UNCHANGED ||
+    description !== UNCHANGED ||
+    price !== UNCHANGED;
+
+  // Build a human-readable summary of what will change
+  const changeSummary = (): string => {
+    const parts: string[] = [];
+    if (category !== UNCHANGED) parts.push('category');
+    if (description !== UNCHANGED) parts.push('description');
+    if (price !== UNCHANGED) parts.push('price');
+    if (wheelchair !== UNCHANGED) parts.push('accessibility');
+    if (startTimeReq !== UNCHANGED) parts.push('arrive-by-start');
+    if (parts.length === 0) return 'Select a field to change';
+    return `Update ${parts.join(', ')} on ${selectedCount} event${selectedCount !== 1 ? 's' : ''}`;
+  };
 
   const handleApply = () => {
     const updates: Record<string, unknown> = {};
@@ -41,11 +57,17 @@ export function BulkEditBar({ selectedCount, onApply, onCancel, applying }: Bulk
     if (startTimeReq !== UNCHANGED) {
       updates.start_time_required = startTimeReq === 'true';
     }
+    if (description !== UNCHANGED) {
+      updates.description = description || null;
+    }
+    if (price !== UNCHANGED) {
+      updates.price = price || null;
+    }
 
     if (Object.keys(updates).length > 0) onApply(updates);
   };
 
-  const fieldLabel: React.CSSProperties = {
+  const label: React.CSSProperties = {
     fontSize: '12px',
     fontWeight: 500,
     color: colors.muted,
@@ -53,7 +75,7 @@ export function BulkEditBar({ selectedCount, onApply, onCancel, applying }: Bulk
     display: 'block',
   };
 
-  const fieldSelect: React.CSSProperties = {
+  const selectStyle: React.CSSProperties = {
     background: colors.card,
     border: `1px solid ${colors.border}`,
     borderRadius: '6px',
@@ -68,8 +90,18 @@ export function BulkEditBar({ selectedCount, onApply, onCancel, applying }: Bulk
     backgroundPosition: 'right 8px center',
   };
 
-  const unchangedStyle: React.CSSProperties = {
-    color: colors.dim,
+  const dimWhenUnchanged = (val: string): React.CSSProperties =>
+    val === UNCHANGED ? { color: colors.dim } : {};
+
+  const inputStyle: React.CSSProperties = {
+    background: colors.card,
+    border: `1px solid ${colors.border}`,
+    borderRadius: '6px',
+    color: colors.text,
+    fontSize: '13px',
+    padding: '7px 8px',
+    outline: 'none',
+    width: '100%',
   };
 
   return (
@@ -80,7 +112,7 @@ export function BulkEditBar({ selectedCount, onApply, onCancel, applying }: Bulk
       padding: '14px 16px',
       marginBottom: '12px',
     }}>
-      {/* Header row */}
+      {/* Header */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
@@ -106,18 +138,58 @@ export function BulkEditBar({ selectedCount, onApply, onCancel, applying }: Bulk
         </button>
       </div>
 
-      {/* Fields — horizontal on wider screens, stacked on narrow */}
+      {/* Description — full width, most common bulk edit */}
+      <div style={{ marginBottom: '10px' }}>
+        <label style={label}>
+          Description
+          {description !== UNCHANGED && (
+            <span style={{ fontWeight: 400, color: colors.dim, marginLeft: '6px' }}>
+              — replaces existing
+            </span>
+          )}
+        </label>
+        <textarea
+          style={{
+            ...inputStyle,
+            minHeight: '56px',
+            resize: 'vertical',
+            color: description === UNCHANGED ? colors.dim : colors.text,
+          }}
+          placeholder="No change"
+          value={description === UNCHANGED ? '' : description}
+          onFocus={() => { if (description === UNCHANGED) setDescription(''); }}
+          onChange={(e) => setDescription(e.target.value)}
+        />
+      </div>
+
+      {/* Inline fields row */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
         gap: '10px',
         marginBottom: '12px',
       }}>
+        {/* Price */}
+        <div>
+          <label style={label}>Price</label>
+          <input
+            type="text"
+            style={{
+              ...inputStyle,
+              color: price === UNCHANGED ? colors.dim : colors.text,
+            }}
+            placeholder="No change"
+            value={price === UNCHANGED ? '' : price}
+            onFocus={() => { if (price === UNCHANGED) setPrice(''); }}
+            onChange={(e) => setPrice(e.target.value)}
+          />
+        </div>
+
         {/* Category */}
         <div>
-          <label style={fieldLabel}>Category</label>
+          <label style={label}>Category</label>
           <select
-            style={{ ...fieldSelect, ...(category === UNCHANGED ? unchangedStyle : {}) }}
+            style={{ ...selectStyle, ...dimWhenUnchanged(category) }}
             value={category}
             onChange={(e) => setCategory(e.target.value)}
           >
@@ -130,11 +202,11 @@ export function BulkEditBar({ selectedCount, onApply, onCancel, applying }: Bulk
           </select>
         </div>
 
-        {/* Wheelchair */}
+        {/* Accessible */}
         <div>
-          <label style={fieldLabel}>Accessible</label>
+          <label style={label}>Accessible</label>
           <select
-            style={{ ...fieldSelect, ...(wheelchair === UNCHANGED ? unchangedStyle : {}) }}
+            style={{ ...selectStyle, ...dimWhenUnchanged(wheelchair) }}
             value={wheelchair}
             onChange={(e) => setWheelchair(e.target.value)}
           >
@@ -145,11 +217,11 @@ export function BulkEditBar({ selectedCount, onApply, onCancel, applying }: Bulk
           </select>
         </div>
 
-        {/* Start time required */}
+        {/* Arrive by start */}
         <div>
-          <label style={fieldLabel}>Arrive by start</label>
+          <label style={label}>Arrive by start</label>
           <select
-            style={{ ...fieldSelect, ...(startTimeReq === UNCHANGED ? unchangedStyle : {}) }}
+            style={{ ...selectStyle, ...dimWhenUnchanged(startTimeReq) }}
             value={startTimeReq}
             onChange={(e) => setStartTimeReq(e.target.value)}
           >
@@ -160,7 +232,7 @@ export function BulkEditBar({ selectedCount, onApply, onCancel, applying }: Bulk
         </div>
       </div>
 
-      {/* Apply button */}
+      {/* Apply */}
       <button
         type="button"
         onClick={handleApply}
@@ -178,7 +250,7 @@ export function BulkEditBar({ selectedCount, onApply, onCancel, applying }: Bulk
           width: '100%',
         }}
       >
-        {applying ? 'Applying...' : dirty ? 'Apply changes' : 'Choose a field to change'}
+        {applying ? 'Applying...' : changeSummary()}
       </button>
     </div>
   );

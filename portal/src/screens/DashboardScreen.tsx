@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { PORTAL_CATEGORIES, type PortalCategory } from '../lib/categories';
 import { styles, colors } from '../lib/styles';
 import { fetchEvents, batchUpdateEvents, batchDeleteEvents, type PortalEvent, type PortalAccount } from '../lib/api';
@@ -28,6 +28,143 @@ function formatTime(time: string): string {
 }
 
 // =============================================================================
+// ACCOUNT DROPDOWN (gear menu)
+// =============================================================================
+
+function AccountDropdown({ account, onSignOut, onSignOutEverywhere, onClose }: {
+  account: PortalAccount;
+  onSignOut: () => void;
+  onSignOutEverywhere: () => void;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [confirmSignOutAll, setConfirmSignOutAll] = useState(false);
+
+  // Close on click outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [onClose]);
+
+  // Close on Escape
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  const row: React.CSSProperties = {
+    display: 'flex',
+    justifyContent: 'space-between',
+    padding: '6px 0',
+    fontSize: '13px',
+  };
+
+  return (
+    <div
+      ref={ref}
+      style={{
+        position: 'absolute',
+        top: '100%',
+        right: 0,
+        marginTop: '6px',
+        background: colors.card,
+        border: `1px solid ${colors.border}`,
+        borderRadius: '10px',
+        padding: '16px',
+        width: '280px',
+        zIndex: 100,
+        boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+      }}
+    >
+      <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: colors.dim, marginBottom: '8px' }}>
+        Account
+      </div>
+
+      <div style={row}>
+        <span style={{ color: colors.muted }}>Email</span>
+        <span style={{ color: colors.cream }}>{account.email}</span>
+      </div>
+      <div style={row}>
+        <span style={{ color: colors.muted }}>Status</span>
+        <span style={{ color: colors.cream }}>{account.status}</span>
+      </div>
+      {account.default_venue_name && (
+        <div style={row}>
+          <span style={{ color: colors.muted }}>Venue</span>
+          <span style={{ color: colors.cream }}>{account.default_venue_name}</span>
+        </div>
+      )}
+      {account.default_address && (
+        <div style={row}>
+          <span style={{ color: colors.muted }}>Address</span>
+          <span style={{ color: colors.cream, textAlign: 'right', maxWidth: '160px' }}>{account.default_address}</span>
+        </div>
+      )}
+      {account.website && (
+        <div style={row}>
+          <span style={{ color: colors.muted }}>Website</span>
+          <span style={{ color: colors.cream }}>{account.website}</span>
+        </div>
+      )}
+      {account.phone && (
+        <div style={row}>
+          <span style={{ color: colors.muted }}>Phone</span>
+          <span style={{ color: colors.cream }}>{account.phone}</span>
+        </div>
+      )}
+      {account.wheelchair_accessible != null && (
+        <div style={row}>
+          <span style={{ color: colors.muted }}>Accessible</span>
+          <span style={{ color: colors.cream }}>{account.wheelchair_accessible ? 'Yes' : 'No'}</span>
+        </div>
+      )}
+
+      <div style={{ borderTop: `1px solid ${colors.border}`, marginTop: '8px', paddingTop: '10px' }}>
+        {confirmSignOutAll ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <span style={{ fontSize: '12px', color: colors.muted }}>Sign out all devices?</span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                type="button"
+                style={{ ...btnLink, color: colors.error }}
+                onClick={() => { onSignOutEverywhere(); onClose(); }}
+              >
+                Yes, everywhere
+              </button>
+              <button type="button" style={btnLink} onClick={() => setConfirmSignOutAll(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <button type="button" style={btnLink} onClick={onSignOut}>
+              Sign out
+            </button>
+            <button type="button" style={btnLink} onClick={() => setConfirmSignOutAll(true)}>
+              All devices
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const btnLink: React.CSSProperties = {
+  background: 'none',
+  border: 'none',
+  fontSize: '12px',
+  color: colors.muted,
+  cursor: 'pointer',
+  padding: '2px 0',
+};
+
+// =============================================================================
 // EVENT ROW
 // =============================================================================
 
@@ -49,7 +186,6 @@ function EventRow({ event, onClick, seriesTotal, selected, onToggle, selectMode 
       style={{
         ...styles.eventRow,
         opacity: isPast ? 0.5 : 1,
-        // Subtle left border when selected instead of full highlight
         borderLeft: selected ? `3px solid ${colors.amber}` : `1px solid ${colors.border}`,
         paddingLeft: selected ? '13px' : '16px',
       }}
@@ -81,44 +217,32 @@ function EventRow({ event, onClick, seriesTotal, selected, onToggle, selectMode 
         </div>
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: '16px', color: colors.cream, fontWeight: 500 }}>
+        <div style={{ fontSize: '15px', color: colors.cream, fontWeight: 500 }}>
           {event.title}
         </div>
-        <div style={{ fontSize: '13px', color: colors.muted, marginTop: '3px' }}>
-          {event.venue_name} · {formatDate(event.event_date)} · {formatTime(event.start_time)}
+        <div style={{ fontSize: '13px', color: colors.muted, marginTop: '2px' }}>
+          {formatDate(event.event_date)} · {formatTime(event.start_time)}
           {event.series_id && seriesTotal && (
-            <span style={{ color: colors.dim }}> · {event.series_instance_number} of {seriesTotal}</span>
+            <span style={{ color: colors.dim }}> · {event.series_instance_number}/{seriesTotal}</span>
           )}
         </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
         {cat && (
-          <span style={{ ...styles.pill, ...styles.pillActive, fontSize: '11px', padding: '2px 8px', cursor: 'default' }}>
+          <span style={{ fontSize: '11px', color: colors.dim }}>
             {cat.label}
           </span>
         )}
         {event.status === 'pending_review' && (
           <span style={{
-            fontSize: '11px',
+            fontSize: '10px',
             color: '#92600a',
             background: '#fef3cd',
             border: '1px solid #fde68a',
-            borderRadius: '12px',
-            padding: '2px 8px',
+            borderRadius: '10px',
+            padding: '1px 6px',
           }}>
             pending
-          </span>
-        )}
-        {event.series_id && (
-          <span style={{
-            fontSize: '11px',
-            color: colors.muted,
-            background: colors.bg,
-            border: `1px solid ${colors.border}`,
-            borderRadius: '12px',
-            padding: '2px 8px',
-          }}>
-            series
           </span>
         )}
       </div>
@@ -127,14 +251,20 @@ function EventRow({ event, onClick, seriesTotal, selected, onToggle, selectMode 
 }
 
 // =============================================================================
-// DASHBOARD SCREEN
+// DASHBOARD
 // =============================================================================
 
 export function DashboardScreen({ account, onCreateEvent, onEditEvent, onSignOut, onSignOutEverywhere }: DashboardScreenProps) {
   const [events, setEvents] = useState<PortalEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [accountExpanded, setAccountExpanded] = useState(false);
-  const [confirmSignOutAll, setConfirmSignOutAll] = useState(false);
+
+  // Account dropdown
+  const [gearOpen, setGearOpen] = useState(false);
+
+  // Search
+  const [search, setSearch] = useState('');
+  const [searchVisible, setSearchVisible] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   // Multi-select
   const [selectMode, setSelectMode] = useState(false);
@@ -151,6 +281,11 @@ export function DashboardScreen({ account, onCreateEvent, onEditEvent, onSignOut
   }, []);
 
   useEffect(() => { loadEvents(); }, [loadEvents]);
+
+  // Focus search field when it appears
+  useEffect(() => {
+    if (searchVisible) searchRef.current?.focus();
+  }, [searchVisible]);
 
   const exitSelectMode = () => {
     setSelectMode(false);
@@ -198,7 +333,6 @@ export function DashboardScreen({ account, onCreateEvent, onEditEvent, onSignOut
     loadEvents();
   };
 
-  // Auto-dismiss toast
   useEffect(() => {
     if (toast) {
       const t = setTimeout(() => setToast(null), 3000);
@@ -206,9 +340,23 @@ export function DashboardScreen({ account, onCreateEvent, onEditEvent, onSignOut
     }
   }, [toast]);
 
+  // Filter events by search
+  const matchesSearch = (e: PortalEvent) => {
+    if (!search) return true;
+    const s = search.toLowerCase();
+    return (
+      e.title.toLowerCase().includes(s) ||
+      e.venue_name.toLowerCase().includes(s) ||
+      (e.category && PORTAL_CATEGORIES[e.category as PortalCategory]?.label.toLowerCase().includes(s)) ||
+      formatDate(e.event_date).toLowerCase().includes(s) ||
+      (e.description?.toLowerCase().includes(s))
+    );
+  };
+
   const today = new Date().toISOString().split('T')[0]!;
-  const upcoming = events.filter((e) => e.event_date >= today);
-  const past = events.filter((e) => e.event_date < today);
+  const allFiltered = events.filter(matchesSearch);
+  const upcoming = allFiltered.filter((e) => e.event_date >= today);
+  const past = allFiltered.filter((e) => e.event_date < today);
 
   const seriesTotals = new Map<string, number>();
   for (const e of events) {
@@ -220,29 +368,22 @@ export function DashboardScreen({ account, onCreateEvent, onEditEvent, onSignOut
     const allSelected = sectionEvents.every((e) => selectedIds.has(e.id));
 
     return (
-      <div style={{ marginBottom: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-          <div style={styles.sectionLabel}>
+      <div style={{ marginBottom: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+          <div style={{ fontSize: '12px', fontWeight: 500, color: colors.dim, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             {label} ({sectionEvents.length})
           </div>
           {selectMode && (
             <button
               type="button"
               onClick={() => selectAllInSection(sectionEvents)}
-              style={{
-                background: 'none',
-                border: 'none',
-                fontSize: '12px',
-                color: colors.dim,
-                cursor: 'pointer',
-                padding: '2px 4px',
-              }}
+              style={btnLink}
             >
               {allSelected ? 'Deselect all' : 'Select all'}
             </button>
           )}
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           {sectionEvents.map((event) => (
             <EventRow
               key={event.id}
@@ -262,17 +403,77 @@ export function DashboardScreen({ account, onCreateEvent, onEditEvent, onSignOut
   return (
     <div style={styles.page}>
       <div style={styles.content} className="fade-up">
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
+
+        {/* ── Account bar ── */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '20px',
+          position: 'relative',
+        }}>
           <div>
-            <h1 style={styles.pageTitle}>{account.business_name}</h1>
-            <p style={{ fontSize: '13px', color: colors.muted, marginTop: '4px' }}>
-              {account.email}
-            </p>
+            <div style={{ fontSize: '18px', fontWeight: 600, color: colors.cream, letterSpacing: '0.01em' }}>
+              {account.business_name}
+            </div>
+            {account.default_address && (
+              <div style={{ fontSize: '12px', color: colors.dim, marginTop: '1px' }}>
+                {account.default_address}
+              </div>
+            )}
           </div>
-          <button style={styles.buttonText} onClick={onSignOut}>
-            Sign Out
-          </button>
+          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+            {/* Search toggle */}
+            <button
+              type="button"
+              onClick={() => { setSearchVisible(!searchVisible); if (searchVisible) setSearch(''); }}
+              style={{
+                background: searchVisible ? colors.amberDim : 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '6px 8px',
+                borderRadius: '6px',
+                display: 'flex',
+                alignItems: 'center',
+              }}
+              title="Search events"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <circle cx="7" cy="7" r="4.5" stroke={searchVisible ? colors.amber : colors.dim} strokeWidth="1.5" />
+                <path d="M10.5 10.5L13.5 13.5" stroke={searchVisible ? colors.amber : colors.dim} strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            </button>
+            {/* Gear */}
+            <button
+              type="button"
+              onClick={() => setGearOpen(!gearOpen)}
+              style={{
+                background: gearOpen ? colors.amberDim : 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '6px 8px',
+                borderRadius: '6px',
+                display: 'flex',
+                alignItems: 'center',
+              }}
+              title="Account settings"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="8" r="2" stroke={gearOpen ? colors.amber : colors.dim} strokeWidth="1.5" />
+                <path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41" stroke={gearOpen ? colors.amber : colors.dim} strokeWidth="1.2" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Account dropdown */}
+          {gearOpen && (
+            <AccountDropdown
+              account={account}
+              onSignOut={onSignOut}
+              onSignOutEverywhere={onSignOutEverywhere}
+              onClose={() => setGearOpen(false)}
+            />
+          )}
         </div>
 
         {/* Verification banner */}
@@ -280,130 +481,48 @@ export function DashboardScreen({ account, onCreateEvent, onEditEvent, onSignOut
           <div style={{
             background: '#fef3cd',
             border: '1px solid #fde68a',
-            borderRadius: '10px',
-            padding: '14px 16px',
-            marginBottom: '16px',
-            fontSize: '14px',
+            borderRadius: '8px',
+            padding: '10px 14px',
+            marginBottom: '14px',
+            fontSize: '13px',
             lineHeight: 1.5,
             color: colors.text,
           }}>
-            <strong style={{ color: '#92600a' }}>Account verification in progress</strong>
-            <br />
-            Your events are saved and ready to go — they'll appear once we verify your business. This usually takes less than 24 hours.
+            <strong style={{ color: '#92600a' }}>Verification in progress</strong> — your events will appear once we verify your business.
           </div>
         )}
 
-        {/* Account section (collapsible) */}
-        <div style={{ ...styles.card, marginBottom: '16px', padding: 0, overflow: 'hidden' }}>
-          <button
-            type="button"
-            onClick={() => setAccountExpanded(!accountExpanded)}
+        {/* Search field (slides in) */}
+        {searchVisible && (
+          <input
+            ref={searchRef}
+            type="text"
+            placeholder="Search by title, category, day..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
             style={{
-              background: 'transparent',
-              border: 'none',
-              width: '100%',
-              padding: '14px 16px',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              cursor: 'pointer',
+              ...styles.input,
+              marginBottom: '14px',
+              padding: '8px 12px',
+              fontSize: '14px',
             }}
-          >
-            <span style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.08em', color: colors.muted }}>
-              Account
-            </span>
-            <span style={{ fontSize: '13px', color: colors.text }}>
-              {account.default_address || account.email}
-              <span style={{ marginLeft: '8px', fontSize: '10px' }}>{accountExpanded ? '▲' : '▼'}</span>
-            </span>
-          </button>
+          />
+        )}
 
-          {accountExpanded && (
-            <div style={{ padding: '0 16px 16px', borderTop: `1px solid ${colors.border}` }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '14px', paddingTop: '14px' }}>
-                <div>
-                  <div style={{ color: colors.muted, fontSize: '12px', marginBottom: '2px' }}>Email</div>
-                  <div style={{ color: colors.cream }}>{account.email}</div>
-                </div>
-                <div>
-                  <div style={{ color: colors.muted, fontSize: '12px', marginBottom: '2px' }}>Status</div>
-                  <div style={{ color: colors.cream }}>{account.status}</div>
-                </div>
-                {account.default_venue_name && (
-                  <div>
-                    <div style={{ color: colors.muted, fontSize: '12px', marginBottom: '2px' }}>Venue</div>
-                    <div style={{ color: colors.cream }}>{account.default_venue_name}</div>
-                  </div>
-                )}
-                {account.default_address && (
-                  <div>
-                    <div style={{ color: colors.muted, fontSize: '12px', marginBottom: '2px' }}>Address</div>
-                    <div style={{ color: colors.cream }}>{account.default_address}</div>
-                  </div>
-                )}
-                {account.website && (
-                  <div>
-                    <div style={{ color: colors.muted, fontSize: '12px', marginBottom: '2px' }}>Website</div>
-                    <div style={{ color: colors.cream }}>{account.website}</div>
-                  </div>
-                )}
-                {account.phone && (
-                  <div>
-                    <div style={{ color: colors.muted, fontSize: '12px', marginBottom: '2px' }}>Phone</div>
-                    <div style={{ color: colors.cream }}>{account.phone}</div>
-                  </div>
-                )}
-                {account.wheelchair_accessible != null && (
-                  <div>
-                    <div style={{ color: colors.muted, fontSize: '12px', marginBottom: '2px' }}>Wheelchair Accessible</div>
-                    <div style={{ color: colors.cream }}>{account.wheelchair_accessible ? 'Yes' : 'No'}</div>
-                  </div>
-                )}
-              </div>
-
-              <div style={{ borderTop: `1px solid ${colors.border}`, marginTop: '14px', paddingTop: '14px', display: 'flex', justifyContent: 'flex-end' }}>
-                {confirmSignOutAll ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '13px', color: colors.muted }}>Sign out all devices?</span>
-                    <button
-                      type="button"
-                      style={{ ...styles.buttonText, color: colors.error, fontSize: '13px' }}
-                      onClick={() => { onSignOutEverywhere(); setConfirmSignOutAll(false); }}
-                    >
-                      Yes, sign out everywhere
-                    </button>
-                    <button
-                      type="button"
-                      style={{ ...styles.buttonText, fontSize: '13px' }}
-                      onClick={() => setConfirmSignOutAll(false)}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    style={{ ...styles.buttonText, fontSize: '13px' }}
-                    onClick={() => setConfirmSignOutAll(true)}
-                  >
-                    Sign out everywhere
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Action bar: New Event + Select toggle */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+        {/* ── Action bar ── */}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
           {!selectMode && (
-            <button style={{ ...styles.buttonPrimary, flex: 1 }} onClick={onCreateEvent}>
+            <button
+              className="btn-primary"
+              style={{ ...styles.buttonPrimary, flex: 1 }}
+              onClick={onCreateEvent}
+            >
               + New Event
             </button>
           )}
           {events.length > 1 && (
             selectMode ? (
-              <div style={{ display: 'flex', gap: '8px', flex: 1 }}>
+              <div style={{ display: 'flex', gap: '8px', flex: 1, alignItems: 'center' }}>
                 {selectedIds.size > 0 && (
                   <button
                     type="button"
@@ -413,8 +532,8 @@ export function DashboardScreen({ account, onCreateEvent, onEditEvent, onSignOut
                       background: 'transparent',
                       border: `1px solid ${colors.error}30`,
                       color: colors.error,
-                      borderRadius: '8px',
-                      padding: '10px 16px',
+                      borderRadius: '6px',
+                      padding: '8px 14px',
                       fontSize: '13px',
                       cursor: 'pointer',
                     }}
@@ -425,11 +544,12 @@ export function DashboardScreen({ account, onCreateEvent, onEditEvent, onSignOut
                 <div style={{ flex: 1 }} />
                 <button
                   type="button"
+                  className="btn-secondary"
                   onClick={exitSelectMode}
                   style={{
                     ...styles.buttonSecondary,
                     width: 'auto',
-                    padding: '10px 20px',
+                    padding: '8px 16px',
                     fontSize: '13px',
                   }}
                 >
@@ -439,6 +559,7 @@ export function DashboardScreen({ account, onCreateEvent, onEditEvent, onSignOut
             ) : (
               <button
                 type="button"
+                className="btn-secondary"
                 onClick={() => setSelectMode(true)}
                 style={{
                   ...styles.buttonSecondary,
@@ -458,16 +579,16 @@ export function DashboardScreen({ account, onCreateEvent, onEditEvent, onSignOut
           <div style={{
             background: toast.type === 'success' ? colors.successDim : '#fef2f2',
             color: toast.type === 'success' ? colors.success : colors.error,
-            borderRadius: '8px',
+            borderRadius: '6px',
             padding: '8px 12px',
             fontSize: '13px',
-            marginBottom: '12px',
+            marginBottom: '10px',
           }}>
             {toast.text}
           </div>
         )}
 
-        {/* Bulk edit bar — appears when events are selected */}
+        {/* Bulk edit bar */}
         {selectMode && selectedIds.size > 0 && (
           <BulkEditBar
             selectedCount={selectedIds.size}
@@ -477,20 +598,26 @@ export function DashboardScreen({ account, onCreateEvent, onEditEvent, onSignOut
           />
         )}
 
-        {/* Event list */}
+        {/* ── Event list ── */}
         {loading ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <EventRowSkeleton />
             <EventRowSkeleton />
             <EventRowSkeleton />
           </div>
         ) : events.length === 0 ? (
-          <div style={{ ...styles.card, textAlign: 'center', padding: '48px 24px' }}>
-            <div style={{ fontSize: '16px', color: colors.cream, marginBottom: '6px' }}>
+          <div style={{ textAlign: 'center', padding: '48px 24px' }}>
+            <div style={{ fontSize: '15px', color: colors.cream, marginBottom: '4px' }}>
               No events yet
             </div>
-            <div style={{ fontSize: '14px', color: colors.muted }}>
-              Create your first event to reach the neighborhood.
+            <div style={{ fontSize: '13px', color: colors.muted }}>
+              Post your first event to reach the neighborhood.
+            </div>
+          </div>
+        ) : allFiltered.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '32px 24px' }}>
+            <div style={{ fontSize: '14px', color: colors.dim }}>
+              No events match "{search}"
             </div>
           </div>
         ) : (
@@ -500,7 +627,7 @@ export function DashboardScreen({ account, onCreateEvent, onEditEvent, onSignOut
           </>
         )}
 
-        {/* Delete confirmation dialog */}
+        {/* Delete confirmation */}
         {confirmDelete && (
           <ConfirmDialog
             title={`Delete ${selectedIds.size} event${selectedIds.size !== 1 ? 's' : ''}?`}
