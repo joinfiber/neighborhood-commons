@@ -1,4 +1,4 @@
-import { colors } from '../lib/styles';
+import { styles, colors } from '../lib/styles';
 
 interface TermsScreenProps {
   onBack: () => void;
@@ -6,34 +6,23 @@ interface TermsScreenProps {
 
 export function TermsScreen({ onBack }: TermsScreenProps) {
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: colors.bg,
-      padding: '40px 20px',
-    }}>
-      <div style={{ maxWidth: '640px', margin: '0 auto' }}>
+    <div style={styles.page}>
+      <div style={styles.content} className="fade-up">
 
         {/* Back nav */}
         <button
           type="button"
           onClick={onBack}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: colors.muted,
-            fontSize: '13px',
-            cursor: 'pointer',
-            padding: 0,
-            marginBottom: '32px',
-          }}
+          style={{ ...styles.buttonText, marginBottom: '16px' }}
         >
           ← Back
         </button>
 
         <h1 style={{
-          fontSize: '24px',
-          fontWeight: 600,
-          color: colors.text,
+          fontSize: '28px',
+          fontWeight: 300,
+          color: colors.cream,
+          letterSpacing: '0.04em',
           margin: '0 0 8px 0',
         }}>
           Terms of Use
@@ -43,7 +32,7 @@ export function TermsScreen({ onBack }: TermsScreenProps) {
           color: colors.dim,
           margin: '0 0 32px 0',
         }}>
-          Last updated: March 13, 2026
+          Last updated: March 14, 2026
         </p>
 
         {/* ---- Intro ---- */}
@@ -91,7 +80,7 @@ export function TermsScreen({ onBack }: TermsScreenProps) {
             You own what you post. You can edit or remove your events at any time, and we will honor that immediately across the system.
           </P>
           <P>
-            By posting, you grant a <strong>Creative Commons Attribution 4.0 (CC BY 4.0)</strong> license on your event data. That means other apps and services can display your events with attribution. This is the whole point — post once, reach everyone.
+            By posting, you grant a <strong style={{ color: colors.cream }}>Creative Commons Attribution 4.0 (CC BY 4.0)</strong> license on your event data. That means other apps and services can display your events with attribution. This is the whole point — post once, reach everyone.
           </P>
           <P>
             You're responsible for the accuracy of what you post. Don't post events that don't exist, list misleading times or locations, or use the portal to promote something other than real happenings.
@@ -184,8 +173,8 @@ function Heading({ children }: { children: React.ReactNode }) {
   return (
     <h2 style={{
       fontSize: '16px',
-      fontWeight: 600,
-      color: colors.text,
+      fontWeight: 500,
+      color: colors.cream,
       margin: '32px 0 12px 0',
     }}>
       {children}
