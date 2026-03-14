@@ -103,13 +103,12 @@ export function LoginScreen({
       }}>
         Your events.<br />
         Your neighbors.<br />
-        Open to everyone.
+        Open data.
       </h1>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '32px' }}>
         {[
-          'Post your happy hours, classes, open gym, specials — anything you want neighbors to know about',
-          'People nearby discover your events in Neighborhood Commons',
+          'Post your happy hours, classes, open gym, specials — and neighbors nearby discover them',
           'Other event apps can pull your data in — for free',
           'Post once, reach everywhere',
         ].map((text, i) => (
@@ -135,7 +134,7 @@ export function LoginScreen({
         lineHeight: 1.5,
         marginBottom: '32px',
       }}>
-        Free to post. Free forever. We verify every business to keep things honest — usually within 24 hours.
+        Free to post. Free forever. We review every business to keep the Commons useful for the neighborhood.
       </p>
 
       {onShowDevelopers && (
@@ -259,6 +258,10 @@ export function LoginScreen({
               >
                 {loading ? 'Creating account...' : 'Create Account'}
               </button>
+              <p style={{ fontSize: '11px', color: loginColors.dim, textAlign: 'center', marginTop: '10px', lineHeight: 1.5 }}>
+                By creating an account, you agree to our{' '}
+                <a href="#/terms" style={{ color: loginColors.muted, textDecoration: 'underline' }}>Terms of Use</a>
+              </p>
             </form>
             <div style={{ textAlign: 'center', marginTop: '12px' }}>
               <button type="button" style={loginStyles.buttonText} onClick={handleBack}>

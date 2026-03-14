@@ -13,6 +13,7 @@ import { AdminCreateEventScreen } from './screens/AdminCreateEventScreen';
 import { AdminEditEventScreen } from './screens/AdminEditEventScreen';
 import { AdminAllEventsScreen } from './screens/AdminAllEventsScreen';
 import { DevelopersScreen } from './screens/DevelopersScreen';
+import { TermsScreen } from './screens/TermsScreen';
 import { Toast } from './components/Toast';
 import { PlaceAutocomplete } from './components/PlaceAutocomplete';
 import type { PlaceResult } from './lib/api';
@@ -110,7 +111,11 @@ export default function App() {
     );
   }
 
-  // Developers page (accessible regardless of auth state)
+  // Public pages (accessible regardless of auth state)
+  if (route.screen === 'terms') {
+    return <TermsScreen onBack={() => navigate('#/')} />;
+  }
+
   if (route.screen === 'developers') {
     return <DevelopersScreen onBack={() => navigate('#/')} />;
   }

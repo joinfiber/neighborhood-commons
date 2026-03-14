@@ -488,7 +488,7 @@ export function DashboardScreen({ account, onCreateEvent, onEditEvent, onSignOut
             lineHeight: 1.5,
             color: colors.text,
           }}>
-            <strong style={{ color: '#92600a' }}>Verification in progress</strong> — your events will appear once we verify your business.
+            <strong style={{ color: '#92600a' }}>Review in progress</strong> — your events will appear once we've reviewed your account. This usually takes less than a day.
           </div>
         )}
 
