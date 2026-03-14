@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { PORTAL_CATEGORIES, PORTAL_CATEGORY_KEYS, type PortalCategory } from '../lib/categories';
+import { PORTAL_CATEGORIES, type PortalCategory } from '../lib/categories';
 import { styles, colors } from '../lib/styles';
 import { fetchEvents, batchUpdateEvents, batchDeleteEvents, type PortalEvent, type PortalAccount } from '../lib/api';
 import { EventRowSkeleton } from '../components/Skeleton';
+import { BulkEditBar } from '../components/BulkEditBar';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 
 interface DashboardScreenProps {
   account: PortalAccount;
@@ -25,12 +27,16 @@ function formatTime(time: string): string {
   return `${h12}:${m} ${ampm}`;
 }
 
-function EventRow({ event, onClick, seriesTotal, selected, onSelect, selectMode }: {
+// =============================================================================
+// EVENT ROW
+// =============================================================================
+
+function EventRow({ event, onClick, seriesTotal, selected, onToggle, selectMode }: {
   event: PortalEvent;
   onClick: () => void;
   seriesTotal?: number;
   selected: boolean;
-  onSelect: (id: string) => void;
+  onToggle: (id: string) => void;
   selectMode: boolean;
 }) {
   const cat = PORTAL_CATEGORIES[event.category as PortalCategory];
@@ -43,31 +49,33 @@ function EventRow({ event, onClick, seriesTotal, selected, onSelect, selectMode 
       style={{
         ...styles.eventRow,
         opacity: isPast ? 0.5 : 1,
-        borderColor: selected ? colors.amber : colors.border,
-        background: selected ? colors.amberDim : colors.card,
+        // Subtle left border when selected instead of full highlight
+        borderLeft: selected ? `3px solid ${colors.amber}` : `1px solid ${colors.border}`,
+        paddingLeft: selected ? '13px' : '16px',
       }}
-      onClick={() => selectMode ? onSelect(event.id) : onClick()}
+      onClick={() => selectMode ? onToggle(event.id) : onClick()}
     >
       {selectMode && (
         <div
-          onClick={(e) => { e.stopPropagation(); onSelect(event.id); }}
+          onClick={(e) => { e.stopPropagation(); onToggle(event.id); }}
           style={{
-            width: '22px',
-            height: '22px',
-            borderRadius: '4px',
-            border: `2px solid ${selected ? colors.amber : colors.border}`,
+            width: '18px',
+            height: '18px',
+            borderRadius: '3px',
+            border: `1.5px solid ${selected ? colors.amber : colors.dim}`,
             background: selected ? colors.amber : 'transparent',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            marginRight: '12px',
+            marginRight: '10px',
             flexShrink: 0,
             cursor: 'pointer',
+            transition: 'all 0.1s',
           }}
         >
           {selected && (
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <path d="M2 6l3 3 5-5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+              <path d="M2 6l3 3 5-5" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           )}
         </div>
@@ -119,167 +127,6 @@ function EventRow({ event, onClick, seriesTotal, selected, onSelect, selectMode 
 }
 
 // =============================================================================
-// BULK EDIT PANEL
-// =============================================================================
-
-function BulkEditPanel({ selectedCount, onApply, onDelete, onCancel, applying }: {
-  selectedCount: number;
-  onApply: (updates: Record<string, unknown>) => void;
-  onDelete: () => void;
-  onCancel: () => void;
-  applying: boolean;
-}) {
-  const [field, setField] = useState<string>('');
-  const [category, setCategory] = useState<string>('');
-  const [wheelchairAccessible, setWheelchairAccessible] = useState<string>('');
-  const [startTimeRequired, setStartTimeRequired] = useState<string>('');
-  const [confirmDelete, setConfirmDelete] = useState(false);
-
-  const handleApply = () => {
-    const updates: Record<string, unknown> = {};
-    if (field === 'category' && category) {
-      updates.category = category;
-    } else if (field === 'wheelchair') {
-      if (wheelchairAccessible === 'true') updates.wheelchair_accessible = true;
-      else if (wheelchairAccessible === 'false') updates.wheelchair_accessible = false;
-      else if (wheelchairAccessible === 'null') updates.wheelchair_accessible = null;
-    } else if (field === 'start_time_required') {
-      if (startTimeRequired === 'true') updates.start_time_required = true;
-      else if (startTimeRequired === 'false') updates.start_time_required = false;
-    }
-
-    if (Object.keys(updates).length > 0) {
-      onApply(updates);
-    }
-  };
-
-  const canApply =
-    (field === 'category' && category !== '') ||
-    (field === 'wheelchair' && wheelchairAccessible !== '') ||
-    (field === 'start_time_required' && startTimeRequired !== '');
-
-  return (
-    <div style={{
-      ...styles.card,
-      marginBottom: '16px',
-      borderColor: colors.amberBorder,
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-        <span style={{ fontSize: '14px', fontWeight: 500, color: colors.cream }}>
-          {selectedCount} event{selectedCount !== 1 ? 's' : ''} selected
-        </span>
-        <button type="button" style={styles.buttonText} onClick={onCancel}>
-          Cancel
-        </button>
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        {/* Field picker */}
-        <div>
-          <label style={styles.formLabel}>Change field</label>
-          <select
-            style={styles.select}
-            value={field}
-            onChange={(e) => { setField(e.target.value); }}
-          >
-            <option value="">Choose a field...</option>
-            <option value="category">Category</option>
-            <option value="wheelchair">Wheelchair Accessible</option>
-            <option value="start_time_required">Arrive by Start Time</option>
-          </select>
-        </div>
-
-        {/* Category selector */}
-        {field === 'category' && (
-          <div>
-            <label style={styles.formLabel}>New category</label>
-            <select style={styles.select} value={category} onChange={(e) => setCategory(e.target.value)}>
-              <option value="">Choose...</option>
-              {PORTAL_CATEGORY_KEYS.map((key) => (
-                <option key={key} value={key}>{PORTAL_CATEGORIES[key].label}</option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {/* Wheelchair accessible */}
-        {field === 'wheelchair' && (
-          <div>
-            <label style={styles.formLabel}>Set to</label>
-            <select style={styles.select} value={wheelchairAccessible} onChange={(e) => setWheelchairAccessible(e.target.value)}>
-              <option value="">Choose...</option>
-              <option value="true">Yes</option>
-              <option value="false">No</option>
-              <option value="null">Use account default</option>
-            </select>
-          </div>
-        )}
-
-        {/* Start time required */}
-        {field === 'start_time_required' && (
-          <div>
-            <label style={styles.formLabel}>Set to</label>
-            <select style={styles.select} value={startTimeRequired} onChange={(e) => setStartTimeRequired(e.target.value)}>
-              <option value="">Choose...</option>
-              <option value="true">Yes — arrive by start time</option>
-              <option value="false">No — arrive anytime</option>
-            </select>
-          </div>
-        )}
-
-        {/* Action buttons */}
-        <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-          <button
-            type="button"
-            className="btn-primary"
-            style={{ ...styles.buttonPrimary, flex: 1, opacity: canApply && !applying ? 1 : 0.5 }}
-            disabled={!canApply || applying}
-            onClick={handleApply}
-          >
-            {applying ? 'Applying...' : 'Apply'}
-          </button>
-        </div>
-
-        {/* Delete */}
-        <div style={{ borderTop: `1px solid ${colors.border}`, paddingTop: '10px', marginTop: '4px' }}>
-          {confirmDelete ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '13px', color: colors.error }}>
-                Delete {selectedCount} event{selectedCount !== 1 ? 's' : ''}?
-              </span>
-              <button
-                type="button"
-                style={{ ...styles.buttonText, color: colors.error, fontSize: '13px' }}
-                onClick={() => { setConfirmDelete(false); onDelete(); }}
-                disabled={applying}
-              >
-                Yes, delete
-              </button>
-              <button
-                type="button"
-                style={{ ...styles.buttonText, fontSize: '13px' }}
-                onClick={() => setConfirmDelete(false)}
-              >
-                No
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              style={{ ...styles.buttonText, color: colors.error, fontSize: '13px', padding: 0 }}
-              onClick={() => setConfirmDelete(true)}
-              disabled={applying}
-            >
-              Delete selected events
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// =============================================================================
 // DASHBOARD SCREEN
 // =============================================================================
 
@@ -289,11 +136,12 @@ export function DashboardScreen({ account, onCreateEvent, onEditEvent, onSignOut
   const [accountExpanded, setAccountExpanded] = useState(false);
   const [confirmSignOutAll, setConfirmSignOutAll] = useState(false);
 
-  // Multi-select state
+  // Multi-select
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [applying, setApplying] = useState(false);
-  const [bulkMessage, setBulkMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [toast, setToast] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const loadEvents = useCallback(async () => {
     setLoading(true);
@@ -302,9 +150,7 @@ export function DashboardScreen({ account, onCreateEvent, onEditEvent, onSignOut
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    loadEvents();
-  }, [loadEvents]);
+  useEffect(() => { loadEvents(); }, [loadEvents]);
 
   const exitSelectMode = () => {
     setSelectMode(false);
@@ -320,62 +166,97 @@ export function DashboardScreen({ account, onCreateEvent, onEditEvent, onSignOut
     });
   };
 
+  const selectAllInSection = (sectionEvents: PortalEvent[]) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      const allSelected = sectionEvents.every((e) => next.has(e.id));
+      for (const e of sectionEvents) allSelected ? next.delete(e.id) : next.add(e.id);
+      return next;
+    });
+  };
+
   const handleBulkApply = async (updates: Record<string, unknown>) => {
     setApplying(true);
-    setBulkMessage(null);
-    const ids = Array.from(selectedIds);
-    const res = await batchUpdateEvents(ids, updates);
+    const res = await batchUpdateEvents(Array.from(selectedIds), updates);
     setApplying(false);
     if (res.error) {
-      setBulkMessage({ text: res.error.message, type: 'error' });
+      setToast({ text: res.error.message, type: 'error' });
     } else {
-      setBulkMessage({ text: `Updated ${res.data?.updated || 0} event${(res.data?.updated || 0) !== 1 ? 's' : ''}`, type: 'success' });
+      setToast({ text: `Updated ${res.data?.updated || 0} event${(res.data?.updated || 0) !== 1 ? 's' : ''}`, type: 'success' });
       exitSelectMode();
       loadEvents();
     }
   };
 
   const handleBulkDelete = async () => {
+    setConfirmDelete(false);
     setApplying(true);
-    setBulkMessage(null);
-    const ids = Array.from(selectedIds);
-    const result = await batchDeleteEvents(ids);
+    const result = await batchDeleteEvents(Array.from(selectedIds));
     setApplying(false);
-    setBulkMessage({ text: `Deleted ${result.deleted} event${result.deleted !== 1 ? 's' : ''}`, type: 'success' });
+    setToast({ text: `Deleted ${result.deleted} event${result.deleted !== 1 ? 's' : ''}`, type: 'success' });
     exitSelectMode();
     loadEvents();
   };
 
-  // Clear bulk message after 3 seconds
+  // Auto-dismiss toast
   useEffect(() => {
-    if (bulkMessage) {
-      const t = setTimeout(() => setBulkMessage(null), 3000);
+    if (toast) {
+      const t = setTimeout(() => setToast(null), 3000);
       return () => clearTimeout(t);
     }
-  }, [bulkMessage]);
+  }, [toast]);
 
   const today = new Date().toISOString().split('T')[0]!;
   const upcoming = events.filter((e) => e.event_date >= today);
   const past = events.filter((e) => e.event_date < today);
 
-  // Compute series totals for badge display
   const seriesTotals = new Map<string, number>();
   for (const e of events) {
     if (e.series_id) seriesTotals.set(e.series_id, (seriesTotals.get(e.series_id) || 0) + 1);
   }
 
-  // Select all / deselect all for a section
-  const selectAllInSection = (sectionEvents: PortalEvent[]) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      const allSelected = sectionEvents.every((e) => next.has(e.id));
-      if (allSelected) {
-        for (const e of sectionEvents) next.delete(e.id);
-      } else {
-        for (const e of sectionEvents) next.add(e.id);
-      }
-      return next;
-    });
+  const renderSection = (label: string, sectionEvents: PortalEvent[]) => {
+    if (sectionEvents.length === 0) return null;
+    const allSelected = sectionEvents.every((e) => selectedIds.has(e.id));
+
+    return (
+      <div style={{ marginBottom: '24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+          <div style={styles.sectionLabel}>
+            {label} ({sectionEvents.length})
+          </div>
+          {selectMode && (
+            <button
+              type="button"
+              onClick={() => selectAllInSection(sectionEvents)}
+              style={{
+                background: 'none',
+                border: 'none',
+                fontSize: '12px',
+                color: colors.dim,
+                cursor: 'pointer',
+                padding: '2px 4px',
+              }}
+            >
+              {allSelected ? 'Deselect all' : 'Select all'}
+            </button>
+          )}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          {sectionEvents.map((event) => (
+            <EventRow
+              key={event.id}
+              event={event}
+              onClick={() => onEditEvent(event)}
+              seriesTotal={event.series_id ? seriesTotals.get(event.series_id) : undefined}
+              selected={selectedIds.has(event.id)}
+              onToggle={toggleSelect}
+              selectMode={selectMode}
+            />
+          ))}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -394,7 +275,7 @@ export function DashboardScreen({ account, onCreateEvent, onEditEvent, onSignOut
           </button>
         </div>
 
-        {/* Verification banner for pending accounts */}
+        {/* Verification banner */}
         {account.status === 'pending' && (
           <div style={{
             background: '#fef3cd',
@@ -513,59 +394,90 @@ export function DashboardScreen({ account, onCreateEvent, onEditEvent, onSignOut
           )}
         </div>
 
-        {/* Action bar */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
-          <button
-            style={{ ...styles.buttonPrimary, flex: 1 }}
-            onClick={onCreateEvent}
-          >
-            + New Event
-          </button>
-          {events.length > 0 && (
-            <button
-              className="btn-secondary"
-              style={{
-                ...styles.buttonSecondary,
-                width: 'auto',
-                padding: '12px 16px',
-                fontSize: '14px',
-                background: selectMode ? colors.amberDim : 'transparent',
-                borderColor: selectMode ? colors.amberBorder : colors.border,
-                color: selectMode ? colors.amber : colors.text,
-              }}
-              onClick={() => selectMode ? exitSelectMode() : setSelectMode(true)}
-            >
-              {selectMode ? 'Done' : 'Select'}
+        {/* Action bar: New Event + Select toggle */}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+          {!selectMode && (
+            <button style={{ ...styles.buttonPrimary, flex: 1 }} onClick={onCreateEvent}>
+              + New Event
             </button>
+          )}
+          {events.length > 1 && (
+            selectMode ? (
+              <div style={{ display: 'flex', gap: '8px', flex: 1 }}>
+                {selectedIds.size > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDelete(true)}
+                    disabled={applying}
+                    style={{
+                      background: 'transparent',
+                      border: `1px solid ${colors.error}30`,
+                      color: colors.error,
+                      borderRadius: '8px',
+                      padding: '10px 16px',
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Delete ({selectedIds.size})
+                  </button>
+                )}
+                <div style={{ flex: 1 }} />
+                <button
+                  type="button"
+                  onClick={exitSelectMode}
+                  style={{
+                    ...styles.buttonSecondary,
+                    width: 'auto',
+                    padding: '10px 20px',
+                    fontSize: '13px',
+                  }}
+                >
+                  Done
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setSelectMode(true)}
+                style={{
+                  ...styles.buttonSecondary,
+                  width: 'auto',
+                  padding: '12px 16px',
+                  fontSize: '13px',
+                }}
+              >
+                Edit multiple
+              </button>
+            )
           )}
         </div>
 
-        {/* Bulk message */}
-        {bulkMessage && (
+        {/* Toast */}
+        {toast && (
           <div style={{
-            background: bulkMessage.type === 'success' ? colors.successDim : '#fef2f2',
-            color: bulkMessage.type === 'success' ? colors.success : colors.error,
-            border: `1px solid ${bulkMessage.type === 'success' ? colors.success + '30' : colors.error + '30'}`,
+            background: toast.type === 'success' ? colors.successDim : '#fef2f2',
+            color: toast.type === 'success' ? colors.success : colors.error,
             borderRadius: '8px',
-            padding: '10px 14px',
-            fontSize: '14px',
-            marginBottom: '16px',
+            padding: '8px 12px',
+            fontSize: '13px',
+            marginBottom: '12px',
           }}>
-            {bulkMessage.text}
+            {toast.text}
           </div>
         )}
 
-        {/* Bulk edit panel */}
+        {/* Bulk edit bar — appears when events are selected */}
         {selectMode && selectedIds.size > 0 && (
-          <BulkEditPanel
+          <BulkEditBar
             selectedCount={selectedIds.size}
             onApply={handleBulkApply}
-            onDelete={handleBulkDelete}
             onCancel={exitSelectMode}
             applying={applying}
           />
         )}
 
+        {/* Event list */}
         {loading ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <EventRowSkeleton />
@@ -583,72 +495,22 @@ export function DashboardScreen({ account, onCreateEvent, onEditEvent, onSignOut
           </div>
         ) : (
           <>
-            {/* Upcoming */}
-            {upcoming.length > 0 && (
-              <div style={{ marginBottom: '24px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                  <div style={styles.sectionLabel}>
-                    Upcoming ({upcoming.length})
-                  </div>
-                  {selectMode && (
-                    <button
-                      type="button"
-                      style={{ ...styles.buttonText, fontSize: '12px' }}
-                      onClick={() => selectAllInSection(upcoming)}
-                    >
-                      {upcoming.every((e) => selectedIds.has(e.id)) ? 'Deselect all' : 'Select all'}
-                    </button>
-                  )}
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {upcoming.map((event) => (
-                    <EventRow
-                      key={event.id}
-                      event={event}
-                      onClick={() => onEditEvent(event)}
-                      seriesTotal={event.series_id ? seriesTotals.get(event.series_id) : undefined}
-                      selected={selectedIds.has(event.id)}
-                      onSelect={toggleSelect}
-                      selectMode={selectMode}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Past */}
-            {past.length > 0 && (
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                  <div style={styles.sectionLabel}>
-                    Past ({past.length})
-                  </div>
-                  {selectMode && (
-                    <button
-                      type="button"
-                      style={{ ...styles.buttonText, fontSize: '12px' }}
-                      onClick={() => selectAllInSection(past)}
-                    >
-                      {past.every((e) => selectedIds.has(e.id)) ? 'Deselect all' : 'Select all'}
-                    </button>
-                  )}
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {past.map((event) => (
-                    <EventRow
-                      key={event.id}
-                      event={event}
-                      onClick={() => onEditEvent(event)}
-                      seriesTotal={event.series_id ? seriesTotals.get(event.series_id) : undefined}
-                      selected={selectedIds.has(event.id)}
-                      onSelect={toggleSelect}
-                      selectMode={selectMode}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
+            {renderSection('Upcoming', upcoming)}
+            {renderSection('Past', past)}
           </>
+        )}
+
+        {/* Delete confirmation dialog */}
+        {confirmDelete && (
+          <ConfirmDialog
+            title={`Delete ${selectedIds.size} event${selectedIds.size !== 1 ? 's' : ''}?`}
+            message="This cannot be undone. Deleted events are removed from all feeds immediately."
+            confirmLabel="Delete"
+            destructive
+            loading={applying}
+            onConfirm={handleBulkDelete}
+            onCancel={() => setConfirmDelete(false)}
+          />
         )}
       </div>
     </div>
