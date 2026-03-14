@@ -125,7 +125,6 @@ export function EventForm({
   const isValid = !!(title && venueName && eventDate && startTime && category);
 
   const hasAvailableTags = !!category && getTagsForCategory(category).length > 0;
-  const showExtrasRow = (!showTags && hasAvailableTags) || !showRecurrence;
 
   return (
     <>
@@ -222,6 +221,45 @@ export function EventForm({
             </div>
           </div>
 
+          {/* ── Recurrence (after times) ── */}
+          {!showRecurrence ? (
+            <div style={{ marginBottom: '16px' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRecurrence(true);
+                  if (recurrence === 'none') {
+                    setRecurrence('weekly');
+                    setInstanceCount(4);
+                  }
+                }}
+                style={expandLinkStyle}
+              >
+                + Make recurring
+              </button>
+            </div>
+          ) : (
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <label style={{ ...styles.formLabel, marginBottom: 0 }}>Recurrence</label>
+                <button
+                  type="button"
+                  onClick={() => { setShowRecurrence(false); setRecurrence('none'); }}
+                  style={collapseLinkStyle}
+                >
+                  Remove
+                </button>
+              </div>
+              <RecurrencePicker
+                value={recurrence}
+                onChange={setRecurrence}
+                eventDate={eventDate}
+                instanceCount={instanceCount}
+                onInstanceCountChange={setInstanceCount}
+              />
+            </div>
+          )}
+
           {/* ── Category (dropdown) ── */}
           <div style={{ marginBottom: '16px' }}>
             <label style={styles.formLabel}>Category</label>
@@ -252,6 +290,35 @@ export function EventForm({
                 maxLength={50}
               />
             </div>
+          )}
+
+          {/* ── Tags (after category) ── */}
+          {hasAvailableTags && (
+            !showTags ? (
+              <div style={{ marginBottom: '16px' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowTags(true)}
+                  style={expandLinkStyle}
+                >
+                  + Add tags
+                </button>
+              </div>
+            ) : category ? (
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <label style={{ ...styles.formLabel, marginBottom: 0 }}>Tags</label>
+                  <button
+                    type="button"
+                    onClick={() => { setShowTags(false); setTags([]); }}
+                    style={collapseLinkStyle}
+                  >
+                    Remove
+                  </button>
+                </div>
+                <TagPicker category={category} value={tags} onChange={setTags} />
+              </div>
+            ) : null
           )}
 
           {/* ── Description ── */}
@@ -289,76 +356,6 @@ export function EventForm({
 
           <hr style={styles.divider} />
 
-          {/* ── Expand links for optional sections ── */}
-          {showExtrasRow && (
-            <div style={{ display: 'flex', gap: '16px', marginTop: '12px', marginBottom: '12px' }}>
-              {!showTags && hasAvailableTags && (
-                <button
-                  type="button"
-                  onClick={() => setShowTags(true)}
-                  style={expandLinkStyle}
-                >
-                  + Add tags
-                </button>
-              )}
-              {!showRecurrence && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowRecurrence(true);
-                    if (recurrence === 'none') {
-                      setRecurrence('weekly');
-                      setInstanceCount(4);
-                    }
-                  }}
-                  style={expandLinkStyle}
-                >
-                  + Make recurring
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* Tags (expanded) */}
-          {showTags && category && (
-            <div style={{ marginBottom: '16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                <label style={{ ...styles.formLabel, marginBottom: 0 }}>Tags</label>
-                <button
-                  type="button"
-                  onClick={() => { setShowTags(false); setTags([]); }}
-                  style={collapseLinkStyle}
-                >
-                  Remove
-                </button>
-              </div>
-              <TagPicker category={category} value={tags} onChange={setTags} />
-            </div>
-          )}
-
-          {/* Recurrence (expanded) */}
-          {showRecurrence && (
-            <div style={{ marginBottom: '16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                <label style={{ ...styles.formLabel, marginBottom: 0 }}>Recurrence</label>
-                <button
-                  type="button"
-                  onClick={() => { setShowRecurrence(false); setRecurrence('none'); }}
-                  style={collapseLinkStyle}
-                >
-                  Remove
-                </button>
-              </div>
-              <RecurrencePicker
-                value={recurrence}
-                onChange={setRecurrence}
-                eventDate={eventDate}
-                instanceCount={instanceCount}
-                onInstanceCountChange={setInstanceCount}
-              />
-            </div>
-          )}
-
           {/* ── Checkboxes ── */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '4px', marginBottom: '20px' }}>
             <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' }}>
@@ -366,7 +363,7 @@ export function EventForm({
                 type="checkbox"
                 checked={startTimeRequired}
                 onChange={(e) => setStartTimeRequired(e.target.checked)}
-                style={{ marginTop: '2px', accentColor: colors.amber }}
+                style={{ marginTop: '2px', accentColor: colors.accent }}
               />
               <div>
                 <span style={{ fontSize: '13px', color: colors.text }}>Arrive by start time</span>
@@ -380,7 +377,7 @@ export function EventForm({
                 type="checkbox"
                 checked={wheelchairAccessible === true}
                 onChange={(e) => setWheelchairAccessible(e.target.checked ? true : null)}
-                style={{ accentColor: colors.amber }}
+                style={{ accentColor: colors.accent }}
               />
               <span style={{ fontSize: '13px', color: colors.text }}>Wheelchair accessible</span>
               {accountWheelchairAccessible != null && initialValues.wheelchair_accessible === undefined && (

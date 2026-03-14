@@ -118,7 +118,7 @@ export function ConfirmDialog({
               ...styles.buttonPrimary,
               width: 'auto',
               padding: '10px 20px',
-              background: destructive ? colors.error : colors.amber,
+              background: destructive ? colors.error : colors.accent,
             }}
             onClick={onConfirm}
             disabled={loading}

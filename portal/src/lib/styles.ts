@@ -10,9 +10,9 @@
 // ---------------------------------------------------------------------------
 
 export const loginColors = {
-  amber: '#D4A853',
-  amberDim: '#D4A85318',
-  amberBorder: '#D4A85344',
+  accent: '#c4b89e',
+  accentDim: '#c4b89e18',
+  accentBorder: '#c4b89e30',
   bg: '#0f0f0e',
   card: '#181715',
   border: '#2a2825',
@@ -30,16 +30,16 @@ export const loginColors = {
 // ---------------------------------------------------------------------------
 
 export const colors = {
-  amber: '#8B7029',
-  amberDim: '#8B70290a',
-  amberBorder: '#8B702920',
-  bg: '#f5f4f1',
+  accent: '#2c2c2c',
+  accentDim: '#2c2c2c06',
+  accentBorder: '#2c2c2c15',
+  bg: '#f7f7f5',
   card: '#ffffff',
-  border: '#ddd9d2',
+  border: '#e8e6e1',
   cream: '#1a1917',
   text: '#37352f',
   muted: '#6b6660',
-  dim: '#9e9890',
+  dim: '#9c9791',
   error: '#c0392b',
   success: '#2d8a4e',
   successDim: '#2d8a4e0c',
@@ -169,7 +169,7 @@ export const styles = {
 
   // Buttons
   buttonPrimary: {
-    background: colors.amber,
+    background: colors.accent,
     color: '#ffffff',
     border: 'none',
     borderRadius: '8px',
@@ -213,9 +213,9 @@ export const styles = {
     userSelect: 'none' as const,
   },
   pillActive: {
-    background: colors.amberDim,
-    color: colors.amber,
-    borderColor: colors.amberBorder,
+    background: colors.accentDim,
+    color: colors.accent,
+    borderColor: colors.accentBorder,
   },
   pillInactive: {
     background: 'transparent',
@@ -252,7 +252,7 @@ export const styles = {
     width: '600px',
     height: '600px',
     borderRadius: '50%',
-    background: `radial-gradient(circle, ${loginColors.amber}0D 0%, transparent 70%)`,
+    background: `radial-gradient(circle, ${loginColors.accent}0D 0%, transparent 70%)`,
     pointerEvents: 'none' as const,
     zIndex: 0,
     animation: 'drift 22s ease-in-out infinite',
@@ -288,7 +288,7 @@ export const loginStyles = {
   },
   input: loginInputBase,
   buttonPrimary: {
-    background: loginColors.amber,
+    background: loginColors.accent,
     color: '#0f0f0e',
     border: 'none',
     borderRadius: '8px',

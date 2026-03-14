@@ -186,7 +186,7 @@ function EventRow({ event, onClick, seriesTotal, selected, onToggle, selectMode 
       style={{
         ...styles.eventRow,
         opacity: isPast ? 0.5 : 1,
-        borderLeft: selected ? `3px solid ${colors.amber}` : `1px solid ${colors.border}`,
+        borderLeft: selected ? `3px solid ${colors.accent}` : `1px solid ${colors.border}`,
         paddingLeft: selected ? '13px' : '16px',
       }}
       onClick={() => selectMode ? onToggle(event.id) : onClick()}
@@ -198,8 +198,8 @@ function EventRow({ event, onClick, seriesTotal, selected, onToggle, selectMode 
             width: '18px',
             height: '18px',
             borderRadius: '3px',
-            border: `1.5px solid ${selected ? colors.amber : colors.dim}`,
-            background: selected ? colors.amber : 'transparent',
+            border: `1.5px solid ${selected ? colors.accent : colors.dim}`,
+            background: selected ? colors.accent : 'transparent',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -428,7 +428,7 @@ export function DashboardScreen({ account, onCreateEvent, onEditEvent, onSignOut
               type="button"
               onClick={() => { setSearchVisible(!searchVisible); if (searchVisible) setSearch(''); }}
               style={{
-                background: searchVisible ? colors.amberDim : 'none',
+                background: searchVisible ? colors.accentDim : 'none',
                 border: 'none',
                 cursor: 'pointer',
                 padding: '6px 8px',
@@ -439,8 +439,8 @@ export function DashboardScreen({ account, onCreateEvent, onEditEvent, onSignOut
               title="Search events"
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <circle cx="7" cy="7" r="4.5" stroke={searchVisible ? colors.amber : colors.dim} strokeWidth="1.5" />
-                <path d="M10.5 10.5L13.5 13.5" stroke={searchVisible ? colors.amber : colors.dim} strokeWidth="1.5" strokeLinecap="round" />
+                <circle cx="7" cy="7" r="4.5" stroke={searchVisible ? colors.accent : colors.dim} strokeWidth="1.5" />
+                <path d="M10.5 10.5L13.5 13.5" stroke={searchVisible ? colors.accent : colors.dim} strokeWidth="1.5" strokeLinecap="round" />
               </svg>
             </button>
             {/* Gear */}
@@ -448,7 +448,7 @@ export function DashboardScreen({ account, onCreateEvent, onEditEvent, onSignOut
               type="button"
               onClick={() => setGearOpen(!gearOpen)}
               style={{
-                background: gearOpen ? colors.amberDim : 'none',
+                background: gearOpen ? colors.accentDim : 'none',
                 border: 'none',
                 cursor: 'pointer',
                 padding: '6px 8px',
@@ -459,8 +459,8 @@ export function DashboardScreen({ account, onCreateEvent, onEditEvent, onSignOut
               title="Account settings"
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <circle cx="8" cy="8" r="2" stroke={gearOpen ? colors.amber : colors.dim} strokeWidth="1.5" />
-                <path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41" stroke={gearOpen ? colors.amber : colors.dim} strokeWidth="1.2" strokeLinecap="round" />
+                <circle cx="8" cy="8" r="2" stroke={gearOpen ? colors.accent : colors.dim} strokeWidth="1.5" />
+                <path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41" stroke={gearOpen ? colors.accent : colors.dim} strokeWidth="1.2" strokeLinecap="round" />
               </svg>
             </button>
           </div>

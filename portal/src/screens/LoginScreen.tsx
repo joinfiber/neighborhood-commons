@@ -87,7 +87,7 @@ export function LoginScreen({
         fontWeight: 300,
         letterSpacing: '0.12em',
         textTransform: 'uppercase' as const,
-        color: loginColors.amber,
+        color: loginColors.accent,
         marginBottom: '20px',
       }}>
         neighborhood commons
@@ -113,7 +113,7 @@ export function LoginScreen({
           'Post once, reach everywhere',
         ].map((text, i) => (
           <div key={i} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-            <span style={{ color: loginColors.amber, fontSize: '16px', lineHeight: '22px', flexShrink: 0 }}>—</span>
+            <span style={{ color: loginColors.accent, fontSize: '16px', lineHeight: '22px', flexShrink: 0 }}>—</span>
             <span style={{ color: loginColors.text, fontSize: '15px', lineHeight: '22px' }}>{text}</span>
           </div>
         ))}

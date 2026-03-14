@@ -124,9 +124,9 @@ export function RecurrencePicker({ value, onChange, eventDate, instanceCount, on
     border: '1px solid',
     userSelect: 'none' as const,
     fontFamily: 'inherit',
-    background: active ? colors.amberDim : 'transparent',
-    color: active ? colors.amber : colors.dim,
-    borderColor: active ? colors.amberBorder : colors.border,
+    background: active ? colors.accentDim : 'transparent',
+    color: active ? colors.accent : colors.dim,
+    borderColor: active ? colors.accentBorder : colors.border,
   });
 
   return (
@@ -194,9 +194,9 @@ export function RecurrencePicker({ value, onChange, eventDate, instanceCount, on
                   transition: 'all 0.15s',
                   border: '1px solid',
                   fontFamily: 'inherit',
-                  background: active ? colors.amberDim : 'transparent',
-                  color: active ? colors.amber : colors.dim,
-                  borderColor: active ? colors.amberBorder : colors.border,
+                  background: active ? colors.accentDim : 'transparent',
+                  color: active ? colors.accent : colors.dim,
+                  borderColor: active ? colors.accentBorder : colors.border,
                 }}
               >
                 {label}
@@ -214,7 +214,7 @@ export function RecurrencePicker({ value, onChange, eventDate, instanceCount, on
             display: 'flex',
             alignItems: 'center',
             gap: '0',
-            border: `1px solid ${isUntilCancelled ? colors.border : colors.amberBorder}`,
+            border: `1px solid ${isUntilCancelled ? colors.border : colors.accentBorder}`,
             borderRadius: '16px',
             overflow: 'hidden',
             opacity: isUntilCancelled ? 0.4 : 1,
@@ -239,7 +239,7 @@ export function RecurrencePicker({ value, onChange, eventDate, instanceCount, on
             </button>
             <span style={{
               fontSize: '12px',
-              color: isUntilCancelled ? colors.dim : colors.amber,
+              color: isUntilCancelled ? colors.dim : colors.accent,
               minWidth: '60px',
               textAlign: 'center',
               fontWeight: 500,

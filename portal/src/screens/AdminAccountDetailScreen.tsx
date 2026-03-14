@@ -151,8 +151,8 @@ export function AdminAccountDetailScreen({ accountId, onBack, onCreateEvent, onE
             fontSize: '11px',
             padding: '2px 8px',
             borderRadius: '4px',
-            background: account.status === 'pending' ? '#fef3cd' : account.status === 'rejected' ? '#fef2f2' : account.status === 'suspended' ? '#fef2f2' : account.claimed_at ? colors.successDim : colors.amberDim,
-            color: account.status === 'pending' ? '#92600a' : account.status === 'rejected' ? colors.error : account.status === 'suspended' ? colors.error : account.claimed_at ? colors.success : colors.amber,
+            background: account.status === 'pending' ? '#fef3cd' : account.status === 'rejected' ? '#fef2f2' : account.status === 'suspended' ? '#fef2f2' : account.claimed_at ? colors.successDim : colors.accentDim,
+            color: account.status === 'pending' ? '#92600a' : account.status === 'rejected' ? colors.error : account.status === 'suspended' ? colors.error : account.claimed_at ? colors.success : colors.accent,
           }}>
             {account.status === 'pending' ? 'Pending' : account.status === 'rejected' ? 'Rejected' : account.status === 'suspended' ? 'Suspended' : account.claimed_at ? 'Claimed' : 'Managed'}
           </span>
@@ -191,8 +191,8 @@ export function AdminAccountDetailScreen({ accountId, onBack, onCreateEvent, onE
                 <button
                   type="button"
                   style={{
-                    background: colors.amber,
-                    color: '#0f0f0e',
+                    background: colors.accent,
+                    color: '#ffffff',
                     border: 'none',
                     borderRadius: '6px',
                     padding: '8px 20px',
@@ -239,7 +239,7 @@ export function AdminAccountDetailScreen({ accountId, onBack, onCreateEvent, onE
               type="button"
               style={{
                 background: colors.success,
-                color: '#0f0f0e',
+                color: '#ffffff',
                 border: 'none',
                 borderRadius: '6px',
                 padding: '8px 20px',

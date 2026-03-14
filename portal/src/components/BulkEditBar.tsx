@@ -238,7 +238,7 @@ export function BulkEditBar({ selectedCount, onApply, onCancel, applying }: Bulk
         onClick={handleApply}
         disabled={!dirty || applying}
         style={{
-          background: dirty ? colors.amber : colors.border,
+          background: dirty ? colors.accent : colors.border,
           color: dirty ? '#fff' : colors.dim,
           border: 'none',
           borderRadius: '6px',

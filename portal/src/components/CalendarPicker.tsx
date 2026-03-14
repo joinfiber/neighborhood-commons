@@ -120,7 +120,7 @@ export function CalendarPicker({ value, onChange }: CalendarPickerProps) {
         style={{
           ...triggerStyle,
           color: value ? colors.text : colors.dim,
-          borderColor: open ? colors.amber : colors.border,
+          borderColor: open ? colors.accent : colors.border,
         }}
       >
         <span>{value ? formatDisplay(value) : 'Select date'}</span>
@@ -161,8 +161,8 @@ export function CalendarPicker({ value, onChange }: CalendarPickerProps) {
                   onClick={() => handleSelect(dateStr)}
                   style={{
                     ...cellStyle,
-                    color: isSelected ? '#0f0f0e' : inMonth ? colors.text : colors.dim,
-                    background: isSelected ? colors.amber : 'transparent',
+                    color: isSelected ? '#ffffff' : inMonth ? colors.text : colors.dim,
+                    background: isSelected ? colors.accent : 'transparent',
                     borderRadius: '4px',
                     fontWeight: isSelected ? 600 : 400,
                     position: 'relative' as const,
@@ -178,7 +178,7 @@ export function CalendarPicker({ value, onChange }: CalendarPickerProps) {
                       width: '2px',
                       height: '2px',
                       borderRadius: '50%',
-                      background: colors.amber,
+                      background: colors.accent,
                     }} />
                   )}
                 </button>

@@ -106,7 +106,7 @@ export function ImageUpload({ value, onChange }: ImageUploadProps) {
       onDrop={handleDrop}
       onClick={() => inputRef.current?.click()}
       style={{
-        border: `2px dashed ${dragging ? colors.amber : colors.border}`,
+        border: `2px dashed ${dragging ? colors.accent : colors.border}`,
         borderRadius: '8px',
         padding: '24px',
         textAlign: 'center',

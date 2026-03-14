@@ -64,8 +64,8 @@ export class ErrorBoundary extends Component<Props, State> {
               type="button"
               className="btn-primary"
               style={{
-                background: colors.amber,
-                color: '#0f0f0e',
+                background: colors.accent,
+                color: '#ffffff',
                 border: 'none',
                 borderRadius: '8px',
                 padding: '10px 24px',

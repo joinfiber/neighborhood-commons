@@ -143,7 +143,7 @@ export function TermsScreen({ onBack }: TermsScreenProps) {
             We may suspend or terminate accounts that violate these terms, that we determine are not legitimate business or organization accounts, or that otherwise undermine the mission of the Commons. We'll explain our reasoning when possible.
           </P>
           <P>
-            You can delete your account at any time by contacting us at <a href="mailto:hello@joinfiber.app" style={{ color: colors.amber }}>hello@joinfiber.app</a>. We'll remove your account and all associated event data.
+            You can delete your account at any time by contacting us at <a href="mailto:hello@joinfiber.app" style={{ color: colors.muted, textDecoration: 'underline' }}>hello@joinfiber.app</a>. We'll remove your account and all associated event data.
           </P>
         </Section>
 
@@ -154,7 +154,7 @@ export function TermsScreen({ onBack }: TermsScreenProps) {
             The event data in the Commons is published under CC BY 4.0. The API is free and requires no authentication to read. Anyone can build on it.
           </P>
           <P>
-            The <a href="https://github.com/The-Relational-Technology-Project/neighborhood-api" style={{ color: colors.amber }} target="_blank" rel="noopener noreferrer">Neighborhood API spec</a> is MIT-licensed and designed for interoperability. If you disagree with how we curate this feed, you are welcome and encouraged to run your own. Fork the repo, stand up your own Commons, set your own rules. The spec exists so that no single operator — including us — is a bottleneck for neighborhood data.
+            The <a href="https://github.com/The-Relational-Technology-Project/neighborhood-api" style={{ color: colors.muted, textDecoration: 'underline' }} target="_blank" rel="noopener noreferrer">Neighborhood API spec</a> is MIT-licensed and designed for interoperability. If you disagree with how we curate this feed, you are welcome and encouraged to run your own. Fork the repo, stand up your own Commons, set your own rules. The spec exists so that no single operator — including us — is a bottleneck for neighborhood data.
           </P>
           <P>
             We mean this sincerely. A diversity of feeds, each with their own editorial perspective, is better for neighborhoods than one feed that tries to please everyone.
@@ -168,7 +168,7 @@ export function TermsScreen({ onBack }: TermsScreenProps) {
             We may update these terms as the project evolves. When we do, we'll update the date at the top of this page. Continued use of the portal after changes constitutes acceptance.
           </P>
           <P>
-            Questions? <a href="mailto:hello@joinfiber.app" style={{ color: colors.amber }}>hello@joinfiber.app</a>
+            Questions? <a href="mailto:hello@joinfiber.app" style={{ color: colors.muted, textDecoration: 'underline' }}>hello@joinfiber.app</a>
           </P>
         </Section>
 

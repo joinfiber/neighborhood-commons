@@ -105,7 +105,7 @@ export function ImageCropPreview({ imageSrc, focalY, onFocalYChange }: ImageCrop
           left: 0,
           right: 0,
           height: '2px',
-          background: colors.amber,
+          background: colors.accent,
           transform: 'translateY(-1px)',
           pointerEvents: 'none',
         }} />
@@ -118,7 +118,7 @@ export function ImageCropPreview({ imageSrc, focalY, onFocalYChange }: ImageCrop
           width: '24px',
           height: '24px',
           borderRadius: '50%',
-          background: colors.amber,
+          background: colors.accent,
           border: '2px solid #fff',
           boxShadow: '0 1px 4px rgba(0,0,0,0.4)',
           pointerEvents: 'none',

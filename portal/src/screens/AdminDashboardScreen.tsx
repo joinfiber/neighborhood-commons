@@ -231,8 +231,8 @@ export function AdminDashboardScreen({ email, onSignOut, onViewAccount, onViewAl
                   fontSize: '11px',
                   padding: '2px 8px',
                   borderRadius: '4px',
-                  background: account.status === 'pending' ? '#fef3cd' : account.claimed_at ? colors.successDim : colors.amberDim,
-                  color: account.status === 'pending' ? '#92600a' : account.claimed_at ? colors.success : colors.amber,
+                  background: account.status === 'pending' ? '#fef3cd' : account.claimed_at ? colors.successDim : colors.accentDim,
+                  color: account.status === 'pending' ? '#92600a' : account.claimed_at ? colors.success : colors.accent,
                 }}>
                   {account.status === 'pending' ? 'Pending' : account.status === 'rejected' ? 'Rejected' : account.claimed_at ? 'Claimed' : 'Managed'}
                 </span>
@@ -328,8 +328,8 @@ function PendingAccountsSection({ accounts, onApprove, onReject, onViewAccount }
                 <button
                   type="button"
                   style={{
-                    background: colors.amber,
-                    color: '#0f0f0e',
+                    background: colors.accent,
+                    color: '#ffffff',
                     border: 'none',
                     borderRadius: '6px',
                     padding: '6px 14px',
