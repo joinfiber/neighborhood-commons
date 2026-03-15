@@ -57,7 +57,7 @@ const SCHEMA: Record<string, string[]> = {
     'default_venue_name', 'default_address', 'default_place_id',
     'default_latitude', 'default_longitude', 'logo_url', 'description',
     'status', 'claimed_at', 'created_at', 'updated_at', 'last_login_at',
-    'wheelchair_accessible',
+    'wheelchair_accessible', 'slug',
   ],
   regions: [
     'id', 'name', 'slug', 'type', 'parent_id', 'bounds', 'centroid',

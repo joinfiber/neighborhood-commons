@@ -28,6 +28,7 @@ import cronRoutes from './routes/cron.js';
 import placesRoutes from './routes/places.js';
 import developerRoutes from './routes/developers.js';
 import contributeRoutes from './routes/contribute.js';
+import pageRoutes from './routes/pages.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -85,6 +86,9 @@ export function createApp(): Express {
   app.use('/.well-known', publicCors);
   app.use('/api/developers', publicCors);
   app.use('/llms.txt', publicCors);
+  // Widget JS and badges must load from any origin
+  app.use('/widget', publicCors);
+  app.use('/pages.css', publicCors);
 
   // Restricted CORS for portal, admin, webhooks, internal routes
   app.use('/api/portal', privateCors);
@@ -169,16 +173,26 @@ export function createApp(): Express {
   // ─── Error handler (API errors) ──────────────────────────────────
   app.use(errorHandler);
 
+  // ─── Public static assets (CSS, widget, badges) ────────────────
+  const publicDir = path.resolve(__dirname, '../public');
+  app.use('/pages.css', express.static(path.join(publicDir, 'pages.css'), { maxAge: '1d', immutable: true }));
+  app.use('/widget', express.static(path.join(publicDir, 'widget'), { maxAge: '1h' }));
+
+  // ─── Public HTML pages (events, venues) ────────────────────────
+  // Must be before portal SPA fallback so /events/:id and /venues/:slug
+  // are handled by server-rendered pages, not the React SPA.
+  app.use(pageRoutes);
+
   // ─── Portal SPA (static files) ─────────────────────────────────
-  // Serve the built portal frontend. Must be after API routes
-  // so /api/* is handled by Express, not the SPA.
+  // Serve the built portal frontend. Must be after API routes and pages
+  // so /api/* and /events/* are handled first.
   const portalDir = path.resolve(__dirname, '../portal');
   app.use(express.static(portalDir, { maxAge: '1h' }));
 
-  // SPA fallback: any non-API route serves index.html
+  // SPA fallback: any non-API, non-page route serves index.html
   // (supports client-side hash routing)
   app.get('*', (_req, res, next) => {
-    if (_req.path.startsWith('/api/')) return next();
+    if (_req.path.startsWith('/api/') || _req.path.startsWith('/events/') || _req.path.startsWith('/venues/')) return next();
     res.sendFile(path.join(portalDir, 'index.html'), (err) => {
       if (err) next(); // portal not built yet — 404 is fine
     });

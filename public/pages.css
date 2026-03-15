@@ -1,0 +1,589 @@
+/* =============================================================================
+   Neighborhood Commons — Public Pages
+   Clean, modern design. Warm palette matching the portal.
+   ============================================================================= */
+
+/* Reset & base */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --nc-bg: #f7f7f5;
+  --nc-surface: #ffffff;
+  --nc-text: #37352f;
+  --nc-muted: #6b6660;
+  --nc-dim: #9c9791;
+  --nc-border: #e8e6e1;
+  --nc-accent: #2c2c2c;
+  --nc-cream: #f5f0e8;
+  --nc-error: #c0392b;
+  --nc-radius: 10px;
+  --nc-radius-sm: 6px;
+  --nc-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06);
+  --nc-shadow-lg: 0 4px 12px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.08);
+  --nc-max-width: 680px;
+  --nc-max-width-wide: 960px;
+}
+
+body {
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--nc-bg);
+  color: var(--nc-text);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a { color: var(--nc-accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+img { max-width: 100%; display: block; }
+
+/* =============================================================================
+   Layout
+   ============================================================================= */
+
+.nc-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.nc-header {
+  border-bottom: 1px solid var(--nc-border);
+  background: var(--nc-surface);
+}
+
+.nc-header-inner {
+  max-width: var(--nc-max-width-wide);
+  margin: 0 auto;
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.nc-logo {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--nc-text);
+  letter-spacing: -0.01em;
+}
+
+.nc-logo:hover { text-decoration: none; }
+
+.nc-header-nav {
+  display: flex;
+  gap: 20px;
+  font-size: 13px;
+}
+
+.nc-header-nav a {
+  color: var(--nc-muted);
+  transition: color 0.15s;
+}
+
+.nc-header-nav a:hover {
+  color: var(--nc-text);
+  text-decoration: none;
+}
+
+.nc-main {
+  flex: 1;
+  max-width: var(--nc-max-width);
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+  width: 100%;
+}
+
+.nc-main--wide {
+  max-width: var(--nc-max-width-wide);
+}
+
+.nc-footer {
+  border-top: 1px solid var(--nc-border);
+  padding: 24px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--nc-dim);
+}
+
+.nc-footer a {
+  color: var(--nc-muted);
+}
+
+/* =============================================================================
+   Event Detail Page
+   ============================================================================= */
+
+.nc-event-hero {
+  width: 100%;
+  aspect-ratio: 16 / 7;
+  object-fit: cover;
+  border-radius: var(--nc-radius);
+  margin-bottom: 28px;
+  box-shadow: var(--nc-shadow);
+}
+
+.nc-event-category {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 100px;
+  color: #fff;
+  margin-bottom: 12px;
+}
+
+.nc-event-title {
+  font-size: 32px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin-bottom: 16px;
+  color: var(--nc-text);
+}
+
+.nc-event-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 28px;
+  font-size: 15px;
+}
+
+.nc-event-meta-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--nc-muted);
+}
+
+.nc-event-meta-icon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  color: var(--nc-dim);
+}
+
+.nc-event-meta-text {
+  color: var(--nc-text);
+}
+
+.nc-event-meta-text a {
+  color: var(--nc-text);
+  text-decoration: underline;
+  text-decoration-color: var(--nc-border);
+  text-underline-offset: 2px;
+}
+
+.nc-event-meta-text a:hover {
+  text-decoration-color: var(--nc-muted);
+}
+
+.nc-event-description {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--nc-muted);
+  margin-bottom: 32px;
+  white-space: pre-line;
+}
+
+.nc-event-description p {
+  margin-bottom: 12px;
+}
+
+/* Tags */
+.nc-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 28px;
+}
+
+.nc-tag {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 100px;
+  background: var(--nc-bg);
+  border: 1px solid var(--nc-border);
+  color: var(--nc-muted);
+}
+
+/* Actions bar */
+.nc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--nc-border);
+}
+
+.nc-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 16px;
+  border-radius: var(--nc-radius-sm);
+  border: 1px solid var(--nc-border);
+  background: var(--nc-surface);
+  color: var(--nc-text);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  text-decoration: none;
+  font-family: inherit;
+}
+
+.nc-btn:hover {
+  border-color: var(--nc-accent);
+  text-decoration: none;
+}
+
+.nc-btn--primary {
+  background: var(--nc-accent);
+  color: #fff;
+  border-color: var(--nc-accent);
+}
+
+.nc-btn--primary:hover {
+  opacity: 0.9;
+}
+
+.nc-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Source attribution */
+.nc-source {
+  font-size: 12px;
+  color: var(--nc-dim);
+  padding: 16px 0;
+  border-top: 1px solid var(--nc-border);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nc-source-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--nc-muted);
+}
+
+/* =============================================================================
+   Venue Page
+   ============================================================================= */
+
+.nc-venue-header {
+  margin-bottom: 32px;
+}
+
+.nc-venue-name {
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin-bottom: 8px;
+}
+
+.nc-venue-address {
+  font-size: 15px;
+  color: var(--nc-muted);
+  margin-bottom: 4px;
+}
+
+.nc-venue-bio {
+  font-size: 15px;
+  color: var(--nc-muted);
+  line-height: 1.6;
+  margin-top: 12px;
+}
+
+.nc-venue-links {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+.nc-venue-stat {
+  color: var(--nc-dim);
+  font-size: 13px;
+}
+
+/* Section headers */
+.nc-section-title {
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nc-dim);
+  margin-bottom: 16px;
+}
+
+/* =============================================================================
+   Event Cards (list view on venue/region pages)
+   ============================================================================= */
+
+.nc-event-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.nc-card {
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
+  gap: 16px;
+  align-items: center;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--nc-border);
+  transition: background 0.1s;
+}
+
+.nc-card:last-child {
+  border-bottom: none;
+}
+
+.nc-card:hover {
+  background: rgba(0,0,0,0.01);
+}
+
+.nc-card-date {
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.nc-card-month {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--nc-dim);
+  line-height: 1;
+}
+
+.nc-card-day {
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--nc-text);
+}
+
+.nc-card-body {
+  min-width: 0;
+}
+
+.nc-card-title {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--nc-text);
+  margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nc-card-title a {
+  color: inherit;
+}
+
+.nc-card-title a:hover {
+  text-decoration: underline;
+}
+
+.nc-card-detail {
+  font-size: 13px;
+  color: var(--nc-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nc-card-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 100px;
+  color: #fff;
+  white-space: nowrap;
+}
+
+/* =============================================================================
+   Subscribe / Embed Section
+   ============================================================================= */
+
+.nc-subscribe {
+  margin-top: 40px;
+  padding: 24px;
+  background: var(--nc-surface);
+  border: 1px solid var(--nc-border);
+  border-radius: var(--nc-radius);
+  box-shadow: var(--nc-shadow);
+}
+
+.nc-subscribe-title {
+  font-size: 15px;
+  font-weight: 500;
+  margin-bottom: 12px;
+}
+
+.nc-code-block {
+  background: var(--nc-bg);
+  border: 1px solid var(--nc-border);
+  border-radius: var(--nc-radius-sm);
+  padding: 12px 16px;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 12px;
+  color: var(--nc-muted);
+  overflow-x: auto;
+  margin-bottom: 12px;
+  white-space: pre;
+  line-height: 1.5;
+}
+
+/* =============================================================================
+   Region Browse Page
+   ============================================================================= */
+
+.nc-region-header {
+  margin-bottom: 32px;
+}
+
+.nc-region-name {
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  margin-bottom: 4px;
+}
+
+.nc-region-count {
+  font-size: 14px;
+  color: var(--nc-dim);
+}
+
+/* =============================================================================
+   Empty States
+   ============================================================================= */
+
+.nc-empty {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--nc-dim);
+  font-size: 14px;
+}
+
+.nc-empty-icon {
+  font-size: 32px;
+  margin-bottom: 12px;
+  opacity: 0.4;
+}
+
+/* =============================================================================
+   404 / Error Pages
+   ============================================================================= */
+
+.nc-error {
+  text-align: center;
+  padding: 80px 24px;
+}
+
+.nc-error-code {
+  font-size: 64px;
+  font-weight: 300;
+  color: var(--nc-border);
+  line-height: 1;
+  margin-bottom: 16px;
+}
+
+.nc-error-message {
+  font-size: 16px;
+  color: var(--nc-muted);
+  margin-bottom: 24px;
+}
+
+/* =============================================================================
+   Accessibility indicator
+   ============================================================================= */
+
+.nc-accessible {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--nc-muted);
+}
+
+/* =============================================================================
+   Responsive
+   ============================================================================= */
+
+@media (max-width: 640px) {
+  .nc-event-title {
+    font-size: 24px;
+  }
+
+  .nc-venue-name, .nc-region-name {
+    font-size: 22px;
+  }
+
+  .nc-event-hero {
+    border-radius: 0;
+    margin-left: -24px;
+    margin-right: -24px;
+    width: calc(100% + 48px);
+  }
+
+  .nc-card {
+    grid-template-columns: 48px 1fr;
+    gap: 12px;
+  }
+
+  .nc-card-badge {
+    display: none;
+  }
+
+  .nc-actions {
+    flex-direction: column;
+  }
+
+  .nc-btn {
+    justify-content: center;
+  }
+
+  .nc-header-nav {
+    gap: 12px;
+  }
+}
+
+/* =============================================================================
+   Print
+   ============================================================================= */
+
+@media print {
+  .nc-header, .nc-footer, .nc-actions, .nc-subscribe {
+    display: none;
+  }
+
+  .nc-main {
+    max-width: 100%;
+    padding: 0;
+  }
+
+  body {
+    background: #fff;
+  }
+}
