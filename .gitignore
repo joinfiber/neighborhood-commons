@@ -25,3 +25,7 @@ coverage
 # Internal tools
 scripts/
 field/
+
+# Internal strategy docs
+docs/strategy.md
+docs/plan-network-effects.md
