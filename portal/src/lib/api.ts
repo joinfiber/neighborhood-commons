@@ -294,6 +294,62 @@ export async function adminFetchAccountActivity(id: string) {
 }
 
 // =============================================================================
+// IMPORT
+// =============================================================================
+
+export interface ImportPreviewEvent {
+  index: number;
+  name: string;
+  start: string;
+  end: string | null;
+  timezone: string;
+  venue_name: string | null;
+  address: string | null;
+  description: string | null;
+  cost: string | null;
+  external_id: string | null;
+  already_exists: boolean;
+  recurrence: string | null;
+  image_url: string | null;
+}
+
+export interface ImportPreviewResponse {
+  source_type: 'ical' | 'eventbrite';
+  source_url: string;
+  events: ImportPreviewEvent[];
+  warnings: string[];
+  total_parsed: number;
+}
+
+export interface ImportConfirmResponse {
+  created: Array<{ id: string; name: string; status: string }>;
+  skipped: Array<{ name: string; reason: string }>;
+  total_created: number;
+  total_skipped: number;
+}
+
+export async function importPreview(url: string, category: string, event_timezone: string) {
+  return apiRequest<ImportPreviewResponse>('/api/portal/import/preview', {
+    method: 'POST',
+    body: JSON.stringify({ url, category, event_timezone }),
+  });
+}
+
+export async function importConfirm(params: {
+  url: string;
+  source_type: 'ical' | 'eventbrite';
+  category: string;
+  event_timezone: string;
+  events: number[];
+  overrides?: Record<string, { venue_name?: string; category?: string; description?: string }>;
+}) {
+  return apiRequest<ImportConfirmResponse>('/api/portal/import/confirm', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+}
+
+// =============================================================================
 // PLACES
 // =============================================================================
 

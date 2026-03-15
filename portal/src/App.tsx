@@ -7,6 +7,7 @@ import { LoginScreen } from './screens/LoginScreen';
 import { DashboardScreen } from './screens/DashboardScreen';
 import { CreateEventScreen } from './screens/CreateEventScreen';
 import { EditEventScreen } from './screens/EditEventScreen';
+import { ImportEventsScreen } from './screens/ImportEventsScreen';
 import { AdminDashboardScreen } from './screens/AdminDashboardScreen';
 import { AdminAccountDetailScreen } from './screens/AdminAccountDetailScreen';
 import { AdminCreateEventScreen } from './screens/AdminCreateEventScreen';
@@ -292,6 +293,19 @@ export default function App() {
       );
     }
 
+    if (route.screen === 'import-events') {
+      return (
+        <ImportEventsScreen
+          account={account}
+          onBack={() => navigate('#/')}
+          onDone={(count) => {
+            navigate('#/');
+            setToast({ message: `Imported ${count} event${count !== 1 ? 's' : ''}`, type: 'success' });
+          }}
+        />
+      );
+    }
+
     if (route.screen === 'create-event') {
       return (
         <CreateEventScreen
@@ -328,6 +342,7 @@ export default function App() {
       <DashboardScreen
         account={account}
         onCreateEvent={() => navigate('#/events/new')}
+        onImportEvents={() => navigate('#/events/import')}
         onEditEvent={(event) => navigate(`#/events/${event.id}/edit`)}
         onNavigateProfile={() => navigate('#/profile')}
         onSignOut={() => signOut()}

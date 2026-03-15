@@ -9,6 +9,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 interface DashboardScreenProps {
   account: PortalAccount;
   onCreateEvent: () => void;
+  onImportEvents: () => void;
   onEditEvent: (event: PortalEvent) => void;
   onNavigateProfile: () => void;
   onSignOut: () => void;
@@ -357,7 +358,7 @@ function SeriesCard({ group, onClick, selectedIds, onToggle, selectMode }: {
 // DASHBOARD
 // =============================================================================
 
-export function DashboardScreen({ account, onCreateEvent, onEditEvent, onNavigateProfile, onSignOut, onSignOutEverywhere }: DashboardScreenProps) {
+export function DashboardScreen({ account, onCreateEvent, onImportEvents, onEditEvent, onNavigateProfile, onSignOut, onSignOutEverywhere }: DashboardScreenProps) {
   const [events, setEvents] = useState<PortalEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -662,13 +663,28 @@ export function DashboardScreen({ account, onCreateEvent, onEditEvent, onNavigat
         {/* ── Action bar ── */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
           {!selectMode && (
-            <button
-              className="btn-primary"
-              style={{ ...styles.buttonPrimary, flex: 1 }}
-              onClick={onCreateEvent}
-            >
-              + New Event
-            </button>
+            <>
+              <button
+                className="btn-primary"
+                style={{ ...styles.buttonPrimary, flex: 1 }}
+                onClick={onCreateEvent}
+              >
+                + New Event
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                style={{
+                  ...styles.buttonSecondary,
+                  width: 'auto',
+                  padding: '12px 16px',
+                  fontSize: '13px',
+                }}
+                onClick={onImportEvents}
+              >
+                Import
+              </button>
+            </>
           )}
           {events.length > 1 && (
             selectMode ? (
