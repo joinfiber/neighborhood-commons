@@ -28,7 +28,8 @@ type PortalAuditAction =
   | 'portal_account_reactivated'
   | 'portal_account_approved'
   | 'portal_account_rejected'
-  | 'portal_creation_rate_limited';
+  | 'portal_creation_rate_limited'
+  | 'portal_import';
 
 /**
  * One-way hash for privacy-preserving logs.

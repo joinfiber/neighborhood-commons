@@ -39,6 +39,8 @@ function makeRow(overrides: Partial<PortalEventRow> = {}): PortalEventRow {
     link_url: 'https://example.com/tickets',
     event_image_url: 'https://images.example.com/jazz.jpg',
     created_at: '2026-03-10T12:00:00.000Z',
+    source_method: null,
+    source_publisher: null,
     portal_accounts: { business_name: 'South Jazz Kitchen', wheelchair_accessible: null },
     ...overrides,
   };

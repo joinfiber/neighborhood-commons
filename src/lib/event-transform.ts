@@ -43,6 +43,9 @@ export interface PortalEventRow {
   link_url: string | null;
   event_image_url: string | null;
   created_at: string;
+  // Contributor tracking (migration 020)
+  source_method: string | null;
+  source_publisher: string | null;
   portal_accounts: { business_name: string; wheelchair_accessible?: boolean | null } | null;
 }
 
@@ -78,7 +81,7 @@ export interface NeighborhoodEvent {
   source: {
     publisher: string;
     collected_at: string;
-    method: 'portal';
+    method: 'portal' | 'import' | 'api';
     license: 'CC BY 4.0';
   };
 }
@@ -207,9 +210,9 @@ export function toNeighborhoodEvent(row: PortalEventRow): NeighborhoodEvent {
     wheelchair_accessible: row.wheelchair_accessible ?? row.portal_accounts?.wheelchair_accessible ?? null,
     recurrence: rrule ? { rrule } : null,
     source: {
-      publisher: row.portal_accounts?.business_name || 'Neighborhood Commons',
+      publisher: row.source_publisher || row.portal_accounts?.business_name || 'Neighborhood Commons',
       collected_at: row.created_at,
-      method: 'portal',
+      method: (row.source_method || 'portal') as 'portal' | 'import' | 'api',
       license: 'CC BY 4.0',
     },
   };

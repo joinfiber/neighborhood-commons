@@ -30,7 +30,7 @@ import { fileURLToPath } from 'url';
 const SCHEMA: Record<string, string[]> = {
   api_keys: [
     'id', 'name', 'tier', 'rate_limit_per_hour', 'created_at',
-    'key_hash', 'key_prefix', 'contact_email', 'status', 'last_used_at',
+    'key_hash', 'key_prefix', 'contact_email', 'status', 'last_used_at', 'contributor_tier',
   ],
   audit_logs: [
     'id', 'action', 'actor_hash', 'resource_id', 'metadata', 'endpoint',
@@ -44,7 +44,9 @@ const SCHEMA: Record<string, string[]> = {
     'creator_account_id', 'user_id', 'is_business', 'visibility', 'status',
     'broadcast_mode', 'discovery_radius_meters', 'recurrence', 'series_id',
     'series_instance_number', 'becomes_visible_at', 'expires_at', 'ended_at',
-    'start_time_required', 'tags', 'wheelchair_accessible', 'rsvp_limit', 'created_at', 'updated_at',
+    'start_time_required', 'tags', 'wheelchair_accessible', 'rsvp_limit',
+    'source_method', 'source_publisher', 'source_feed_url', 'external_id',
+    'created_at', 'updated_at',
   ],
   event_series: [
     'id', 'creator_account_id', 'recurrence', 'base_event_data',
