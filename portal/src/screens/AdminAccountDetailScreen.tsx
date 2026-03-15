@@ -160,10 +160,9 @@ function AdminEventCard({ event, onClick, onDelete, selected, onToggle, selectMo
 // SERIES CARD (admin variant)
 // =============================================================================
 
-function AdminSeriesCard({ group, onClick, onDeleteEvent, selectedIds, onToggle, selectMode }: {
+function AdminSeriesCard({ group, onClick, selectedIds, onToggle, selectMode }: {
   group: SeriesGroup;
   onClick: (event: PortalEvent) => void;
-  onDeleteEvent: (id: string) => void;
   selectedIds: Set<string>;
   onToggle: (id: string) => void;
   selectMode: boolean;
@@ -478,7 +477,7 @@ export function AdminAccountDetailScreen({ accountId, onBack, onCreateEvent, onE
                   key={item.seriesId}
                   group={item}
                   onClick={(e) => onEditEvent(e, account)}
-                  onDeleteEvent={(id) => setDeleteEventId(id)}
+
                   selectedIds={selectedIds}
                   onToggle={toggleSelect}
                   selectMode={selectMode}
