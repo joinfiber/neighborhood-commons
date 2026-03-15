@@ -1050,7 +1050,7 @@ router.delete('/events/:id', writeLimiter, async (req, res, next) => {
     }
 
     void dispatchWebhooks('event.deleted', req.params.id, {
-      id: req.params.id, name: '', start: '', end: null, description: null,
+      id: req.params.id, name: '', start: '', end: null, timezone: 'UTC', description: null,
       category: [], place_id: null,
       location: { name: '', address: null, lat: null, lng: null },
       url: null, images: [], organizer: { name: '', phone: null },

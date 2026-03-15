@@ -56,6 +56,7 @@ describe('toNeighborhoodEvent', () => {
     expect(keys).toContain('name');
     expect(keys).toContain('start');
     expect(keys).toContain('end');
+    expect(keys).toContain('timezone');
     expect(keys).toContain('description');
     expect(keys).toContain('category');
     expect(keys).toContain('place_id');
@@ -203,6 +204,24 @@ describe('toIso', () => {
 
   it('returns original string for invalid dates', () => {
     expect(toIso('not-a-date', 'America/New_York')).toBe('not-a-date');
+  });
+
+  it('handles half-hour timezone offsets (Asia/Kolkata = +05:30)', () => {
+    const result = toIso('2026-03-14T12:00:00.000Z', 'Asia/Kolkata');
+    // 12:00 UTC = 17:30 IST (+05:30)
+    expect(result).toBe('2026-03-14T17:30:00+05:30');
+  });
+
+  it('handles 45-minute timezone offsets (Asia/Kathmandu = +05:45)', () => {
+    const result = toIso('2026-03-14T12:00:00.000Z', 'Asia/Kathmandu');
+    // 12:00 UTC = 17:45 NPT (+05:45)
+    expect(result).toBe('2026-03-14T17:45:00+05:45');
+  });
+
+  it('produces EST offset (-05:00) for January dates', () => {
+    const result = toIso('2026-01-15T22:00:00.000Z', 'America/New_York');
+    // January = EST (UTC-5), so 22:00 UTC = 17:00 EST
+    expect(result).toBe('2026-01-15T17:00:00-05:00');
   });
 
   it('falls back gracefully for unknown timezone', () => {

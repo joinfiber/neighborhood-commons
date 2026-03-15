@@ -58,8 +58,9 @@ curl "https://commons.joinfiber.app/api/v1/events?limit=10&category=live-music"
     {
       "id": "uuid-here",
       "name": "Jazz Night at South",
-      "start": "2026-03-14T19:00:00-05:00",
-      "end": "2026-03-14T22:00:00-05:00",
+      "start": "2026-03-14T19:00:00-04:00",
+      "end": "2026-03-14T22:00:00-04:00",
+      "timezone": "America/New_York",
       "description": "Live jazz quartet every Friday.",
       "category": ["live-music"],
       "place_id": "ChIJ...",
@@ -221,6 +222,31 @@ All errors follow the same shape:
   }
 }
 ```
+
+## Timestamps and Timezones
+
+All event timestamps (`start`, `end`) are ISO 8601 with a UTC offset computed for the event's actual date and IANA timezone. The offset accounts for Daylight Saving Time — the same recurring event will show `-05:00` (EST) in January and `-04:00` (EDT) in March.
+
+**Key rules for consumers:**
+
+- **Parse the offset.** Don't assume a fixed offset for any region. The offset in the response is correct for that specific event date.
+- **The `timezone` field** on each event contains the IANA timezone name (e.g., `America/New_York`). Use this if you need to do your own local-time calculations — it's authoritative for DST rules.
+- **`start_after` / `start_before` query parameters** accept `YYYY-MM-DD` date strings. The API interprets these as calendar dates in the event's local timezone.
+- **Recurring events** maintain consistent local times across DST transitions. A weekly 5pm event stays at 5pm whether the clock springs forward or falls back.
+- **iCal feed** uses `DTSTART;TZID=America/New_York:20260314T190000` format with VTIMEZONE blocks. Your calendar app handles DST via its own IANA timezone database.
+- **RSS feed** uses RFC 822 dates in UTC (`toUTCString()`), as required by the RSS 2.0 spec.
+
+**Example — same venue, different seasons:**
+
+```json
+// March 14 (EDT, clocks have sprung forward)
+{ "start": "2026-03-14T19:00:00-04:00", "timezone": "America/New_York" }
+
+// January 15 (EST, standard time)
+{ "start": "2026-01-15T19:00:00-05:00", "timezone": "America/New_York" }
+```
+
+Both represent 7pm local time in Philadelphia. The offset differs because of DST.
 
 ## Security
 

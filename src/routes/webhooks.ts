@@ -259,6 +259,7 @@ router.post('/:id/test', writeLimiter, async (req, res, next) => {
       name: 'Test Event',
       start: new Date().toISOString(),
       end: null,
+      timezone: 'America/New_York',
       description: 'This is a test webhook delivery from Neighborhood Commons.',
       category: ['test'],
       place_id: null,

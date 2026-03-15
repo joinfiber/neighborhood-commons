@@ -51,6 +51,7 @@ export interface NeighborhoodEvent {
   name: string;
   start: string;
   end: string | null;
+  timezone: string;
   description: string | null;
   category: string[];
   place_id: string | null;
@@ -106,12 +107,13 @@ export function toIso(eventAt: string, timezone: string): string {
     const parts = formatter.formatToParts(d);
     const offsetPart = parts.find((p) => p.type === 'timeZoneName');
     if (offsetPart) {
-      const match = offsetPart.value.match(/GMT([+-]\d+)/);
-      if (match?.[1]) {
-        const hours = parseInt(match[1], 10);
-        const sign = hours >= 0 ? '+' : '-';
-        const abs = Math.abs(hours).toString().padStart(2, '0');
-        return `${dateStr}T${timeStr}${sign}${abs}:00`;
+      // Handle whole-hour (GMT-5) and fractional (GMT+5:30, GMT+5:45) offsets
+      const match = offsetPart.value.match(/GMT([+-])(\d{1,2})(?::(\d{2}))?/);
+      if (match) {
+        const sign = match[1];
+        const hours = (match[2] as string).padStart(2, '0');
+        const minutes = match[3] || '00';
+        return `${dateStr}T${timeStr}${sign}${hours}:${minutes}`;
       }
     }
     return `${dateStr}T${timeStr}`;
@@ -180,6 +182,7 @@ export function toNeighborhoodEvent(row: PortalEventRow): NeighborhoodEvent {
     name: row.content,
     start: toIso(row.event_at, tz),
     end: row.end_time ? toIso(row.end_time, tz) : null,
+    timezone: tz,
     description: row.description,
     category: slugifyCategory(row.category, row.custom_category),
     place_id: row.place_id || null,

@@ -205,6 +205,9 @@ describe('GET /api/v1/events', () => {
     // ISO 8601 with timezone offset
     expect(event.start).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/);
 
+    // IANA timezone name
+    expect(event.timezone).toBe('America/New_York');
+
     // Category as array (spec requires array)
     expect(Array.isArray(event.category)).toBe(true);
 

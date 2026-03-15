@@ -72,6 +72,7 @@ Response (200):
       "name": "Jazz Night at South",
       "start": "2026-03-14T19:00:00-04:00",
       "end": "2026-03-14T22:00:00-04:00",
+      "timezone": "America/New_York",
       "description": "Live jazz trio...",
       "category": ["live-music"],
       "tags": ["outdoor", "free", "all-ages"],
@@ -391,8 +392,9 @@ function verify(rawBody, signature, secret) {
 |-------|------|-------------|
 | id | string | UUID |
 | name | string | Event title |
-| start | string | ISO 8601 with timezone offset |
-| end | string or null | End time |
+| start | string | ISO 8601 with timezone offset (DST-aware — offset is computed for the event's actual date) |
+| end | string or null | End time (same format as start) |
+| timezone | string | IANA timezone name (e.g., "America/New_York"). Use for local-time calculations; authoritative for DST rules. |
 | description | string or null | Plain text |
 | category | string[] | Slugified categories (e.g., ["live-music"]) |
 | tags | string[] | Experience/setting/access tags from a shared pool of 29 tags (e.g., ["outdoor", "free", "all-ages"]). Curated per category. May be empty. |
@@ -406,6 +408,17 @@ function verify(rawBody, signature, secret) {
 | start_time_required | boolean | Default true. When true, event should be hidden from browse feeds after its start time. When false (open-window events like happy hours), keep showing until end time. If false and no end time, consumer decides fallback (e.g., start + 3h). |
 | wheelchair_accessible | boolean or null | Resolved from event-level override or venue default. true = accessible, false = not accessible, null = unknown. |
 | source | object | { publisher, collected_at, method, license } |
+
+## Timestamps and Timezones
+
+All `start` and `end` timestamps are ISO 8601 with a UTC offset computed for the event's actual date and IANA timezone. The offset accounts for Daylight Saving Time — the same recurring event will show `-05:00` (EST) in January and `-04:00` (EDT) in March.
+
+- Parse the offset — don't assume a fixed offset for any region.
+- The `timezone` field carries the IANA name for your own local-time calculations.
+- `start_after` / `start_before` query parameters accept `YYYY-MM-DD` dates, interpreted as calendar dates in the event's local timezone.
+- Recurring events maintain consistent local times across DST transitions.
+- iCal feed uses `DTSTART;TZID=` with VTIMEZONE blocks (RFC 5545 compliant).
+- RSS feed uses RFC 822 dates in UTC, per RSS 2.0 spec.
 
 ## License
 

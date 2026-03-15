@@ -325,9 +325,16 @@ function generateInstanceDates(startDate: string, recurrence: string, instanceCo
       case 'biweekly':
         d.setDate(d.getDate() + i * 14);
         break;
-      case 'monthly':
-        d.setMonth(d.getMonth() + i);
+      case 'monthly': {
+        // Clamp to last day of target month to avoid overflow
+        // (e.g., Jan 31 + 1 month → Feb 28, not March 3)
+        const targetMonth = start.getMonth() + i;
+        d.setDate(1); // avoid overflow during setMonth
+        d.setMonth(targetMonth);
+        const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+        d.setDate(Math.min(start.getDate(), lastDay));
         break;
+      }
       default:
         return dates;
     }
@@ -486,7 +493,7 @@ export async function deleteSeriesEvents(seriesId: string): Promise<number> {
   // Dispatch webhooks for each deleted event
   for (const e of events) {
     void dispatchWebhooks('event.deleted', e.id, {
-      id: e.id, name: '', start: '', end: null, description: null,
+      id: e.id, name: '', start: '', end: null, timezone: 'UTC', description: null,
       category: [], place_id: null,
       location: { name: '', address: null, lat: null, lng: null },
       url: null, images: [], organizer: { name: '', phone: null },
@@ -850,6 +857,16 @@ router.get('/account', portalLimiter, async (req, res, next) => {
       throw createError('No portal account found', 404, 'NOT_FOUND');
     }
 
+    // Sync email: if the auth user verified a new email, update portal_accounts to match
+    const authEmail = req.user?.email;
+    if (authEmail && authEmail !== account.email) {
+      await supabaseAdmin
+        .from('portal_accounts')
+        .update({ email: authEmail })
+        .eq('id', account.id);
+      account.email = authEmail;
+    }
+
     res.json({ account });
   } catch (err) {
     next(err);
@@ -861,6 +878,7 @@ router.get('/account', portalLimiter, async (req, res, next) => {
 // =============================================================================
 
 const updateProfileSchema = z.object({
+  business_name: z.string().min(1).max(200).optional(),
   default_venue_name: z.string().max(200).optional(),
   default_place_id: z.string().max(500).optional(),
   default_address: z.string().max(500).optional(),
@@ -882,6 +900,7 @@ router.patch('/account/profile', writeLimiter, async (req, res, next) => {
     const data = validateRequest(updateProfileSchema, req.body);
 
     const update: Record<string, unknown> = {};
+    if (data.business_name !== undefined) update.business_name = data.business_name;
     if (data.default_venue_name !== undefined) update.default_venue_name = data.default_venue_name || null;
     if (data.default_place_id !== undefined) update.default_place_id = data.default_place_id || null;
     if (data.default_address !== undefined) update.default_address = data.default_address || null;
@@ -1769,7 +1788,7 @@ router.delete('/events/:id', writeLimiter, async (req, res, next) => {
 
     // Dispatch webhook (fire-and-forget)
     void dispatchWebhooks('event.deleted', req.params.id, {
-      id: req.params.id, name: '', start: '', end: null, description: null,
+      id: req.params.id, name: '', start: '', end: null, timezone: 'UTC', description: null,
       category: [], place_id: null,
       location: { name: '', address: null, lat: null, lng: null },
       url: null, images: [], organizer: { name: '', phone: null },

@@ -43,8 +43,9 @@ The v1 public API (`/api/v1/events`) **must** return events conforming to the Ne
 |------------|------|---------------|-------|
 | `id` | string | `id` (UUID) | Spec uses slugs (`evt_...`); we use UUIDs. Both valid. |
 | `name` | string | `content` | Spec calls it `name`, not `title`. Transform on output. |
-| `start` | ISO 8601 w/ tz | `event_at` | |
-| `end` | ISO 8601 w/ tz | `end_time` | |
+| `start` | ISO 8601 w/ tz | `event_at` | Offset is DST-aware, computed for the event's actual date. |
+| `end` | ISO 8601 w/ tz | `end_time` | Same format as `start`. |
+| `timezone` | string | `event_timezone` | IANA timezone name (e.g., `America/New_York`). Authoritative for DST rules. |
 | `description` | string | `description` | Direct match. |
 | `category` | string[] | `category` | Spec uses array; we store single string. Wrap on output. |
 | `place_id` | string | `place_id` | Direct match. |

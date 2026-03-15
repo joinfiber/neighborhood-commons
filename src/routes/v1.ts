@@ -277,6 +277,110 @@ function toICalDate(eventAt: string, timezone: string): string {
   return `${dateStr}T${timeStr}`;
 }
 
+/**
+ * Build a VTIMEZONE block for an IANA timezone by probing the Intl API for
+ * UTC offset transitions within a given year. If the timezone observes DST,
+ * emits both STANDARD and DAYLIGHT sub-components with the transition dates.
+ * If no transitions are found (e.g., America/Phoenix), emits STANDARD only.
+ */
+function buildVTimezone(tzid: string, year: number): string[] {
+  // Probe the 1st and 15th of each month to find offset transitions
+  type OffsetInfo = { offset: number; abbr: string; date: Date };
+  const probes: OffsetInfo[] = [];
+  for (let m = 0; m < 12; m++) {
+    for (const day of [1, 15]) {
+      const d = new Date(Date.UTC(year, m, day, 12, 0, 0));
+      probes.push({ offset: getUtcOffset(d, tzid), abbr: getOffsetAbbr(d, tzid), date: d });
+    }
+  }
+
+  // Find transitions: where offset changes between consecutive probes
+  const transitions: { from: OffsetInfo; to: OffsetInfo }[] = [];
+  for (let i = 1; i < probes.length; i++) {
+    if ((probes[i] as OffsetInfo).offset !== (probes[i - 1] as OffsetInfo).offset) {
+      transitions.push({ from: probes[i - 1] as OffsetInfo, to: probes[i] as OffsetInfo });
+    }
+  }
+
+  const lines: string[] = ['BEGIN:VTIMEZONE', `TZID:${tzid}`];
+
+  if (transitions.length === 0) {
+    // No DST — emit a single STANDARD component
+    const info = probes[0] as OffsetInfo;
+    lines.push('BEGIN:STANDARD');
+    lines.push(`DTSTART:${year}0101T000000`);
+    lines.push(`TZOFFSETFROM:${formatICalOffset(info.offset)}`);
+    lines.push(`TZOFFSETTO:${formatICalOffset(info.offset)}`);
+    lines.push(`TZNAME:${info.abbr}`);
+    lines.push('END:STANDARD');
+  } else {
+    // Binary-search for the exact transition date between each pair
+    for (const { from, to } of transitions) {
+      const transDate = findTransitionDate(from.date, to.date, tzid);
+      const isDaylight = to.offset > from.offset;
+      const component = isDaylight ? 'DAYLIGHT' : 'STANDARD';
+      lines.push(`BEGIN:${component}`);
+      lines.push(`DTSTART:${formatICalLocalDate(transDate, tzid)}`);
+      lines.push(`TZOFFSETFROM:${formatICalOffset(from.offset)}`);
+      lines.push(`TZOFFSETTO:${formatICalOffset(to.offset)}`);
+      lines.push(`TZNAME:${to.abbr}`);
+      lines.push(`END:${component}`);
+    }
+  }
+
+  lines.push('END:VTIMEZONE');
+  return lines;
+}
+
+/** Get UTC offset in minutes for a Date in a given timezone */
+function getUtcOffset(date: Date, timezone: string): number {
+  const utcStr = date.toLocaleString('en-US', { timeZone: 'UTC' });
+  const tzStr = date.toLocaleString('en-US', { timeZone: timezone });
+  return (new Date(tzStr).getTime() - new Date(utcStr).getTime()) / 60000;
+}
+
+/** Get short timezone abbreviation (e.g., EST, EDT) */
+function getOffsetAbbr(date: Date, timezone: string): string {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: timezone, timeZoneName: 'short' }).formatToParts(date);
+  return parts.find(p => p.type === 'timeZoneName')?.value || timezone;
+}
+
+/** Binary-search for the exact hour a timezone transition occurs */
+function findTransitionDate(before: Date, after: Date, timezone: string): Date {
+  let lo = before.getTime();
+  let hi = after.getTime();
+  const targetOffset = getUtcOffset(after, timezone);
+  // Narrow to within 1 hour
+  while (hi - lo > 3600000) {
+    const mid = lo + Math.floor((hi - lo) / 2);
+    const midDate = new Date(mid);
+    if (getUtcOffset(midDate, timezone) === targetOffset) {
+      hi = mid;
+    } else {
+      lo = mid;
+    }
+  }
+  return new Date(hi);
+}
+
+/** Format offset in minutes as iCal offset string: +0500, -0430 */
+function formatICalOffset(offsetMinutes: number): string {
+  const sign = offsetMinutes >= 0 ? '+' : '-';
+  const abs = Math.abs(offsetMinutes);
+  const h = Math.floor(abs / 60).toString().padStart(2, '0');
+  const m = (abs % 60).toString().padStart(2, '0');
+  return `${sign}${h}${m}`;
+}
+
+/** Format a Date as iCal local datetime in a given timezone: 20260309T020000 */
+function formatICalLocalDate(date: Date, timezone: string): string {
+  const dateStr = date.toLocaleDateString('en-CA', { timeZone: timezone }).replace(/-/g, '');
+  const timeStr = date.toLocaleTimeString('en-GB', {
+    timeZone: timezone, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).replace(/:/g, '');
+  return `${dateStr}T${timeStr}`;
+}
+
 /** Escape special characters for iCal text values */
 function escapeICalText(text: string): string {
   return text.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
@@ -323,6 +427,12 @@ export async function icsHandler(_req: import('express').Request, res: import('e
 
     const deduped = deduplicateSeries((events || []) as unknown as Record<string, unknown>[]);
 
+    // Collect unique timezones to emit VTIMEZONE blocks (RFC 5545 §3.6.5)
+    const timezones = new Set<string>();
+    for (const row of deduped) {
+      timezones.add((row.event_timezone as string) || 'America/New_York');
+    }
+
     const lines: string[] = [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
@@ -331,6 +441,12 @@ export async function icsHandler(_req: import('express').Request, res: import('e
       'METHOD:PUBLISH',
       'X-WR-CALNAME:Neighborhood Commons Events',
     ];
+
+    // Emit VTIMEZONE for each referenced timezone
+    const year = new Date().getFullYear();
+    for (const tz of timezones) {
+      lines.push(...buildVTimezone(tz, year));
+    }
 
     for (const row of deduped) {
       const tz = (row.event_timezone as string) || 'America/New_York';
