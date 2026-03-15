@@ -11,6 +11,256 @@ interface AdminAllEventsScreenProps {
   onViewAccount: (accountId: string) => void;
 }
 
+function formatDate(dateStr: string): string {
+  const d = new Date(dateStr + 'T12:00:00');
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+function formatTime(time: string): string {
+  const [h, m] = time.split(':');
+  const hour = parseInt(h!, 10);
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  const h12 = hour % 12 || 12;
+  return `${h12}:${m} ${ampm}`;
+}
+
+function recurrenceLabel(recurrence: string): string | null {
+  if (recurrence === 'none' || !recurrence) return null;
+  if (recurrence === 'daily') return 'Daily';
+  if (recurrence === 'weekly') return 'Weekly';
+  if (recurrence === 'biweekly') return 'Every 2 weeks';
+  if (recurrence === 'monthly') return 'Monthly';
+  if (recurrence.startsWith('weekly_days:')) {
+    const days = recurrence.replace('weekly_days:', '').split(',');
+    const dayNames: Record<string, string> = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
+    return days.map((d) => dayNames[d] || d).join(', ');
+  }
+  if (recurrence.startsWith('ordinal_weekday:')) {
+    const [, ordStr, day] = recurrence.split(':');
+    const ord = parseInt(ordStr!, 10);
+    const ordinals = ['', '1st', '2nd', '3rd', '4th'];
+    const dayName = day ? day.charAt(0).toUpperCase() + day.slice(1) : '';
+    return `${ordinals[ord] || ord} ${dayName}`;
+  }
+  return null;
+}
+
+// =============================================================================
+// TYPES
+// =============================================================================
+
+interface EventGroup { type: 'single'; event: AdminPortalEvent }
+interface SeriesGroup {
+  type: 'series';
+  seriesId: string;
+  events: AdminPortalEvent[];
+  nextEvent: AdminPortalEvent;
+}
+type DashboardItem = EventGroup | SeriesGroup;
+
+// =============================================================================
+// CARD COMPONENTS
+// =============================================================================
+
+function AdminEventCard({ event, onClick, selected, onToggle, selectMode, today }: {
+  event: AdminPortalEvent;
+  onClick: () => void;
+  selected: boolean;
+  onToggle: (id: string) => void;
+  selectMode: boolean;
+  today: string;
+}) {
+  const cat = PORTAL_CATEGORIES[event.category as PortalCategory];
+  const isPast = event.event_date < today;
+
+  return (
+    <div
+      className="interactive-row"
+      style={{
+        background: colors.card,
+        border: `1px solid ${selected ? colors.accent : colors.border}`,
+        borderRadius: '10px',
+        padding: '14px 16px',
+        cursor: 'pointer',
+        transition: 'border-color 0.15s',
+        opacity: isPast ? 0.5 : 1,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '6px',
+        minHeight: '90px',
+      }}
+      onClick={() => selectMode ? onToggle(event.id) : onClick()}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+        <div style={{ fontSize: '15px', color: colors.cream, fontWeight: 500, lineHeight: 1.3 }}>
+          {event.title}
+        </div>
+        {selectMode && (
+          <div
+            onClick={(e) => { e.stopPropagation(); onToggle(event.id); }}
+            style={{
+              width: '18px', height: '18px', borderRadius: '3px',
+              border: `1.5px solid ${selected ? colors.accent : colors.dim}`,
+              background: selected ? colors.accent : 'transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0, cursor: 'pointer',
+            }}
+          >
+            {selected && (
+              <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                <path d="M2 6l3 3 5-5" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
+          </div>
+        )}
+      </div>
+      <div style={{ fontSize: '13px', color: colors.muted }}>
+        {event.portal_accounts?.business_name || '—'} · {formatDate(event.event_date)} · {formatTime(event.start_time)}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+        {cat && <span style={{ fontSize: '11px', color: colors.dim }}>{cat.label}</span>}
+        {event.recurrence !== 'none' && (
+          <span style={{ fontSize: '11px', color: colors.dim }}>· {event.recurrence}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AdminSeriesCard({ group, onClick, selectedIds, onToggle, selectMode, today }: {
+  group: SeriesGroup;
+  onClick: (event: AdminPortalEvent) => void;
+  selectedIds: Set<string>;
+  onToggle: (id: string) => void;
+  selectMode: boolean;
+  today: string;
+}) {
+  const { nextEvent, events } = group;
+  const cat = PORTAL_CATEGORIES[nextEvent.category as PortalCategory];
+  const upcomingCount = events.filter((e) => e.event_date >= today).length;
+  const totalCount = events.length;
+  const allSelected = events.every((e) => selectedIds.has(e.id));
+  const someSelected = events.some((e) => selectedIds.has(e.id));
+  const rec = recurrenceLabel(nextEvent.recurrence);
+
+  const toggleAll = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    for (const ev of events) onToggle(ev.id);
+  };
+
+  return (
+    <div
+      className="interactive-row"
+      style={{
+        background: colors.card,
+        border: `1px solid ${someSelected ? colors.accent : colors.border}`,
+        borderRadius: '10px',
+        padding: '14px 16px',
+        cursor: 'pointer',
+        transition: 'border-color 0.15s',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '6px',
+        minHeight: '90px',
+      }}
+      onClick={() => selectMode ? toggleAll({ stopPropagation: () => {} } as React.MouseEvent) : onClick(nextEvent)}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+        <div style={{ fontSize: '15px', color: colors.cream, fontWeight: 500, lineHeight: 1.3 }}>
+          {nextEvent.title}
+        </div>
+        {selectMode && (
+          <div
+            onClick={toggleAll}
+            style={{
+              width: '18px', height: '18px', borderRadius: '3px',
+              border: `1.5px solid ${allSelected ? colors.accent : colors.dim}`,
+              background: allSelected ? colors.accent : 'transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0, cursor: 'pointer',
+            }}
+          >
+            {allSelected && (
+              <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                <path d="M2 6l3 3 5-5" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
+          </div>
+        )}
+      </div>
+      <div style={{ fontSize: '13px', color: colors.muted }}>
+        {nextEvent.portal_accounts?.business_name || '—'} · Next: {formatDate(nextEvent.event_date)} · {formatTime(nextEvent.start_time)}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+        {rec && (
+          <span style={{
+            fontSize: '11px', color: colors.accent, background: colors.accentDim,
+            border: `1px solid ${colors.accentBorder}`, borderRadius: '10px', padding: '1px 8px',
+          }}>{rec}</span>
+        )}
+        <span style={{ fontSize: '11px', color: colors.dim }}>
+          {upcomingCount} upcoming · {totalCount} total
+        </span>
+        {cat && <span style={{ fontSize: '11px', color: colors.dim }}>· {cat.label}</span>}
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
+// GROUPING
+// =============================================================================
+
+function buildItems(events: AdminPortalEvent[], today: string): { upcoming: DashboardItem[]; past: DashboardItem[] } {
+  const seriesMap = new Map<string, AdminPortalEvent[]>();
+  const singles: AdminPortalEvent[] = [];
+
+  for (const e of events) {
+    if (e.series_id) {
+      const arr = seriesMap.get(e.series_id) || [];
+      arr.push(e);
+      seriesMap.set(e.series_id, arr);
+    } else {
+      singles.push(e);
+    }
+  }
+
+  const upcomingItems: DashboardItem[] = [];
+  const pastItems: DashboardItem[] = [];
+
+  for (const [seriesId, seriesEvents] of seriesMap) {
+    seriesEvents.sort((a, b) => a.event_date.localeCompare(b.event_date));
+    const upcomingInSeries = seriesEvents.filter((e) => e.event_date >= today);
+    const nextEvent = upcomingInSeries[0] || seriesEvents[seriesEvents.length - 1]!;
+    const group: SeriesGroup = { type: 'series', seriesId, events: seriesEvents, nextEvent };
+    if (upcomingInSeries.length > 0) upcomingItems.push(group);
+    else pastItems.push(group);
+  }
+
+  for (const e of singles) {
+    const item: EventGroup = { type: 'single', event: e };
+    if (e.event_date >= today) upcomingItems.push(item);
+    else pastItems.push(item);
+  }
+
+  upcomingItems.sort((a, b) => {
+    const dateA = a.type === 'series' ? a.nextEvent.event_date : a.event.event_date;
+    const dateB = b.type === 'series' ? b.nextEvent.event_date : b.event.event_date;
+    return dateA.localeCompare(dateB);
+  });
+  pastItems.sort((a, b) => {
+    const dateA = a.type === 'series' ? a.nextEvent.event_date : a.event.event_date;
+    const dateB = b.type === 'series' ? b.nextEvent.event_date : b.event.event_date;
+    return dateB.localeCompare(dateA);
+  });
+
+  return { upcoming: upcomingItems, past: pastItems };
+}
+
+// =============================================================================
+// MAIN SCREEN
+// =============================================================================
+
 type Filter = 'upcoming' | 'past' | 'all';
 
 export function AdminAllEventsScreen({ onBack, onViewAccount }: AdminAllEventsScreenProps) {
@@ -68,15 +318,6 @@ export function AdminAllEventsScreen({ onBack, onViewAccount }: AdminAllEventsSc
     });
   };
 
-  const selectAllVisible = () => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      const allSelected = filtered.every((e) => next.has(e.id));
-      for (const e of filtered) allSelected ? next.delete(e.id) : next.add(e.id);
-      return next;
-    });
-  };
-
   const handleBulkApply = async (updates: Record<string, unknown>) => {
     setApplying(true);
     const res = await adminBatchUpdateEvents(Array.from(selectedIds), updates);
@@ -107,7 +348,40 @@ export function AdminAllEventsScreen({ onBack, onViewAccount }: AdminAllEventsSc
     }
   }, [toast]);
 
-  const allVisibleSelected = filtered.length > 0 && filtered.every((e) => selectedIds.has(e.id));
+  // Build grouped items
+  const { upcoming, past } = buildItems(filtered, today);
+  const displayItems = filter === 'upcoming' ? upcoming : filter === 'past' ? past : [...upcoming, ...past];
+
+  const renderGrid = (items: DashboardItem[]) => (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '8px' }}>
+      {items.map((item) => {
+        if (item.type === 'series') {
+          return (
+            <AdminSeriesCard
+              key={item.seriesId}
+              group={item}
+              onClick={(e) => e.portal_account_id && onViewAccount(e.portal_account_id)}
+              selectedIds={selectedIds}
+              onToggle={toggleSelect}
+              selectMode={selectMode}
+              today={today}
+            />
+          );
+        }
+        return (
+          <AdminEventCard
+            key={item.event.id}
+            event={item.event}
+            onClick={() => item.event.portal_account_id && onViewAccount(item.event.portal_account_id)}
+            selected={selectedIds.has(item.event.id)}
+            onToggle={toggleSelect}
+            selectMode={selectMode}
+            today={today}
+          />
+        );
+      })}
+    </div>
+  );
 
   return (
     <div style={styles.page}>
@@ -116,7 +390,7 @@ export function AdminAllEventsScreen({ onBack, onViewAccount }: AdminAllEventsSc
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
           <button type="button" style={styles.buttonText} onClick={onBack}>← Back</button>
           <h1 style={styles.pageTitle}>All Events</h1>
-          <span style={{ fontSize: '14px', color: colors.muted }}>({filtered.length})</span>
+          <span style={{ fontSize: '14px', color: colors.muted }}>({displayItems.length} groups)</span>
           <div style={{ flex: 1 }} />
           {events.length > 0 && (
             selectMode ? (
@@ -134,6 +408,7 @@ export function AdminAllEventsScreen({ onBack, onViewAccount }: AdminAllEventsSc
                       padding: '6px 12px',
                       fontSize: '12px',
                       cursor: 'pointer',
+                      fontFamily: 'inherit',
                     }}
                   >
                     Delete ({selectedIds.size})
@@ -142,12 +417,7 @@ export function AdminAllEventsScreen({ onBack, onViewAccount }: AdminAllEventsSc
                 <button
                   type="button"
                   onClick={exitSelectMode}
-                  style={{
-                    ...styles.buttonSecondary,
-                    width: 'auto',
-                    padding: '6px 14px',
-                    fontSize: '12px',
-                  }}
+                  style={{ ...styles.buttonSecondary, width: 'auto', padding: '6px 14px', fontSize: '12px' }}
                 >
                   Done
                 </button>
@@ -156,12 +426,7 @@ export function AdminAllEventsScreen({ onBack, onViewAccount }: AdminAllEventsSc
               <button
                 type="button"
                 onClick={() => setSelectMode(true)}
-                style={{
-                  ...styles.buttonSecondary,
-                  width: 'auto',
-                  padding: '6px 14px',
-                  fontSize: '12px',
-                }}
+                style={{ ...styles.buttonSecondary, width: 'auto', padding: '6px 14px', fontSize: '12px' }}
               >
                 Edit multiple
               </button>
@@ -199,10 +464,7 @@ export function AdminAllEventsScreen({ onBack, onViewAccount }: AdminAllEventsSc
           <div style={{
             background: toast.type === 'success' ? colors.successDim : '#fef2f2',
             color: toast.type === 'success' ? colors.success : colors.error,
-            borderRadius: '8px',
-            padding: '8px 12px',
-            fontSize: '13px',
-            marginBottom: '12px',
+            borderRadius: '8px', padding: '8px 12px', fontSize: '13px', marginBottom: '12px',
           }}>
             {toast.text}
           </div>
@@ -218,103 +480,38 @@ export function AdminAllEventsScreen({ onBack, onViewAccount }: AdminAllEventsSc
           />
         )}
 
-        {/* Select all toggle */}
-        {selectMode && filtered.length > 0 && (
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '6px' }}>
-            <button
-              type="button"
-              onClick={selectAllVisible}
-              style={{
-                background: 'none',
-                border: 'none',
-                fontSize: '12px',
-                color: colors.dim,
-                cursor: 'pointer',
-                padding: '2px 4px',
-              }}
-            >
-              {allVisibleSelected ? 'Deselect all' : `Select all ${filtered.length}`}
-            </button>
-          </div>
-        )}
-
+        {/* Event grid */}
         {loading ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <EventRowSkeleton />
             <EventRowSkeleton />
             <EventRowSkeleton />
           </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            {filtered.map((event) => {
-              const selected = selectedIds.has(event.id);
-              return (
-                <button
-                  key={event.id}
-                  type="button"
-                  style={{
-                    ...styles.eventRow,
-                    display: 'grid',
-                    gridTemplateColumns: selectMode ? 'auto 1fr auto' : '1fr auto',
-                    gap: '12px',
-                    alignItems: 'center',
-                    background: 'transparent',
-                    border: `1px solid ${colors.border}`,
-                    borderLeft: selected ? `3px solid ${colors.accent}` : `1px solid ${colors.border}`,
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    width: '100%',
-                    opacity: event.event_date < today ? 0.5 : 1,
-                  }}
-                  className="interactive-row"
-                  onClick={() => selectMode
-                    ? toggleSelect(event.id)
-                    : event.portal_account_id && onViewAccount(event.portal_account_id)
-                  }
-                >
-                  {selectMode && (
-                    <div style={{
-                      width: '18px',
-                      height: '18px',
-                      borderRadius: '3px',
-                      border: `1.5px solid ${selected ? colors.accent : colors.dim}`,
-                      background: selected ? colors.accent : 'transparent',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                      transition: 'all 0.1s',
-                    }}>
-                      {selected && (
-                        <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-                          <path d="M2 6l3 3 5-5" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      )}
-                    </div>
-                  )}
-                  <div>
-                    <div style={{ fontSize: '16px', fontWeight: 500, color: colors.cream }}>{event.title}</div>
-                    <div style={{ fontSize: '14px', color: colors.muted }}>
-                      {event.portal_accounts?.business_name || '—'} · {event.venue_name} · {event.event_date} · {event.start_time}
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                    <span style={{ ...styles.pill, ...styles.pillInactive, fontSize: '11px', padding: '2px 8px' }}>
-                      {PORTAL_CATEGORIES[event.category as PortalCategory]?.label || event.category}
-                    </span>
-                    {event.recurrence !== 'none' && (
-                      <span style={{ fontSize: '11px', color: colors.dim }}>{event.recurrence}</span>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-            {filtered.length === 0 && (
-              <div style={{ color: colors.dim, fontSize: '14px', padding: '24px', textAlign: 'center' }}>
-                {search ? 'No events match your search' : 'No events yet'}
+        ) : displayItems.length === 0 ? (
+          <div style={{ color: colors.dim, fontSize: '14px', padding: '24px', textAlign: 'center' }}>
+            {search ? 'No events match your search' : 'No events yet'}
+          </div>
+        ) : filter === 'all' ? (
+          <>
+            {upcoming.length > 0 && (
+              <div style={{ marginBottom: '20px' }}>
+                <div style={{ fontSize: '12px', fontWeight: 500, color: colors.dim, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '10px' }}>
+                  Upcoming ({upcoming.length})
+                </div>
+                {renderGrid(upcoming)}
               </div>
             )}
-          </div>
+            {past.length > 0 && (
+              <div style={{ marginBottom: '20px', opacity: 0.6 }}>
+                <div style={{ fontSize: '12px', fontWeight: 500, color: colors.dim, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '10px' }}>
+                  Past ({past.length})
+                </div>
+                {renderGrid(past)}
+              </div>
+            )}
+          </>
+        ) : (
+          renderGrid(displayItems)
         )}
 
         {/* Delete confirmation */}
