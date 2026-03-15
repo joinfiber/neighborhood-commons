@@ -380,10 +380,14 @@ ${imageUrl ? `<img class="nc-event-hero" src="${escapeAttr(imageUrl)}" alt="${es
     ${ICON.ticket}
     <span class="nc-event-meta-text">${escapeHtml(price)}</span>
   </div>` : ''}
-  ${linkUrl ? `<div class="nc-event-meta-row">
+  ${linkUrl ? (() => {
+    let hostname = linkUrl;
+    try { hostname = new URL(linkUrl).hostname; } catch { /* malformed URL — show raw */ }
+    return `<div class="nc-event-meta-row">
     ${ICON.link}
-    <span class="nc-event-meta-text"><a href="${escapeAttr(linkUrl)}" target="_blank" rel="noopener">${escapeHtml(new URL(linkUrl).hostname)}</a></span>
-  </div>` : ''}
+    <span class="nc-event-meta-text"><a href="${escapeAttr(linkUrl)}" target="_blank" rel="noopener">${escapeHtml(hostname)}</a></span>
+  </div>`;
+  })() : ''}
   ${accessible ? `<div class="nc-event-meta-row">
     ${ICON.accessible}
     <span class="nc-accessible">Wheelchair accessible</span>
@@ -425,7 +429,7 @@ router.get('/venues/:slug',async (req, res, next) => {
     const slug = req.params.slug.toLowerCase();
 
     // Validate slug format
-    if (!/^[a-z0-9][a-z0-9-]*[a-z0-9]$/.test(slug) && slug.length < 2) {
+    if (!/^[a-z0-9][a-z0-9-]*[a-z0-9]$/.test(slug) || slug.length < 2) {
       res.status(404).send(render404()); return;
     }
 

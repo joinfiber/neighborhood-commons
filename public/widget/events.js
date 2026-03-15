@@ -43,12 +43,13 @@
   // For now, we filter client-side after fetch if venue is specified
 
   // Category colors (must match server-side categories.ts)
+  // Keys use underscores to match the v1 API response format (category: ["live_music"])
   var COLORS = {
-    'live-music': '#E85D3A', 'dj-dance': '#A855F7', 'comedy': '#F59E0B',
-    'trivia': '#6366F1', 'karaoke': '#EC4899', 'open-mic': '#8B5CF6',
-    'art-gallery': '#B47AEA', 'workshop-class': '#F97316', 'happy-hour': '#F59E0B',
-    'food-drink': '#E8943E', 'market-popup': '#14B8A6', 'community': '#22C55E',
-    'sports': '#3B82F6', 'film-screenings': '#EF4444', 'other': '#6B7280'
+    'live_music': '#E85D3A', 'dj_dance': '#A855F7', 'comedy': '#F59E0B',
+    'trivia': '#6366F1', 'karaoke': '#EC4899', 'open_mic': '#8B5CF6',
+    'art_gallery': '#B47AEA', 'workshop_class': '#F97316', 'happy_hour': '#F59E0B',
+    'food_drink': '#E8943E', 'market_popup': '#14B8A6', 'community': '#22C55E',
+    'sports': '#3B82F6', 'film_screenings': '#EF4444', 'other': '#6B7280'
   };
 
   // CSS for the widget (injected into Shadow DOM)
@@ -164,7 +165,7 @@
         var time = fmtTime(ev.start, tz);
         var catSlug = (ev.category && ev.category[0]) || 'other';
         var catColor = COLORS[catSlug] || '#6B7280';
-        var catLabel = catSlug.replace(/-/g, ' ');
+        var catLabel = catSlug.replace(/_/g, ' ');
         var venueName = ev.location && ev.location.name ? ev.location.name : '';
         var eventUrl = apiBase + '/events/' + ev.id;
 
