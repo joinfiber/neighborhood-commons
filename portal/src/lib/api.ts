@@ -109,6 +109,7 @@ export async function fetchAccount() {
 }
 
 export async function updateProfile(params: {
+  business_name?: string;
   default_venue_name?: string;
   default_place_id?: string;
   default_address?: string;

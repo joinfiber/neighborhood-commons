@@ -13,6 +13,7 @@ import { AdminCreateEventScreen } from './screens/AdminCreateEventScreen';
 import { AdminEditEventScreen } from './screens/AdminEditEventScreen';
 import { AdminAllEventsScreen } from './screens/AdminAllEventsScreen';
 import { DevelopersScreen } from './screens/DevelopersScreen';
+import { ProfileScreen } from './screens/ProfileScreen';
 import { TermsScreen } from './screens/TermsScreen';
 import { Toast } from './components/Toast';
 import { PlaceAutocomplete } from './components/PlaceAutocomplete';
@@ -281,6 +282,16 @@ export default function App() {
   // BUSINESS ROUTES
   // =========================================================================
   const businessContent = (() => {
+    if (route.screen === 'profile') {
+      return (
+        <ProfileScreen
+          account={account}
+          onBack={() => navigate('#/')}
+          onAccountUpdated={(updated) => setAccount(updated)}
+        />
+      );
+    }
+
     if (route.screen === 'create-event') {
       return (
         <CreateEventScreen
@@ -318,6 +329,7 @@ export default function App() {
         account={account}
         onCreateEvent={() => navigate('#/events/new')}
         onEditEvent={(event) => navigate(`#/events/${event.id}/edit`)}
+        onNavigateProfile={() => navigate('#/profile')}
         onSignOut={() => signOut()}
         onSignOutEverywhere={() => signOut('global')}
       />

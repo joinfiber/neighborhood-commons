@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useBreakpoint } from '../hooks/useBreakpoint';
 import { styles, colors } from '../lib/styles';
 import type { EventFormData, PlaceResult } from '../lib/types';
 import { PORTAL_CATEGORIES, PORTAL_CATEGORY_KEYS } from '../lib/categories';
@@ -134,6 +135,7 @@ export function EventForm({
     }
   }
 
+  const { isMobile } = useBreakpoint();
   const label = submitLabel || (mode === 'edit' ? 'Save Changes' : 'Post Event');
   const isValid = !!(title && venueName && eventDate && startTime && category);
 
@@ -173,7 +175,7 @@ export function EventForm({
           </div>
 
           {/* ── Venue + Address ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px', marginBottom: '16px' }}>
             <div>
               <label style={styles.formLabel}>Venue</label>
               <PlaceAutocomplete
@@ -203,7 +205,7 @@ export function EventForm({
 
           {/* ── Times ── */}
           <div style={{ marginBottom: '16px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>
               <div>
                 <label style={styles.formLabel}>Start</label>
                 <TimePicker value={startTime || '19:00'} onChange={setStartTime} />
@@ -366,7 +368,7 @@ export function EventForm({
           </div>
 
           {/* ── Price + RSVP + Link ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px', marginBottom: '16px' }}>
             <div>
               <label style={styles.formLabel}>Price</label>
               <input
@@ -482,14 +484,23 @@ export function EventForm({
         </div>
 
         {/* Submit */}
-        <button
-          type="submit"
-          className="btn-primary"
-          style={{ ...styles.buttonPrimary, marginTop: '16px' }}
-          disabled={submitting || !isValid}
-        >
-          {submitting ? (mode === 'edit' ? 'Saving...' : 'Posting...') : label}
-        </button>
+        <div style={isMobile ? {
+          position: 'sticky',
+          bottom: 0,
+          background: colors.bg,
+          padding: '12px 0',
+          marginTop: '8px',
+          zIndex: 10,
+        } : { marginTop: '16px' }}>
+          <button
+            type="submit"
+            className="btn-primary"
+            style={styles.buttonPrimary}
+            disabled={submitting || !isValid}
+          >
+            {submitting ? (mode === 'edit' ? 'Saving...' : 'Posting...') : label}
+          </button>
+        </div>
       </form>
     </>
   );

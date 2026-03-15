@@ -14,6 +14,7 @@ interface RoutePattern {
 const routes: RoutePattern[] = [
   { pattern: /^#\/terms$/, screen: 'terms', paramNames: [] },
   { pattern: /^#\/developers$/, screen: 'developers', paramNames: [] },
+  { pattern: /^#\/profile$/, screen: 'profile', paramNames: [] },
   { pattern: /^#\/events\/new$/, screen: 'create-event', paramNames: [] },
   { pattern: /^#\/events\/([^/]+)\/edit$/, screen: 'edit-event', paramNames: ['id'] },
   { pattern: /^#\/admin\/accounts\/([^/]+)$/, screen: 'admin-account', paramNames: ['id'] },
