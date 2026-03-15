@@ -27,6 +27,7 @@ import internalRoutes from './routes/internal.js';
 import cronRoutes from './routes/cron.js';
 import placesRoutes from './routes/places.js';
 import developerRoutes from './routes/developers.js';
+import contributeRoutes from './routes/contribute.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -145,6 +146,9 @@ export function createApp(): Express {
 
   // ─── Developer Registration ─────────────────────────────────────
   app.use('/api/v1/developers', developerRoutes);
+
+  // ─── Contribute API (external app writes) ─────────────────────
+  app.use('/api/v1/contribute', contributeRoutes);
 
   // ─── Places (venue search for portal) ──────────────────────────
   app.use('/api/places', placesRoutes);

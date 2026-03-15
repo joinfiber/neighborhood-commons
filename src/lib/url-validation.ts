@@ -84,6 +84,53 @@ function isPrivateIPv6(ip: string): boolean {
  *
  * @throws Error if the URL is unsafe
  */
+/**
+ * Validate a feed URL is safe to fetch.
+ * Same SSRF protection as webhooks, but allows HTTP (many iCal feeds are HTTP-only).
+ *
+ * @throws Error if the URL is unsafe
+ */
+export async function validateFeedUrl(url: string): Promise<void> {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error('Invalid URL');
+  }
+
+  // Allow HTTP and HTTPS for feeds — block everything else
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    throw new Error('URL must use HTTP or HTTPS');
+  }
+
+  // Block known private hostnames
+  const hostname = parsed.hostname.toLowerCase();
+  if (BLOCKED_HOSTNAMES.has(hostname)) {
+    throw new Error('URL hostname is not allowed');
+  }
+
+  // Resolve hostname to IP address
+  try {
+    const { address, family } = await dns.lookup(hostname);
+
+    if (family === 4 && isPrivateIPv4(address)) {
+      throw new Error('URL resolves to a private IP address');
+    }
+
+    if (family === 6 && isPrivateIPv6(address)) {
+      throw new Error('URL resolves to a private IP address');
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('private IP')) {
+      throw err;
+    }
+    if (err instanceof Error && (err.message.includes('ENOTFOUND') || err.message.includes('EAI_AGAIN'))) {
+      throw new Error('URL hostname could not be resolved');
+    }
+    throw err;
+  }
+}
+
 export async function validateWebhookUrl(url: string): Promise<void> {
   let parsed: URL;
   try {
