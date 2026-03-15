@@ -71,8 +71,7 @@ type DashboardItem = EventGroup | SeriesGroup;
 // ACCOUNT DROPDOWN (gear menu)
 // =============================================================================
 
-function AccountDropdown({ account, onNavigateProfile, onSignOut, onSignOutEverywhere, onClose }: {
-  account: PortalAccount;
+function AccountDropdown({ onNavigateProfile, onSignOut, onSignOutEverywhere, onClose }: {
   onNavigateProfile: () => void;
   onSignOut: () => void;
   onSignOutEverywhere: () => void;
@@ -619,7 +618,6 @@ export function DashboardScreen({ account, onCreateEvent, onEditEvent, onNavigat
           {/* Account dropdown */}
           {gearOpen && (
             <AccountDropdown
-              account={account}
               onNavigateProfile={onNavigateProfile}
               onSignOut={onSignOut}
               onSignOutEverywhere={onSignOutEverywhere}
