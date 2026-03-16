@@ -3,6 +3,7 @@ import { PORTAL_CATEGORIES, type PortalCategory } from '../lib/categories';
 import { colors, styles } from '../lib/styles';
 import { importPreview, importConfirm } from '../lib/api';
 import type { ImportPreviewEvent, ImportPreviewResponse, ImportConfirmResponse, PortalAccount } from '../lib/api';
+import { ImageCropPreview } from '../components/ImageCropPreview';
 
 // =============================================================================
 // TYPES
@@ -60,6 +61,7 @@ export function ImportEventsScreen({ onBack, onDone }: ImportEventsScreenProps) 
   // Step 2: preview
   const [preview, setPreview] = useState<ImportPreviewResponse | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [focalYMap, setFocalYMap] = useState<Record<number, number>>({});
 
   // Step 3: result
   const [result, setResult] = useState<ImportConfirmResponse | null>(null);
@@ -105,12 +107,23 @@ export function ImportEventsScreen({ onBack, onDone }: ImportEventsScreenProps) 
 
     setLoading(true);
     setError(null);
+
+    // Build overrides for events that have custom focal points
+    const overrides: Record<string, { image_focal_y?: number }> = {};
+    for (const idx of selected) {
+      const fy = focalYMap[idx];
+      if (fy !== undefined) {
+        overrides[String(idx)] = { image_focal_y: fy };
+      }
+    }
+
     const res = await importConfirm({
       url: preview.source_url,
       source_type: preview.source_type,
       category,
       event_timezone: timezone,
       events: Array.from(selected),
+      overrides: Object.keys(overrides).length > 0 ? overrides : undefined,
     });
     setLoading(false);
 
@@ -191,6 +204,8 @@ export function ImportEventsScreen({ onBack, onDone }: ImportEventsScreenProps) 
             category={category}
             timezone={timezone}
             loading={loading}
+            focalYMap={focalYMap}
+            onFocalYChange={(idx, y) => setFocalYMap((prev) => ({ ...prev, [idx]: y }))}
             onToggle={toggleEvent}
             onToggleAll={toggleAll}
             onConfirm={handleConfirm}
@@ -291,12 +306,14 @@ function InputStep({ url, setUrl, category, setCategory, timezone, setTimezone, 
 // STEP 2: PREVIEW
 // =============================================================================
 
-function PreviewStep({ preview, selected, category, timezone, loading, onToggle, onToggleAll, onConfirm, onBack }: {
+function PreviewStep({ preview, selected, category, timezone, loading, focalYMap, onFocalYChange, onToggle, onToggleAll, onConfirm, onBack }: {
   preview: ImportPreviewResponse;
   selected: Set<number>;
   category: string;
   timezone: string;
   loading: boolean;
+  focalYMap: Record<number, number>;
+  onFocalYChange: (index: number, y: number) => void;
   onToggle: (index: number) => void;
   onToggleAll: () => void;
   onConfirm: () => void;
@@ -386,6 +403,8 @@ function PreviewStep({ preview, selected, category, timezone, loading, onToggle,
             event={ev}
             timezone={timezone}
             checked={selected.has(ev.index)}
+            focalY={focalYMap[ev.index] ?? 0.5}
+            onFocalYChange={(y) => onFocalYChange(ev.index, y)}
             onToggle={() => onToggle(ev.index)}
           />
         ))}
@@ -420,82 +439,173 @@ function PreviewStep({ preview, selected, category, timezone, loading, onToggle,
 // PREVIEW EVENT ROW
 // =============================================================================
 
-function PreviewEventRow({ event, timezone, checked, onToggle }: {
+function PreviewEventRow({ event, timezone, checked, focalY, onFocalYChange, onToggle }: {
   event: ImportPreviewEvent;
   timezone: string;
   checked: boolean;
+  focalY: number;
+  onFocalYChange: (y: number) => void;
   onToggle: () => void;
 }) {
+  const [showCrop, setShowCrop] = useState(false);
   const tz = event.timezone || timezone;
   const disabled = event.already_exists;
+  const hasImage = !!event.image_url;
 
   return (
     <div
-      onClick={disabled ? undefined : onToggle}
       style={{
         background: colors.card,
         border: `1px solid ${checked ? colors.accent : colors.border}`,
         borderRadius: '10px',
-        padding: '12px 14px',
-        cursor: disabled ? 'default' : 'pointer',
+        overflow: 'hidden',
         opacity: disabled ? 0.45 : 1,
         transition: 'border-color 0.15s',
-        display: 'flex',
-        gap: '12px',
-        alignItems: 'flex-start',
       }}
     >
-      {/* Checkbox */}
+      {/* Image thumbnail strip — shows how the image looks with current focal point */}
+      {hasImage && checked && (
+        <div
+          onClick={(e) => { e.stopPropagation(); if (!disabled) setShowCrop(!showCrop); }}
+          style={{
+            position: 'relative',
+            width: '100%',
+            height: '80px',
+            overflow: 'hidden',
+            cursor: disabled ? 'default' : 'pointer',
+          }}
+        >
+          <img
+            src={event.image_url!}
+            alt=""
+            draggable={false}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              objectPosition: `center ${focalY * 100}%`,
+              display: 'block',
+            }}
+          />
+          {!disabled && (
+            <div style={{
+              position: 'absolute',
+              bottom: '4px',
+              right: '6px',
+              fontSize: '10px',
+              color: '#fff',
+              background: 'rgba(0,0,0,0.55)',
+              padding: '1px 6px',
+              borderRadius: '6px',
+              pointerEvents: 'none',
+            }}>
+              {showCrop ? 'tap to close' : 'tap to adjust crop'}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Main row: checkbox + info */}
       <div
+        onClick={disabled ? undefined : onToggle}
         style={{
-          width: '18px',
-          height: '18px',
-          borderRadius: '3px',
-          border: `1.5px solid ${checked ? colors.accent : colors.dim}`,
-          background: checked ? colors.accent : 'transparent',
+          padding: '12px 14px',
+          cursor: disabled ? 'default' : 'pointer',
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexShrink: 0,
-          marginTop: '2px',
+          gap: '12px',
+          alignItems: 'flex-start',
         }}
       >
-        {checked && (
-          <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-            <path d="M2 6l3 3 5-5" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        )}
-      </div>
+        {/* Checkbox */}
+        <div
+          style={{
+            width: '18px',
+            height: '18px',
+            borderRadius: '3px',
+            border: `1.5px solid ${checked ? colors.accent : colors.dim}`,
+            background: checked ? colors.accent : 'transparent',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            marginTop: '2px',
+          }}
+        >
+          {checked && (
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+              <path d="M2 6l3 3 5-5" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
+        </div>
 
-      {/* Content */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: '14px', fontWeight: 500, color: colors.cream, marginBottom: '3px' }}>
-          {event.name}
-        </div>
-        <div style={{ fontSize: '13px', color: colors.muted }}>
-          {formatPreviewDate(event.start, tz)} &middot; {formatPreviewTime(event.start, tz)}
-          {event.end && ` – ${formatPreviewTime(event.end, tz)}`}
-        </div>
-        {event.venue_name && (
-          <div style={{ fontSize: '12px', color: colors.dim, marginTop: '2px' }}>
-            {event.venue_name}
+        {/* Unchecked image thumbnail */}
+        {hasImage && !checked && (
+          <div style={{
+            width: '48px',
+            height: '48px',
+            borderRadius: '6px',
+            overflow: 'hidden',
+            flexShrink: 0,
+          }}>
+            <img
+              src={event.image_url!}
+              alt=""
+              draggable={false}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                objectPosition: `center ${focalY * 100}%`,
+                display: 'block',
+              }}
+            />
           </div>
         )}
-        {event.already_exists && (
-          <span style={{
-            fontSize: '10px',
-            color: '#92600a',
-            background: '#fef3cd',
-            border: '1px solid #fde68a',
-            borderRadius: '10px',
-            padding: '1px 6px',
-            marginTop: '4px',
-            display: 'inline-block',
-          }}>
-            already imported
-          </span>
-        )}
+
+        {/* Content */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: '14px', fontWeight: 500, color: colors.cream, marginBottom: '3px' }}>
+            {event.name}
+          </div>
+          <div style={{ fontSize: '13px', color: colors.muted }}>
+            {formatPreviewDate(event.start, tz)} &middot; {formatPreviewTime(event.start, tz)}
+            {event.end && ` – ${formatPreviewTime(event.end, tz)}`}
+          </div>
+          {event.venue_name && (
+            <div style={{ fontSize: '12px', color: colors.dim, marginTop: '2px' }}>
+              {event.venue_name}
+            </div>
+          )}
+          {event.already_exists && (
+            <span style={{
+              fontSize: '10px',
+              color: '#92600a',
+              background: '#fef3cd',
+              border: '1px solid #fde68a',
+              borderRadius: '10px',
+              padding: '1px 6px',
+              marginTop: '4px',
+              display: 'inline-block',
+            }}>
+              already imported
+            </span>
+          )}
+        </div>
       </div>
+
+      {/* Expanded crop preview */}
+      {hasImage && checked && showCrop && !disabled && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{ padding: '0 14px 14px' }}
+        >
+          <ImageCropPreview
+            imageSrc={event.image_url!}
+            focalY={focalY}
+            onFocalYChange={onFocalYChange}
+          />
+        </div>
+      )}
     </div>
   );
 }

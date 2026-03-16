@@ -1921,6 +1921,7 @@ const importConfirmSchema = z.object({
     venue_name: z.string().min(1).max(200).optional(),
     category: z.enum(EVENT_CATEGORY_KEYS as [string, ...string[]]).optional(),
     description: z.string().max(2000).optional(),
+    image_focal_y: z.number().min(0).max(1).optional(),
   })).default({}),
 });
 
@@ -2174,7 +2175,7 @@ router.post('/import/confirm', writeLimiter, async (req, res, next) => {
         tags: [],
         wheelchair_accessible: null,
         rsvp_limit: null,
-        event_image_focal_y: 0.5,
+        event_image_focal_y: override.image_focal_y ?? 0.5,
         event_image_url: event.image_url || null,
         creator_account_id: account.id,
         source: 'import',

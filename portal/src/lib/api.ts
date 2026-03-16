@@ -341,7 +341,7 @@ export async function importConfirm(params: {
   category: string;
   event_timezone: string;
   events: number[];
-  overrides?: Record<string, { venue_name?: string; category?: string; description?: string }>;
+  overrides?: Record<string, { venue_name?: string; category?: string; description?: string; image_focal_y?: number }>;
 }) {
   return apiRequest<ImportConfirmResponse>('/api/portal/import/confirm', {
     method: 'POST',
