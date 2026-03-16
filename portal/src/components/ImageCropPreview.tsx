@@ -10,7 +10,8 @@ interface ImageCropPreviewProps {
 /**
  * Overlay crop preview on the uploaded image.
  * A draggable horizontal line shows where the vertical center of the crop
- * will be. The visible "crop window" band shows what the browse card sees.
+ * will be. The visible "crop window" band represents a standard landscape
+ * crop (~2:1) that most event apps and cards will display.
  */
 export function ImageCropPreview({ imageSrc, focalY, onFocalYChange }: ImageCropPreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -39,15 +40,16 @@ export function ImageCropPreview({ imageSrc, focalY, onFocalYChange }: ImageCrop
     dragging.current = false;
   }, []);
 
-  // Crop band: proportionally represents the browse card's 160px view height
-  // relative to a ~400px wide card image (roughly 40% of image height)
-  const bandHeight = 35; // percent of container
+  // Crop band: represents a standard landscape crop (~2:1 ratio).
+  // At 30% of container height this is roughly what most event cards,
+  // social previews, and embed widgets will show.
+  const bandHeight = 30; // percent of container
   const bandTop = Math.max(0, Math.min(100 - bandHeight, focalY * 100 - bandHeight / 2));
 
   return (
     <div style={{ marginTop: '12px' }}>
       <div style={{ fontSize: '12px', color: colors.muted, marginBottom: '6px' }}>
-        Drag to set vertical crop center
+        Drag to set the focus of your image
       </div>
       <div
         ref={containerRef}
