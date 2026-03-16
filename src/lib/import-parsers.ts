@@ -373,7 +373,24 @@ export function parseEventbritePage(html: string, sourceUrl: string, fallbackTim
     }
   }
 
+  // Fallback: if events have no image, try og:image from the page HTML
+  if (events.length > 0) {
+    const ogImage = extractOgImage(html);
+    if (ogImage) {
+      for (const ev of events) {
+        if (!ev.image_url) ev.image_url = ogImage;
+      }
+    }
+  }
+
   return events;
+}
+
+/** Extract og:image URL from HTML meta tags */
+function extractOgImage(html: string): string | null {
+  const match = html.match(/<meta[^>]*property\s*=\s*["']og:image["'][^>]*content\s*=\s*["']([^"']+)["']/i)
+    || html.match(/<meta[^>]*content\s*=\s*["']([^"']+)["'][^>]*property\s*=\s*["']og:image["']/i);
+  return match?.[1] || null;
 }
 
 /** Extract all JSON-LD script blocks from HTML */
@@ -442,7 +459,7 @@ function jsonLdEventToImported(item: Record<string, unknown>, sourceUrl: string,
     }
   }
 
-  // Image
+  // Image — try JSON-LD image field first
   let image_url: string | null = null;
   const img = item['image'];
   if (typeof img === 'string') {
@@ -451,6 +468,10 @@ function jsonLdEventToImported(item: Record<string, unknown>, sourceUrl: string,
     image_url = img[0];
   } else if (img && typeof img === 'object' && 'url' in (img as Record<string, unknown>)) {
     image_url = String((img as Record<string, unknown>)['url']);
+  }
+  // ImageObject with contentUrl (some Eventbrite pages use this)
+  if (!image_url && img && typeof img === 'object' && 'contentUrl' in (img as Record<string, unknown>)) {
+    image_url = String((img as Record<string, unknown>)['contentUrl']);
   }
 
   // External ID from URL

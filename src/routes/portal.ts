@@ -1108,11 +1108,11 @@ router.get('/events', portalLimiter, async (req, res, next) => {
     const accountId = await getPortalAccountId(req);
 
     // [RLS] portal_events_select_own policy enforces ownership via creator_account_id
+    // Show all events owned by this account regardless of source (portal, import, api)
     const { data: events, error } = await getUserClient(req)
       .from('events')
       .select(PORTAL_SELECT)
       .eq('creator_account_id', accountId)
-      .eq('source', 'portal')
       .order('event_at', { ascending: false });
 
     if (error) {
@@ -1238,12 +1238,11 @@ router.get('/events/:id', portalLimiter, async (req, res, next) => {
     validateUuidParam(req.params.id, 'event ID');
     await getPortalAccountId(req);
 
-    // [RLS] portal_events_select_own policy
+    // [RLS] portal_events_select_own policy — works for portal, import, and api sources
     const { data: event, error } = await getUserClient(req)
       .from('events')
       .select(PORTAL_SELECT)
       .eq('id', req.params.id)
-      .eq('source', 'portal')
       .maybeSingle();
 
     if (error) {
@@ -1541,7 +1540,6 @@ router.patch('/events/batch', writeLimiter, async (req, res, next) => {
       .from('events')
       .update(dbUpdate)
       .in('id', ids)
-      .eq('source', 'portal')
       .select('id');
 
     if (error) {
@@ -1604,7 +1602,6 @@ router.patch('/events/:id', writeLimiter, async (req, res, next) => {
       .from('events')
       .select('event_timezone, event_at')
       .eq('id', req.params.id)
-      .eq('source', 'portal')
       .maybeSingle();
 
     if (!existing) {
@@ -1688,12 +1685,11 @@ router.patch('/events/:id', writeLimiter, async (req, res, next) => {
       throw createError('No fields to update', 400, 'VALIDATION_ERROR');
     }
 
-    // [RLS] portal_events_update_own policy
+    // [RLS] portal_events_update_own policy — works for portal, import, and api sources
     const { data: event, error } = await getUserClient(req)
       .from('events')
       .update(update)
       .eq('id', req.params.id)
-      .eq('source', 'portal')
       .select(PORTAL_SELECT)
       .single();
 
@@ -1772,12 +1768,11 @@ router.delete('/events/:id', writeLimiter, async (req, res, next) => {
     validateUuidParam(req.params.id, 'event ID');
     const accountId = await getPortalAccountId(req);
 
-    // [RLS] portal_events_delete_own policy
+    // [RLS] portal_events_delete_own policy — works for portal, import, and api sources
     const { error } = await getUserClient(req)
       .from('events')
       .delete()
-      .eq('id', req.params.id)
-      .eq('source', 'portal');
+      .eq('id', req.params.id);
 
     if (error) {
       console.error('[PORTAL] Event delete error:', error.message);
@@ -1870,7 +1865,6 @@ router.post('/events/:id/image', imageBodyLimit, writeLimiter, async (req, res, 
       .from('events')
       .select('id')
       .eq('id', req.params.id)
-      .eq('source', 'portal')
       .maybeSingle();
 
     if (!event) {
@@ -1883,8 +1877,7 @@ router.post('/events/:id/image', imageBodyLimit, writeLimiter, async (req, res, 
     const { error: updateError } = await getUserClient(req)
       .from('events')
       .update({ event_image_url: imageUrl })
-      .eq('id', req.params.id)
-      .eq('source', 'portal');
+      .eq('id', req.params.id);
 
     if (updateError) {
       console.error('[PORTAL] Image URL update error:', updateError.message);
