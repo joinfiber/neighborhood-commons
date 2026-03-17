@@ -212,12 +212,12 @@ export function getAdminUserId(): string {
 const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
 
 const DEFAULT_LIMITS: Record<string, number> = {
-  daily: 30, weekly: 8, biweekly: 4, monthly: 4,
+  daily: 180, weekly: 26, biweekly: 12, monthly: 6,
 };
-const DEFAULT_ORDINAL_LIMIT = 4;
-const DEFAULT_WEEKLY_DAYS_LIMIT = 8; // 8 weeks of specific-day events
+const DEFAULT_ORDINAL_LIMIT = 6;
+const DEFAULT_WEEKLY_DAYS_LIMIT = 26; // ~6 months of specific-day events
 const ONGOING_LIMITS: Record<string, number> = {
-  daily: 90, weekly: 26, biweekly: 12, monthly: 12,
+  daily: 180, weekly: 26, biweekly: 12, monthly: 12,
 };
 const ONGOING_ORDINAL_LIMIT = 12;
 const ONGOING_WEEKLY_DAYS_LIMIT = 26; // ~6 months of specific-day events
@@ -1473,6 +1473,152 @@ router.patch('/events/series/:seriesId', writeLimiter, async (req, res, next) =>
     })();
 
     res.json({ updated: updatedCount, total: futureEvents.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/portal/events/series/:seriesId/extend
+ * Extend (renew) a series by generating additional instances from the day after
+ * the current last instance. Uses the series base_event_data as the template.
+ * Returns the count of new instances created.
+ */
+router.post('/events/series/:seriesId/extend', writeLimiter, async (req, res, next) => {
+  try {
+    validateUuidParam(req.params.seriesId, 'series ID');
+    const accountId = await getPortalAccountId(req);
+
+    // Verify ownership
+    const { data: check } = await getUserClient(req)
+      .from('events')
+      .select('id')
+      .eq('series_id', req.params.seriesId)
+      .eq('creator_account_id', accountId)
+      .eq('source', 'portal')
+      .limit(1)
+      .maybeSingle();
+
+    if (!check) {
+      throw createError('Series not found', 404, 'NOT_FOUND');
+    }
+
+    // Fetch the series metadata
+    const { data: series } = await supabaseAdmin
+      .from('event_series')
+      .select('id, recurrence, base_event_data, creator_account_id')
+      .eq('id', req.params.seriesId)
+      .single();
+
+    if (!series) throw createError('Series not found', 404, 'NOT_FOUND');
+
+    const recurrence = series.recurrence as string;
+    if (recurrence === 'none') throw createError('Cannot extend a non-recurring series', 400, 'VALIDATION_ERROR');
+
+    const baseData = (series.base_event_data as Record<string, unknown>) || {};
+
+    // Find the last instance to determine where to continue from
+    const { data: lastEvent } = await supabaseAdmin
+      .from('events')
+      .select('event_at, event_timezone, end_time, series_instance_number')
+      .eq('series_id', req.params.seriesId)
+      .order('event_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (!lastEvent) throw createError('No existing events in series', 404, 'NOT_FOUND');
+
+    const tz = (lastEvent.event_timezone as string) || 'America/New_York';
+    const lastParsed = fromTimestamptz(lastEvent.event_at as string, tz);
+    const lastInstanceNum = (lastEvent.series_instance_number as number) || 0;
+
+    // Extract start_time and end_time from the last instance
+    const startTime = lastParsed.time;
+    let endTime: string | null = null;
+    if (lastEvent.end_time) {
+      endTime = fromTimestamptz(lastEvent.end_time as string, tz).time;
+    }
+
+    // Generate new dates starting the day after the last instance
+    const lastDate = new Date(lastParsed.date + 'T12:00:00');
+    lastDate.setDate(lastDate.getDate() + 1);
+    const newStartDate = formatDateStr(lastDate);
+
+    const newDates = generateInstanceDates(newStartDate, recurrence);
+    if (newDates.length === 0) {
+      throw createError('No new dates generated', 400, 'VALIDATION_ERROR');
+    }
+
+    // Fetch one existing event for template fields not in base_event_data
+    const { data: templateEvent } = await supabaseAdmin
+      .from('events')
+      .select('creator_account_id, source, visibility, status, is_business, region_id, event_timezone, event_image_url, event_image_focal_y')
+      .eq('series_id', req.params.seriesId)
+      .limit(1)
+      .single();
+
+    if (!templateEvent) throw createError('Series events not found', 404, 'NOT_FOUND');
+
+    const adminUserId = getAdminUserId();
+
+    // Build rows for new instances
+    const rows = newDates.map((date, i) => {
+      const eventAt = toTimestamptz(date, startTime, tz);
+      let endTimeTs: string | null = null;
+      if (endTime) {
+        endTimeTs = toTimestamptz(date, endTime, tz);
+        if (new Date(endTimeTs) <= new Date(eventAt)) {
+          const nextDay = new Date(date);
+          nextDay.setDate(nextDay.getDate() + 1);
+          endTimeTs = toTimestamptz(nextDay.toISOString().split('T')[0]!, endTime, tz);
+        }
+      }
+
+      return {
+        ...baseData,
+        creator_account_id: series.creator_account_id,
+        user_id: adminUserId,
+        source: templateEvent.source,
+        visibility: templateEvent.visibility,
+        status: templateEvent.status,
+        is_business: templateEvent.is_business,
+        region_id: templateEvent.region_id,
+        event_timezone: tz,
+        event_image_url: templateEvent.event_image_url,
+        event_image_focal_y: templateEvent.event_image_focal_y,
+        event_at: eventAt,
+        end_time: endTimeTs,
+        recurrence,
+        series_id: series.id,
+        series_instance_number: lastInstanceNum + i + 1,
+      };
+    });
+
+    const { data: created, error: insertErr } = await supabaseAdmin
+      .from('events')
+      .insert(rows)
+      .select('id, event_at')
+      .order('event_at', { ascending: true });
+
+    if (insertErr) {
+      console.error('[PORTAL] Series extend insert failed:', insertErr.message);
+      throw createError('Failed to create new instances', 500, 'SERVER_ERROR');
+    }
+
+    const count = created?.length || 0;
+
+    // Update series recurrence_rule count
+    const updatedRule = { frequency: recurrence, count: lastInstanceNum + count };
+    await supabaseAdmin
+      .from('event_series')
+      .update({ recurrence_rule: updatedRule })
+      .eq('id', series.id);
+
+    console.log(`[PORTAL] Series ${series.id} extended: +${count} instances (total ${lastInstanceNum + count})`);
+    auditPortalAction('portal_event_updated', accountId, series.id,
+      { series_extend: true, added: count, total: lastInstanceNum + count });
+
+    res.json({ added: count, total: lastInstanceNum + count });
   } catch (err) {
     next(err);
   }

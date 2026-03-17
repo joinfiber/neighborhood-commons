@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { PORTAL_CATEGORIES, type PortalCategory } from '../lib/categories';
 import { styles, colors } from '../lib/styles';
-import { fetchEvents, batchUpdateEvents, batchDeleteEvents, type PortalEvent, type PortalAccount } from '../lib/api';
+import { fetchEvents, batchUpdateEvents, batchDeleteEvents, extendEventSeries, type PortalEvent, type PortalAccount } from '../lib/api';
 import { EventRowSkeleton } from '../components/Skeleton';
 import { BulkEditBar } from '../components/BulkEditBar';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -249,12 +249,13 @@ function EventCard({ event, onClick, selected, onToggle, selectMode }: {
 // SERIES CARD
 // =============================================================================
 
-function SeriesCard({ group, onClick, selectedIds, onToggle, selectMode }: {
+function SeriesCard({ group, onClick, selectedIds, onToggle, selectMode, onExtend }: {
   group: SeriesGroup;
   onClick: (event: PortalEvent) => void;
   selectedIds: Set<string>;
   onToggle: (id: string) => void;
   selectMode: boolean;
+  onExtend: (seriesId: string) => void;
 }) {
   const { nextEvent, events } = group;
   const cat = PORTAL_CATEGORIES[nextEvent.category as PortalCategory];
@@ -264,6 +265,8 @@ function SeriesCard({ group, onClick, selectedIds, onToggle, selectMode }: {
   const allSelected = events.every((e) => selectedIds.has(e.id));
   const someSelected = events.some((e) => selectedIds.has(e.id));
   const rec = recurrenceLabel(nextEvent.recurrence);
+  const runningLow = upcomingCount <= 5 && upcomingCount > 0;
+  const expired = upcomingCount === 0;
 
   const toggleAll = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -350,6 +353,26 @@ function SeriesCard({ group, onClick, selectedIds, onToggle, selectMode }: {
           </span>
         )}
       </div>
+      {(runningLow || expired) && !selectMode && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onExtend(group.seriesId); }}
+          style={{
+            background: expired ? colors.accent : 'transparent',
+            color: expired ? '#ffffff' : colors.accent,
+            border: expired ? 'none' : `1px solid ${colors.accentBorder}`,
+            borderRadius: '6px',
+            fontSize: '12px',
+            fontWeight: 500,
+            padding: '5px 12px',
+            cursor: 'pointer',
+            alignSelf: 'flex-start',
+            marginTop: '2px',
+          }}
+        >
+          {expired ? 'Renew 6 months' : `Renew (${upcomingCount} left)`}
+        </button>
+      )}
     </div>
   );
 }
@@ -413,6 +436,18 @@ export function DashboardScreen({ account, onCreateEvent, onImportEvents, onEdit
     } else {
       setToast({ text: `Updated ${res.data?.updated || 0} event${(res.data?.updated || 0) !== 1 ? 's' : ''}`, type: 'success' });
       exitSelectMode();
+      loadEvents();
+    }
+  };
+
+  const handleExtendSeries = async (seriesId: string) => {
+    setApplying(true);
+    const res = await extendEventSeries(seriesId);
+    setApplying(false);
+    if (res.error) {
+      setToast({ text: res.error.message, type: 'error' });
+    } else {
+      setToast({ text: `Added ${res.data?.added || 0} events`, type: 'success' });
       loadEvents();
     }
   };
@@ -532,6 +567,7 @@ export function DashboardScreen({ account, onCreateEvent, onImportEvents, onEdit
                   selectedIds={selectedIds}
                   onToggle={toggleSelect}
                   selectMode={selectMode}
+                  onExtend={handleExtendSeries}
                 />
               );
             }

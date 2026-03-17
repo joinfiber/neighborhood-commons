@@ -183,6 +183,10 @@ export async function deleteEventSeries(seriesId: string) {
   return apiRequest<{ success: boolean; deleted: number }>(`/api/portal/events/series/${seriesId}`, { method: 'DELETE' });
 }
 
+export async function extendEventSeries(seriesId: string) {
+  return apiRequest<{ added: number; total: number }>(`/api/portal/events/series/${seriesId}/extend`, { method: 'POST' });
+}
+
 export async function uploadEventImage(id: string, base64: string) {
   return apiRequest<{ image_url: string }>(`/api/portal/events/${id}/image`, {
     method: 'POST',
