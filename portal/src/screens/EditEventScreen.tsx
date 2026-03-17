@@ -116,41 +116,37 @@ export function EditEventScreen({ id, accountWheelchairAccessible, onBack, onUpd
 
   if (loading) {
     return (
-      <div style={styles.page}>
-        <div style={styles.content}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-            <button type="button" className="btn-text" style={styles.buttonText} onClick={onBack}>
-              ← Back
-            </button>
-            <h1 style={styles.pageTitle}>Edit Event</h1>
-          </div>
-          <div style={{ color: colors.dim, fontSize: '14px', padding: '24px 0' }}>Loading...</div>
+      <>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+          <button type="button" className="btn-text" style={styles.buttonText} onClick={onBack}>
+            ← Back
+          </button>
+          <h1 style={styles.pageTitle}>Edit Event</h1>
         </div>
-      </div>
+        <div style={{ color: colors.dim, fontSize: '14px', padding: '24px 0' }}>Loading...</div>
+      </>
     );
   }
 
   if (!event) {
     return (
-      <div style={styles.page}>
-        <div style={styles.content}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-            <button type="button" className="btn-text" style={styles.buttonText} onClick={onBack}>
-              ← Back
-            </button>
-            <h1 style={styles.pageTitle}>Edit Event</h1>
-          </div>
-          <div style={{
-            background: '#fef2f2',
-            color: colors.error,
-            padding: '10px 14px',
-            borderRadius: '8px',
-            fontSize: '13px',
-          }}>
-            {error || 'Event not found'}
-          </div>
+      <>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+          <button type="button" className="btn-text" style={styles.buttonText} onClick={onBack}>
+            ← Back
+          </button>
+          <h1 style={styles.pageTitle}>Edit Event</h1>
         </div>
-      </div>
+        <div style={{
+          background: '#fef2f2',
+          color: colors.error,
+          padding: '10px 14px',
+          borderRadius: '8px',
+          fontSize: '13px',
+        }}>
+          {error || 'Event not found'}
+        </div>
+      </>
     );
   }
 
@@ -178,12 +174,11 @@ export function EditEventScreen({ id, accountWheelchairAccessible, onBack, onUpd
   };
 
   return (
-    <div style={styles.page}>
-      <div style={styles.content} className="fade-up">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-          <button type="button" className="btn-text" style={styles.buttonText} onClick={onBack}>
-            &larr; Back
-          </button>
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+        <button type="button" className="btn-text" style={styles.buttonText} onClick={onBack}>
+          &larr; Back
+        </button>
           <h1 style={{ ...styles.pageTitle, flex: 1 }}>Edit Event</h1>
           <button
             type="button"
@@ -344,7 +339,6 @@ export function EditEventScreen({ id, accountWheelchairAccessible, onBack, onUpd
             </div>
           </div>
         )}
-      </div>
-    </div>
+    </>
   );
 }

@@ -18,8 +18,14 @@ import { ProfileScreen } from './screens/ProfileScreen';
 import { TermsScreen } from './screens/TermsScreen';
 import { ShareStudioScreen } from './screens/ShareStudioScreen';
 import { Toast } from './components/Toast';
+import { WorkspaceShell } from './components/WorkspaceShell';
 import { PlaceAutocomplete } from './components/PlaceAutocomplete';
 import type { PlaceResult } from './lib/api';
+
+function contentWidthForRoute(screen: string): 'normal' | 'wide' {
+  const wide = ['dashboard', 'developers', 'admin-home', 'admin-events', 'admin-account', 'admin-create-event'];
+  return wide.includes(screen) ? 'wide' : 'normal';
+}
 
 export default function App() {
   const { route, navigate, back } = useHashRoute();
@@ -136,8 +142,8 @@ export default function App() {
     return <TermsScreen onBack={() => navigate('#/')} />;
   }
 
-  if (route.screen === 'developers') {
-    return <DevelopersScreen onBack={() => navigate('#/')} />;
+  if (route.screen === 'developers' && !isAuthenticated) {
+    return <DevelopersScreen />;
   }
 
   // Login
@@ -189,7 +195,6 @@ export default function App() {
           return (
             <ProfileScreen
               account={actAsAccount}
-              onBack={() => navigate('#/')}
               onAccountUpdated={(updated) => setActAsAccount(updated)}
             />
           );
@@ -204,11 +209,14 @@ export default function App() {
           );
         }
 
+        if (route.screen === 'developers') {
+          return <DevelopersScreen />;
+        }
+
         if (route.screen === 'import-events') {
           return (
             <ImportEventsScreen
               account={actAsAccount}
-              onBack={() => navigate('#/')}
               onDone={(count) => {
                 navigate('#/');
                 setToast({ message: `Imported ${count} event${count !== 1 ? 's' : ''}`, type: 'success' });
@@ -255,9 +263,6 @@ export default function App() {
             onImportEvents={() => navigate('#/events/import')}
             onEditEvent={(event) => navigate(`#/events/${event.id}/edit`)}
             onShareEvent={(event) => navigate(`#/events/${event.id}/share`)}
-            onNavigateProfile={() => navigate('#/profile')}
-            onSignOut={() => signOut()}
-            onSignOutEverywhere={() => signOut('global')}
           />
         );
       })();
@@ -293,7 +298,17 @@ export default function App() {
             </button>
           </div>
           {toast && <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />}
-          {businessContent}
+          <WorkspaceShell
+            activeScreen={route.screen}
+            contentWidth={contentWidthForRoute(route.screen)}
+            role="business"
+            account={actAsAccount}
+            onNavigate={navigate}
+            onSignOut={() => signOut()}
+            onSignOutEverywhere={() => signOut('global')}
+          >
+            {businessContent}
+          </WorkspaceShell>
         </>
       );
     }
@@ -355,7 +370,6 @@ export default function App() {
       return (
         <AdminDashboardScreen
           email={user?.email || ''}
-          onSignOut={() => signOut()}
           onViewAccount={(acct) => navigate(`#/admin/accounts/${acct.id}`)}
           onViewAllEvents={() => navigate('#/admin/events')}
           onCreateEvent={() => navigate('#/admin/events/new')}
@@ -366,7 +380,16 @@ export default function App() {
     return (
       <>
         {toast && <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />}
-        {adminContent}
+        <WorkspaceShell
+          activeScreen={route.screen}
+          contentWidth={contentWidthForRoute(route.screen)}
+          role="admin"
+          onNavigate={navigate}
+          onSignOut={() => signOut()}
+          onSignOutEverywhere={() => signOut('global')}
+        >
+          {adminContent}
+        </WorkspaceShell>
       </>
     );
   }
@@ -435,7 +458,6 @@ export default function App() {
       return (
         <ProfileScreen
           account={account}
-          onBack={() => navigate('#/')}
           onAccountUpdated={(updated) => setAccount(updated)}
         />
       );
@@ -450,11 +472,14 @@ export default function App() {
       );
     }
 
+    if (route.screen === 'developers') {
+      return <DevelopersScreen />;
+    }
+
     if (route.screen === 'import-events') {
       return (
         <ImportEventsScreen
           account={account}
-          onBack={() => navigate('#/')}
           onDone={(count) => {
             navigate('#/');
             setToast({ message: `Imported ${count} event${count !== 1 ? 's' : ''}`, type: 'success' });
@@ -502,9 +527,6 @@ export default function App() {
         onImportEvents={() => navigate('#/events/import')}
         onEditEvent={(event) => navigate(`#/events/${event.id}/edit`)}
         onShareEvent={(event) => navigate(`#/events/${event.id}/share`)}
-        onNavigateProfile={() => navigate('#/profile')}
-        onSignOut={() => signOut()}
-        onSignOutEverywhere={() => signOut('global')}
       />
     );
   })();
@@ -512,7 +534,17 @@ export default function App() {
   return (
     <>
       {toast && <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />}
-      {businessContent}
+      <WorkspaceShell
+        activeScreen={route.screen}
+        contentWidth={contentWidthForRoute(route.screen)}
+        role="business"
+        account={account}
+        onNavigate={navigate}
+        onSignOut={() => signOut()}
+        onSignOutEverywhere={() => signOut('global')}
+      >
+        {businessContent}
+      </WorkspaceShell>
     </>
   );
 }

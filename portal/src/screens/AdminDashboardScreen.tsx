@@ -9,7 +9,6 @@ import { StatCardSkeleton } from '../components/Skeleton';
 
 interface AdminDashboardScreenProps {
   email: string;
-  onSignOut: () => void;
   onViewAccount: (account: PortalAccount) => void;
   onViewAllEvents: () => void;
   onCreateEvent: () => void;
@@ -103,7 +102,7 @@ function timeAgo(date: string | null): string {
   return new Date(date).toLocaleDateString();
 }
 
-export function AdminDashboardScreen({ email, onSignOut, onViewAccount, onViewAllEvents, onCreateEvent }: AdminDashboardScreenProps) {
+export function AdminDashboardScreen({ email, onViewAccount, onViewAllEvents, onCreateEvent }: AdminDashboardScreenProps) {
   const [stats, setStats] = useState<PortalStats | null>(null);
   const [accounts, setAccounts] = useState<PortalAccount[]>([]);
   const [loading, setLoading] = useState(true);
@@ -130,16 +129,12 @@ export function AdminDashboardScreen({ email, onSignOut, onViewAccount, onViewAl
     : accounts;
 
   return (
-    <div style={styles.page}>
-      <div style={styles.contentWide} className="fade-up">
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-          <div>
-            <h1 style={{ ...styles.pageTitle, marginBottom: '4px' }}>neighborhood commons</h1>
-            <div style={{ fontSize: '14px', color: colors.muted }}>{email}</div>
-          </div>
-          <button type="button" style={styles.buttonText} onClick={onSignOut}>Sign Out</button>
-        </div>
+    <>
+      {/* Header */}
+      <div style={{ marginBottom: '24px' }}>
+        <h1 style={{ ...styles.pageTitle, marginBottom: '4px' }}>neighborhood commons</h1>
+        <div style={{ fontSize: '14px', color: colors.muted }}>{email}</div>
+      </div>
 
         {/* Stats */}
         {stats && (
@@ -251,8 +246,7 @@ export function AdminDashboardScreen({ email, onSignOut, onViewAccount, onViewAl
             )}
           </div>
         )}
-      </div>
-    </div>
+    </>
   );
 }
 

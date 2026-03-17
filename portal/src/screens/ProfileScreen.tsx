@@ -7,11 +7,10 @@ import type { PlaceResult } from '../lib/types';
 
 interface ProfileScreenProps {
   account: PortalAccount;
-  onBack: () => void;
   onAccountUpdated: (account: PortalAccount) => void;
 }
 
-export function ProfileScreen({ account, onBack, onAccountUpdated }: ProfileScreenProps) {
+export function ProfileScreen({ account, onAccountUpdated }: ProfileScreenProps) {
   // Editable fields
   const [businessName, setBusinessName] = useState(account.business_name);
   const [venueName, setVenueName] = useState(account.default_venue_name || '');
@@ -95,19 +94,8 @@ export function ProfileScreen({ account, onBack, onAccountUpdated }: ProfileScre
   };
 
   return (
-    <div style={styles.page}>
-      <div style={styles.content} className="fade-up">
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
-          <button
-            type="button"
-            onClick={onBack}
-            style={{ ...styles.buttonText, padding: '4px 0', fontSize: '14px', color: colors.muted }}
-          >
-            &larr; Dashboard
-          </button>
-        </div>
-        <h1 style={{ ...styles.pageTitle, marginBottom: '4px' }}>Profile</h1>
+    <>
+      <h1 style={{ ...styles.pageTitle, marginBottom: '4px' }}>Profile</h1>
         <p style={{ fontSize: '13px', color: colors.muted, marginBottom: '24px' }}>
           Changes save when you press Save. Come back anytime.
         </p>
@@ -246,7 +234,6 @@ export function ProfileScreen({ account, onBack, onAccountUpdated }: ProfileScre
         <div style={{ fontSize: '12px', color: colors.dim, marginTop: '8px' }}>
           Account status: {account.status} · Member since {new Date(account.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
         </div>
-      </div>
-    </div>
+    </>
   );
 }

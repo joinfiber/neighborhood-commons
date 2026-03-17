@@ -192,3 +192,39 @@ input::placeholder, textarea::placeholder {
 button:focus:not(:focus-visible) {
   outline: none;
 }
+
+/* =============================================================================
+   Sidebar navigation
+   ============================================================================= */
+
+.sidebar-nav-item {
+  transition: background 0.15s, color 0.15s;
+}
+
+.sidebar-nav-item:hover {
+  background: var(--color-accent-dim) !important;
+  color: var(--color-cream) !important;
+}
+
+/* Mobile sidebar overlay */
+.sidebar-overlay-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 99;
+  opacity: 0;
+  animation: fadeIn 0.15s ease forwards;
+}
+
+@keyframes fadeIn {
+  to { opacity: 1; }
+}
+
+@keyframes slideInLeft {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+.sidebar-slide-in {
+  animation: slideInLeft 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

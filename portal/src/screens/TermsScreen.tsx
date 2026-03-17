@@ -6,8 +6,7 @@ interface TermsScreenProps {
 
 export function TermsScreen({ onBack }: TermsScreenProps) {
   return (
-    <div style={styles.page}>
-      <div style={styles.content} className="fade-up">
+    <>
 
         {/* Back nav */}
         <button
@@ -162,8 +161,7 @@ export function TermsScreen({ onBack }: TermsScreenProps) {
         </Section>
 
         <div style={{ height: '60px' }} />
-      </div>
-    </div>
+    </>
   );
 }
 

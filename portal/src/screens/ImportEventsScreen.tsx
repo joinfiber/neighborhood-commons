@@ -13,7 +13,6 @@ type Step = 'input' | 'preview' | 'result';
 
 interface ImportEventsScreenProps {
   account: PortalAccount;
-  onBack: () => void;
   onDone: (count: number) => void;
 }
 
@@ -52,7 +51,7 @@ function formatPreviewTime(iso: string, tz: string): string {
 // SCREEN
 // =============================================================================
 
-export function ImportEventsScreen({ onBack, onDone }: ImportEventsScreenProps) {
+export function ImportEventsScreen({ onDone }: ImportEventsScreenProps) {
   // Step 1: input
   const [url, setUrl] = useState('');
   const [category, setCategory] = useState<string>('live_music');
@@ -162,14 +161,8 @@ export function ImportEventsScreen({ onBack, onDone }: ImportEventsScreenProps) 
   // ── Render ──
 
   return (
-    <div style={styles.page}>
-      <div style={styles.content} className="fade-up">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-          <button type="button" className="btn-text" style={styles.buttonText} onClick={onBack}>
-            &larr; Back
-          </button>
-          <h1 style={styles.pageTitle}>Import Events</h1>
-        </div>
+    <>
+      <h1 style={{ ...styles.pageTitle, marginBottom: '24px' }}>Import Events</h1>
 
         {error && (
           <div style={{
@@ -219,8 +212,7 @@ export function ImportEventsScreen({ onBack, onDone }: ImportEventsScreenProps) 
             onDone={() => onDone(result.total_created)}
           />
         )}
-      </div>
-    </div>
+    </>
   );
 }
 

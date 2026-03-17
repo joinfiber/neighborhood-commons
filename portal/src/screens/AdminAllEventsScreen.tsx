@@ -384,11 +384,10 @@ export function AdminAllEventsScreen({ onBack, onViewAccount }: AdminAllEventsSc
   );
 
   return (
-    <div style={styles.page}>
-      <div style={styles.contentWide} className="fade-up">
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-          <button type="button" style={styles.buttonText} onClick={onBack}>← Back</button>
+    <>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+        <button type="button" style={styles.buttonText} onClick={onBack}>← Back</button>
           <h1 style={styles.pageTitle}>All Events</h1>
           <span style={{ fontSize: '14px', color: colors.muted }}>({displayItems.length} groups)</span>
           <div style={{ flex: 1 }} />
@@ -526,7 +525,6 @@ export function AdminAllEventsScreen({ onBack, onViewAccount }: AdminAllEventsSc
             onCancel={() => setConfirmDelete(false)}
           />
         )}
-      </div>
-    </div>
+    </>
   );
 }

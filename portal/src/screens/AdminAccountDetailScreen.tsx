@@ -434,29 +434,25 @@ export function AdminAccountDetailScreen({ accountId, onBack, onCreateEvent, onE
 
   if (loading) {
     return (
-      <div style={styles.page}>
-        <div style={styles.contentWide}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-            <button type="button" className="btn-text" style={styles.buttonText} onClick={onBack}>← Back</button>
-          </div>
-          <AccountInfoSkeleton />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '20px' }}>
-            <EventRowSkeleton />
-            <EventRowSkeleton />
-          </div>
+      <>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+          <button type="button" className="btn-text" style={styles.buttonText} onClick={onBack}>← Back</button>
         </div>
-      </div>
+        <AccountInfoSkeleton />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '20px' }}>
+          <EventRowSkeleton />
+          <EventRowSkeleton />
+        </div>
+      </>
     );
   }
 
   if (error || !account) {
     return (
-      <div style={styles.page}>
-        <div style={styles.contentWide}>
-          <button type="button" style={styles.buttonText} onClick={onBack}>← Back</button>
-          <div style={{ color: colors.error, padding: '24px' }}>{error || 'Account not found'}</div>
-        </div>
-      </div>
+      <>
+        <button type="button" style={styles.buttonText} onClick={onBack}>← Back</button>
+        <div style={{ color: colors.error, padding: '24px' }}>{error || 'Account not found'}</div>
+      </>
     );
   }
 
@@ -503,11 +499,10 @@ export function AdminAccountDetailScreen({ accountId, onBack, onCreateEvent, onE
   };
 
   return (
-    <div style={styles.page}>
-      <div style={styles.contentWide} className="fade-up">
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-          <button type="button" style={styles.buttonText} onClick={onBack}>← Back</button>
+    <>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+        <button type="button" style={styles.buttonText} onClick={onBack}>← Back</button>
           <h1 style={styles.pageTitle}>{account.business_name}</h1>
           <span style={{
             fontSize: '11px',
@@ -825,7 +820,6 @@ export function AdminAccountDetailScreen({ accountId, onBack, onCreateEvent, onE
             </div>
           )}
         </div>
-      </div>
 
       {deleteEventId && (
         <ConfirmDialog
@@ -850,6 +844,6 @@ export function AdminAccountDetailScreen({ accountId, onBack, onCreateEvent, onE
           onCancel={() => setConfirmBulkDelete(false)}
         />
       )}
-    </div>
+    </>
   );
 }

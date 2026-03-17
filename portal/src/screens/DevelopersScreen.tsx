@@ -1,10 +1,6 @@
 import { useState } from 'react';
 import { styles, colors } from '../lib/styles';
 
-interface DevelopersScreenProps {
-  onBack: () => void;
-}
-
 const API_BASE = 'https://commons.joinfiber.app';
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -342,13 +338,11 @@ function RegisterCard() {
   );
 }
 
-export function DevelopersScreen({ onBack }: DevelopersScreenProps) {
+export function DevelopersScreen() {
   return (
-    <div style={styles.page}>
-      <div style={styles.contentWide} className="fade-up">
+    <>
         {/* Header */}
         <div style={{ marginBottom: '32px' }}>
-          <button type="button" style={{ ...styles.buttonText, marginBottom: '16px' }} onClick={onBack}>← Back to login</button>
           <h1 style={{ fontSize: '28px', fontWeight: 300, color: colors.cream, letterSpacing: '0.04em', marginBottom: '8px' }}>
             Build with Neighborhood Commons
           </h1>
@@ -685,7 +679,6 @@ curl -H "X-API-Key: nc_..." \\
             We'd love to hear about it — <span style={{ color: colors.muted }}>hello@joinfiber.app</span>
           </p>
         </div>
-      </div>
-    </div>
+    </>
   );
 }

@@ -12,9 +12,6 @@ interface DashboardScreenProps {
   onImportEvents: () => void;
   onEditEvent: (event: PortalEvent) => void;
   onShareEvent: (event: PortalEvent) => void;
-  onNavigateProfile: () => void;
-  onSignOut: () => void;
-  onSignOutEverywhere: () => void;
 }
 
 function formatDate(dateStr: string): string {
@@ -68,98 +65,6 @@ interface SeriesGroup {
 }
 
 type DashboardItem = EventGroup | SeriesGroup;
-
-// =============================================================================
-// ACCOUNT DROPDOWN (gear menu)
-// =============================================================================
-
-function AccountDropdown({ onNavigateProfile, onSignOut, onSignOutEverywhere, onClose }: {
-  onNavigateProfile: () => void;
-  onSignOut: () => void;
-  onSignOutEverywhere: () => void;
-  onClose: () => void;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [confirmSignOutAll, setConfirmSignOutAll] = useState(false);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [onClose]);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [onClose]);
-
-  return (
-    <div
-      ref={ref}
-      style={{
-        position: 'absolute',
-        top: '100%',
-        right: 0,
-        marginTop: '6px',
-        background: colors.card,
-        border: `1px solid ${colors.border}`,
-        borderRadius: '10px',
-        padding: '12px 16px',
-        width: '200px',
-        zIndex: 100,
-        boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-      }}
-    >
-      <button
-        type="button"
-        onClick={() => { onNavigateProfile(); onClose(); }}
-        style={{ ...btnLink, display: 'block', width: '100%', textAlign: 'left', padding: '6px 0', fontSize: '13px' }}
-      >
-        Profile & Settings
-      </button>
-      <div style={{ borderTop: `1px solid ${colors.border}`, margin: '6px 0' }} />
-      {confirmSignOutAll ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          <span style={{ fontSize: '12px', color: colors.muted }}>Sign out all devices?</span>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              type="button"
-              style={{ ...btnLink, color: colors.error }}
-              onClick={() => { onSignOutEverywhere(); onClose(); }}
-            >
-              Yes, everywhere
-            </button>
-            <button type="button" style={btnLink} onClick={() => setConfirmSignOutAll(false)}>
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <button type="button" style={btnLink} onClick={onSignOut}>
-            Sign out
-          </button>
-          <button type="button" style={btnLink} onClick={() => setConfirmSignOutAll(true)}>
-            All devices
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-const btnLink: React.CSSProperties = {
-  background: 'none',
-  border: 'none',
-  fontSize: '12px',
-  color: colors.muted,
-  cursor: 'pointer',
-  padding: '2px 0',
-  fontFamily: 'inherit',
-};
 
 // =============================================================================
 // EVENT CARD
@@ -408,12 +313,9 @@ function SeriesCard({ group, onClick, onShare, selectedIds, onToggle, selectMode
 // DASHBOARD
 // =============================================================================
 
-export function DashboardScreen({ account, onCreateEvent, onImportEvents, onEditEvent, onShareEvent, onNavigateProfile, onSignOut, onSignOutEverywhere }: DashboardScreenProps) {
+export function DashboardScreen({ account, onCreateEvent, onImportEvents, onEditEvent, onShareEvent }: DashboardScreenProps) {
   const [events, setEvents] = useState<PortalEvent[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Account dropdown
-  const [gearOpen, setGearOpen] = useState(false);
 
   // Search
   const [search, setSearch] = useState('');
@@ -617,81 +519,7 @@ export function DashboardScreen({ account, onCreateEvent, onImportEvents, onEdit
   };
 
   return (
-    <div style={styles.page}>
-      <div style={styles.contentWide} className="fade-up">
-
-        {/* ── Account bar ── */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '20px',
-          position: 'relative',
-        }}>
-          <div>
-            <div style={{ fontSize: '18px', fontWeight: 600, color: colors.cream, letterSpacing: '0.01em' }}>
-              {account.business_name}
-            </div>
-            {account.default_address && (
-              <div style={{ fontSize: '12px', color: colors.dim, marginTop: '1px' }}>
-                {account.default_address}
-              </div>
-            )}
-          </div>
-          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-            {/* Search toggle */}
-            <button
-              type="button"
-              onClick={() => { setSearchVisible(!searchVisible); if (searchVisible) setSearch(''); }}
-              style={{
-                background: searchVisible ? colors.accentDim : 'none',
-                border: 'none',
-                cursor: 'pointer',
-                padding: '6px 8px',
-                borderRadius: '6px',
-                display: 'flex',
-                alignItems: 'center',
-              }}
-              title="Search events"
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <circle cx="7" cy="7" r="4.5" stroke={searchVisible ? colors.accent : colors.dim} strokeWidth="1.5" />
-                <path d="M10.5 10.5L13.5 13.5" stroke={searchVisible ? colors.accent : colors.dim} strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-            </button>
-            {/* Gear */}
-            <button
-              type="button"
-              onClick={() => setGearOpen(!gearOpen)}
-              style={{
-                background: gearOpen ? colors.accentDim : 'none',
-                border: 'none',
-                cursor: 'pointer',
-                padding: '6px 8px',
-                borderRadius: '6px',
-                display: 'flex',
-                alignItems: 'center',
-              }}
-              title="Account settings"
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <circle cx="8" cy="8" r="2" stroke={gearOpen ? colors.accent : colors.dim} strokeWidth="1.5" />
-                <path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41" stroke={gearOpen ? colors.accent : colors.dim} strokeWidth="1.2" strokeLinecap="round" />
-              </svg>
-            </button>
-          </div>
-
-          {/* Account dropdown */}
-          {gearOpen && (
-            <AccountDropdown
-              onNavigateProfile={onNavigateProfile}
-              onSignOut={onSignOut}
-              onSignOutEverywhere={onSignOutEverywhere}
-              onClose={() => setGearOpen(false)}
-            />
-          )}
-        </div>
-
+    <>
         {/* Verification banner */}
         {account.status === 'pending' && (
           <div style={{
@@ -726,7 +554,7 @@ export function DashboardScreen({ account, onCreateEvent, onImportEvents, onEdit
         )}
 
         {/* ── Action bar ── */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '14px', alignItems: 'center' }}>
           {!selectMode && (
             <>
               <button
@@ -748,6 +576,25 @@ export function DashboardScreen({ account, onCreateEvent, onImportEvents, onEdit
                 onClick={onImportEvents}
               >
                 Import
+              </button>
+              <button
+                type="button"
+                onClick={() => { setSearchVisible(!searchVisible); if (searchVisible) setSearch(''); }}
+                style={{
+                  background: searchVisible ? colors.accentDim : 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '8px',
+                  borderRadius: '6px',
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+                title="Search events"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <circle cx="7" cy="7" r="4.5" stroke={searchVisible ? colors.accent : colors.dim} strokeWidth="1.5" />
+                  <path d="M10.5 10.5L13.5 13.5" stroke={searchVisible ? colors.accent : colors.dim} strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
               </button>
             </>
           )}
@@ -871,7 +718,6 @@ export function DashboardScreen({ account, onCreateEvent, onImportEvents, onEdit
             onCancel={() => setConfirmDelete(false)}
           />
         )}
-      </div>
-    </div>
+    </>
   );
 }

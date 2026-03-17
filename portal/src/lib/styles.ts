@@ -257,6 +257,36 @@ export const styles = {
     zIndex: 0,
     animation: 'drift 22s ease-in-out infinite',
   },
+
+  // Workspace layout — sidebar CMS shell
+  workspace: {
+    display: 'flex',
+    minHeight: '100vh',
+    background: colors.bg,
+  },
+  sidebar: {
+    width: '240px',
+    background: colors.card,
+    borderRight: `1px solid ${colors.border}`,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    padding: '20px 0',
+    position: 'fixed' as const,
+    top: 0,
+    left: 0,
+    height: '100vh',
+    overflowY: 'auto' as const,
+    zIndex: 100,
+  },
+  mainCanvas: {
+    flex: 1,
+    marginLeft: '240px',
+    minHeight: '100vh',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    padding: '40px 20px',
+  },
 } as const;
 
 // ---------------------------------------------------------------------------

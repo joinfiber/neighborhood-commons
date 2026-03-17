@@ -55,8 +55,7 @@ export function AdminCreateEventScreen({ preSelectedAccountId, onBack, onCreated
   }
 
   return (
-    <div style={styles.page}>
-      <div style={styles.contentWide} className="fade-up">
+    <>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
           <button type="button" className="btn-text" style={styles.buttonText} onClick={onBack}>
             ← Back
@@ -92,7 +91,6 @@ export function AdminCreateEventScreen({ preSelectedAccountId, onBack, onCreated
           submitting={submitting}
           accountWheelchairAccessible={selectedAccount?.wheelchair_accessible ?? null}
         />
-      </div>
-    </div>
+    </>
   );
 }

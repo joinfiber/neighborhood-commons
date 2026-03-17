@@ -141,10 +141,8 @@ export function ShareStudioScreen({ eventId, onDone }: ShareStudioScreenProps) {
   // Loading
   if (loading) {
     return (
-      <div style={styles.page}>
-        <div style={{ ...styles.content, textAlign: 'center' as const, paddingTop: '120px' }}>
-          <div style={{ color: colors.dim, fontSize: '14px' }}>Loading...</div>
-        </div>
+      <div style={{ textAlign: 'center' as const, paddingTop: '80px' }}>
+        <div style={{ color: colors.dim, fontSize: '14px' }}>Loading...</div>
       </div>
     );
   }
@@ -152,19 +150,17 @@ export function ShareStudioScreen({ eventId, onDone }: ShareStudioScreenProps) {
   // Error
   if (error || !event) {
     return (
-      <div style={styles.page}>
-        <div style={{ ...styles.content, textAlign: 'center' as const, paddingTop: '120px' }}>
-          <div style={{ color: colors.error, fontSize: '14px', marginBottom: '16px' }}>
-            {error || 'Event not found'}
-          </div>
-          <button
-            className="btn-secondary"
-            style={{ ...styles.buttonSecondary, width: 'auto', padding: '10px 24px' }}
-            onClick={onDone}
-          >
-            Go to Dashboard
-          </button>
+      <div style={{ textAlign: 'center' as const, paddingTop: '80px' }}>
+        <div style={{ color: colors.error, fontSize: '14px', marginBottom: '16px' }}>
+          {error || 'Event not found'}
         </div>
+        <button
+          className="btn-secondary"
+          style={{ ...styles.buttonSecondary, width: 'auto', padding: '10px 24px' }}
+          onClick={onDone}
+        >
+          Go to Dashboard
+        </button>
       </div>
     );
   }
@@ -172,8 +168,7 @@ export function ShareStudioScreen({ eventId, onDone }: ShareStudioScreenProps) {
   const previewUrl = activeTemplate === 'story' ? storyUrl : squareUrl;
 
   return (
-    <div style={styles.page}>
-      <div style={{ ...styles.content, maxWidth: '520px' }} className="fade-up">
+    <>
 
         {/* Header */}
         <div style={{ marginBottom: '24px' }}>
@@ -290,7 +285,6 @@ export function ShareStudioScreen({ eventId, onDone }: ShareStudioScreenProps) {
         </button>
 
         <div style={{ height: '40px' }} />
-      </div>
-    </div>
+    </>
   );
 }
