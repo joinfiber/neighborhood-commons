@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useHashRoute } from './hooks/useHashRoute';
-import { claimAccount, fetchAccount, fetchWhoami, adminFetchAccount, updateProfile, setImpersonation, getImpersonation, type PortalAccount, type UserRole } from './lib/api';
+import { claimAccount, fetchAccount, fetchWhoami, updateProfile, setImpersonation, type PortalAccount, type UserRole } from './lib/api';
 import { colors, styles } from './lib/styles';
 import { LoginScreen } from './screens/LoginScreen';
 import { DashboardScreen } from './screens/DashboardScreen';
@@ -45,11 +45,19 @@ export default function App() {
     setRoleLoading(true);
     const res = await fetchWhoami();
     if (res.data) {
-      setRole(res.data.role);
-      if (res.data.role === 'business' && res.data.account) {
-        setAccount(res.data.account);
-        if (res.data.account.status === 'pending' && !res.data.account.default_address) {
-          setShowOnboarding(true);
+      // Admin impersonation restored from sessionStorage: /whoami returns
+      // role='business' + impersonating=true. Set the real role to admin
+      // and populate the impersonation state instead of the business state.
+      if (res.data.impersonating && res.data.account) {
+        setRole('admin');
+        setActAsAccount(res.data.account);
+      } else {
+        setRole(res.data.role);
+        if (res.data.role === 'business' && res.data.account) {
+          setAccount(res.data.account);
+          if (res.data.account.status === 'pending' && !res.data.account.default_address) {
+            setShowOnboarding(true);
+          }
         }
       }
     } else {
@@ -106,21 +114,9 @@ export default function App() {
     }
   }, [isAuthenticated, role, roleLoading, account, claiming, claimError, detectRole, loadAccount]);
 
-  // Restore impersonation on page refresh (admin only)
-  useEffect(() => {
-    if (role === 'admin' && !actAsAccount) {
-      const stored = getImpersonation();
-      if (stored) {
-        adminFetchAccount(stored).then((res) => {
-          if (res.data) {
-            setActAsAccount(res.data.account);
-          } else {
-            setImpersonation(null);
-          }
-        });
-      }
-    }
-  }, [role, actAsAccount]);
+  // Note: impersonation restore on page refresh is handled by detectRole() —
+  // /whoami returns impersonating:true when X-Act-As-Account header is present,
+  // so detectRole sets role='admin' + actAsAccount in one pass.
 
   // =========================================================================
   // LOADING / INITIALIZING

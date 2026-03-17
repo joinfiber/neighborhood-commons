@@ -756,9 +756,8 @@ router.get('/whoami', portalLimiter, async (req, res, next) => {
 
     if (isPortalAdmin(req)) {
       // Admin impersonation: return target account as business role
-      const actAs = req.headers['x-act-as-account'] as string | undefined;
+      const actAs = getActAsAccountId(req);
       if (actAs) {
-        validateUuidParam(actAs, 'act-as account ID');
         const { data: targetAccount } = await supabaseAdmin
           .from('portal_accounts')
           .select(PORTAL_ACCOUNT_SELECT)
@@ -814,6 +813,11 @@ router.get('/whoami', portalLimiter, async (req, res, next) => {
 
 router.post('/account/claim', writeLimiter, async (req, res, next) => {
   try {
+    // Account claiming is identity-binding — never allowed during impersonation
+    if (req.headers['x-act-as-account']) {
+      throw createError('Cannot claim accounts during impersonation', 400, 'VALIDATION_ERROR');
+    }
+
     const userId = req.user?.id;
     const email = req.user?.email;
     if (!userId || !email) throw createError('Unauthorized', 401, 'UNAUTHORIZED');
@@ -908,14 +912,17 @@ router.get('/account', portalLimiter, async (req, res, next) => {
       throw createError('No portal account found', 404, 'NOT_FOUND');
     }
 
-    // Sync email: if the auth user verified a new email, update portal_accounts to match
-    const authEmail = req.user?.email;
-    if (authEmail && authEmail !== account.email) {
-      await supabaseAdmin
-        .from('portal_accounts')
-        .update({ email: authEmail })
-        .eq('id', account.id);
-      account.email = authEmail;
+    // Sync email: if the auth user verified a new email, update portal_accounts to match.
+    // Skip during admin impersonation — req.user.email is the admin's email, not the business owner's.
+    if (!actAs) {
+      const authEmail = req.user?.email;
+      if (authEmail && authEmail !== account.email) {
+        await supabaseAdmin
+          .from('portal_accounts')
+          .update({ email: authEmail })
+          .eq('id', account.id);
+        account.email = authEmail;
+      }
     }
 
     res.json({ account });

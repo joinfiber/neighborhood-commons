@@ -96,6 +96,7 @@ export interface WhoamiResponse {
   role: UserRole;
   email?: string;
   account?: PortalAccount;
+  impersonating?: boolean;
 }
 
 export interface PortalStats {
