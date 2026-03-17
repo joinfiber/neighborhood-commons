@@ -7,7 +7,7 @@ import { EventForm } from '../components/EventForm';
 interface CreateEventScreenProps {
   account: PortalAccount;
   onBack: () => void;
-  onCreated: (title: string, venue: string, date: string) => void;
+  onCreated: (eventId: string) => void;
 }
 
 export function CreateEventScreen({ account, onBack, onCreated }: CreateEventScreenProps) {
@@ -40,7 +40,7 @@ export function CreateEventScreen({ account, onBack, onCreated }: CreateEventScr
     }
 
     setSubmitting(false);
-    onCreated(data.title, data.venue_name, data.event_date);
+    onCreated(res.data!.event.id);
   }
 
   return (

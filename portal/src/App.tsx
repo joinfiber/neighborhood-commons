@@ -16,6 +16,7 @@ import { AdminAllEventsScreen } from './screens/AdminAllEventsScreen';
 import { DevelopersScreen } from './screens/DevelopersScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { TermsScreen } from './screens/TermsScreen';
+import { ShareStudioScreen } from './screens/ShareStudioScreen';
 import { Toast } from './components/Toast';
 import { PlaceAutocomplete } from './components/PlaceAutocomplete';
 import type { PlaceResult } from './lib/api';
@@ -194,6 +195,15 @@ export default function App() {
           );
         }
 
+        if (route.screen === 'share-event' && route.params.id) {
+          return (
+            <ShareStudioScreen
+              eventId={route.params.id}
+              onDone={() => navigate('#/')}
+            />
+          );
+        }
+
         if (route.screen === 'import-events') {
           return (
             <ImportEventsScreen
@@ -212,9 +222,8 @@ export default function App() {
             <CreateEventScreen
               account={actAsAccount}
               onBack={() => navigate('#/')}
-              onCreated={(title, venue, date) => {
-                navigate('#/');
-                setToast({ message: `${title} at ${venue} on ${date}`, type: 'success' });
+              onCreated={(eventId) => {
+                navigate(`#/events/${eventId}/share`);
               }}
             />
           );
@@ -430,6 +439,15 @@ export default function App() {
       );
     }
 
+    if (route.screen === 'share-event' && route.params.id) {
+      return (
+        <ShareStudioScreen
+          eventId={route.params.id}
+          onDone={() => navigate('#/')}
+        />
+      );
+    }
+
     if (route.screen === 'import-events') {
       return (
         <ImportEventsScreen
@@ -448,9 +466,8 @@ export default function App() {
         <CreateEventScreen
           account={account}
           onBack={() => navigate('#/')}
-          onCreated={(title, venue, date) => {
-            navigate('#/');
-            setToast({ message: `${title} at ${venue} on ${date}`, type: 'success' });
+          onCreated={(eventId) => {
+            navigate(`#/events/${eventId}/share`);
           }}
         />
       );
