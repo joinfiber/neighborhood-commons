@@ -273,6 +273,13 @@ export async function adminBatchDeleteEvents(ids: string[]) {
   return { deleted: results.length, ids: results };
 }
 
+export async function adminUpdateEventSeries(seriesId: string, params: Partial<CreateEventParams> & { force?: boolean }) {
+  return apiRequest<{ updated: number; total: number; added: number; removed: number }>(`/api/portal/admin/events/series/${seriesId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(params),
+  });
+}
+
 export async function adminDeleteEvent(id: string) {
   return apiRequest<{ success: boolean }>(`/api/portal/admin/events/${id}`, { method: 'DELETE' });
 }

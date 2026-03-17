@@ -37,6 +37,8 @@ import {
   createEventSeries,
   deleteSeriesEvents,
   dispatchSeriesWebhooks,
+  generateInstanceDates,
+  formatDateStr,
 } from './portal.js';
 
 const router: ReturnType<typeof Router> = Router();
@@ -876,6 +878,302 @@ router.patch('/events/batch', writeLimiter, async (req, res, next) => {
     })();
 
     res.json({ updated: updatedRows.length, ids: updatedRows.map((r) => r.id) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * PATCH /admin/events/series/:seriesId
+ * Update all future instances of a series (admin override, no RLS).
+ * Handles field updates + instance count changes (add/remove instances).
+ * NOTE: Must be defined before /events/:id to avoid route conflict.
+ */
+router.patch('/events/series/:seriesId', writeLimiter, async (req, res, next) => {
+  try {
+    validateUuidParam(req.params.seriesId, 'series ID');
+    const data = validateRequest(updateEventSchema, req.body);
+
+    // Fetch the series metadata
+    const { data: series } = await supabaseAdmin
+      .from('event_series')
+      .select('id, recurrence, base_event_data, creator_account_id')
+      .eq('id', req.params.seriesId)
+      .maybeSingle();
+
+    if (!series) throw createError('Series not found', 404, 'NOT_FOUND');
+
+    const baseData = (series.base_event_data as Record<string, unknown>) || {};
+
+    // Fetch all future instances
+    const now = new Date().toISOString();
+    const { data: futureEvents, error: fetchErr } = await supabaseAdmin
+      .from('events')
+      .select(PORTAL_SELECT)
+      .eq('series_id', req.params.seriesId)
+      .eq('source', 'portal')
+      .gte('event_at', now)
+      .order('event_at', { ascending: true });
+
+    if (fetchErr) {
+      console.error('[COMMONS-ADMIN] Series fetch error:', fetchErr.message);
+      throw createError('Failed to fetch series events', 500, 'SERVER_ERROR');
+    }
+
+    if (!futureEvents || futureEvents.length === 0) {
+      throw createError('No upcoming events in this series', 404, 'NOT_FOUND');
+    }
+
+    const refEvent = futureEvents[0]!;
+    const tz = data.event_timezone || (refEvent.event_timezone as string) || 'America/New_York';
+
+    // Build template update
+    const templateUpdate: Record<string, unknown> = {};
+    if (data.title !== undefined) templateUpdate.content = data.title;
+    if (data.venue_name !== undefined) templateUpdate.place_name = data.venue_name;
+    if (data.address !== undefined) templateUpdate.venue_address = data.address || null;
+    if (data.place_id !== undefined) templateUpdate.place_id = data.place_id || null;
+    if (data.latitude !== undefined) templateUpdate.latitude = data.latitude ?? null;
+    if (data.longitude !== undefined) templateUpdate.longitude = data.longitude ?? null;
+    if (data.latitude !== undefined || data.longitude !== undefined) {
+      const lat = data.latitude ?? null;
+      const lng = data.longitude ?? null;
+      templateUpdate.approximate_location = lat != null && lng != null
+        ? `POINT(${lng} ${lat})`
+        : null;
+    }
+    if (data.event_timezone !== undefined) templateUpdate.event_timezone = data.event_timezone;
+    if (data.category !== undefined) {
+      templateUpdate.category = data.category;
+      if (data.category !== 'other') templateUpdate.custom_category = null;
+    }
+    if (data.custom_category !== undefined && data.category === 'other') {
+      templateUpdate.custom_category = data.custom_category?.trim() || null;
+    }
+    if (data.description !== undefined) templateUpdate.description = data.description || null;
+    if (data.price !== undefined) templateUpdate.price = data.price || null;
+    if (data.ticket_url !== undefined) {
+      templateUpdate.link_url = data.ticket_url ? (checkApprovedDomain(data.ticket_url), sanitizeUrl(data.ticket_url)) : null;
+    }
+    if (data.recurrence !== undefined) templateUpdate.recurrence = data.recurrence;
+    if (data.image_focal_y !== undefined) templateUpdate.event_image_focal_y = data.image_focal_y;
+
+    const hasTimeChange = data.start_time !== undefined || data.end_time !== undefined;
+    const hasInstanceCountChange = data.instance_count !== undefined;
+
+    if (Object.keys(templateUpdate).length === 0 && !hasTimeChange && !hasInstanceCountChange) {
+      throw createError('No fields to update', 400, 'VALIDATION_ERROR');
+    }
+
+    // Update each future instance
+    let updatedCount = 0;
+    for (const ev of futureEvents) {
+      const instanceUpdate: Record<string, unknown> = { ...templateUpdate };
+
+      // Apply time changes per-instance (preserving each instance's date)
+      if (hasTimeChange) {
+        const instanceTz = (ev as Record<string, unknown>).event_timezone as string || tz;
+        const parsed = ev.event_at ? fromTimestamptz(ev.event_at as string, instanceTz) : null;
+        const instanceDate = parsed?.date;
+
+        if (instanceDate) {
+          if (data.start_time !== undefined) {
+            const newTime = data.start_time || parsed?.time;
+            if (newTime) {
+              instanceUpdate.event_at = toTimestamptz(instanceDate, newTime, instanceTz);
+            }
+          }
+          if (data.end_time !== undefined) {
+            if (data.end_time) {
+              const eventAtRef = (instanceUpdate.event_at as string | undefined) || (ev.event_at as string);
+              let endTimeTs = toTimestamptz(instanceDate, data.end_time, instanceTz);
+              if (eventAtRef && new Date(endTimeTs) <= new Date(eventAtRef)) {
+                const nextDay = new Date(instanceDate);
+                nextDay.setDate(nextDay.getDate() + 1);
+                endTimeTs = toTimestamptz(nextDay.toISOString().split('T')[0]!, data.end_time, instanceTz);
+              }
+              instanceUpdate.end_time = endTimeTs;
+            } else {
+              instanceUpdate.end_time = null;
+            }
+          }
+        }
+      }
+
+      if (Object.keys(instanceUpdate).length === 0) continue;
+
+      const { error: updateErr } = await supabaseAdmin
+        .from('events')
+        .update(instanceUpdate)
+        .eq('id', (ev as Record<string, unknown>).id as string);
+
+      if (updateErr) {
+        console.error(`[COMMONS-ADMIN] Series instance update error (${(ev as Record<string, unknown>).id}):`, updateErr.message);
+      } else {
+        updatedCount++;
+      }
+    }
+
+    // Update base_event_data on the series row
+    const newBase = { ...baseData };
+    const columnToBaseKey: Record<string, string> = {
+      content: 'content', place_name: 'place_name', venue_address: 'venue_address',
+      place_id: 'place_id', latitude: 'latitude', longitude: 'longitude',
+      category: 'category', custom_category: 'custom_category',
+      description: 'description', price: 'price', link_url: 'link_url',
+      event_image_focal_y: 'event_image_focal_y',
+    };
+    for (const [col, baseKey] of Object.entries(columnToBaseKey)) {
+      if (col in templateUpdate) {
+        newBase[baseKey] = templateUpdate[col];
+      }
+    }
+    await supabaseAdmin
+      .from('event_series')
+      .update({ base_event_data: newBase })
+      .eq('id', req.params.seriesId);
+
+    // Handle instance_count changes
+    let instancesAdded = 0;
+    let instancesRemoved = 0;
+    if (hasInstanceCountChange) {
+      const seriesRecurrence = series.recurrence as string;
+      if (seriesRecurrence && seriesRecurrence !== 'none') {
+        const desiredCount = generateInstanceDates('2025-01-01', seriesRecurrence, data.instance_count).length;
+
+        const { data: allFuture } = await supabaseAdmin
+          .from('events')
+          .select('id, event_at, event_timezone, end_time, series_instance_number')
+          .eq('series_id', req.params.seriesId)
+          .eq('source', 'portal')
+          .gte('event_at', now)
+          .order('event_at', { ascending: true });
+
+        const currentFutureCount = allFuture?.length || 0;
+
+        if (desiredCount > currentFutureCount && allFuture && allFuture.length > 0) {
+          const lastFuture = allFuture[allFuture.length - 1]!;
+          const lastTz = (lastFuture.event_timezone as string) || tz;
+          const lastParsed = fromTimestamptz(lastFuture.event_at as string, lastTz);
+          const lastNum = (lastFuture.series_instance_number as number) || allFuture.length;
+
+          const startTime = lastParsed.time;
+          let endTime: string | null = null;
+          if (lastFuture.end_time) {
+            endTime = fromTimestamptz(lastFuture.end_time as string, lastTz).time;
+          }
+
+          const lastDate = new Date(lastParsed.date + 'T12:00:00');
+          lastDate.setDate(lastDate.getDate() + 1);
+          const newStartDate = formatDateStr(lastDate);
+
+          const needed = desiredCount - currentFutureCount;
+          const newDates = generateInstanceDates(newStartDate, seriesRecurrence, needed);
+
+          if (newDates.length > 0) {
+            const { data: templateEvent } = await supabaseAdmin
+              .from('events')
+              .select('creator_account_id, source, visibility, status, is_business, region_id, event_timezone, event_image_url, event_image_focal_y')
+              .eq('series_id', req.params.seriesId)
+              .limit(1)
+              .single();
+
+            if (templateEvent) {
+              const adminUserId = getAdminUserId();
+              const rows = newDates.map((date, i) => {
+                const eventAt = toTimestamptz(date, startTime, lastTz);
+                let endTimeTs: string | null = null;
+                if (endTime) {
+                  endTimeTs = toTimestamptz(date, endTime, lastTz);
+                  if (new Date(endTimeTs) <= new Date(eventAt)) {
+                    const nextDay = new Date(date);
+                    nextDay.setDate(nextDay.getDate() + 1);
+                    endTimeTs = toTimestamptz(nextDay.toISOString().split('T')[0]!, endTime, lastTz);
+                  }
+                }
+                return {
+                  ...newBase,
+                  creator_account_id: series.creator_account_id,
+                  user_id: adminUserId,
+                  source: templateEvent.source,
+                  visibility: templateEvent.visibility,
+                  status: templateEvent.status,
+                  is_business: templateEvent.is_business,
+                  region_id: templateEvent.region_id,
+                  event_timezone: lastTz,
+                  event_image_url: templateEvent.event_image_url,
+                  event_image_focal_y: templateEvent.event_image_focal_y,
+                  event_at: eventAt,
+                  end_time: endTimeTs,
+                  recurrence: seriesRecurrence,
+                  series_id: series.id,
+                  series_instance_number: lastNum + i + 1,
+                };
+              });
+
+              const { data: created, error: insertErr } = await supabaseAdmin
+                .from('events')
+                .insert(rows)
+                .select('id');
+
+              if (insertErr) {
+                console.error('[COMMONS-ADMIN] Series instance expansion error:', insertErr.message);
+              } else {
+                instancesAdded = created?.length || 0;
+              }
+            }
+          }
+        } else if (desiredCount < currentFutureCount && allFuture) {
+          const toRemove = allFuture.slice(desiredCount);
+          const removeIds = toRemove.map((e) => (e as Record<string, unknown>).id as string);
+          if (removeIds.length > 0) {
+            const { error: delErr } = await supabaseAdmin
+              .from('events')
+              .delete()
+              .in('id', removeIds);
+
+            if (delErr) {
+              console.error('[COMMONS-ADMIN] Series instance removal error:', delErr.message);
+            } else {
+              instancesRemoved = removeIds.length;
+            }
+          }
+        }
+
+        const finalCount = (allFuture?.length || 0) + instancesAdded - instancesRemoved;
+        const updatedRule = { frequency: seriesRecurrence, count: finalCount };
+        await supabaseAdmin
+          .from('event_series')
+          .update({ recurrence_rule: updatedRule })
+          .eq('id', series.id);
+      }
+    }
+
+    const totalAfter = futureEvents.length + instancesAdded - instancesRemoved;
+    console.log(`[COMMONS-ADMIN] Series ${req.params.seriesId} updated: ${updatedCount}/${futureEvents.length} instances` +
+      (instancesAdded ? `, +${instancesAdded} added` : '') +
+      (instancesRemoved ? `, -${instancesRemoved} removed` : ''));
+
+    // Dispatch webhooks (fire-and-forget)
+    void (async () => {
+      try {
+        for (const ev of futureEvents) {
+          const { data: row } = await supabaseAdmin
+            .from('events')
+            .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name)`)
+            .eq('id', (ev as Record<string, unknown>).id as string)
+            .maybeSingle();
+          if (row && (row as Record<string, unknown>).status === 'published') {
+            void dispatchWebhooks('event.updated', (ev as Record<string, unknown>).id as string,
+              toNeighborhoodEvent(row as unknown as PortalEventRow));
+          }
+        }
+      } catch (err) {
+        console.error('[COMMONS-ADMIN] Series webhook dispatch error:', err instanceof Error ? err.message : err);
+      }
+    })();
+
+    res.json({ updated: updatedCount, total: totalAfter, added: instancesAdded, removed: instancesRemoved });
   } catch (err) {
     next(err);
   }

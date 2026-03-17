@@ -250,14 +250,14 @@ function getNthWeekdayOfMonth(year: number, month: number, dayOfWeek: number, n:
   return result;
 }
 
-function formatDateStr(d: Date): string {
+export function formatDateStr(d: Date): string {
   const y = d.getFullYear();
   const m = d.getMonth() + 1;
   const day = d.getDate();
   return `${y}-${m < 10 ? '0' : ''}${m}-${day < 10 ? '0' : ''}${day}`;
 }
 
-function generateInstanceDates(startDate: string, recurrence: string, instanceCount?: number): string[] {
+export function generateInstanceDates(startDate: string, recurrence: string, instanceCount?: number): string[] {
   if (recurrence === 'none') return [startDate];
 
   const start = new Date(startDate + 'T12:00:00');

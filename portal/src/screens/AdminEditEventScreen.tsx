@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { styles, colors } from '../lib/styles';
-import { adminFetchAccount, adminUpdateEvent, adminDeleteEvent, adminUploadEventImage } from '../lib/api';
+import { adminFetchAccount, adminUpdateEvent, adminUpdateEventSeries, adminDeleteEvent, adminUploadEventImage } from '../lib/api';
 import type { PortalAccount, PortalEvent, EventFormData } from '../lib/types';
 import { EventForm } from '../components/EventForm';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -20,6 +20,8 @@ export function AdminEditEventScreen({ eventId, accountId, onBack, onUpdated, on
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [seriesEditChoice, setSeriesEditChoice] = useState<null | { data: EventFormData }>(null);
+  const [seriesResult, setSeriesResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -39,8 +41,44 @@ export function AdminEditEventScreen({ eventId, accountId, onBack, onUpdated, on
 
   async function handleSubmit(data: EventFormData) {
     if (!event) return;
+
+    // If this is a series event, ask which scope to apply
+    if (event.series_id) {
+      setSeriesEditChoice({ data });
+      return;
+    }
+
+    return applyUpdate(data, 'single');
+  }
+
+  async function applyUpdate(data: EventFormData, scope: 'single' | 'all_upcoming') {
+    if (!event) return;
     setSubmitting(true);
+    setSeriesEditChoice(null);
+    setSeriesResult(null);
     const { image, ...params } = data;
+
+    if (scope === 'all_upcoming' && event.series_id) {
+      const res = await adminUpdateEventSeries(event.series_id, params);
+      if (res.error) {
+        setSubmitting(false);
+        return { error: res.error.message };
+      }
+
+      if (image) {
+        const raw = image.replace(/^data:[^;]+;base64,/, '');
+        await adminUploadEventImage(event.id, raw);
+      }
+
+      setSubmitting(false);
+      const parts = [`Updated ${res.data!.updated} of ${res.data!.total} upcoming events`];
+      if (res.data!.added > 0) parts.push(`+${res.data!.added} added`);
+      if (res.data!.removed > 0) parts.push(`${res.data!.removed} removed`);
+      setSeriesResult(parts.join(', '));
+      setTimeout(() => onUpdated(), 1500);
+      return;
+    }
+
     const res = await adminUpdateEvent(event.id, params);
     if (res.error) {
       setSubmitting(false);
@@ -144,6 +182,34 @@ export function AdminEditEventScreen({ eventId, accountId, onBack, onUpdated, on
           <h1 style={styles.pageTitle}>Edit Event</h1>
         </div>
 
+        {event.series_id && (
+          <div style={{
+            background: colors.bg,
+            border: `1px solid ${colors.border}`,
+            borderRadius: '8px',
+            padding: '8px 12px',
+            marginBottom: '16px',
+            fontSize: '12px',
+            color: colors.muted,
+          }}>
+            Part of a recurring series (instance {event.series_instance_number})
+          </div>
+        )}
+
+        {seriesResult && (
+          <div style={{
+            background: '#f0fdf4',
+            border: '1px solid #bbf7d0',
+            color: colors.success,
+            padding: '10px 14px',
+            borderRadius: '8px',
+            fontSize: '13px',
+            marginBottom: '16px',
+          }}>
+            {seriesResult}
+          </div>
+        )}
+
         {error && (
           <div style={{
             background: '#fef2f2',
@@ -191,6 +257,63 @@ export function AdminEditEventScreen({ eventId, accountId, onBack, onUpdated, on
             onConfirm={handleConfirmDelete}
             onCancel={() => setConfirmDelete(false)}
           />
+        )}
+
+        {seriesEditChoice && (
+          <div style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+          }}>
+            <div style={{
+              background: colors.card, border: `1px solid ${colors.border}`,
+              borderRadius: '12px', padding: '24px', maxWidth: '380px', width: '90%',
+            }}>
+              <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', color: colors.cream }}>
+                Edit recurring event
+              </h3>
+              <p style={{ margin: '0 0 20px 0', fontSize: '13px', color: colors.muted, lineHeight: 1.6 }}>
+                This event is part of a series. Apply your changes to just this instance, or all upcoming events?
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => void applyUpdate(seriesEditChoice.data, 'single')}
+                  disabled={submitting}
+                  style={{
+                    ...styles.buttonPrimary,
+                    background: colors.bg, border: `1px solid ${colors.border}`,
+                    color: colors.text, fontSize: '13px', padding: '10px 16px',
+                    cursor: 'pointer', borderRadius: '8px',
+                  }}
+                >
+                  This event only
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void applyUpdate(seriesEditChoice.data, 'all_upcoming')}
+                  disabled={submitting}
+                  style={{
+                    ...styles.buttonPrimary,
+                    fontSize: '13px', padding: '10px 16px',
+                    cursor: 'pointer', borderRadius: '8px',
+                  }}
+                >
+                  {submitting ? 'Updating...' : 'All upcoming events'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSeriesEditChoice(null)}
+                  disabled={submitting}
+                  style={{
+                    background: 'none', border: 'none', color: colors.dim,
+                    fontSize: '12px', cursor: 'pointer', padding: '8px',
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>
