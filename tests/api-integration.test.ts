@@ -72,6 +72,15 @@ import { createApp } from '../src/app.js';
 // Test fixtures
 // ---------------------------------------------------------------------------
 
+/** Future date helpers — tests must not go stale as calendar dates pass */
+function futureDate(daysAhead = 1): string {
+  const d = new Date();
+  d.setDate(d.getDate() + daysAhead);
+  return d.toISOString().split('T')[0]!;
+}
+const FUTURE_START = `${futureDate(1)}T21:00:00.000Z`;
+const FUTURE_END = `${futureDate(1)}T23:00:00.000Z`;
+
 /** A realistic event row as it comes from the database (with joined portal_accounts) */
 function makeDbRow(overrides: Record<string, unknown> = {}) {
   return {
@@ -83,8 +92,8 @@ function makeDbRow(overrides: Record<string, unknown> = {}) {
     place_id: 'ChIJ_fishtown_tap',
     latitude: 39.9743,
     longitude: -75.1340,
-    event_at: '2026-03-16T21:00:00.000Z',
-    end_time: '2026-03-16T23:00:00.000Z',
+    event_at: FUTURE_START,
+    end_time: FUTURE_END,
     event_timezone: 'America/New_York',
     category: 'happy_hour',
     custom_category: null,
@@ -497,21 +506,21 @@ describe('series deduplication', () => {
           series_id: seriesId,
           series_instance_number: 1,
           recurrence: 'weekly_days:mon,tue,wed,thu',
-          event_at: '2026-03-16T21:00:00.000Z',
+          event_at: `${futureDate(1)}T21:00:00.000Z`,
         }),
         makeDbRow({
           id: 'instance-2',
           series_id: seriesId,
           series_instance_number: 2,
           recurrence: 'weekly_days:mon,tue,wed,thu',
-          event_at: '2026-03-17T21:00:00.000Z',
+          event_at: `${futureDate(2)}T21:00:00.000Z`,
         }),
         makeDbRow({
           id: 'instance-3',
           series_id: seriesId,
           series_instance_number: 3,
           recurrence: 'weekly_days:mon,tue,wed,thu',
-          event_at: '2026-03-18T21:00:00.000Z',
+          event_at: `${futureDate(3)}T21:00:00.000Z`,
         }),
         makeDbRow({
           id: 'standalone-event',

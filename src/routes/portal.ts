@@ -1288,10 +1288,10 @@ router.patch('/events/series/:seriesId', writeLimiter, async (req, res, next) =>
       throw createError('Series not found', 404, 'NOT_FOUND');
     }
 
-    // Fetch the series base_event_data for customization detection
+    // Fetch the series metadata for customization detection + instance generation
     const { data: series } = await supabaseAdmin
       .from('event_series')
-      .select('base_event_data')
+      .select('id, recurrence, base_event_data, creator_account_id')
       .eq('id', req.params.seriesId)
       .maybeSingle();
 
@@ -1360,7 +1360,8 @@ router.patch('/events/series/:seriesId', writeLimiter, async (req, res, next) =>
     // Time changes: apply to each instance relative to its own date
     const hasTimeChange = data.start_time !== undefined || data.end_time !== undefined;
 
-    if (Object.keys(templateUpdate).length === 0 && !hasTimeChange) {
+    const hasInstanceCountChange = data.instance_count !== undefined;
+    if (Object.keys(templateUpdate).length === 0 && !hasTimeChange && !hasInstanceCountChange) {
       throw createError('No fields to update', 400, 'VALIDATION_ERROR');
     }
 
@@ -1449,9 +1450,134 @@ router.patch('/events/series/:seriesId', writeLimiter, async (req, res, next) =>
       .update({ base_event_data: newBase })
       .eq('id', req.params.seriesId);
 
-    console.log(`[PORTAL] Series ${req.params.seriesId} updated: ${updatedCount}/${futureEvents.length} future instances`);
+    // Handle instance_count changes: add or remove future instances
+    let instancesAdded = 0;
+    let instancesRemoved = 0;
+    if (hasInstanceCountChange && series) {
+      const seriesRecurrence = series.recurrence as string;
+      if (seriesRecurrence && seriesRecurrence !== 'none') {
+        // Determine how many instances the user wants
+        const desiredCount = generateInstanceDates('2025-01-01', seriesRecurrence, data.instance_count).length;
+
+        // Re-fetch ALL future instances (including any just-updated ones)
+        const { data: allFuture } = await supabaseAdmin
+          .from('events')
+          .select('id, event_at, event_timezone, end_time, series_instance_number')
+          .eq('series_id', req.params.seriesId)
+          .eq('source', 'portal')
+          .gte('event_at', now)
+          .order('event_at', { ascending: true });
+
+        const currentFutureCount = allFuture?.length || 0;
+
+        if (desiredCount > currentFutureCount && allFuture && allFuture.length > 0) {
+          // Need more instances — generate from day after last existing instance
+          const lastFuture = allFuture[allFuture.length - 1]!;
+          const lastTz = (lastFuture.event_timezone as string) || tz;
+          const lastParsed = fromTimestamptz(lastFuture.event_at as string, lastTz);
+          const lastNum = (lastFuture.series_instance_number as number) || allFuture.length;
+
+          const startTime = lastParsed.time;
+          let endTime: string | null = null;
+          if (lastFuture.end_time) {
+            endTime = fromTimestamptz(lastFuture.end_time as string, lastTz).time;
+          }
+
+          const lastDate = new Date(lastParsed.date + 'T12:00:00');
+          lastDate.setDate(lastDate.getDate() + 1);
+          const newStartDate = formatDateStr(lastDate);
+
+          const needed = desiredCount - currentFutureCount;
+          const newDates = generateInstanceDates(newStartDate, seriesRecurrence, needed);
+
+          if (newDates.length > 0) {
+            // Fetch template fields from an existing instance
+            const { data: templateEvent } = await supabaseAdmin
+              .from('events')
+              .select('creator_account_id, source, visibility, status, is_business, region_id, event_timezone, event_image_url, event_image_focal_y')
+              .eq('series_id', req.params.seriesId)
+              .limit(1)
+              .single();
+
+            if (templateEvent) {
+              const adminUserId = getAdminUserId();
+              const rows = newDates.map((date, i) => {
+                const eventAt = toTimestamptz(date, startTime, lastTz);
+                let endTimeTs: string | null = null;
+                if (endTime) {
+                  endTimeTs = toTimestamptz(date, endTime, lastTz);
+                  if (new Date(endTimeTs) <= new Date(eventAt)) {
+                    const nextDay = new Date(date);
+                    nextDay.setDate(nextDay.getDate() + 1);
+                    endTimeTs = toTimestamptz(nextDay.toISOString().split('T')[0]!, endTime, lastTz);
+                  }
+                }
+                return {
+                  ...newBase,
+                  creator_account_id: series.creator_account_id,
+                  user_id: adminUserId,
+                  source: templateEvent.source,
+                  visibility: templateEvent.visibility,
+                  status: templateEvent.status,
+                  is_business: templateEvent.is_business,
+                  region_id: templateEvent.region_id,
+                  event_timezone: lastTz,
+                  event_image_url: templateEvent.event_image_url,
+                  event_image_focal_y: templateEvent.event_image_focal_y,
+                  event_at: eventAt,
+                  end_time: endTimeTs,
+                  recurrence: seriesRecurrence,
+                  series_id: series.id,
+                  series_instance_number: lastNum + i + 1,
+                };
+              });
+
+              const { data: created, error: insertErr } = await supabaseAdmin
+                .from('events')
+                .insert(rows)
+                .select('id');
+
+              if (insertErr) {
+                console.error('[PORTAL] Series instance expansion error:', insertErr.message);
+              } else {
+                instancesAdded = created?.length || 0;
+              }
+            }
+          }
+        } else if (desiredCount < currentFutureCount && allFuture) {
+          // Need fewer instances — remove the furthest-out ones
+          const toRemove = allFuture.slice(desiredCount);
+          const removeIds = toRemove.map((e) => (e as Record<string, unknown>).id as string);
+          if (removeIds.length > 0) {
+            const { error: delErr } = await supabaseAdmin
+              .from('events')
+              .delete()
+              .in('id', removeIds);
+
+            if (delErr) {
+              console.error('[PORTAL] Series instance removal error:', delErr.message);
+            } else {
+              instancesRemoved = removeIds.length;
+            }
+          }
+        }
+
+        // Update recurrence_rule count on the series
+        const finalCount = (allFuture?.length || 0) + instancesAdded - instancesRemoved;
+        const updatedRule = { frequency: seriesRecurrence, count: finalCount };
+        await supabaseAdmin
+          .from('event_series')
+          .update({ recurrence_rule: updatedRule })
+          .eq('id', series.id);
+      }
+    }
+
+    const totalAfter = futureEvents.length + instancesAdded - instancesRemoved;
+    console.log(`[PORTAL] Series ${req.params.seriesId} updated: ${updatedCount}/${futureEvents.length} future instances` +
+      (instancesAdded ? `, +${instancesAdded} added` : '') +
+      (instancesRemoved ? `, -${instancesRemoved} removed` : ''));
     auditPortalAction('portal_event_updated', accountId, req.params.seriesId,
-      { series: true, updated: updatedCount, total: futureEvents.length });
+      { series: true, updated: updatedCount, total: totalAfter, added: instancesAdded, removed: instancesRemoved });
 
     // Dispatch webhooks for updated events (fire-and-forget)
     void (async () => {
@@ -1472,7 +1598,7 @@ router.patch('/events/series/:seriesId', writeLimiter, async (req, res, next) =>
       }
     })();
 
-    res.json({ updated: updatedCount, total: futureEvents.length });
+    res.json({ updated: updatedCount, total: totalAfter, added: instancesAdded, removed: instancesRemoved });
   } catch (err) {
     next(err);
   }
