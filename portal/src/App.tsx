@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useHashRoute } from './hooks/useHashRoute';
-import { claimAccount, fetchAccount, fetchWhoami, updateProfile, type PortalAccount, type UserRole } from './lib/api';
+import { claimAccount, fetchAccount, fetchWhoami, adminFetchAccount, updateProfile, setImpersonation, getImpersonation, type PortalAccount, type UserRole } from './lib/api';
 import { colors, styles } from './lib/styles';
 import { LoginScreen } from './screens/LoginScreen';
 import { DashboardScreen } from './screens/DashboardScreen';
@@ -36,6 +36,9 @@ export default function App() {
   // UI state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
+
+  // Admin impersonation state
+  const [actAsAccount, setActAsAccount] = useState<PortalAccount | null>(null);
 
   // Detect role after authentication via /whoami
   const detectRole = useCallback(async () => {
@@ -98,8 +101,26 @@ export default function App() {
       setAccount(null);
       setClaimError(null);
       setShowOnboarding(false);
+      setActAsAccount(null);
+      setImpersonation(null);
     }
   }, [isAuthenticated, role, roleLoading, account, claiming, claimError, detectRole, loadAccount]);
+
+  // Restore impersonation on page refresh (admin only)
+  useEffect(() => {
+    if (role === 'admin' && !actAsAccount) {
+      const stored = getImpersonation();
+      if (stored) {
+        adminFetchAccount(stored).then((res) => {
+          if (res.data) {
+            setActAsAccount(res.data.account);
+          } else {
+            setImpersonation(null);
+          }
+        });
+      }
+    }
+  }, [role, actAsAccount]);
 
   // =========================================================================
   // LOADING / INITIALIZING
@@ -150,7 +171,126 @@ export default function App() {
   // =========================================================================
   // ADMIN ROUTES
   // =========================================================================
+
+  function startActAs(acct: PortalAccount) {
+    setImpersonation(acct.id);
+    setActAsAccount(acct);
+    navigate('#/');
+  }
+
+  function stopActAs() {
+    setImpersonation(null);
+    setActAsAccount(null);
+    navigate('#/admin');
+  }
+
   if (role === 'admin') {
+    // Admin impersonation mode: show regular business screens as the target account
+    if (actAsAccount) {
+      const businessContent = (() => {
+        if (route.screen === 'profile') {
+          return (
+            <ProfileScreen
+              account={actAsAccount}
+              onBack={() => navigate('#/')}
+              onAccountUpdated={(updated) => setActAsAccount(updated)}
+            />
+          );
+        }
+
+        if (route.screen === 'import-events') {
+          return (
+            <ImportEventsScreen
+              account={actAsAccount}
+              onBack={() => navigate('#/')}
+              onDone={(count) => {
+                navigate('#/');
+                setToast({ message: `Imported ${count} event${count !== 1 ? 's' : ''}`, type: 'success' });
+              }}
+            />
+          );
+        }
+
+        if (route.screen === 'create-event') {
+          return (
+            <CreateEventScreen
+              account={actAsAccount}
+              onBack={() => navigate('#/')}
+              onCreated={(title, venue, date) => {
+                navigate('#/');
+                setToast({ message: `${title} at ${venue} on ${date}`, type: 'success' });
+              }}
+            />
+          );
+        }
+
+        if (route.screen === 'edit-event' && route.params.id) {
+          return (
+            <EditEventScreen
+              id={route.params.id}
+              accountWheelchairAccessible={actAsAccount?.wheelchair_accessible ?? null}
+              onBack={back}
+              onUpdated={() => {
+                navigate('#/');
+                setToast({ message: 'Event updated', type: 'success' });
+              }}
+              onDeleted={() => {
+                navigate('#/');
+                setToast({ message: 'Event deleted', type: 'success' });
+              }}
+            />
+          );
+        }
+
+        return (
+          <DashboardScreen
+            account={actAsAccount}
+            onCreateEvent={() => navigate('#/events/new')}
+            onImportEvents={() => navigate('#/events/import')}
+            onEditEvent={(event) => navigate(`#/events/${event.id}/edit`)}
+            onNavigateProfile={() => navigate('#/profile')}
+            onSignOut={() => signOut()}
+            onSignOutEverywhere={() => signOut('global')}
+          />
+        );
+      })();
+
+      return (
+        <>
+          <div style={{
+            background: '#2563eb',
+            color: '#fff',
+            padding: '6px 16px',
+            fontSize: '13px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            position: 'sticky',
+            top: 0,
+            zIndex: 9999,
+          }}>
+            <span>Acting as <strong>{actAsAccount.business_name}</strong></span>
+            <button
+              onClick={stopActAs}
+              style={{
+                background: 'rgba(255,255,255,0.2)',
+                border: 'none',
+                color: '#fff',
+                padding: '4px 12px',
+                borderRadius: '4px',
+                fontSize: '12px',
+                cursor: 'pointer',
+              }}
+            >
+              Exit
+            </button>
+          </div>
+          {toast && <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />}
+          {businessContent}
+        </>
+      );
+    }
+
     const adminContent = (() => {
       if (route.screen === 'admin-account' && route.params.id) {
         return (
@@ -159,6 +299,7 @@ export default function App() {
             onBack={() => navigate('#/admin')}
             onCreateEvent={(acct) => navigate(`#/admin/events/new?account=${acct.id}`)}
             onEditEvent={(event, acct) => navigate(`#/admin/events/${event.id}/edit?account=${acct.id}`)}
+            onActAs={startActAs}
           />
         );
       }

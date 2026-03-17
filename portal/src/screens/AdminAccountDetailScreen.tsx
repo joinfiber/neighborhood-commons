@@ -305,9 +305,10 @@ interface AdminAccountDetailScreenProps {
   onBack: () => void;
   onCreateEvent: (account: PortalAccount) => void;
   onEditEvent: (event: PortalEvent, account: PortalAccount) => void;
+  onActAs?: (account: PortalAccount) => void;
 }
 
-export function AdminAccountDetailScreen({ accountId, onBack, onCreateEvent, onEditEvent }: AdminAccountDetailScreenProps) {
+export function AdminAccountDetailScreen({ accountId, onBack, onCreateEvent, onEditEvent, onActAs }: AdminAccountDetailScreenProps) {
   const [account, setAccount] = useState<PortalAccount | null>(null);
   const [events, setEvents] = useState<PortalEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -684,13 +685,29 @@ export function AdminAccountDetailScreen({ accountId, onBack, onCreateEvent, onE
         {/* Action bar */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
           {!selectMode && (
-            <button
-              type="button"
-              style={{ ...styles.buttonPrimary, flex: 1 }}
-              onClick={() => onCreateEvent(account)}
-            >
-              + Post Event for {account.business_name}
-            </button>
+            <>
+              <button
+                type="button"
+                style={{ ...styles.buttonPrimary, flex: 1 }}
+                onClick={() => onCreateEvent(account)}
+              >
+                + Post Event
+              </button>
+              {onActAs && (
+                <button
+                  type="button"
+                  style={{
+                    ...styles.buttonSecondary,
+                    borderColor: '#2563eb',
+                    color: '#2563eb',
+                    flex: 1,
+                  }}
+                  onClick={() => onActAs(account)}
+                >
+                  Login as {account.business_name.length > 15 ? account.business_name.slice(0, 15) + '...' : account.business_name}
+                </button>
+              )}
+            </>
           )}
           {events.length > 1 && (
             selectMode ? (

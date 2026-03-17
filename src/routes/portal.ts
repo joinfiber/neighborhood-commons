@@ -541,10 +541,29 @@ function isPortalAdmin(req: import('express').Request): boolean {
 }
 
 /**
+ * Check if this request is an admin impersonation ("act as" mode).
+ * Returns the target account ID if valid, null otherwise.
+ */
+function getActAsAccountId(req: import('express').Request): string | null {
+  const actAs = req.headers['x-act-as-account'] as string | undefined;
+  if (!actAs) return null;
+  if (!isPortalAdmin(req)) {
+    throw createError('Forbidden', 403, 'FORBIDDEN');
+  }
+  validateUuidParam(actAs, 'act-as account ID');
+  return actAs;
+}
+
+/**
  * Get the user-context Supabase client from the request.
  * Set by requirePortalAuth middleware. Throws if missing.
+ * When admin is impersonating, returns supabaseAdmin (bypasses RLS)
+ * since the admin's JWT doesn't own the target account's rows.
  */
 function getUserClient(req: import('express').Request) {
+  if (getActAsAccountId(req)) {
+    return supabaseAdmin;
+  }
   if (!req.supabaseClient) {
     throw createError('Authentication required', 401, 'UNAUTHORIZED');
   }
@@ -736,6 +755,22 @@ router.get('/whoami', portalLimiter, async (req, res, next) => {
     if (!userId || !email) throw createError('Unauthorized', 401, 'UNAUTHORIZED');
 
     if (isPortalAdmin(req)) {
+      // Admin impersonation: return target account as business role
+      const actAs = req.headers['x-act-as-account'] as string | undefined;
+      if (actAs) {
+        validateUuidParam(actAs, 'act-as account ID');
+        const { data: targetAccount } = await supabaseAdmin
+          .from('portal_accounts')
+          .select(PORTAL_ACCOUNT_SELECT)
+          .eq('id', actAs)
+          .in('status', ['active', 'pending'])
+          .maybeSingle();
+
+        if (!targetAccount) throw createError('Target account not found', 404, 'NOT_FOUND');
+        res.json({ role: 'business', account: targetAccount, impersonating: true });
+        return;
+      }
+
       res.json({ role: 'admin', email });
       return;
     }
@@ -842,11 +877,27 @@ router.get('/account', portalLimiter, async (req, res, next) => {
     const userId = req.user?.id;
     if (!userId) throw createError('Unauthorized', 401, 'UNAUTHORIZED');
 
-    const { data: account, error } = await getUserClient(req)
-      .from('portal_accounts')
-      .select(PORTAL_ACCOUNT_SELECT)
-      .eq('auth_user_id', userId)
-      .maybeSingle();
+    // Admin impersonation: look up by account ID
+    const actAs = getActAsAccountId(req);
+    let account;
+    let error;
+    if (actAs) {
+      const result = await supabaseAdmin
+        .from('portal_accounts')
+        .select(PORTAL_ACCOUNT_SELECT)
+        .eq('id', actAs)
+        .maybeSingle();
+      account = result.data;
+      error = result.error;
+    } else {
+      const result = await getUserClient(req)
+        .from('portal_accounts')
+        .select(PORTAL_ACCOUNT_SELECT)
+        .eq('auth_user_id', userId)
+        .maybeSingle();
+      account = result.data;
+      error = result.error;
+    }
 
     if (error) {
       console.error('[PORTAL] Account fetch error:', error.message);
@@ -1025,6 +1076,20 @@ const updateEventSchema = z.object({
 });
 
 async function getPortalAccount(req: import('express').Request): Promise<{ id: string; status: string }> {
+  // Admin impersonation: look up by account ID (not auth_user_id)
+  const actAs = getActAsAccountId(req);
+  if (actAs) {
+    const { data } = await supabaseAdmin
+      .from('portal_accounts')
+      .select('id, status')
+      .eq('id', actAs)
+      .in('status', ['active', 'pending'])
+      .maybeSingle();
+
+    if (!data) throw createError('Target account not found', 404, 'NOT_FOUND');
+    return data;
+  }
+
   const userId = req.user?.id;
   if (!userId) throw createError('Unauthorized', 401, 'UNAUTHORIZED');
 

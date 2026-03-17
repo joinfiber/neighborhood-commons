@@ -15,6 +15,26 @@ export type {
 const API_URL = import.meta.env.VITE_API_URL || '';
 const TIMEOUT_MS = 30000;
 
+// Admin impersonation: module-level state injected into every API call
+let _actAsAccountId: string | null = null;
+
+export function setImpersonation(accountId: string | null) {
+  _actAsAccountId = accountId;
+  if (accountId) {
+    sessionStorage.setItem('actAsAccountId', accountId);
+  } else {
+    sessionStorage.removeItem('actAsAccountId');
+  }
+}
+
+export function getImpersonation(): string | null {
+  if (_actAsAccountId) return _actAsAccountId;
+  // Restore from sessionStorage on page refresh
+  const stored = sessionStorage.getItem('actAsAccountId');
+  if (stored) _actAsAccountId = stored;
+  return _actAsAccountId;
+}
+
 interface ApiError { code: string; message: string }
 interface ApiResponse<T> { data?: T; error?: ApiError }
 
@@ -25,15 +45,22 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`,
+    ...(options.headers as Record<string, string>),
+  };
+
+  const actAs = getImpersonation();
+  if (actAs) {
+    headers['X-Act-As-Account'] = actAs;
+  }
+
   try {
     const res = await fetch(`${API_URL}${endpoint}`, {
       ...options,
       signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-        ...options.headers,
-      },
+      headers,
     });
 
     if (res.status === 429) return { error: { code: 'RATE_LIMIT', message: 'Too many requests' } };
