@@ -167,8 +167,10 @@ export function AdminEditEventScreen({ eventId, accountId, onBack, onUpdated, on
     description: event.description || '',
     price: event.price || '',
     ticket_url: event.ticket_url || '',
+    start_time_required: event.start_time_required,
     tags: event.tags || [],
     wheelchair_accessible: event.wheelchair_accessible,
+    rsvp_limit: event.rsvp_limit,
     image_focal_y: event.image_focal_y,
   };
 
