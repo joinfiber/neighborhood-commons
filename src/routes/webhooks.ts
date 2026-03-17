@@ -25,7 +25,7 @@ router.use(requireApiKey);
 
 const MAX_SUBSCRIPTIONS_PER_KEY = 5;
 
-const EVENT_TYPES = ['event.created', 'event.updated', 'event.deleted'] as const;
+const EVENT_TYPES = ['event.created', 'event.updated', 'event.deleted', 'event.series_created'] as const;
 
 // =============================================================================
 // SCHEMAS
@@ -33,12 +33,12 @@ const EVENT_TYPES = ['event.created', 'event.updated', 'event.deleted'] as const
 
 const createWebhookSchema = z.object({
   url: z.string().url().max(2000).refine((u) => u.startsWith('https://'), 'URL must use HTTPS'),
-  event_types: z.array(z.enum(EVENT_TYPES)).min(1).max(3).default([...EVENT_TYPES]),
+  event_types: z.array(z.enum(EVENT_TYPES)).min(1).max(4).default([...EVENT_TYPES]),
 });
 
 const updateWebhookSchema = z.object({
   url: z.string().url().max(2000).refine((u) => u.startsWith('https://'), 'URL must use HTTPS').optional(),
-  event_types: z.array(z.enum(EVENT_TYPES)).min(1).max(3).optional(),
+  event_types: z.array(z.enum(EVENT_TYPES)).min(1).max(4).optional(),
   status: z.enum(['active', 'paused']).optional(),
 });
 

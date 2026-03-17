@@ -29,7 +29,8 @@ type PortalAuditAction =
   | 'portal_account_approved'
   | 'portal_account_rejected'
   | 'portal_creation_rate_limited'
-  | 'portal_import';
+  | 'portal_import'
+  | 'admin_impersonation';
 
 /**
  * One-way hash for privacy-preserving logs.

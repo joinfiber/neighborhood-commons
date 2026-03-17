@@ -17,7 +17,7 @@ import { EVENT_CATEGORIES } from '../lib/categories.js';
 import { ALL_TAG_SLUGS } from '../lib/tags.js';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { createError } from '../middleware/error-handler.js';
-import { validateRequest } from '../lib/helpers.js';
+import { validateRequest, validateUuidParam } from '../lib/helpers.js';
 import { toNeighborhoodEvent, toRRule, type PortalEventRow } from '../lib/event-transform.js';
 import { optionalApiKey } from '../middleware/api-key.js';
 
@@ -31,7 +31,7 @@ export const v1Limiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 1000,
   keyGenerator: (req) => req.apiKeyInfo?.id || req.ip || 'unknown',
-  message: { error: { code: 'RATE_LIMIT', message: 'Rate limit exceeded (1000/hr). Contact hello@joinfiber.app if you need more.' } },
+  message: { error: { code: 'RATE_LIMIT', message: 'Rate limit exceeded (1000/hr). Register for an API key at /api/v1/developers for a dedicated limit bucket.' } },
   standardHeaders: true,
   legacyHeaders: false,
   skip: () => process.env.INTEGRATION_TEST === 'true',
@@ -216,6 +216,7 @@ router.get('/terms', (_req, res) => {
  */
 router.get('/:id', async (req, res, next) => {
   try {
+    validateUuidParam(req.params.id, 'event ID');
     const id = req.params.id;
 
     const { data: event, error } = await supabaseAdmin

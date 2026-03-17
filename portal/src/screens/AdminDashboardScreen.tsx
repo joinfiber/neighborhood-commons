@@ -135,7 +135,7 @@ export function AdminDashboardScreen({ email, onSignOut, onViewAccount, onViewAl
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
           <div>
-            <h1 style={{ ...styles.pageTitle, marginBottom: '4px' }}>fiber events</h1>
+            <h1 style={{ ...styles.pageTitle, marginBottom: '4px' }}>neighborhood commons</h1>
             <div style={{ fontSize: '14px', color: colors.muted }}>{email}</div>
           </div>
           <button type="button" style={styles.buttonText} onClick={onSignOut}>Sign Out</button>

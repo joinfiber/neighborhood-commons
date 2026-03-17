@@ -12,6 +12,7 @@ import type { Request } from 'express';
 import { config } from '../config.js';
 import { createError } from '../middleware/error-handler.js';
 import { validateRequest } from '../lib/helpers.js';
+import { requirePortalAuth } from '../middleware/auth.js';
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -76,7 +77,7 @@ const searchSchema = z.object({
 /**
  * POST /api/places/search — Venue search for portal event creation
  */
-router.post('/search', placesLimiter, async (req, res, next) => {
+router.post('/search', requirePortalAuth, placesLimiter, async (req, res, next) => {
   try {
     if (!config.google.placesApiKey) {
       throw createError('Places API not configured', 503, 'SERVICE_UNAVAILABLE');

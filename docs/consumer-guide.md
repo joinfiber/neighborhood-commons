@@ -31,9 +31,13 @@ Returns upcoming published events in Neighborhood API v0.2 format.
 | `start_after` | `YYYY-MM-DD` | Events starting after this date |
 | `start_before` | `YYYY-MM-DD` | Events starting before this date |
 | `category` | string | Filter by category slug (e.g., `live-music`, `comedy`) |
+| `tag` | string (repeatable) | Filter by experience tag. Multiple tags use AND semantics (`?tag=outdoor&tag=free`) |
 | `q` | string | Text search across event name and description |
 | `near` | `lat,lng` | Filter by location (e.g., `39.95,-75.17`) |
 | `radius_km` | number | Radius for `near` filter (default: 10, max: 100) |
+| `collapse_series` | `true`/`false` | Deduplicate recurring series — keep nearest upcoming instance per series (default: all instances) |
+| `series_id` | UUID | Filter to events in a specific series |
+| `recurring` | `true`/`false` | Filter by recurring/one-off |
 | `limit` | number | Results per page (default: 50, max: 200) |
 | `offset` | number | Pagination offset (default: 0) |
 
@@ -194,6 +198,8 @@ curl -X POST "https://commons.joinfiber.app/api/v1/webhooks" \
 
 Event types: `event.created`, `event.updated`, `event.deleted`, `event.series_created`
 
+`event.series_created` delivers one webhook per new recurring series (with all instance IDs, start times, and the RRULE) instead of N individual `event.created` webhooks. Subscribe to it if you want to avoid webhook storms when a venue creates a 12-week trivia night.
+
 **Verifying signatures:** Every delivery includes an `X-NC-Signature` header (HMAC-SHA256). Verify it:
 
 ```javascript
@@ -209,6 +215,65 @@ function verify(rawBody, signatureHeader, secret) {
 **Reliability:** Failed deliveries retry 3 times (1 min, 5 min, 25 min backoff). After 10 consecutive failures, the subscription is auto-disabled. Re-enable with `PATCH /api/v1/webhooks/{id}` setting `status: "active"`.
 
 Max 5 subscriptions per API key.
+
+## Contribute API (Write API)
+
+Push events into the commons programmatically. Requires an API key (free, self-service).
+
+### Submit a Single Event
+
+```bash
+curl -X POST "https://commons.joinfiber.app/api/v1/contribute" \
+  -H "X-API-Key: nc_yourkey" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Open Mic Night",
+    "start": "2026-03-20T19:00:00-04:00",
+    "timezone": "America/New_York",
+    "category": "live_music",
+    "location": { "name": "The Coffee Shop", "address": "123 Main St" }
+  }'
+```
+
+Required fields: `name`, `start` (ISO 8601 with offset), `timezone` (IANA), `category`, `location.name`.
+
+Optional: `end`, `description`, `cost`, `url`, `image_url`, `tags`, `wheelchair_accessible`, `custom_category`, `external_id`.
+
+Response: `201` with `{ event: { id, status, source } }`. Status is `published` for verified/trusted keys, `pending_review` for new keys.
+
+### Submit a Batch
+
+```
+POST /api/v1/contribute/batch
+```
+
+Body: `{ "events": [ ...up to 50 events... ] }`. Returns `201` (all succeeded), `207` (partial), or `400` (all failed) with per-event results and a summary.
+
+### List Your Events
+
+```
+GET /api/v1/contribute/mine?status=published&limit=50
+```
+
+### Delete Your Event
+
+```
+DELETE /api/v1/contribute/:id
+```
+
+Only deletes events submitted by your API key.
+
+### Contribute Rate Limits
+
+Per-key tier limits (DB-enforced):
+
+| Tier | Hourly | Daily |
+|------|--------|-------|
+| pending (new keys) | 20 | 100 |
+| verified | 100 | 500 |
+| trusted | 500 | 2000 |
+
+Batch submissions count each event individually against the limit.
 
 ## Error Format
 

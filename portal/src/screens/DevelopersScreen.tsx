@@ -75,7 +75,7 @@ function verifyWebhookSignature(body, signature, secret) {
 
 // In your webhook handler:
 app.post('/webhooks', (req, res) => {
-  const sig = req.headers['x-fiber-signature'];
+  const sig = req.headers['x-nc-signature'];
   if (!verifyWebhookSignature(req.body, sig, YOUR_SECRET)) {
     return res.status(401).send('Invalid signature');
   }

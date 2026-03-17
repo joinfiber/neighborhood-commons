@@ -31,7 +31,7 @@ import { auditPortalAction } from '../lib/audit.js';
 import { toNeighborhoodEvent, toRRule, type PortalEventRow } from '../lib/event-transform.js';
 import { sanitizeUrl, checkApprovedDomain } from '../lib/url-sanitizer.js';
 import { geocodeEventIfNeeded, geocodeSeriesEvents } from '../lib/geocoding.js';
-import { writeLimiter, enumerationLimiter, portalLimiter } from '../middleware/rate-limit.js';
+import { writeLimiter, enumerationLimiter, portalLimiter, imageUploadLimiter } from '../middleware/rate-limit.js';
 import { blockDatacenterIps } from '../middleware/ip-filter.js';
 
 const PORTAL_ACCOUNT_SELECT = 'id, email, business_name, auth_user_id, status, default_venue_name, default_place_id, default_address, default_latitude, default_longitude, website, phone, wheelchair_accessible, last_login_at, created_at, updated_at';
@@ -501,7 +501,7 @@ export async function deleteSeriesEvents(seriesId: string): Promise<number> {
       location: { name: '', address: null, lat: null, lng: null },
       url: null, images: [], organizer: { name: '', phone: null },
       cost: null, series_id: null, series_instance_number: null, series_instance_count: null, start_time_required: true, tags: [], wheelchair_accessible: null, recurrence: null,
-      source: { publisher: 'fiber', collected_at: new Date().toISOString(), method: 'portal', license: 'CC BY 4.0' },
+      source: { publisher: 'neighborhood-commons', collected_at: new Date().toISOString(), method: 'portal', license: 'CC BY 4.0' },
     });
   }
 
@@ -554,6 +554,16 @@ function getActAsAccountId(req: import('express').Request): string | null {
     throw createError('Forbidden', 403, 'FORBIDDEN');
   }
   validateUuidParam(actAs, 'act-as account ID');
+
+  // Audit trail: record which admin is impersonating which account.
+  // Without this, impersonated actions are unattributable.
+  auditPortalAction(
+    'admin_impersonation',
+    req.user!.id,
+    actAs,
+    { endpoint: req.method + ' ' + req.originalUrl },
+  );
+
   return actAs;
 }
 
@@ -2135,7 +2145,7 @@ router.delete('/events/:id', writeLimiter, async (req, res, next) => {
       location: { name: '', address: null, lat: null, lng: null },
       url: null, images: [], organizer: { name: '', phone: null },
       cost: null, series_id: null, series_instance_number: null, series_instance_count: null, start_time_required: true, tags: [], wheelchair_accessible: null, recurrence: null,
-      source: { publisher: 'fiber', collected_at: new Date().toISOString(), method: 'portal', license: 'CC BY 4.0' },
+      source: { publisher: 'neighborhood-commons', collected_at: new Date().toISOString(), method: 'portal', license: 'CC BY 4.0' },
     });
 
     res.json({ success: true });
@@ -2201,7 +2211,7 @@ async function processAndUploadImage(eventId: string, base64: string): Promise<s
  * POST /api/portal/events/:id/image
  * Upload an event image (base64 -> sharp re-encode -> R2).
  */
-router.post('/events/:id/image', imageBodyLimit, writeLimiter, async (req, res, next) => {
+router.post('/events/:id/image', imageBodyLimit, imageUploadLimiter, async (req, res, next) => {
   try {
     validateUuidParam(req.params.id, 'event ID');
     await getPortalAccountId(req);

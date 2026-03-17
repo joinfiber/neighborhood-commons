@@ -1,8 +1,8 @@
 /**
  * Event Categories
  *
- * Inlined from @fiber/config to keep commons-api a standalone build
- * (no monorepo workspace dependency). Keep in sync with packages/config/src/index.ts.
+ * Canonical event category definitions for Neighborhood Commons.
+ * Shared by portal, admin, and public API validation.
  */
 
 export const EVENT_CATEGORIES = {

@@ -56,6 +56,16 @@ export const enumerationLimiter = isTest ? passthrough : rateLimit({
   legacyHeaders: false,
 });
 
+/** Image upload — stricter limit to prevent storage exhaustion (12MB × 3/min = 36MB/min max) */
+export const imageUploadLimiter = isTest ? passthrough : rateLimit({
+  windowMs: 60 * 1000,
+  max: 3,
+  keyGenerator: (req: Request) => req.user?.id || req.ip || 'unknown',
+  message: { error: { code: 'RATE_LIMIT', message: 'Too many image uploads. Please try again shortly.' } },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 /**
  * OTP verification — compounds IP + email to prevent distributed
  * brute-force against a single email's OTP code. 5-minute window

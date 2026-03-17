@@ -59,6 +59,9 @@ Query parameters:
 - `q` (string) — Text search in title and description. Max 200 chars.
 - `near` (string) — Geo filter center: "lat,lng" (e.g., "39.95,-75.16").
 - `radius_km` (number) — Radius from `near` in km. 0.1–100, default 10.
+- `collapse_series` (string) — "true" to deduplicate recurring series (keep nearest upcoming instance per series). Default: all instances returned.
+- `series_id` (string) — UUID. Filter to events in a specific series.
+- `recurring` (string) — "true" for recurring events only, "false" for one-off only.
 - `limit` (number) — Results per page. 1–200, default 50.
 - `offset` (number) — Pagination offset. Default 0.
 
@@ -145,8 +148,12 @@ Response (200):
   "description": "Open neighborhood event data, flourishes because of you.",
   "spec": "neighborhood-api-v0.2",
   "spec_url": "https://github.com/The-Relational-Technology-Project/neighborhood-api",
-  "stewards": [{ "name": "Neighborhood Commons", "url": "https://joinfiber.app", "contact": "hello@joinfiber.app", "role": "maintainer" }],
-  "data_sources": [{ "name": "Portal", "method": "portal", "description": "Events submitted directly by venue owners and promoters." }],
+  "stewards": [{ "name": "Neighborhood Commons", "url": "https://commons.joinfiber.app", "contact": "hello@joinfiber.app", "role": "maintainer" }],
+  "data_sources": [
+    { "name": "Portal", "method": "portal", "description": "Events submitted directly by venue owners and promoters." },
+    { "name": "Import", "method": "import", "description": "Events ingested from iCal feeds and external sources." },
+    { "name": "Contribute API", "method": "api", "description": "Events pushed by third-party apps via the write API." }
+  ],
   "resources": ["events"],
   "license": { "name": "Creative Commons Attribution 4.0 International", "spdx": "CC-BY-4.0", "url": "https://creativecommons.org/licenses/by/4.0/" },
   "terms_url": "https://commons.joinfiber.app/api/v1/events/terms"
@@ -265,7 +272,9 @@ Webhook subscriptions are automatically migrated to the new key.
 
 Real-time notifications when events are created, updated, or deleted. Requires an API key.
 
-Event types: `event.created`, `event.updated`, `event.deleted`
+Event types: `event.created`, `event.updated`, `event.deleted`, `event.series_created`
+
+`event.series_created` is optional — subscribe to it instead of (or in addition to) `event.created` if you want one webhook per recurring series instead of N individual create webhooks. The payload includes the series template, all instance IDs and start times, and the RRULE.
 
 ### POST /api/v1/webhooks — Create Subscription
 
@@ -347,10 +356,25 @@ Response (200):
 
 ### Webhook Payload Format
 
+Standard events (`event.created`, `event.updated`, `event.deleted`):
 ```json
 {
   "event_type": "event.created",
   "event": { ...full event object... },
+  "timestamp": "2026-03-14T12:00:00.000Z",
+  "delivery_id": "42"
+}
+```
+
+Series creation (`event.series_created`):
+```json
+{
+  "event_type": "event.series_created",
+  "series_id": "uuid",
+  "recurrence": { "rrule": "FREQ=WEEKLY;BYDAY=TH" },
+  "instance_count": 12,
+  "instances": [{ "id": "uuid", "start": "2026-03-19T19:00:00-04:00", "series_instance_number": 1 }, ...],
+  "template": { ...full event object for the first instance... },
   "timestamp": "2026-03-14T12:00:00.000Z",
   "delivery_id": "42"
 }
@@ -383,6 +407,98 @@ function verify(rawBody, signature, secret) {
 - Webhook signing secrets are encrypted at rest (AES-256-GCM) on the server.
 - Webhook URLs are validated for SSRF before every delivery: DNS resolution, RFC 1918 block, cloud metadata block (169.254.169.254), IPv6 private range block. URLs must be HTTPS.
 - API keys are stored as SHA-256 hashes — the plaintext key is returned once on creation and never stored.
+
+---
+
+## Contribute API (Write API)
+
+Push events into the commons via API key. Events are validated, attributed, and placed in a review queue (or auto-published for verified/trusted contributors).
+
+### POST /api/v1/contribute — Submit Single Event
+
+Headers: `X-API-Key: nc_...` (required)
+
+Body:
+```json
+{
+  "name": "Open Mic Night",
+  "start": "2026-03-20T19:00:00-04:00",
+  "timezone": "America/New_York",
+  "category": "live_music",
+  "location": { "name": "The Coffee Shop", "address": "123 Main St, Philadelphia, PA", "lat": 39.97, "lng": -75.13 },
+  "end": "2026-03-20T22:00:00-04:00",
+  "description": "Weekly open mic. All genres welcome.",
+  "cost": "Free",
+  "url": "https://example.com/event",
+  "tags": ["all-ages", "free"],
+  "external_id": "your-system-id-123"
+}
+```
+
+Required: `name`, `start`, `timezone`, `category`, `location` (with `name`).
+Optional: `end`, `description`, `cost`, `url`, `image_url`, `tags`, `wheelchair_accessible`, `custom_category`, `external_id`.
+
+Response (201):
+```json
+{
+  "event": { "id": "uuid", "status": "published", "source": { "publisher": "Your App", "method": "api" } }
+}
+```
+
+Status is `published` for verified/trusted keys, `pending_review` for new keys.
+
+Error: 400 (validation), 409 (duplicate external_id), 429 (rate limit).
+
+### POST /api/v1/contribute/batch — Submit Multiple Events
+
+Headers: `X-API-Key: nc_...` (required)
+
+Body:
+```json
+{ "events": [ ...up to 50 events, same shape as single... ] }
+```
+
+Response (201 all succeeded, 207 partial, 400 all failed):
+```json
+{
+  "results": [{ "index": 0, "id": "uuid", "status": "published" }, { "index": 1, "error": "Duplicate external_id" }],
+  "summary": { "total": 2, "created": 1, "failed": 1, "publisher": "Your App" }
+}
+```
+
+### GET /api/v1/contribute/mine — List Your Events
+
+Headers: `X-API-Key: nc_...` (required)
+
+Query: `status` (published, pending_review, unpublished), `limit` (1-200, default 50), `offset`.
+
+Response (200):
+```json
+{ "meta": { "total": 42, "limit": 50, "offset": 0 }, "events": [{ "id": "uuid", "name": "...", "start": "...", "status": "published", ... }] }
+```
+
+### DELETE /api/v1/contribute/:id — Delete Your Event
+
+Headers: `X-API-Key: nc_...` (required)
+
+Only deletes events submitted by this API key. Returns 404 for events owned by other keys.
+
+Response (200):
+```json
+{ "deleted": true, "id": "uuid" }
+```
+
+### Rate Limits (Contribute)
+
+Per-key tier limits (enforced server-side, counts actual events in DB):
+
+| Tier | Hourly | Daily |
+|------|--------|-------|
+| pending (new keys) | 20 | 100 |
+| verified | 100 | 500 |
+| trusted | 500 | 2000 |
+
+Batch submissions count each event against the limit.
 
 ---
 

@@ -29,7 +29,7 @@ router.get('/', (_req, res) => {
     stewards: [
       {
         name: 'Neighborhood Commons',
-        url: 'https://joinfiber.app',
+        url: 'https://commons.joinfiber.app',
         contact: 'hello@joinfiber.app',
         role: 'maintainer',
       },
@@ -39,6 +39,16 @@ router.get('/', (_req, res) => {
         name: 'Portal',
         method: 'portal',
         description: 'Events submitted directly by venue owners and promoters.',
+      },
+      {
+        name: 'Import',
+        method: 'import',
+        description: 'Events ingested from iCal feeds and external sources.',
+      },
+      {
+        name: 'Contribute API',
+        method: 'api',
+        description: 'Events pushed by third-party apps via the write API.',
       },
     ],
     resources: ['events'],

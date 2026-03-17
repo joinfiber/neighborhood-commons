@@ -305,20 +305,21 @@ describe('GET /api/v1/events/:id', () => {
   });
 
   it('returns series recurrence directly from instance', async () => {
+    const instanceId = 'b2c3d4e5-f6a7-8901-bcde-f12345678903';
     mockResponses.set('events', {
       data: makeDbRow({
-        id: 'instance-3',
-        series_id: 'series-uuid-1',
+        id: instanceId,
+        series_id: 'c3d4e5f6-a7b8-9012-cdef-123456789012',
         series_instance_number: 3,
         recurrence: 'weekly_days:mon,tue,wed,thu',
       }),
       error: null,
     });
 
-    const res = await fetch(`${baseUrl}/api/v1/events/instance-3`);
+    const res = await fetch(`${baseUrl}/api/v1/events/${instanceId}`);
     const body = await res.json();
 
-    expect(body.event.series_id).toBe('series-uuid-1');
+    expect(body.event.series_id).toBe('c3d4e5f6-a7b8-9012-cdef-123456789012');
     expect(body.event.series_instance_number).toBe(3);
     expect(body.event.recurrence).toEqual({ rrule: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH' });
   });
