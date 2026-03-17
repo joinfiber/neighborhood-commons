@@ -223,7 +223,6 @@ ${head}
   <nav class="nc-header-nav">
     <a href="${SITE_DOMAIN}/api/v1/events">API</a>
     <a href="${SITE_DOMAIN}/api/v1/events.ics">iCal Feed</a>
-    <a href="${SITE_DOMAIN}/llms.txt">llms.txt</a>
   </nav>
 </div>
 </header>
