@@ -199,6 +199,9 @@ export function portalInputToInsert(
 /** Columns to select when reading portal events from the events table */
 export const PORTAL_SELECT = 'id, user_id, content, description, place_name, place_id, approximate_location, event_at, end_time, event_image_url, event_image_focal_y, link_url, category, custom_category, event_timezone, venue_address, recurrence, price, latitude, longitude, creator_account_id, source, visibility, status, is_business, region_id, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, rsvp_limit, created_at';
 
+/** Sources that represent account-managed events (portal-created, imported, or API-submitted). */
+export const MANAGED_SOURCES = ['portal', 'import', 'api'] as const;
+
 export function getAdminUserId(): string {
   const id = config.admin.userIds[0];
   if (!id) throw new Error('No admin user ID configured (COMMONS_ADMIN_USER_IDS)');
@@ -474,7 +477,7 @@ export async function deleteSeriesEvents(seriesId: string): Promise<number> {
     .from('events')
     .select('id')
     .eq('series_id', seriesId)
-    .eq('source', 'portal');
+    .in('source', [...MANAGED_SOURCES]);
 
   if (!events || events.length === 0) return 0;
 
@@ -1352,7 +1355,7 @@ router.patch('/events/series/:seriesId', writeLimiter, async (req, res, next) =>
       .select('id')
       .eq('series_id', req.params.seriesId)
       .eq('creator_account_id', accountId)
-      .eq('source', 'portal')
+      .in('source', [...MANAGED_SOURCES])
       .limit(1)
       .maybeSingle();
 
@@ -1375,7 +1378,7 @@ router.patch('/events/series/:seriesId', writeLimiter, async (req, res, next) =>
       .from('events')
       .select(PORTAL_SELECT)
       .eq('series_id', req.params.seriesId)
-      .eq('source', 'portal')
+      .in('source', [...MANAGED_SOURCES])
       .gte('event_at', now)
       .order('event_at', { ascending: true });
 
@@ -1536,7 +1539,7 @@ router.patch('/events/series/:seriesId', writeLimiter, async (req, res, next) =>
           .from('events')
           .select('id, event_at, event_timezone, end_time, series_instance_number')
           .eq('series_id', req.params.seriesId)
-          .eq('source', 'portal')
+          .in('source', [...MANAGED_SOURCES])
           .gte('event_at', now)
           .order('event_at', { ascending: true });
 
@@ -1693,7 +1696,7 @@ router.post('/events/series/:seriesId/extend', writeLimiter, async (req, res, ne
       .select('id')
       .eq('series_id', req.params.seriesId)
       .eq('creator_account_id', accountId)
-      .eq('source', 'portal')
+      .in('source', [...MANAGED_SOURCES])
       .limit(1)
       .maybeSingle();
 
@@ -2088,7 +2091,7 @@ router.delete('/events/series/:seriesId', writeLimiter, async (req, res, next) =
       .select('id')
       .eq('series_id', req.params.seriesId)
       .eq('creator_account_id', accountId)
-      .eq('source', 'portal')
+      .in('source', [...MANAGED_SOURCES])
       .limit(1)
       .maybeSingle();
 

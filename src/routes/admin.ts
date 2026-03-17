@@ -31,6 +31,7 @@ import {
   toPortalEvent,
   portalInputToInsert,
   PORTAL_SELECT,
+  MANAGED_SOURCES,
   toTimestamptz,
   fromTimestamptz,
   getAdminUserId,
@@ -219,13 +220,13 @@ router.get('/stats', portalLimiter, async (_req, res, next) => {
     const { count: totalEvents } = await supabaseAdmin
       .from('events')
       .select('id', { count: 'exact', head: true })
-      .eq('source', 'portal');
+      .in('source', [...MANAGED_SOURCES]);
 
     const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     const { count: eventsThisWeek } = await supabaseAdmin
       .from('events')
       .select('id', { count: 'exact', head: true })
-      .eq('source', 'portal')
+      .in('source', [...MANAGED_SOURCES])
       .gte('created_at', oneWeekAgo);
 
     res.json({
@@ -270,7 +271,7 @@ router.get('/accounts', portalLimiter, async (_req, res, next) => {
       const { data: counts } = await supabaseAdmin
         .from('events')
         .select('creator_account_id')
-        .eq('source', 'portal')
+        .in('source', [...MANAGED_SOURCES])
         .in('creator_account_id', accountIds);
 
       if (counts) {
@@ -314,7 +315,7 @@ router.get('/accounts/:id', portalLimiter, async (req, res, next) => {
       .from('events')
       .select(PORTAL_SELECT)
       .eq('creator_account_id', account.id)
-      .eq('source', 'portal')
+      .in('source', [...MANAGED_SOURCES])
       .order('event_at', { ascending: false });
 
     if (eventsErr) {
@@ -599,7 +600,7 @@ router.post('/accounts/:id/reactivate', writeLimiter, async (req, res, next) => 
         .select('id')
         .eq('creator_account_id', req.params.id)
         .eq('status', 'published')
-        .eq('source', 'portal');
+        .in('source', [...MANAGED_SOURCES]);
       if (republished) void dispatchSeriesWebhooks(republished);
     }
 
@@ -770,7 +771,7 @@ router.get('/events', portalLimiter, async (_req, res, next) => {
     const { data: events, error } = await supabaseAdmin
       .from('events')
       .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name, email)`)
-      .eq('source', 'portal')
+      .in('source', [...MANAGED_SOURCES])
       .order('event_at', { ascending: false })
       .limit(200);
 
@@ -844,7 +845,7 @@ router.patch('/events/batch', writeLimiter, async (req, res, next) => {
       .from('events')
       .update(dbUpdate)
       .in('id', ids)
-      .eq('source', 'portal')
+      .in('source', [...MANAGED_SOURCES])
       .select('id, creator_account_id');
 
     if (error) {
@@ -911,7 +912,7 @@ router.patch('/events/series/:seriesId', writeLimiter, async (req, res, next) =>
       .from('events')
       .select(PORTAL_SELECT)
       .eq('series_id', req.params.seriesId)
-      .eq('source', 'portal')
+      .in('source', [...MANAGED_SOURCES])
       .gte('event_at', now)
       .order('event_at', { ascending: true });
 
@@ -1045,7 +1046,7 @@ router.patch('/events/series/:seriesId', writeLimiter, async (req, res, next) =>
           .from('events')
           .select('id, event_at, event_timezone, end_time, series_instance_number')
           .eq('series_id', req.params.seriesId)
-          .eq('source', 'portal')
+          .in('source', [...MANAGED_SOURCES])
           .gte('event_at', now)
           .order('event_at', { ascending: true });
 
@@ -1199,7 +1200,7 @@ router.patch('/events/:id', writeLimiter, async (req, res, next) => {
       .from('events')
       .select('event_timezone, event_at')
       .eq('id', req.params.id)
-      .eq('source', 'portal')
+      .in('source', [...MANAGED_SOURCES])
       .maybeSingle();
 
     if (!existing) {
@@ -1274,7 +1275,7 @@ router.patch('/events/:id', writeLimiter, async (req, res, next) => {
       .from('events')
       .update(update)
       .eq('id', req.params.id)
-      .eq('source', 'portal')
+      .in('source', [...MANAGED_SOURCES])
       .select(PORTAL_SELECT)
       .single();
 
@@ -1340,7 +1341,7 @@ router.delete('/events/:id', writeLimiter, async (req, res, next) => {
       .from('events')
       .delete()
       .eq('id', req.params.id)
-      .eq('source', 'portal');
+      .in('source', [...MANAGED_SOURCES]);
 
     if (error) {
       console.error('[COMMONS-ADMIN] Event delete error:', error.message);
@@ -1380,7 +1381,7 @@ router.post('/events/:id/image', imageBodyLimit, writeLimiter, async (req, res, 
       .from('events')
       .select('id')
       .eq('id', req.params.id)
-      .eq('source', 'portal')
+      .in('source', [...MANAGED_SOURCES])
       .maybeSingle();
 
     if (!event) {
@@ -1393,7 +1394,7 @@ router.post('/events/:id/image', imageBodyLimit, writeLimiter, async (req, res, 
       .from('events')
       .update({ event_image_url: imageUrl })
       .eq('id', req.params.id)
-      .eq('source', 'portal');
+      .in('source', [...MANAGED_SOURCES]);
 
     if (updateError) {
       console.error('[COMMONS-ADMIN] Image URL update error:', updateError.message);
