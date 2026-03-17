@@ -11,9 +11,10 @@ interface EditEventScreenProps {
   onBack: () => void;
   onUpdated: () => void;
   onDeleted: () => void;
+  onShare: () => void;
 }
 
-export function EditEventScreen({ id, accountWheelchairAccessible, onBack, onUpdated, onDeleted }: EditEventScreenProps) {
+export function EditEventScreen({ id, accountWheelchairAccessible, onBack, onUpdated, onDeleted, onShare }: EditEventScreenProps) {
   const [event, setEvent] = useState<PortalEvent | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -181,9 +182,17 @@ export function EditEventScreen({ id, accountWheelchairAccessible, onBack, onUpd
       <div style={styles.content} className="fade-up">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
           <button type="button" className="btn-text" style={styles.buttonText} onClick={onBack}>
-            ← Back
+            &larr; Back
           </button>
-          <h1 style={styles.pageTitle}>Edit Event</h1>
+          <h1 style={{ ...styles.pageTitle, flex: 1 }}>Edit Event</h1>
+          <button
+            type="button"
+            className="btn-secondary"
+            style={{ ...styles.buttonSecondary, width: 'auto', padding: '8px 14px', fontSize: '13px' }}
+            onClick={onShare}
+          >
+            Share
+          </button>
         </div>
 
         {event.series_id && (

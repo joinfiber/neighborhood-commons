@@ -243,6 +243,7 @@ export default function App() {
                 navigate('#/');
                 setToast({ message: 'Event deleted', type: 'success' });
               }}
+              onShare={() => navigate(`#/events/${route.params.id}/share`)}
             />
           );
         }
@@ -253,6 +254,7 @@ export default function App() {
             onCreateEvent={() => navigate('#/events/new')}
             onImportEvents={() => navigate('#/events/import')}
             onEditEvent={(event) => navigate(`#/events/${event.id}/edit`)}
+            onShareEvent={(event) => navigate(`#/events/${event.id}/share`)}
             onNavigateProfile={() => navigate('#/profile')}
             onSignOut={() => signOut()}
             onSignOutEverywhere={() => signOut('global')}
@@ -487,6 +489,7 @@ export default function App() {
             navigate('#/');
             setToast({ message: 'Event deleted', type: 'success' });
           }}
+          onShare={() => navigate(`#/events/${route.params.id}/share`)}
         />
       );
     }
@@ -498,6 +501,7 @@ export default function App() {
         onCreateEvent={() => navigate('#/events/new')}
         onImportEvents={() => navigate('#/events/import')}
         onEditEvent={(event) => navigate(`#/events/${event.id}/edit`)}
+        onShareEvent={(event) => navigate(`#/events/${event.id}/share`)}
         onNavigateProfile={() => navigate('#/profile')}
         onSignOut={() => signOut()}
         onSignOutEverywhere={() => signOut('global')}

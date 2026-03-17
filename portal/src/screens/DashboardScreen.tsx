@@ -11,6 +11,7 @@ interface DashboardScreenProps {
   onCreateEvent: () => void;
   onImportEvents: () => void;
   onEditEvent: (event: PortalEvent) => void;
+  onShareEvent: (event: PortalEvent) => void;
   onNavigateProfile: () => void;
   onSignOut: () => void;
   onSignOutEverywhere: () => void;
@@ -164,9 +165,10 @@ const btnLink: React.CSSProperties = {
 // EVENT CARD
 // =============================================================================
 
-function EventCard({ event, onClick, selected, onToggle, selectMode }: {
+function EventCard({ event, onClick, onShare, selected, onToggle, selectMode }: {
   event: PortalEvent;
   onClick: () => void;
+  onShare: () => void;
   selected: boolean;
   onToggle: (id: string) => void;
   selectMode: boolean;
@@ -194,10 +196,10 @@ function EventCard({ event, onClick, selected, onToggle, selectMode }: {
       onClick={() => selectMode ? onToggle(event.id) : onClick()}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-        <div style={{ fontSize: '15px', color: colors.cream, fontWeight: 500, lineHeight: 1.3 }}>
+        <div style={{ fontSize: '15px', color: colors.cream, fontWeight: 500, lineHeight: 1.3, flex: 1 }}>
           {event.title}
         </div>
-        {selectMode && (
+        {selectMode ? (
           <div
             onClick={(e) => { e.stopPropagation(); onToggle(event.id); }}
             style={{
@@ -219,6 +221,18 @@ function EventCard({ event, onClick, selected, onToggle, selectMode }: {
               </svg>
             )}
           </div>
+        ) : (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onShare(); }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', flexShrink: 0 }}
+            title="Share"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <path d="M4 12V14H12V12" stroke={colors.dim} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M8 10V3M5 5.5L8 2.5L11 5.5" stroke={colors.dim} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
         )}
       </div>
       <div style={{ fontSize: '13px', color: colors.muted }}>
@@ -249,9 +263,10 @@ function EventCard({ event, onClick, selected, onToggle, selectMode }: {
 // SERIES CARD
 // =============================================================================
 
-function SeriesCard({ group, onClick, selectedIds, onToggle, selectMode, onExtend }: {
+function SeriesCard({ group, onClick, onShare, selectedIds, onToggle, selectMode, onExtend }: {
   group: SeriesGroup;
   onClick: (event: PortalEvent) => void;
+  onShare: (event: PortalEvent) => void;
   selectedIds: Set<string>;
   onToggle: (id: string) => void;
   selectMode: boolean;
@@ -291,10 +306,10 @@ function SeriesCard({ group, onClick, selectedIds, onToggle, selectMode, onExten
       onClick={() => selectMode ? toggleAll({ stopPropagation: () => {} } as React.MouseEvent) : onClick(nextEvent)}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-        <div style={{ fontSize: '15px', color: colors.cream, fontWeight: 500, lineHeight: 1.3 }}>
+        <div style={{ fontSize: '15px', color: colors.cream, fontWeight: 500, lineHeight: 1.3, flex: 1 }}>
           {nextEvent.title}
         </div>
-        {selectMode && (
+        {selectMode ? (
           <div
             onClick={toggleAll}
             style={{
@@ -316,6 +331,18 @@ function SeriesCard({ group, onClick, selectedIds, onToggle, selectMode, onExten
               </svg>
             )}
           </div>
+        ) : (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onShare(nextEvent); }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', flexShrink: 0 }}
+            title="Share"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <path d="M4 12V14H12V12" stroke={colors.dim} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M8 10V3M5 5.5L8 2.5L11 5.5" stroke={colors.dim} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
         )}
       </div>
       <div style={{ fontSize: '13px', color: colors.muted }}>
@@ -381,7 +408,7 @@ function SeriesCard({ group, onClick, selectedIds, onToggle, selectMode, onExten
 // DASHBOARD
 // =============================================================================
 
-export function DashboardScreen({ account, onCreateEvent, onImportEvents, onEditEvent, onNavigateProfile, onSignOut, onSignOutEverywhere }: DashboardScreenProps) {
+export function DashboardScreen({ account, onCreateEvent, onImportEvents, onEditEvent, onShareEvent, onNavigateProfile, onSignOut, onSignOutEverywhere }: DashboardScreenProps) {
   const [events, setEvents] = useState<PortalEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -564,6 +591,7 @@ export function DashboardScreen({ account, onCreateEvent, onImportEvents, onEdit
                   key={item.seriesId}
                   group={item}
                   onClick={onEditEvent}
+                  onShare={onShareEvent}
                   selectedIds={selectedIds}
                   onToggle={toggleSelect}
                   selectMode={selectMode}
@@ -576,6 +604,7 @@ export function DashboardScreen({ account, onCreateEvent, onImportEvents, onEdit
                 key={item.event.id}
                 event={item.event}
                 onClick={() => onEditEvent(item.event)}
+                onShare={() => onShareEvent(item.event)}
                 selected={selectedIds.has(item.event.id)}
                 onToggle={toggleSelect}
                 selectMode={selectMode}
