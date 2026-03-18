@@ -75,6 +75,13 @@ const FONT_CATEGORIES = [
   { key: 'script' as const, label: 'Script' },
 ];
 
+// Phone frame: simulates a 6" device (375pt viewport)
+const PHONE_WIDTH = 375;
+const PHONE_BEZEL = 10;
+const PHONE_RADIUS = 40;
+
+type FontTarget = 'title' | 'details';
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -89,6 +96,7 @@ export function ShareStudioScreen({ eventId, onDone }: ShareStudioScreenProps) {
   const [activeTemplate, setActiveTemplate] = useState<TemplateType>('story');
   const [design, setDesign] = useState<CardDesign>({ ...DEFAULT_DESIGN });
   const [dominantColor, setDominantColor] = useState<RGB | null>(null);
+  const [fontTarget, setFontTarget] = useState<FontTarget>('title');
 
   // Canvas refs — full composites (bg + text) for each template
   const storyCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -237,6 +245,7 @@ export function ShareStudioScreen({ eventId, onDone }: ShareStudioScreenProps) {
     clone.style.height = 'auto';
     clone.style.display = 'block';
     clone.style.cursor = 'grab';
+    clone.style.borderRadius = `${PHONE_RADIUS - PHONE_BEZEL}px`;
     clone.setAttribute('data-preview-canvas', 'true');
     container.appendChild(clone);
   }, [activeTemplate, rendering, renderComplete]);
@@ -264,7 +273,6 @@ export function ShareStudioScreen({ eventId, onDone }: ShareStudioScreenProps) {
     const previewCanvas = previewRef.current?.querySelector('canvas[data-preview-canvas]') as HTMLCanvasElement | null;
     if (!previewCanvas) return;
 
-    // Scale mouse delta to canvas coordinates
     const rect = previewCanvas.getBoundingClientRect();
     const scale = previewCanvas.width / rect.width;
     const dx = (e.clientX - dragStartX.current) * scale;
@@ -273,17 +281,14 @@ export function ShareStudioScreen({ eventId, onDone }: ShareStudioScreenProps) {
     const newOffsetX = dragBaseOffsetX.current + dx;
     const newOffsetY = dragBaseOffsetY.current + dy;
 
-    // Get the source canvas and bg for active template
     const type = activeTemplate;
     const srcCanvas = type === 'story' ? storyCanvasRef.current : squareCanvasRef.current;
     const bgCanvas = type === 'story' ? storyBgRef.current : squareBgRef.current;
     if (!srcCanvas || !bgCanvas || !eventDataRef.current) return;
 
-    // Redraw with new offsets directly on the source canvas
     const tempDesign = { ...designRef.current, titleOffsetX: newOffsetX, titleOffsetY: newOffsetY };
     redrawText(srcCanvas, bgCanvas, eventDataRef.current, type, tempDesign);
 
-    // Copy to preview canvas
     const ctx = previewCanvas.getContext('2d');
     if (ctx) {
       ctx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
@@ -301,7 +306,6 @@ export function ShareStudioScreen({ eventId, onDone }: ShareStudioScreenProps) {
       previewCanvas.releasePointerCapture(e.pointerId);
     }
 
-    // Calculate final offset and commit to state
     const rect = previewCanvas?.getBoundingClientRect();
     if (!rect || !previewCanvas) return;
     const scale = previewCanvas.width / rect.width;
@@ -372,294 +376,291 @@ export function ShareStudioScreen({ eventId, onDone }: ShareStudioScreenProps) {
   }
 
   // =========================================================================
-  // Render
+  // Shared UI blocks
   // =========================================================================
 
-  const controlsPanel = (
+  const activeFont = fontTarget === 'title' ? design.font : design.detailFont;
+
+  const fontTargetToggle = (
+    <div style={{ display: 'flex', gap: '0', marginBottom: '8px', borderRadius: '6px', overflow: 'hidden', border: `1px solid ${colors.border}` }}>
+      {([['title', 'Title'] as const, ['details', 'Details'] as const]).map(([id, label]) => (
+        <button
+          key={id}
+          type="button"
+          onClick={() => setFontTarget(id)}
+          style={{
+            flex: 1,
+            padding: '5px 0',
+            fontSize: '11px',
+            fontWeight: fontTarget === id ? 600 : 400,
+            color: fontTarget === id ? colors.accent : colors.dim,
+            background: fontTarget === id ? colors.accentDim : 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+            transition: 'background 0.1s, color 0.1s',
+          }}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+
+  const fontGrid = FONT_CATEGORIES.map((cat) => {
+    const fontsInCat = FONT_OPTIONS.filter(f => f.category === cat.key);
+    if (fontsInCat.length === 0) return null;
+    return (
+      <div key={cat.key} style={{ marginBottom: '8px' }}>
+        <div style={{ fontSize: '10px', color: colors.dim, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          {cat.label}
+        </div>
+        <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+          {fontsInCat.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => {
+                if (fontTarget === 'title') {
+                  updateDesign({ font: f.id as FontId });
+                } else {
+                  updateDesign({ detailFont: f.id as FontId });
+                }
+              }}
+              style={{
+                ...optionBtn(activeFont === f.id),
+                fontFamily: f.family,
+                fontWeight: f.weight,
+                fontSize: '12px',
+                padding: '4px 10px',
+              }}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  });
+
+  const designControls = (
     <div style={{
       display: 'flex',
       flexDirection: 'column',
-      gap: '16px',
-      ...(isDesktop ? { width: '360px', flexShrink: 0, overflowY: 'auto' as const, maxHeight: 'calc(100vh - 120px)' } : {}),
+      gap: '20px',
+      padding: '16px',
+      background: colors.card,
+      border: `1px solid ${colors.border}`,
+      borderRadius: '10px',
     }}>
-      {/* Header */}
+
+      {/* Overlay */}
       <div>
-        <button
-          type="button"
-          className="btn-text"
-          style={{ ...styles.buttonText, padding: '0 0 8px 0' }}
-          onClick={onDone}
-        >
-          &larr; Creative Tools
-        </button>
-        <h1 style={{ ...styles.pageTitle, fontSize: '20px', margin: 0 }}>
-          Share Studio
-        </h1>
-        <div style={{ fontSize: '13px', color: colors.muted, marginTop: '4px' }}>
-          Design and download social media assets
-        </div>
-      </div>
-
-      {/* Template Toggle */}
-      <div style={{ display: 'flex', gap: '8px' }}>
-        {(['story', 'square'] as TemplateType[]).map((t) => (
-          <button
-            key={t}
-            onClick={() => setActiveTemplate(t)}
-            style={{
-              ...styles.pill,
-              ...(activeTemplate === t ? styles.pillActive : styles.pillInactive),
-            }}
-          >
-            {t === 'story' ? 'Story 9:16' : 'Square 1:1'}
-          </button>
-        ))}
-      </div>
-
-      {/* Design Controls */}
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '20px',
-        padding: '16px',
-        background: colors.card,
-        border: `1px solid ${colors.border}`,
-        borderRadius: '10px',
-      }}>
-
-        {/* Overlay */}
-        <div>
-          <div style={sectionLabel}>Overlay</div>
-          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-            {GRADIENT_STYLES.map((g) => (
-              <button
-                key={g.id}
-                type="button"
-                onClick={() => updateDesign({ gradient: g.id })}
-                title={g.label}
-                style={{
-                  width: 40,
-                  height: activeTemplate === 'story' ? 56 : 40,
-                  borderRadius: '6px',
-                  border: design.gradient === g.id
-                    ? `2px solid ${colors.accent}`
-                    : `1px solid ${colors.border}`,
-                  background: g.css,
-                  cursor: 'pointer',
-                  transition: 'border-color 0.1s',
-                  flexShrink: 0,
-                }}
-              />
-            ))}
-          </div>
-          {/* Gradient Opacity */}
-          <div style={{ marginTop: '10px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-              <span style={{ fontSize: '11px', color: colors.dim }}>Opacity</span>
-              <span style={{ fontSize: '11px', color: colors.dim }}>{Math.round(design.gradientOpacity * 100)}%</span>
-            </div>
-            <input
-              type="range"
-              min="30"
-              max="100"
-              value={Math.round(design.gradientOpacity * 100)}
-              onChange={(e) => updateDesign({ gradientOpacity: Number(e.target.value) / 100 })}
-              style={sliderTrack}
-            />
-          </div>
-        </div>
-
-        {/* Color */}
-        <div>
-          <div style={sectionLabel}>Color</div>
-          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-            {COLOR_SCHEMES.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => {
-                  if (c.id === 'custom' && !design.customColor) {
-                    updateDesign({ colorScheme: c.id, customColor: '#6366f1' });
-                  } else {
-                    updateDesign({ colorScheme: c.id });
-                  }
-                }}
-                title={c.label}
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: '50%',
-                  border: design.colorScheme === c.id
-                    ? `2px solid ${colors.accent}`
-                    : `1px solid ${colors.border}`,
-                  background: c.swatch,
-                  cursor: 'pointer',
-                  transition: 'border-color 0.1s',
-                  flexShrink: 0,
-                }}
-              />
-            ))}
-          </div>
-          {/* Color picker for custom */}
-          {design.colorScheme === 'custom' && (
-            <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <input
-                type="color"
-                value={design.customColor || '#6366f1'}
-                onChange={(e) => updateDesign({ customColor: e.target.value })}
-                style={{
-                  width: '36px',
-                  height: '28px',
-                  border: `1px solid ${colors.border}`,
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  padding: 0,
-                  background: 'none',
-                }}
-              />
-              <span style={{ fontSize: '12px', color: colors.dim, fontFamily: 'monospace' }}>
-                {design.customColor || '#6366f1'}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Font */}
-        <div>
-          <div style={sectionLabel}>Font</div>
-          {FONT_CATEGORIES.map((cat) => {
-            const fontsInCat = FONT_OPTIONS.filter(f => f.category === cat.key);
-            if (fontsInCat.length === 0) return null;
-            return (
-              <div key={cat.key} style={{ marginBottom: '8px' }}>
-                <div style={{ fontSize: '10px', color: colors.dim, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                  {cat.label}
-                </div>
-                <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-                  {fontsInCat.map((f) => (
-                    <button
-                      key={f.id}
-                      type="button"
-                      onClick={() => updateDesign({ font: f.id as FontId })}
-                      style={{
-                        ...optionBtn(design.font === f.id),
-                        fontFamily: f.family,
-                        fontWeight: f.weight,
-                        fontSize: '12px',
-                        padding: '4px 10px',
-                      }}
-                    >
-                      {f.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Size Controls */}
-        <div>
-          <div style={sectionLabel}>Size</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                <span style={{ fontSize: '11px', color: colors.dim }}>Title</span>
-                <span style={{ fontSize: '11px', color: colors.dim }}>{design.titleSize}px</span>
-              </div>
-              <input
-                type="range"
-                min={SIZE_LIMITS.titleMin}
-                max={SIZE_LIMITS.titleMax}
-                value={design.titleSize}
-                onChange={(e) => updateDesign({ titleSize: Number(e.target.value) })}
-                style={sliderTrack}
-              />
-            </div>
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                <span style={{ fontSize: '11px', color: colors.dim }}>Details</span>
-                <span style={{ fontSize: '11px', color: colors.dim }}>{design.supportSize}px</span>
-              </div>
-              <input
-                type="range"
-                min={SIZE_LIMITS.supportMin}
-                max={SIZE_LIMITS.supportMax}
-                value={design.supportSize}
-                onChange={(e) => updateDesign({ supportSize: Number(e.target.value) })}
-                style={sliderTrack}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Layout */}
-        <div>
-          <div style={sectionLabel}>Layout</div>
-          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-            {TEXT_POSITIONS.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => updateDesign({ position: p.id })}
-                style={optionBtn(design.position === p.id)}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-          {(design.titleOffsetX !== 0 || design.titleOffsetY !== 0) && (
+        <div style={sectionLabel}>Overlay</div>
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+          {GRADIENT_STYLES.map((g) => (
             <button
+              key={g.id}
               type="button"
-              onClick={resetPosition}
-              style={{ ...styles.buttonText, fontSize: '11px', color: colors.dim, padding: '4px 0', marginTop: '6px' }}
-            >
-              Reset drag position
-            </button>
-          )}
+              onClick={() => updateDesign({ gradient: g.id })}
+              title={g.label}
+              style={{
+                width: 40,
+                height: activeTemplate === 'story' ? 56 : 40,
+                borderRadius: '6px',
+                border: design.gradient === g.id
+                  ? `2px solid ${colors.accent}`
+                  : `1px solid ${colors.border}`,
+                background: g.css,
+                cursor: 'pointer',
+                transition: 'border-color 0.1s',
+                flexShrink: 0,
+              }}
+            />
+          ))}
         </div>
+        <div style={{ marginTop: '10px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+            <span style={{ fontSize: '11px', color: colors.dim }}>Opacity</span>
+            <span style={{ fontSize: '11px', color: colors.dim }}>{Math.round(design.gradientOpacity * 100)}%</span>
+          </div>
+          <input
+            type="range"
+            min="30"
+            max="100"
+            value={Math.round(design.gradientOpacity * 100)}
+            onChange={(e) => updateDesign({ gradientOpacity: Number(e.target.value) / 100 })}
+            style={sliderTrack}
+          />
+        </div>
+      </div>
 
-        {/* Background */}
-        <div>
-          <div style={sectionLabel}>Background</div>
+      {/* Color */}
+      <div>
+        <div style={sectionLabel}>Color</div>
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+          {COLOR_SCHEMES.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => {
+                if (c.id === 'custom' && !design.customColor) {
+                  updateDesign({ colorScheme: c.id, customColor: '#6366f1' });
+                } else {
+                  updateDesign({ colorScheme: c.id });
+                }
+              }}
+              title={c.label}
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: '50%',
+                border: design.colorScheme === c.id
+                  ? `2px solid ${colors.accent}`
+                  : `1px solid ${colors.border}`,
+                background: c.swatch,
+                cursor: 'pointer',
+                transition: 'border-color 0.1s',
+                flexShrink: 0,
+              }}
+            />
+          ))}
+        </div>
+        {design.colorScheme === 'custom' && (
+          <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <input
+              type="color"
+              value={design.customColor || '#6366f1'}
+              onChange={(e) => updateDesign({ customColor: e.target.value })}
+              style={{
+                width: '36px',
+                height: '28px',
+                border: `1px solid ${colors.border}`,
+                borderRadius: '4px',
+                cursor: 'pointer',
+                padding: 0,
+                background: 'none',
+              }}
+            />
+            <span style={{ fontSize: '12px', color: colors.dim, fontFamily: 'monospace' }}>
+              {design.customColor || '#6366f1'}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Font */}
+      <div>
+        <div style={sectionLabel}>Font</div>
+        {fontTargetToggle}
+        {fontGrid}
+      </div>
+
+      {/* Size Controls */}
+      <div>
+        <div style={sectionLabel}>Size</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-              <span style={{ fontSize: '11px', color: colors.dim }}>Blur</span>
-              <span style={{ fontSize: '11px', color: colors.dim }}>{design.blur}px</span>
+              <span style={{ fontSize: '11px', color: colors.dim }}>Title</span>
+              <span style={{ fontSize: '11px', color: colors.dim }}>{design.titleSize}px</span>
             </div>
             <input
               type="range"
-              min="0"
-              max={SIZE_LIMITS.blurMax}
-              value={design.blur}
-              onChange={(e) => updateDesign({ blur: Number(e.target.value) })}
+              min={SIZE_LIMITS.titleMin}
+              max={SIZE_LIMITS.titleMax}
+              value={design.titleSize}
+              onChange={(e) => updateDesign({ titleSize: Number(e.target.value) })}
+              style={sliderTrack}
+            />
+          </div>
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+              <span style={{ fontSize: '11px', color: colors.dim }}>Details</span>
+              <span style={{ fontSize: '11px', color: colors.dim }}>{design.supportSize}px</span>
+            </div>
+            <input
+              type="range"
+              min={SIZE_LIMITS.supportMin}
+              max={SIZE_LIMITS.supportMax}
+              value={design.supportSize}
+              onChange={(e) => updateDesign({ supportSize: Number(e.target.value) })}
               style={sliderTrack}
             />
           </div>
         </div>
+      </div>
 
-        {/* Details */}
+      {/* Layout */}
+      <div>
+        <div style={sectionLabel}>Layout</div>
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+          {TEXT_POSITIONS.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => updateDesign({ position: p.id })}
+              style={optionBtn(design.position === p.id)}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        {(design.titleOffsetX !== 0 || design.titleOffsetY !== 0) && (
+          <button
+            type="button"
+            onClick={resetPosition}
+            style={{ ...styles.buttonText, fontSize: '11px', color: colors.dim, padding: '4px 0', marginTop: '6px' }}
+          >
+            Reset drag position
+          </button>
+        )}
+      </div>
+
+      {/* Background */}
+      <div>
+        <div style={sectionLabel}>Background</div>
         <div>
-          <div style={sectionLabel}>Details</div>
-          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              onClick={() => updateDesign({ showVenue: !design.showVenue })}
-              style={optionBtn(design.showVenue)}
-            >
-              Venue
-            </button>
-            <button
-              type="button"
-              onClick={() => updateDesign({ showDateTime: !design.showDateTime })}
-              style={optionBtn(design.showDateTime)}
-            >
-              Date & Time
-            </button>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+            <span style={{ fontSize: '11px', color: colors.dim }}>Blur</span>
+            <span style={{ fontSize: '11px', color: colors.dim }}>{design.blur}px</span>
           </div>
+          <input
+            type="range"
+            min="0"
+            max={SIZE_LIMITS.blurMax}
+            value={design.blur}
+            onChange={(e) => updateDesign({ blur: Number(e.target.value) })}
+            style={sliderTrack}
+          />
         </div>
       </div>
 
+      {/* Details */}
+      <div>
+        <div style={sectionLabel}>Details</div>
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={() => updateDesign({ showVenue: !design.showVenue })}
+            style={optionBtn(design.showVenue)}
+          >
+            Venue
+          </button>
+          <button
+            type="button"
+            onClick={() => updateDesign({ showDateTime: !design.showDateTime })}
+            style={optionBtn(design.showDateTime)}
+          >
+            Date & Time
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const actionButtons = (
+    <>
       {/* Download Button */}
       <button
         className="btn-primary"
@@ -713,37 +714,65 @@ export function ShareStudioScreen({ eventId, onDone }: ShareStudioScreenProps) {
       >
         Done
       </button>
+    </>
+  );
+
+  const templateToggle = (
+    <div style={{ display: 'flex', gap: '8px' }}>
+      {(['story', 'square'] as TemplateType[]).map((t) => (
+        <button
+          key={t}
+          onClick={() => setActiveTemplate(t)}
+          style={{
+            ...styles.pill,
+            ...(activeTemplate === t ? styles.pillActive : styles.pillInactive),
+          }}
+        >
+          {t === 'story' ? 'Story 9:16' : 'Square 1:1'}
+        </button>
+      ))}
     </div>
   );
 
-  const previewPanel = (
+  // Phone frame wrapping the preview canvas
+  const phoneFrame = (
     <div style={{
-      flex: 1,
-      minWidth: 0,
-      ...(isDesktop ? { position: 'sticky' as const, top: '20px', alignSelf: 'flex-start' } : {}),
+      width: PHONE_WIDTH + PHONE_BEZEL * 2,
+      maxWidth: '100%',
+      margin: '0 auto',
+      ...(isDesktop ? {} : { margin: '0 auto' }),
     }}>
-      <div
-        ref={previewRef}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        style={{
-          background: '#1a1a1a',
-          borderRadius: '12px',
-          overflow: 'hidden',
-          minHeight: rendering ? '300px' : undefined,
-          display: rendering ? 'flex' : 'block',
-          alignItems: 'center',
-          justifyContent: 'center',
-          touchAction: 'none',
-          userSelect: 'none',
-        }}
-      >
-        {rendering && (
-          <div style={{ color: '#666', fontSize: '14px', padding: '60px 20px' }}>
-            Generating preview...
-          </div>
-        )}
+      {/* Phone shell */}
+      <div style={{
+        background: '#1a1a1a',
+        borderRadius: `${PHONE_RADIUS}px`,
+        padding: `${PHONE_BEZEL}px`,
+        boxShadow: '0 8px 40px rgba(0,0,0,0.15), 0 2px 8px rgba(0,0,0,0.08)',
+      }}>
+        {/* Screen area */}
+        <div
+          ref={previewRef}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          style={{
+            background: '#000',
+            borderRadius: `${PHONE_RADIUS - PHONE_BEZEL}px`,
+            overflow: 'hidden',
+            minHeight: rendering ? '200px' : undefined,
+            display: rendering ? 'flex' : 'block',
+            alignItems: 'center',
+            justifyContent: 'center',
+            touchAction: 'none',
+            userSelect: 'none',
+          }}
+        >
+          {rendering && (
+            <div style={{ color: '#444', fontSize: '13px', padding: '60px 20px' }}>
+              Generating...
+            </div>
+          )}
+        </div>
       </div>
       {!rendering && renderComplete && (
         <div style={{ textAlign: 'center', marginTop: '8px' }}>
@@ -755,19 +784,66 @@ export function ShareStudioScreen({ eventId, onDone }: ShareStudioScreenProps) {
     </div>
   );
 
-  // Desktop: side-by-side. Mobile: stacked (preview first, then controls).
+  // =========================================================================
+  // Desktop: side-by-side layout
+  // =========================================================================
+
   if (isDesktop) {
     return (
       <div style={{ display: 'flex', gap: '32px', width: '100%', alignItems: 'flex-start' }}>
-        {controlsPanel}
-        {previewPanel}
+        {/* Controls panel */}
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '16px',
+          width: '360px',
+          flexShrink: 0,
+          overflowY: 'auto',
+          maxHeight: 'calc(100vh - 120px)',
+        }}>
+          <div>
+            <button
+              type="button"
+              className="btn-text"
+              style={{ ...styles.buttonText, padding: '0 0 8px 0' }}
+              onClick={onDone}
+            >
+              &larr; Creative Tools
+            </button>
+            <h1 style={{ ...styles.pageTitle, fontSize: '20px', margin: 0 }}>
+              Share Studio
+            </h1>
+            <div style={{ fontSize: '13px', color: colors.muted, marginTop: '4px' }}>
+              Design and download social media assets
+            </div>
+          </div>
+          {templateToggle}
+          {designControls}
+          {actionButtons}
+        </div>
+
+        {/* Preview panel */}
+        <div style={{
+          flex: 1,
+          minWidth: 0,
+          position: 'sticky',
+          top: '20px',
+          alignSelf: 'flex-start',
+          display: 'flex',
+          justifyContent: 'center',
+        }}>
+          {phoneFrame}
+        </div>
       </div>
     );
   }
 
+  // =========================================================================
+  // Mobile: stacked layout — preview first, then controls
+  // =========================================================================
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', width: '100%' }}>
-      {/* Header on mobile — above preview */}
       <div>
         <button
           type="button"
@@ -781,323 +857,11 @@ export function ShareStudioScreen({ eventId, onDone }: ShareStudioScreenProps) {
           Share Studio
         </h1>
       </div>
-
-      {/* Template Toggle */}
-      <div style={{ display: 'flex', gap: '8px' }}>
-        {(['story', 'square'] as TemplateType[]).map((t) => (
-          <button
-            key={t}
-            onClick={() => setActiveTemplate(t)}
-            style={{
-              ...styles.pill,
-              ...(activeTemplate === t ? styles.pillActive : styles.pillInactive),
-            }}
-          >
-            {t === 'story' ? 'Story 9:16' : 'Square 1:1'}
-          </button>
-        ))}
-      </div>
-
-      {previewPanel}
-
-      {/* On mobile, render controls panel but without the redundant header/toggle */}
+      {templateToggle}
+      {phoneFrame}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        {/* Design Controls */}
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '20px',
-          padding: '16px',
-          background: colors.card,
-          border: `1px solid ${colors.border}`,
-          borderRadius: '10px',
-        }}>
-
-          {/* Overlay */}
-          <div>
-            <div style={sectionLabel}>Overlay</div>
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-              {GRADIENT_STYLES.map((g) => (
-                <button
-                  key={g.id}
-                  type="button"
-                  onClick={() => updateDesign({ gradient: g.id })}
-                  title={g.label}
-                  style={{
-                    width: 40,
-                    height: activeTemplate === 'story' ? 56 : 40,
-                    borderRadius: '6px',
-                    border: design.gradient === g.id
-                      ? `2px solid ${colors.accent}`
-                      : `1px solid ${colors.border}`,
-                    background: g.css,
-                    cursor: 'pointer',
-                    transition: 'border-color 0.1s',
-                    flexShrink: 0,
-                  }}
-                />
-              ))}
-            </div>
-            <div style={{ marginTop: '10px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                <span style={{ fontSize: '11px', color: colors.dim }}>Opacity</span>
-                <span style={{ fontSize: '11px', color: colors.dim }}>{Math.round(design.gradientOpacity * 100)}%</span>
-              </div>
-              <input
-                type="range"
-                min="30"
-                max="100"
-                value={Math.round(design.gradientOpacity * 100)}
-                onChange={(e) => updateDesign({ gradientOpacity: Number(e.target.value) / 100 })}
-                style={sliderTrack}
-              />
-            </div>
-          </div>
-
-          {/* Color */}
-          <div>
-            <div style={sectionLabel}>Color</div>
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-              {COLOR_SCHEMES.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => {
-                    if (c.id === 'custom' && !design.customColor) {
-                      updateDesign({ colorScheme: c.id, customColor: '#6366f1' });
-                    } else {
-                      updateDesign({ colorScheme: c.id });
-                    }
-                  }}
-                  title={c.label}
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: '50%',
-                    border: design.colorScheme === c.id
-                      ? `2px solid ${colors.accent}`
-                      : `1px solid ${colors.border}`,
-                    background: c.swatch,
-                    cursor: 'pointer',
-                    transition: 'border-color 0.1s',
-                    flexShrink: 0,
-                  }}
-                />
-              ))}
-            </div>
-            {design.colorScheme === 'custom' && (
-              <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <input
-                  type="color"
-                  value={design.customColor || '#6366f1'}
-                  onChange={(e) => updateDesign({ customColor: e.target.value })}
-                  style={{
-                    width: '36px',
-                    height: '28px',
-                    border: `1px solid ${colors.border}`,
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    padding: 0,
-                    background: 'none',
-                  }}
-                />
-                <span style={{ fontSize: '12px', color: colors.dim, fontFamily: 'monospace' }}>
-                  {design.customColor || '#6366f1'}
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* Font */}
-          <div>
-            <div style={sectionLabel}>Font</div>
-            {FONT_CATEGORIES.map((cat) => {
-              const fontsInCat = FONT_OPTIONS.filter(f => f.category === cat.key);
-              if (fontsInCat.length === 0) return null;
-              return (
-                <div key={cat.key} style={{ marginBottom: '8px' }}>
-                  <div style={{ fontSize: '10px', color: colors.dim, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                    {cat.label}
-                  </div>
-                  <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-                    {fontsInCat.map((f) => (
-                      <button
-                        key={f.id}
-                        type="button"
-                        onClick={() => updateDesign({ font: f.id as FontId })}
-                        style={{
-                          ...optionBtn(design.font === f.id),
-                          fontFamily: f.family,
-                          fontWeight: f.weight,
-                          fontSize: '12px',
-                          padding: '4px 10px',
-                        }}
-                      >
-                        {f.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Size Controls */}
-          <div>
-            <div style={sectionLabel}>Size</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                  <span style={{ fontSize: '11px', color: colors.dim }}>Title</span>
-                  <span style={{ fontSize: '11px', color: colors.dim }}>{design.titleSize}px</span>
-                </div>
-                <input
-                  type="range"
-                  min={SIZE_LIMITS.titleMin}
-                  max={SIZE_LIMITS.titleMax}
-                  value={design.titleSize}
-                  onChange={(e) => updateDesign({ titleSize: Number(e.target.value) })}
-                  style={sliderTrack}
-                />
-              </div>
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                  <span style={{ fontSize: '11px', color: colors.dim }}>Details</span>
-                  <span style={{ fontSize: '11px', color: colors.dim }}>{design.supportSize}px</span>
-                </div>
-                <input
-                  type="range"
-                  min={SIZE_LIMITS.supportMin}
-                  max={SIZE_LIMITS.supportMax}
-                  value={design.supportSize}
-                  onChange={(e) => updateDesign({ supportSize: Number(e.target.value) })}
-                  style={sliderTrack}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Layout */}
-          <div>
-            <div style={sectionLabel}>Layout</div>
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-              {TEXT_POSITIONS.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => updateDesign({ position: p.id })}
-                  style={optionBtn(design.position === p.id)}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-            {(design.titleOffsetX !== 0 || design.titleOffsetY !== 0) && (
-              <button
-                type="button"
-                onClick={resetPosition}
-                style={{ ...styles.buttonText, fontSize: '11px', color: colors.dim, padding: '4px 0', marginTop: '6px' }}
-              >
-                Reset drag position
-              </button>
-            )}
-          </div>
-
-          {/* Background */}
-          <div>
-            <div style={sectionLabel}>Background</div>
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                <span style={{ fontSize: '11px', color: colors.dim }}>Blur</span>
-                <span style={{ fontSize: '11px', color: colors.dim }}>{design.blur}px</span>
-              </div>
-              <input
-                type="range"
-                min="0"
-                max={SIZE_LIMITS.blurMax}
-                value={design.blur}
-                onChange={(e) => updateDesign({ blur: Number(e.target.value) })}
-                style={sliderTrack}
-              />
-            </div>
-          </div>
-
-          {/* Details */}
-          <div>
-            <div style={sectionLabel}>Details</div>
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                onClick={() => updateDesign({ showVenue: !design.showVenue })}
-                style={optionBtn(design.showVenue)}
-              >
-                Venue
-              </button>
-              <button
-                type="button"
-                onClick={() => updateDesign({ showDateTime: !design.showDateTime })}
-                style={optionBtn(design.showDateTime)}
-              >
-                Date & Time
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Download Button */}
-        <button
-          className="btn-primary"
-          style={styles.buttonPrimary}
-          onClick={handleDownload}
-          disabled={rendering || !renderComplete}
-        >
-          Download {activeTemplate === 'story' ? 'Story' : 'Square'} Image
-        </button>
-
-        {/* Caption */}
-        <div>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: '8px',
-          }}>
-            <div style={styles.sectionLabel}>Caption</div>
-            <button
-              onClick={handleCopy}
-              style={{
-                ...styles.pill,
-                ...(copied
-                  ? { background: colors.successDim, color: colors.success, borderColor: colors.success }
-                  : styles.pillInactive),
-                fontSize: '11px',
-                padding: '3px 10px',
-              }}
-            >
-              {copied ? 'Copied!' : 'Copy'}
-            </button>
-          </div>
-          <textarea
-            value={caption}
-            onChange={(e) => setCaption(e.target.value)}
-            style={{
-              ...styles.textarea,
-              minHeight: '140px',
-              fontSize: '12px',
-              lineHeight: '1.6',
-            }}
-          />
-        </div>
-
-        {/* Done */}
-        <button
-          className="btn-secondary"
-          style={{ ...styles.buttonSecondary, width: '100%', textAlign: 'center' as const }}
-          onClick={onDone}
-        >
-          Done
-        </button>
-
+        {designControls}
+        {actionButtons}
         <div style={{ height: '40px' }} />
       </div>
     </div>

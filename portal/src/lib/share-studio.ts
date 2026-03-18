@@ -49,7 +49,8 @@ export interface CardDesign {
   gradientOpacity: number;    // 0.3–1.0, overlay intensity
   colorScheme: ColorSchemeId;
   customColor: string | null; // hex string when colorScheme is 'custom'
-  font: FontId;
+  font: FontId;               // title font
+  detailFont: FontId;         // venue, date, time font
   position: TextPosition;
   titleSize: number;          // canvas px, 48–140
   supportSize: number;        // venue + date size, 18–54
@@ -66,6 +67,7 @@ export const DEFAULT_DESIGN: CardDesign = {
   colorScheme: 'auto',
   customColor: null,
   font: 'dm-serif',
+  detailFont: 'dm-sans',
   position: 'bottom-left',
   titleSize: 90,
   supportSize: 36,
@@ -467,6 +469,7 @@ export function drawTextContent(
   const maxTextW = W - pad * 2;
 
   const fontOpt = FONT_OPTIONS.find(f => f.id === design.font) || FONT_OPTIONS[0]!;
+  const detailFontOpt = FONT_OPTIONS.find(f => f.id === design.detailFont) || FONT_OPTIONS.find(f => f.id === 'dm-sans') || FONT_OPTIONS[0]!;
   const titleSize = design.titleSize;
   const venueSize = design.supportSize;
   const dateSize = Math.round(design.supportSize * 0.92);
@@ -499,7 +502,7 @@ export function drawTextContent(
   const endStr = event.end_time ? ` \u2013 ${formatTime12(event.end_time)}` : '';
 
   // Prepare venue (truncate if needed)
-  ctx.font = `400 ${venueSize}px "DM Sans", sans-serif`;
+  ctx.font = `${detailFontOpt.weight} ${venueSize}px ${detailFontOpt.family}`;
   let venueLine = event.venue_name;
   if (ctx.measureText(venueLine).width > maxTextW) {
     while (ctx.measureText(venueLine + '\u2026').width > maxTextW && venueLine.length > 1) {
@@ -526,7 +529,7 @@ export function drawTextContent(
     let y = H - (isStory ? 80 : 56);
 
     if (design.showDateTime) {
-      ctx.font = `500 ${dateSize}px "DM Sans", sans-serif`;
+      ctx.font = `${detailFontOpt.weight} ${dateSize}px ${detailFontOpt.family}`;
       ctx.fillStyle = 'rgba(255,255,255,0.85)';
       ctx.fillText(`${timeStr}${endStr}`, textX + ox, y + oy);
       y -= dateSize + 6;
@@ -535,7 +538,7 @@ export function drawTextContent(
     }
 
     if (design.showVenue) {
-      ctx.font = `400 ${venueSize}px "DM Sans", sans-serif`;
+      ctx.font = `${detailFontOpt.weight} ${venueSize}px ${detailFontOpt.family}`;
       ctx.fillStyle = 'rgba(255,255,255,0.65)';
       ctx.fillText(venueLine, textX + ox, y + oy);
       y -= venueSize + 28;
@@ -569,14 +572,14 @@ export function drawTextContent(
     y += 16;
 
     if (design.showVenue) {
-      ctx.font = `400 ${venueSize}px "DM Sans", sans-serif`;
+      ctx.font = `${detailFontOpt.weight} ${venueSize}px ${detailFontOpt.family}`;
       ctx.fillStyle = 'rgba(255,255,255,0.65)';
       ctx.fillText(venueLine, textX + ox, y + venueSize * 0.8 + oy);
       y += venueSize + 16;
     }
 
     if (design.showDateTime) {
-      ctx.font = `500 ${dateSize}px "DM Sans", sans-serif`;
+      ctx.font = `${detailFontOpt.weight} ${dateSize}px ${detailFontOpt.family}`;
       ctx.fillStyle = 'rgba(255,255,255,0.85)';
       ctx.fillText(dateStr, textX + ox, y + dateSize * 0.8 + oy);
       y += dateSize + 6;
@@ -607,14 +610,14 @@ export function drawTextContent(
   y += 16;
 
   if (design.showVenue) {
-    ctx.font = `400 ${venueSize}px "DM Sans", sans-serif`;
+    ctx.font = `${detailFontOpt.weight} ${venueSize}px ${detailFontOpt.family}`;
     ctx.fillStyle = 'rgba(255,255,255,0.65)';
     ctx.fillText(venueLine, textX + ox, y + venueSize * 0.8 + oy);
     y += venueSize + 16;
   }
 
   if (design.showDateTime) {
-    ctx.font = `500 ${dateSize}px "DM Sans", sans-serif`;
+    ctx.font = `${detailFontOpt.weight} ${dateSize}px ${detailFontOpt.family}`;
     ctx.fillStyle = 'rgba(255,255,255,0.85)';
     ctx.fillText(dateStr, textX + ox, y + dateSize * 0.8 + oy);
     y += dateSize + 6;
@@ -687,7 +690,11 @@ export async function renderTemplate(
   await loadShareFonts();
 
   const fontOpt = FONT_OPTIONS.find(f => f.id === design.font) || FONT_OPTIONS[0]!;
-  await ensureFontLoaded(fontOpt, design.titleSize);
+  const detailFontOpt = FONT_OPTIONS.find(f => f.id === design.detailFont) || FONT_OPTIONS.find(f => f.id === 'dm-sans') || FONT_OPTIONS[0]!;
+  await Promise.all([
+    ensureFontLoaded(fontOpt, design.titleSize),
+    ensureFontLoaded(detailFontOpt, design.supportSize),
+  ]);
 
   const bg = await renderBackground(event, type, dominantColor, design);
   const W = bg.width;
