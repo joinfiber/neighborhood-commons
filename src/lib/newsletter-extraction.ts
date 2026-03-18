@@ -69,6 +69,36 @@ function stripHtml(html: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Time normalization — LLMs often return "7pm" instead of "19:00"
+// ---------------------------------------------------------------------------
+
+/**
+ * Normalize time strings to HH:MM format for PostgreSQL time columns.
+ * Handles: "7pm", "7:30pm", "7:30 PM", "19:00", "7 pm", "12pm", "12:30am"
+ */
+export function normalizeTime(time: string | null): string | null {
+  if (!time) return null;
+
+  const t = time.trim().toLowerCase();
+
+  // Already HH:MM format
+  if (/^\d{1,2}:\d{2}$/.test(t)) return t.padStart(5, '0');
+
+  // Match patterns like "7pm", "7:30pm", "7 pm", "7:30 pm", "12am"
+  const match = t.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/);
+  if (!match) return time; // Return as-is if we can't parse; let DB reject if invalid
+
+  let hours = parseInt(match[1], 10);
+  const minutes = match[2] || '00';
+  const period = match[3];
+
+  if (period === 'pm' && hours < 12) hours += 12;
+  if (period === 'am' && hours === 12) hours = 0;
+
+  return `${hours.toString().padStart(2, '0')}:${minutes}`;
+}
+
+// ---------------------------------------------------------------------------
 // LLM extraction prompt
 // ---------------------------------------------------------------------------
 
@@ -311,8 +341,8 @@ export function parseExtractionResponse(raw: string): ExtractedEvent[] {
       title: e.title,
       description: e.description,
       start_date: e.date,
-      start_time: e.start_time,
-      end_time: e.end_time,
+      start_time: normalizeTime(e.start_time),
+      end_time: normalizeTime(e.end_time),
       location_name: e.location,
       location_address: e.location, // Use location string as address for geocoding
       source_url: e.url,
