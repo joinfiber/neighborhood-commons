@@ -15,6 +15,7 @@ const routes: RoutePattern[] = [
   { pattern: /^#\/terms$/, screen: 'terms', paramNames: [] },
   { pattern: /^#\/developers$/, screen: 'developers', paramNames: [] },
   { pattern: /^#\/profile$/, screen: 'profile', paramNames: [] },
+  { pattern: /^#\/creative$/, screen: 'creative', paramNames: [] },
   { pattern: /^#\/events\/import$/, screen: 'import-events', paramNames: [] },
   { pattern: /^#\/events\/new$/, screen: 'create-event', paramNames: [] },
   { pattern: /^#\/events\/([^/]+)\/share$/, screen: 'share-event', paramNames: ['id'] },

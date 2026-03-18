@@ -70,8 +70,7 @@ const icons = {
 
 const BUSINESS_NAV: NavItem[] = [
   { label: 'Events', icon: icons.calendar, hash: '#/', screens: ['dashboard', 'edit-event', 'create-event'] },
-  { label: 'Import', icon: icons.import, hash: '#/events/import', screens: ['import-events'] },
-  { label: 'Share Studio', icon: icons.share, hash: '', screens: ['share-event'] },
+  { label: 'Creative', icon: icons.share, hash: '#/creative', screens: ['creative', 'share-event'] },
   { label: 'Developers', icon: icons.code, hash: '#/developers', screens: ['developers'] },
 ];
 
@@ -151,7 +150,7 @@ export function Sidebar({ role, activeScreen, businessName, businessAddress, onN
         )}
       </div>
 
-      {/* Hero CTA */}
+      {/* Hero CTA + Import */}
       <div style={{ padding: '0 16px', marginBottom: '16px' }}>
         <button
           type="button"
@@ -165,13 +164,31 @@ export function Sidebar({ role, activeScreen, businessName, businessAddress, onN
         >
           {heroLabel}
         </button>
+        {role === 'business' && (
+          <button
+            type="button"
+            className="sidebar-nav-item"
+            onClick={() => handleNav('#/events/import')}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: activeScreen === 'import-events' ? colors.accent : colors.dim,
+              fontSize: '12px',
+              cursor: 'pointer',
+              padding: '6px 4px 0',
+              fontFamily: 'inherit',
+              textAlign: 'left',
+              width: '100%',
+            }}
+          >
+            or import from Eventbrite, Dice, Facebook...
+          </button>
+        )}
       </div>
 
       {/* Nav items */}
       {navItems.map((item) => {
         const active = isActive(item);
-        // Share Studio is contextual — only show when active
-        if (item.label === 'Share Studio' && !active) return null;
         return (
           <button
             key={item.label}

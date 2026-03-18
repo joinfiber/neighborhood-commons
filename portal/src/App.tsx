@@ -17,13 +17,14 @@ import { DevelopersScreen } from './screens/DevelopersScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { TermsScreen } from './screens/TermsScreen';
 import { ShareStudioScreen } from './screens/ShareStudioScreen';
+import { CreativeScreen } from './screens/CreativeScreen';
 import { Toast } from './components/Toast';
 import { WorkspaceShell } from './components/WorkspaceShell';
 import { PlaceAutocomplete } from './components/PlaceAutocomplete';
 import type { PlaceResult } from './lib/api';
 
 function contentWidthForRoute(screen: string): 'normal' | 'wide' {
-  const wide = ['dashboard', 'developers', 'admin-home', 'admin-events', 'admin-account', 'admin-create-event'];
+  const wide = ['dashboard', 'creative', 'developers', 'admin-home', 'admin-events', 'admin-account', 'admin-create-event'];
   return wide.includes(screen) ? 'wide' : 'normal';
 }
 
@@ -200,11 +201,19 @@ export default function App() {
           );
         }
 
+        if (route.screen === 'creative') {
+          return (
+            <CreativeScreen
+              onShareEvent={(event) => navigate(`#/events/${event.id}/share`)}
+            />
+          );
+        }
+
         if (route.screen === 'share-event' && route.params.id) {
           return (
             <ShareStudioScreen
               eventId={route.params.id}
-              onDone={() => navigate('#/')}
+              onDone={() => navigate('#/creative')}
             />
           );
         }
@@ -259,8 +268,6 @@ export default function App() {
         return (
           <DashboardScreen
             account={actAsAccount}
-            onCreateEvent={() => navigate('#/events/new')}
-            onImportEvents={() => navigate('#/events/import')}
             onEditEvent={(event) => navigate(`#/events/${event.id}/edit`)}
             onShareEvent={(event) => navigate(`#/events/${event.id}/share`)}
           />
@@ -463,11 +470,19 @@ export default function App() {
       );
     }
 
+    if (route.screen === 'creative') {
+      return (
+        <CreativeScreen
+          onShareEvent={(event) => navigate(`#/events/${event.id}/share`)}
+        />
+      );
+    }
+
     if (route.screen === 'share-event' && route.params.id) {
       return (
         <ShareStudioScreen
           eventId={route.params.id}
-          onDone={() => navigate('#/')}
+          onDone={() => navigate('#/creative')}
         />
       );
     }
@@ -523,8 +538,6 @@ export default function App() {
     return (
       <DashboardScreen
         account={account}
-        onCreateEvent={() => navigate('#/events/new')}
-        onImportEvents={() => navigate('#/events/import')}
         onEditEvent={(event) => navigate(`#/events/${event.id}/edit`)}
         onShareEvent={(event) => navigate(`#/events/${event.id}/share`)}
       />

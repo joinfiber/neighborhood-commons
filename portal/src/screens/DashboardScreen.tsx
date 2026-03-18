@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { PORTAL_CATEGORIES, type PortalCategory } from '../lib/categories';
-import { styles, colors } from '../lib/styles';
+import { colors } from '../lib/styles';
 import { fetchEvents, batchUpdateEvents, batchDeleteEvents, extendEventSeries, type PortalEvent, type PortalAccount } from '../lib/api';
 import { EventRowSkeleton } from '../components/Skeleton';
 import { BulkEditBar } from '../components/BulkEditBar';
@@ -8,8 +8,6 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 
 interface DashboardScreenProps {
   account: PortalAccount;
-  onCreateEvent: () => void;
-  onImportEvents: () => void;
   onEditEvent: (event: PortalEvent) => void;
   onShareEvent: (event: PortalEvent) => void;
 }
@@ -168,7 +166,7 @@ function EventCard({ event, onClick, onShare, selected, onToggle, selectMode }: 
 // SERIES CARD
 // =============================================================================
 
-function SeriesCard({ group, onClick, onShare, selectedIds, onToggle, selectMode, onExtend }: {
+function SeriesCard({ group, onClick, onShare, selectedIds, onToggle, selectMode, onExtend, onEditInstances }: {
   group: SeriesGroup;
   onClick: (event: PortalEvent) => void;
   onShare: (event: PortalEvent) => void;
@@ -176,6 +174,7 @@ function SeriesCard({ group, onClick, onShare, selectedIds, onToggle, selectMode
   onToggle: (id: string) => void;
   selectMode: boolean;
   onExtend: (seriesId: string) => void;
+  onEditInstances: () => void;
 }) {
   const { nextEvent, events } = group;
   const cat = PORTAL_CATEGORIES[nextEvent.category as PortalCategory];
@@ -285,25 +284,43 @@ function SeriesCard({ group, onClick, onShare, selectedIds, onToggle, selectMode
           </span>
         )}
       </div>
-      {(runningLow || expired) && !selectMode && (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onExtend(group.seriesId); }}
-          style={{
-            background: expired ? colors.accent : 'transparent',
-            color: expired ? '#ffffff' : colors.accent,
-            border: expired ? 'none' : `1px solid ${colors.accentBorder}`,
-            borderRadius: '6px',
-            fontSize: '12px',
-            fontWeight: 500,
-            padding: '5px 12px',
-            cursor: 'pointer',
-            alignSelf: 'flex-start',
-            marginTop: '2px',
-          }}
-        >
-          {expired ? 'Renew 6 months' : `Renew (${upcomingCount} left)`}
-        </button>
+      {!selectMode && (
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '2px' }}>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onEditInstances(); }}
+            style={{
+              background: 'transparent',
+              color: colors.dim,
+              border: `1px solid ${colors.border}`,
+              borderRadius: '6px',
+              fontSize: '11px',
+              padding: '4px 10px',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            Edit instances
+          </button>
+          {(runningLow || expired) && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onExtend(group.seriesId); }}
+              style={{
+                background: expired ? colors.accent : 'transparent',
+                color: expired ? '#ffffff' : colors.accent,
+                border: expired ? 'none' : `1px solid ${colors.accentBorder}`,
+                borderRadius: '6px',
+                fontSize: '11px',
+                fontWeight: 500,
+                padding: '4px 10px',
+                cursor: 'pointer',
+              }}
+            >
+              {expired ? 'Renew 6 months' : `Renew (${upcomingCount} left)`}
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
@@ -313,17 +330,13 @@ function SeriesCard({ group, onClick, onShare, selectedIds, onToggle, selectMode
 // DASHBOARD
 // =============================================================================
 
-export function DashboardScreen({ account, onCreateEvent, onImportEvents, onEditEvent, onShareEvent }: DashboardScreenProps) {
+export function DashboardScreen({ account, onEditEvent, onShareEvent }: DashboardScreenProps) {
   const [events, setEvents] = useState<PortalEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Search
-  const [search, setSearch] = useState('');
-  const [searchVisible, setSearchVisible] = useState(false);
-  const searchRef = useRef<HTMLInputElement>(null);
-
-  // Multi-select
+  // Multi-select (per-series bulk edit)
   const [selectMode, setSelectMode] = useState(false);
+  const [selectSeriesId, setSelectSeriesId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [applying, setApplying] = useState(false);
   const [toast, setToast] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
@@ -338,13 +351,16 @@ export function DashboardScreen({ account, onCreateEvent, onImportEvents, onEdit
 
   useEffect(() => { loadEvents(); }, [loadEvents]);
 
-  useEffect(() => {
-    if (searchVisible) searchRef.current?.focus();
-  }, [searchVisible]);
-
   const exitSelectMode = () => {
     setSelectMode(false);
+    setSelectSeriesId(null);
     setSelectedIds(new Set());
+  };
+
+  const enterSeriesSelectMode = (seriesId: string, eventIds: string[]) => {
+    setSelectMode(true);
+    setSelectSeriesId(seriesId);
+    setSelectedIds(new Set(eventIds));
   };
 
   const toggleSelect = (id: string) => {
@@ -398,28 +414,14 @@ export function DashboardScreen({ account, onCreateEvent, onImportEvents, onEdit
     }
   }, [toast]);
 
-  // Filter events by search
-  const matchesSearch = (e: PortalEvent) => {
-    if (!search) return true;
-    const s = search.toLowerCase();
-    return (
-      e.title.toLowerCase().includes(s) ||
-      e.venue_name.toLowerCase().includes(s) ||
-      (e.category && PORTAL_CATEGORIES[e.category as PortalCategory]?.label.toLowerCase().includes(s)) ||
-      formatDate(e.event_date).toLowerCase().includes(s) ||
-      (e.description?.toLowerCase().includes(s))
-    );
-  };
-
   const today = new Date().toISOString().split('T')[0]!;
-  const allFiltered = events.filter(matchesSearch);
 
-  // Group events: series_id → SeriesGroup, standalone → EventGroup
-  const buildDashboardItems = (filtered: PortalEvent[]): { upcoming: DashboardItem[]; past: DashboardItem[] } => {
+  // Group events into Recurring (series) and One-off (singles)
+  const buildSections = () => {
     const seriesMap = new Map<string, PortalEvent[]>();
     const singles: PortalEvent[] = [];
 
-    for (const e of filtered) {
+    for (const e of events) {
       if (e.series_id) {
         const arr = seriesMap.get(e.series_id) || [];
         arr.push(e);
@@ -429,94 +431,67 @@ export function DashboardScreen({ account, onCreateEvent, onImportEvents, onEdit
       }
     }
 
-    const upcomingItems: DashboardItem[] = [];
-    const pastItems: DashboardItem[] = [];
-
-    // Process series groups
+    const recurring: SeriesGroup[] = [];
     for (const [seriesId, seriesEvents] of seriesMap) {
       seriesEvents.sort((a, b) => a.event_date.localeCompare(b.event_date));
       const upcomingInSeries = seriesEvents.filter((e) => e.event_date >= today);
       const nextEvent = upcomingInSeries[0] || seriesEvents[seriesEvents.length - 1]!;
-      const group: SeriesGroup = { type: 'series', seriesId, events: seriesEvents, nextEvent };
-
-      if (upcomingInSeries.length > 0) {
-        upcomingItems.push(group);
-      } else {
-        pastItems.push(group);
-      }
+      recurring.push({ type: 'series', seriesId, events: seriesEvents, nextEvent });
     }
-
-    // Process singles
-    for (const e of singles) {
-      const item: EventGroup = { type: 'single', event: e };
-      if (e.event_date >= today) {
-        upcomingItems.push(item);
-      } else {
-        pastItems.push(item);
-      }
-    }
-
-    // Sort: upcoming by next date ascending, past by date descending
-    upcomingItems.sort((a, b) => {
-      const dateA = a.type === 'series' ? a.nextEvent.event_date : a.event.event_date;
-      const dateB = b.type === 'series' ? b.nextEvent.event_date : b.event.event_date;
-      return dateA.localeCompare(dateB);
-    });
-    pastItems.sort((a, b) => {
-      const dateA = a.type === 'series' ? a.nextEvent.event_date : a.event.event_date;
-      const dateB = b.type === 'series' ? b.nextEvent.event_date : b.event.event_date;
-      return dateB.localeCompare(dateA);
+    // Active series first (have upcoming events), then expired, each sorted by next date
+    recurring.sort((a, b) => {
+      const aHasUpcoming = a.events.some((e) => e.event_date >= today);
+      const bHasUpcoming = b.events.some((e) => e.event_date >= today);
+      if (aHasUpcoming !== bHasUpcoming) return aHasUpcoming ? -1 : 1;
+      return a.nextEvent.event_date.localeCompare(b.nextEvent.event_date);
     });
 
-    return { upcoming: upcomingItems, past: pastItems };
+    // One-offs: upcoming first (ascending), then past (descending)
+    const upcomingSingles = singles.filter((e) => e.event_date >= today).sort((a, b) => a.event_date.localeCompare(b.event_date));
+    const pastSingles = singles.filter((e) => e.event_date < today).sort((a, b) => b.event_date.localeCompare(a.event_date));
+    const oneOff = [...upcomingSingles, ...pastSingles];
+
+    return { recurring, oneOff };
   };
 
-  const { upcoming, past } = buildDashboardItems(allFiltered);
+  const { recurring, oneOff } = buildSections();
 
-  const renderSection = (label: string, items: DashboardItem[]) => {
-    if (items.length === 0) return null;
-
-    return (
-      <div style={{ marginBottom: '20px' }}>
-        <div style={{ fontSize: '12px', fontWeight: 500, color: colors.dim, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '10px' }}>
-          {label} ({items.length})
-        </div>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
-          gap: '8px',
-        }}>
-          {items.map((item) => {
-            if (item.type === 'series') {
-              return (
-                <SeriesCard
-                  key={item.seriesId}
-                  group={item}
-                  onClick={onEditEvent}
-                  onShare={onShareEvent}
-                  selectedIds={selectedIds}
-                  onToggle={toggleSelect}
-                  selectMode={selectMode}
-                  onExtend={handleExtendSeries}
-                />
-              );
-            }
-            return (
-              <EventCard
-                key={item.event.id}
-                event={item.event}
-                onClick={() => onEditEvent(item.event)}
-                onShare={() => onShareEvent(item.event)}
-                selected={selectedIds.has(item.event.id)}
-                onToggle={toggleSelect}
-                selectMode={selectMode}
-              />
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
+  const renderGrid = (items: DashboardItem[]) => (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+      gap: '8px',
+    }}>
+      {items.map((item) => {
+        if (item.type === 'series') {
+          return (
+            <SeriesCard
+              key={item.seriesId}
+              group={item}
+              onClick={onEditEvent}
+              onShare={onShareEvent}
+              selectedIds={selectedIds}
+              onToggle={toggleSelect}
+              selectMode={selectMode && selectSeriesId === item.seriesId}
+              onExtend={handleExtendSeries}
+              onEditInstances={() => enterSeriesSelectMode(item.seriesId, item.events.map((e) => e.id))}
+            />
+          );
+        }
+        return (
+          <EventCard
+            key={item.event.id}
+            event={item.event}
+            onClick={() => onEditEvent(item.event)}
+            onShare={() => onShareEvent(item.event)}
+            selected={selectedIds.has(item.event.id)}
+            onToggle={toggleSelect}
+            selectMode={false}
+          />
+        );
+      })}
+    </div>
+  );
 
   return (
     <>
@@ -536,123 +511,6 @@ export function DashboardScreen({ account, onCreateEvent, onImportEvents, onEdit
           </div>
         )}
 
-        {/* Search field */}
-        {searchVisible && (
-          <input
-            ref={searchRef}
-            type="text"
-            placeholder="Search by title, category, day..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{
-              ...styles.input,
-              marginBottom: '14px',
-              padding: '8px 12px',
-              fontSize: '14px',
-            }}
-          />
-        )}
-
-        {/* ── Action bar ── */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '14px', alignItems: 'center' }}>
-          {!selectMode && (
-            <>
-              <button
-                className="btn-primary"
-                style={{ ...styles.buttonPrimary, flex: 1 }}
-                onClick={onCreateEvent}
-              >
-                + New Event
-              </button>
-              <button
-                type="button"
-                className="btn-secondary"
-                style={{
-                  ...styles.buttonSecondary,
-                  width: 'auto',
-                  padding: '12px 16px',
-                  fontSize: '13px',
-                }}
-                onClick={onImportEvents}
-              >
-                Import
-              </button>
-              <button
-                type="button"
-                onClick={() => { setSearchVisible(!searchVisible); if (searchVisible) setSearch(''); }}
-                style={{
-                  background: searchVisible ? colors.accentDim : 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '8px',
-                  borderRadius: '6px',
-                  display: 'flex',
-                  alignItems: 'center',
-                }}
-                title="Search events"
-              >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <circle cx="7" cy="7" r="4.5" stroke={searchVisible ? colors.accent : colors.dim} strokeWidth="1.5" />
-                  <path d="M10.5 10.5L13.5 13.5" stroke={searchVisible ? colors.accent : colors.dim} strokeWidth="1.5" strokeLinecap="round" />
-                </svg>
-              </button>
-            </>
-          )}
-          {events.length > 1 && (
-            selectMode ? (
-              <div style={{ display: 'flex', gap: '8px', flex: 1, alignItems: 'center' }}>
-                {selectedIds.size > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setConfirmDelete(true)}
-                    disabled={applying}
-                    style={{
-                      background: 'transparent',
-                      border: `1px solid ${colors.error}30`,
-                      color: colors.error,
-                      borderRadius: '6px',
-                      padding: '8px 14px',
-                      fontSize: '13px',
-                      cursor: 'pointer',
-                      fontFamily: 'inherit',
-                    }}
-                  >
-                    Delete ({selectedIds.size})
-                  </button>
-                )}
-                <div style={{ flex: 1 }} />
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={exitSelectMode}
-                  style={{
-                    ...styles.buttonSecondary,
-                    width: 'auto',
-                    padding: '8px 16px',
-                    fontSize: '13px',
-                  }}
-                >
-                  Done
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => setSelectMode(true)}
-                style={{
-                  ...styles.buttonSecondary,
-                  width: 'auto',
-                  padding: '12px 16px',
-                  fontSize: '13px',
-                }}
-              >
-                Edit multiple
-              </button>
-            )
-          )}
-        </div>
-
         {/* Toast */}
         {toast && (
           <div style={{
@@ -667,14 +525,52 @@ export function DashboardScreen({ account, onCreateEvent, onImportEvents, onEdit
           </div>
         )}
 
-        {/* Bulk edit bar */}
+        {/* Bulk edit bar (shown when editing series instances) */}
         {selectMode && selectedIds.size > 0 && (
-          <BulkEditBar
-            selectedCount={selectedIds.size}
-            onApply={handleBulkApply}
-            onCancel={exitSelectMode}
-            applying={applying}
-          />
+          <div style={{ marginBottom: '14px' }}>
+            <BulkEditBar
+              selectedCount={selectedIds.size}
+              onApply={handleBulkApply}
+              onCancel={exitSelectMode}
+              applying={applying}
+            />
+            <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+              {selectedIds.size > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(true)}
+                  disabled={applying}
+                  style={{
+                    background: 'transparent',
+                    border: `1px solid ${colors.error}30`,
+                    color: colors.error,
+                    borderRadius: '6px',
+                    padding: '6px 12px',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  Delete ({selectedIds.size})
+                </button>
+              )}
+              <div style={{ flex: 1 }} />
+              <button
+                type="button"
+                onClick={exitSelectMode}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: colors.dim,
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                Done
+              </button>
+            </div>
+          </div>
         )}
 
         {/* ── Event grid ── */}
@@ -693,16 +589,24 @@ export function DashboardScreen({ account, onCreateEvent, onImportEvents, onEdit
               Post your first event to reach the neighborhood.
             </div>
           </div>
-        ) : allFiltered.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '32px 24px' }}>
-            <div style={{ fontSize: '14px', color: colors.dim }}>
-              No events match "{search}"
-            </div>
-          </div>
         ) : (
           <>
-            {renderSection('Upcoming', upcoming)}
-            {renderSection('Past', past)}
+            {recurring.length > 0 && (
+              <div style={{ marginBottom: '24px' }}>
+                <div style={{ fontSize: '12px', fontWeight: 500, color: colors.dim, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '10px' }}>
+                  Recurring ({recurring.length})
+                </div>
+                {renderGrid(recurring)}
+              </div>
+            )}
+            {oneOff.length > 0 && (
+              <div style={{ marginBottom: '24px' }}>
+                <div style={{ fontSize: '12px', fontWeight: 500, color: colors.dim, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '10px' }}>
+                  One-off ({oneOff.length})
+                </div>
+                {renderGrid(oneOff.map((e) => ({ type: 'single' as const, event: e })))}
+              </div>
+            )}
           </>
         )}
 
