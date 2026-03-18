@@ -238,9 +238,172 @@ interface ChatCompletionResponse {
   }>;
 }
 
+// Max chars per chunk — leaves room for system prompt in context window
+const CHUNK_SIZE = 12000;
+// Timeout per LLM call (longer for large chunks)
+const LLM_TIMEOUT_MS = 60000;
+
+/**
+ * Schematron JSON schema for structured output.
+ * Defined once to avoid repetition across chunks.
+ */
+const SCHEMATRON_RESPONSE_FORMAT = {
+  type: 'json_schema' as const,
+  json_schema: {
+    name: 'event_extraction',
+    strict: true,
+    schema: {
+      type: 'object',
+      properties: {
+        events: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string' },
+              description: { type: ['string', 'null'] },
+              date: { type: ['string', 'null'] },
+              start_time: { type: ['string', 'null'] },
+              end_time: { type: ['string', 'null'] },
+              location: { type: ['string', 'null'] },
+              url: { type: ['string', 'null'] },
+              confidence: { type: 'number' },
+              field_confidence: {
+                type: 'object',
+                properties: {
+                  title: { type: 'number' },
+                  description: { type: 'number' },
+                  date: { type: 'number' },
+                  start_time: { type: 'number' },
+                  end_time: { type: 'number' },
+                  location: { type: 'number' },
+                  url: { type: 'number' },
+                },
+                required: ['title', 'description', 'date', 'start_time', 'end_time', 'location', 'url'],
+                additionalProperties: false,
+              },
+              excerpts: {
+                type: 'object',
+                properties: {
+                  title: { type: ['string', 'null'] },
+                  description: { type: ['string', 'null'] },
+                  date: { type: ['string', 'null'] },
+                  start_time: { type: ['string', 'null'] },
+                  end_time: { type: ['string', 'null'] },
+                  location: { type: ['string', 'null'] },
+                  url: { type: ['string', 'null'] },
+                },
+                required: ['title', 'description', 'date', 'start_time', 'end_time', 'location', 'url'],
+                additionalProperties: false,
+              },
+            },
+            required: ['title', 'description', 'date', 'start_time', 'end_time', 'location', 'url', 'confidence', 'field_confidence', 'excerpts'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['events'],
+      additionalProperties: false,
+    },
+  },
+};
+
+/**
+ * Split text into chunks at natural boundaries (double newlines, then single newlines).
+ * Each chunk stays under maxSize characters.
+ */
+function chunkText(text: string, maxSize: number): string[] {
+  if (text.length <= maxSize) return [text];
+
+  const chunks: string[] = [];
+  let remaining = text;
+
+  while (remaining.length > 0) {
+    if (remaining.length <= maxSize) {
+      chunks.push(remaining);
+      break;
+    }
+
+    // Find the best break point within maxSize
+    let breakAt = -1;
+
+    // Prefer double newline (paragraph boundary)
+    const lastParagraph = remaining.lastIndexOf('\n\n', maxSize);
+    if (lastParagraph > maxSize * 0.5) {
+      breakAt = lastParagraph + 2;
+    }
+
+    // Fallback: single newline
+    if (breakAt === -1) {
+      const lastNewline = remaining.lastIndexOf('\n', maxSize);
+      if (lastNewline > maxSize * 0.3) {
+        breakAt = lastNewline + 1;
+      }
+    }
+
+    // Last resort: hard break at maxSize
+    if (breakAt === -1) {
+      breakAt = maxSize;
+    }
+
+    chunks.push(remaining.substring(0, breakAt));
+    remaining = remaining.substring(breakAt);
+  }
+
+  return chunks;
+}
+
+/**
+ * Call inference.net for a single chunk of text.
+ */
+async function extractChunk(
+  chunkBody: string,
+  model: string,
+  chunkIndex: number,
+  totalChunks: number,
+): Promise<{ events: ExtractedEvent[]; rawResponse: string }> {
+  const chunkLabel = totalChunks > 1 ? ` (chunk ${chunkIndex + 1}/${totalChunks})` : '';
+
+  const requestBody: Record<string, unknown> = {
+    model,
+    messages: buildMessages(chunkBody),
+    temperature: 0.1,
+    max_tokens: 8192,
+  };
+
+  if (model.includes('schematron')) {
+    requestBody.response_format = SCHEMATRON_RESPONSE_FORMAT;
+  }
+
+  const response = await fetch(`${config.inference.apiUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${config.inference.apiKey}`,
+    },
+    body: JSON.stringify(requestBody),
+    signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text().catch(() => 'unknown');
+    console.error(`[NEWSLETTER] Inference API HTTP ${response.status}${chunkLabel}: ${errText}`);
+    return { events: [], rawResponse: errText };
+  }
+
+  const result = (await response.json()) as ChatCompletionResponse;
+  const rawContent = result.choices?.[0]?.message?.content || '';
+  console.log(`[NEWSLETTER] LLM response${chunkLabel}: ${rawContent.length} chars, first 300: ${rawContent.substring(0, 300)}`);
+
+  const events = parseExtractionResponse(rawContent);
+  console.log(`[NEWSLETTER] Parsed ${events.length} events${chunkLabel}`);
+  return { events, rawResponse: rawContent };
+}
+
 /**
  * Call inference.net chat completions API.
- * Returns the raw response content string and the parsed events.
+ * For large newsletters, splits into chunks and processes each separately.
+ * Returns the raw response content string(s) and the merged parsed events.
  */
 export async function extractEventsFromEmail(
   bodyHtml: string | null,
@@ -257,107 +420,27 @@ export async function extractEventsFromEmail(
     return { events: [], rawResponse: '' };
   }
 
-  // Truncate to ~15k chars to stay within context limits
-  const truncated = body.length > 15000 ? body.substring(0, 15000) + '\n[...truncated]' : body;
+  const model = config.inference.model;
+  const chunks = chunkText(body, CHUNK_SIZE);
+  console.log(`[NEWSLETTER] Calling ${model} for event extraction: ${body.length} chars, ${chunks.length} chunk(s)`);
 
   try {
-    const model = config.inference.model;
-    console.log(`[NEWSLETTER] Calling ${model} for event extraction`);
+    // Process chunks sequentially to avoid rate limits
+    const allEvents: ExtractedEvent[] = [];
+    const allRawResponses: string[] = [];
 
-    const requestBody: Record<string, unknown> = {
-      model,
-      messages: buildMessages(truncated),
-      temperature: 0.1,
-      max_tokens: 4096,
-    };
-
-    // Schematron models require json_schema response format
-    if (model.includes('schematron')) {
-      requestBody.response_format = {
-        type: 'json_schema',
-        json_schema: {
-          name: 'event_extraction',
-          strict: true,
-          schema: {
-            type: 'object',
-            properties: {
-              events: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    title: { type: 'string' },
-                    description: { type: ['string', 'null'] },
-                    date: { type: ['string', 'null'] },
-                    start_time: { type: ['string', 'null'] },
-                    end_time: { type: ['string', 'null'] },
-                    location: { type: ['string', 'null'] },
-                    url: { type: ['string', 'null'] },
-                    confidence: { type: 'number' },
-                    field_confidence: {
-                      type: 'object',
-                      properties: {
-                        title: { type: 'number' },
-                        description: { type: 'number' },
-                        date: { type: 'number' },
-                        start_time: { type: 'number' },
-                        end_time: { type: 'number' },
-                        location: { type: 'number' },
-                        url: { type: 'number' },
-                      },
-                      required: ['title', 'description', 'date', 'start_time', 'end_time', 'location', 'url'],
-                      additionalProperties: false,
-                    },
-                    excerpts: {
-                      type: 'object',
-                      properties: {
-                        title: { type: ['string', 'null'] },
-                        description: { type: ['string', 'null'] },
-                        date: { type: ['string', 'null'] },
-                        start_time: { type: ['string', 'null'] },
-                        end_time: { type: ['string', 'null'] },
-                        location: { type: ['string', 'null'] },
-                        url: { type: ['string', 'null'] },
-                      },
-                      required: ['title', 'description', 'date', 'start_time', 'end_time', 'location', 'url'],
-                      additionalProperties: false,
-                    },
-                  },
-                  required: ['title', 'description', 'date', 'start_time', 'end_time', 'location', 'url', 'confidence', 'field_confidence', 'excerpts'],
-                  additionalProperties: false,
-                },
-              },
-            },
-            required: ['events'],
-            additionalProperties: false,
-          },
-        },
-      };
+    for (let i = 0; i < chunks.length; i++) {
+      const { events, rawResponse } = await extractChunk(chunks[i], model, i, chunks.length);
+      allEvents.push(...events);
+      allRawResponses.push(rawResponse);
     }
 
-    const response = await fetch(`${config.inference.apiUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.inference.apiKey}`,
-      },
-      body: JSON.stringify(requestBody),
-      signal: AbortSignal.timeout(30000),
-    });
+    const rawResponse = chunks.length === 1
+      ? allRawResponses[0]
+      : allRawResponses.map((r, i) => `--- Chunk ${i + 1}/${chunks.length} ---\n${r}`).join('\n\n');
 
-    if (!response.ok) {
-      const errText = await response.text().catch(() => 'unknown');
-      console.error(`[NEWSLETTER] Inference API HTTP ${response.status}: ${errText}`);
-      return { events: [], rawResponse: errText };
-    }
-
-    const result = (await response.json()) as ChatCompletionResponse;
-    const rawContent = result.choices?.[0]?.message?.content || '';
-    console.log(`[NEWSLETTER] LLM raw content (first 500): ${rawContent.substring(0, 500)}`);
-
-    const events = parseExtractionResponse(rawContent);
-    console.log(`[NEWSLETTER] Parsed ${events.length} events from LLM response`);
-    return { events, rawResponse: rawContent };
+    console.log(`[NEWSLETTER] Total: ${allEvents.length} events from ${chunks.length} chunk(s)`);
+    return { events: allEvents, rawResponse };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[NEWSLETTER] Extraction error:', msg);

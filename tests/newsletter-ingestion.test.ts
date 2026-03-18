@@ -15,10 +15,49 @@ import crypto from 'crypto';
 // Import the pure functions we can test without mocking
 import {
   parseExtractionResponse,
+  normalizeTime,
   levenshteinDistance,
   haversineDistance,
   titlesMatch,
 } from '../src/lib/newsletter-extraction.js';
+
+// ---------------------------------------------------------------------------
+// Time normalization
+// ---------------------------------------------------------------------------
+
+describe('normalizeTime', () => {
+  it('returns null for null input', () => {
+    expect(normalizeTime(null)).toBeNull();
+  });
+
+  it('passes through HH:MM format', () => {
+    expect(normalizeTime('19:00')).toBe('19:00');
+    expect(normalizeTime('9:30')).toBe('09:30');
+  });
+
+  it('converts 12-hour pm to 24-hour', () => {
+    expect(normalizeTime('7pm')).toBe('19:00');
+    expect(normalizeTime('7:30pm')).toBe('19:30');
+    expect(normalizeTime('7 pm')).toBe('19:00');
+    expect(normalizeTime('7:30 PM')).toBe('19:30');
+  });
+
+  it('converts 12-hour am correctly', () => {
+    expect(normalizeTime('9am')).toBe('09:00');
+    expect(normalizeTime('9:15am')).toBe('09:15');
+    expect(normalizeTime('12am')).toBe('00:00');
+  });
+
+  it('handles 12pm as noon', () => {
+    expect(normalizeTime('12pm')).toBe('12:00');
+    expect(normalizeTime('12:30pm')).toBe('12:30');
+  });
+
+  it('returns unparseable strings as-is', () => {
+    expect(normalizeTime('evening')).toBe('evening');
+    expect(normalizeTime('TBD')).toBe('TBD');
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Levenshtein distance
@@ -222,6 +261,39 @@ describe('parseExtractionResponse', () => {
   it('handles malformed JSON gracefully', () => {
     expect(parseExtractionResponse('[{broken json')).toEqual([]);
     expect(parseExtractionResponse('{"not": "an array"}')).toEqual([]);
+  });
+
+  it('parses extraction metadata (field_confidence and excerpts)', () => {
+    const raw = JSON.stringify({
+      events: [{
+        title: 'Puppy Streetfest',
+        description: 'Support puppies in need.',
+        date: null,
+        start_time: '19:00',
+        end_time: '21:00',
+        location: '937 N 2nd St, Philly',
+        url: null,
+        confidence: 0.8,
+        field_confidence: { title: 1.0, description: 0.8, date: 0.0, start_time: 0.9, end_time: 0.9, location: 0.95, url: 0.0 },
+        excerpts: { title: 'Puppy Streetfest', description: 'support puppies in need', date: null, start_time: '7-9pm', end_time: '7-9pm', location: '937 N 2nd St, Philly', url: null },
+      }],
+    });
+    const events = parseExtractionResponse(raw);
+    expect(events).toHaveLength(1);
+    expect(events[0].extraction_metadata).not.toBeNull();
+    expect(events[0].extraction_metadata!.field_confidence.title).toBe(1.0);
+    expect(events[0].extraction_metadata!.field_confidence.date).toBe(0.0);
+    expect(events[0].extraction_metadata!.excerpts.start_time).toBe('7-9pm');
+    expect(events[0].extraction_metadata!.excerpts.date).toBeNull();
+  });
+
+  it('provides default extraction metadata when LLM omits it', () => {
+    const raw = JSON.stringify([{ title: 'Simple Event', confidence: 0.7 }]);
+    const events = parseExtractionResponse(raw);
+    expect(events).toHaveLength(1);
+    // Zod defaults create metadata with 0-confidence fields
+    expect(events[0].extraction_metadata).not.toBeNull();
+    expect(events[0].extraction_metadata!.field_confidence.title).toBe(0);
   });
 });
 
