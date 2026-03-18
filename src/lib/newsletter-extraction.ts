@@ -133,47 +133,12 @@ export async function extractEventsFromEmail(
     const model = config.inference.model;
     console.log(`[NEWSLETTER] Calling ${model} for event extraction`);
 
-    // Build request body — use structured outputs for Schematron models
     const requestBody: Record<string, unknown> = {
       model,
       messages: buildMessages(truncated),
       temperature: 0.1,
       max_tokens: 4096,
     };
-
-    if (model.includes('schematron')) {
-      requestBody.response_format = {
-        type: 'json_schema',
-        json_schema: {
-          strict: true,
-          schema: {
-            type: 'object',
-            properties: {
-              events: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    title: { type: 'string' },
-                    description: { type: 'string' },
-                    date: { type: 'string' },
-                    start_time: { type: 'string' },
-                    end_time: { type: 'string' },
-                    location: { type: 'string' },
-                    url: { type: 'string' },
-                    confidence: { type: 'number' },
-                  },
-                  required: ['title', 'description', 'date', 'start_time', 'end_time', 'location', 'url', 'confidence'],
-                  additionalProperties: false,
-                },
-              },
-            },
-            required: ['events'],
-            additionalProperties: false,
-          },
-        },
-      };
-    }
 
     const response = await fetch(`${config.inference.apiUrl}/chat/completions`, {
       method: 'POST',
