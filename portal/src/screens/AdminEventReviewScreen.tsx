@@ -3,6 +3,7 @@ import { colors } from '../lib/styles';
 import { PORTAL_CATEGORIES, PORTAL_CATEGORY_KEYS } from '../lib/categories';
 import {
   adminFetchEventCandidates,
+  adminFetchCandidateDetail,
   adminApproveCandidate,
   adminRejectCandidate,
   adminMarkCandidateDuplicate,
@@ -54,6 +55,8 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
   const [editDescription, setEditDescription] = useState('');
   const [editPrice, setEditPrice] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [sourceEmail, setSourceEmail] = useState<{ subject: string; body_plain: string | null; body_html: string | null; sender_email: string; created_at: string } | null>(null);
+  const [sourceLoading, setSourceLoading] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -67,6 +70,7 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
   function expand(candidate: EventCandidate) {
     if (expandedId === candidate.id) {
       setExpandedId(null);
+      setSourceEmail(null);
       return;
     }
     setExpandedId(candidate.id);
@@ -79,6 +83,17 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
     setEditCategory('community');
     setEditDescription(candidate.description || '');
     setEditPrice('');
+
+    // Fetch source email content
+    setSourceEmail(null);
+    setSourceLoading(true);
+    adminFetchCandidateDetail(candidate.id).then((res) => {
+      const email = res.data?.candidate?.newsletter_emails;
+      if (email && !Array.isArray(email)) {
+        setSourceEmail(email as typeof sourceEmail);
+      }
+      setSourceLoading(false);
+    }).catch(() => setSourceLoading(false));
   }
 
   async function handleApprove(id: string) {
@@ -244,6 +259,33 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
                         </a>
                       </p>
                     )}
+
+                    {/* Source email content */}
+                    <div style={{
+                      margin: '12px 0', padding: 14, borderRadius: 8, background: colors.bg,
+                      border: `1px solid ${colors.border}`,
+                    }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: colors.muted, marginBottom: 8 }}>
+                        Source Email
+                      </div>
+                      {sourceLoading ? (
+                        <p style={{ fontSize: 13, color: colors.muted, margin: 0 }}>Loading source...</p>
+                      ) : sourceEmail ? (
+                        <>
+                          <div style={{ fontSize: 12, color: colors.muted, marginBottom: 8 }}>
+                            From: {sourceEmail.sender_email} &middot; Subject: {sourceEmail.subject}
+                          </div>
+                          <div style={{
+                            fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap',
+                            maxHeight: 300, overflowY: 'auto', color: colors.text,
+                          }}>
+                            {sourceEmail.body_plain || '(no plain text body)'}
+                          </div>
+                        </>
+                      ) : (
+                        <p style={{ fontSize: 13, color: colors.muted, margin: 0 }}>Source email not available</p>
+                      )}
+                    </div>
 
                     {c.matched_event_id && (
                       <div style={{

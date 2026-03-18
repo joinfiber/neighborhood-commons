@@ -432,6 +432,10 @@ export async function adminFetchEventCandidates(filters?: { status?: string; lim
   return apiRequest<{ candidates: EventCandidate[] }>(`/api/admin/event-candidates${qs ? `?${qs}` : ''}`);
 }
 
+export async function adminFetchCandidateDetail(id: string) {
+  return apiRequest<{ candidate: EventCandidate & { newsletter_emails?: { subject: string; body_plain: string | null; body_html: string | null; sender_email: string; created_at: string } } }>(`/api/admin/event-candidates/${id}`);
+}
+
 export async function adminApproveCandidate(id: string, overrides?: Record<string, unknown>) {
   return apiRequest<{ event_id: string; candidate_id: string }>(`/api/admin/event-candidates/${id}/approve`, {
     method: 'POST',

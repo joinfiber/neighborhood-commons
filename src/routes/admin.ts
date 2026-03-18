@@ -1736,6 +1736,32 @@ router.get('/event-candidates', portalLimiter, async (req, res, next) => {
   }
 });
 
+// GET /event-candidates/:id — detail with source email body
+router.get('/event-candidates/:id', portalLimiter, async (req, res, next) => {
+  try {
+    validateUuidParam(req.params.id, 'id');
+
+    const { data: candidate, error } = await supabaseAdmin
+      .from('event_candidates')
+      .select('id, email_id, source_id, title, description, start_date, start_time, end_time, location_name, location_address, location_lat, location_lng, source_url, confidence, status, matched_event_id, match_confidence, review_notes, created_at, reviewed_at, newsletter_emails(subject, body_plain, body_html, sender_email, created_at), newsletter_sources(name)')
+      .eq('id', req.params.id)
+      .maybeSingle();
+
+    if (error) {
+      console.error('[COMMONS-ADMIN] Event candidate detail error:', error.message);
+      throw createError('Failed to fetch candidate', 500, 'SERVER_ERROR');
+    }
+
+    if (!candidate) {
+      throw createError('Candidate not found', 404, 'NOT_FOUND');
+    }
+
+    res.json({ candidate });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post('/event-candidates/:id/approve', writeLimiter, async (req, res, next) => {
   try {
     validateUuidParam(req.params.id, 'id');
