@@ -1780,7 +1780,8 @@ router.post('/event-candidates/:id/approve', writeLimiter, async (req, res, next
     const endTimeAt = endTime ? toTimestamptz(eventDate, endTime, timezone) : null;
 
     // Source publisher from newsletter source name
-    const sourceName = (candidate.newsletter_sources as { name: string } | null)?.name;
+    const sourceJoin = candidate.newsletter_sources as unknown as { name: string } | null;
+    const sourceName = sourceJoin?.name;
 
     // Insert the real event
     const { data: event, error: insertErr } = await supabaseAdmin
@@ -1836,9 +1837,18 @@ router.post('/event-candidates/:id/approve', writeLimiter, async (req, res, next
     );
 
     // Fire-and-forget: dispatch webhooks
-    void dispatchWebhooks('event.created', eventId).catch(() => {});
+    void (async () => {
+      const { data: row } = await supabaseAdmin
+        .from('events')
+        .select(PORTAL_SELECT)
+        .eq('id', eventId)
+        .maybeSingle();
+      if (row) {
+        void dispatchWebhooks('event.created', eventId, toNeighborhoodEvent(row as unknown as PortalEventRow));
+      }
+    })().catch(() => {});
 
-    const adminId = getAdminUserId(req);
+    const adminId = getAdminUserId();
     auditPortalAction('newsletter_candidate_approved', adminId, eventId, { candidate_id: req.params.id });
     console.log(`[COMMONS-ADMIN] Approved candidate ${req.params.id} → event ${eventId}`);
 
@@ -1878,7 +1888,7 @@ router.post('/event-candidates/:id/reject', writeLimiter, async (req, res, next)
       })
       .eq('id', req.params.id);
 
-    const adminId = getAdminUserId(req);
+    const adminId = getAdminUserId();
     auditPortalAction('newsletter_candidate_rejected', adminId, req.params.id);
     console.log(`[COMMONS-ADMIN] Rejected candidate ${req.params.id}`);
 
@@ -1918,7 +1928,7 @@ router.post('/event-candidates/:id/duplicate', writeLimiter, async (req, res, ne
       })
       .eq('id', req.params.id);
 
-    const adminId = getAdminUserId(req);
+    const adminId = getAdminUserId();
     auditPortalAction('newsletter_candidate_duplicate', adminId, req.params.id);
     console.log(`[COMMONS-ADMIN] Marked candidate ${req.params.id} as duplicate`);
 
