@@ -37,6 +37,52 @@ function confidenceColor(c: number | null): string {
   return '#c62828';
 }
 
+function renderEmailBodyWithHighlight(body: string, excerpt: string | null) {
+  if (!excerpt) return body;
+  const idx = body.toLowerCase().indexOf(excerpt.toLowerCase());
+  if (idx === -1) return body;
+  return (
+    <>
+      {body.substring(0, idx)}
+      <mark id="excerpt-highlight" style={{ background: '#fff3cd', padding: '1px 2px', borderRadius: 2 }}>
+        {body.substring(idx, idx + excerpt.length)}
+      </mark>
+      {body.substring(idx + excerpt.length)}
+    </>
+  );
+}
+
+function FieldConfBadge({ field, meta, onClickExcerpt }: {
+  field: string;
+  meta: { field_confidence: Record<string, number>; excerpts: Record<string, string | null> } | null;
+  onClickExcerpt: (excerpt: string) => void;
+}) {
+  if (!meta) return null;
+  const conf = meta.field_confidence[field];
+  if (conf == null) return null;
+
+  const excerpt = meta.excerpts[field];
+  const pct = Math.round(conf * 100);
+  const color = conf >= 0.8 ? '#2e7d32' : conf >= 0.5 ? '#e65100' : '#999';
+
+  return (
+    <span
+      onClick={(e) => {
+        e.stopPropagation();
+        if (excerpt) onClickExcerpt(excerpt);
+      }}
+      title={excerpt ? `Source: "${excerpt}"` : 'No source excerpt'}
+      style={{
+        fontSize: 10, fontWeight: 600, color, cursor: excerpt ? 'pointer' : 'default',
+        marginLeft: 4, opacity: 0.8,
+        borderBottom: excerpt ? `1px dotted ${color}` : 'none',
+      }}
+    >
+      {pct}%
+    </span>
+  );
+}
+
 export function AdminEventReviewScreen({ onNavigate }: Props) {
   const [candidates, setCandidates] = useState<EventCandidate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,6 +103,8 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
   const [actionLoading, setActionLoading] = useState(false);
   const [sourceEmail, setSourceEmail] = useState<{ subject: string; body_plain: string | null; body_html: string | null; sender_email: string; created_at: string } | null>(null);
   const [sourceLoading, setSourceLoading] = useState(false);
+  const [extractionMeta, setExtractionMeta] = useState<{ field_confidence: Record<string, number>; excerpts: Record<string, string | null> } | null>(null);
+  const [highlightExcerpt, setHighlightExcerpt] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -66,6 +114,15 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
   }
 
   useEffect(() => { load(); }, [activeTab]);
+
+  function handleExcerptClick(excerpt: string) {
+    setHighlightExcerpt(excerpt);
+    // Scroll to the highlight after render
+    setTimeout(() => {
+      const el = document.getElementById('excerpt-highlight');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 50);
+  }
 
   function expand(candidate: EventCandidate) {
     if (expandedId === candidate.id) {
@@ -84,13 +141,18 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
     setEditDescription(candidate.description || '');
     setEditPrice('');
 
-    // Fetch source email content
+    // Fetch source email content and extraction metadata
     setSourceEmail(null);
+    setExtractionMeta(null);
+    setHighlightExcerpt(null);
     setSourceLoading(true);
     adminFetchCandidateDetail(candidate.id).then((res) => {
-      const email = res.data?.candidate?.newsletter_emails;
-      if (email && !Array.isArray(email)) {
-        setSourceEmail(email as typeof sourceEmail);
+      const c = res.data?.candidate;
+      if (c?.newsletter_emails && !Array.isArray(c.newsletter_emails)) {
+        setSourceEmail(c.newsletter_emails as typeof sourceEmail);
+      }
+      if (c?.extraction_metadata) {
+        setExtractionMeta(c.extraction_metadata as typeof extractionMeta);
       }
       setSourceLoading(false);
     }).catch(() => setSourceLoading(false));
@@ -275,11 +337,14 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
                           <div style={{ fontSize: 12, color: colors.muted, marginBottom: 8 }}>
                             From: {sourceEmail.sender_email} &middot; Subject: {sourceEmail.subject}
                           </div>
-                          <div style={{
-                            fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap',
-                            maxHeight: 300, overflowY: 'auto', color: colors.text,
-                          }}>
-                            {sourceEmail.body_plain || '(no plain text body)'}
+                          <div
+                            id="source-email-body"
+                            style={{
+                              fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap',
+                              maxHeight: 300, overflowY: 'auto', color: colors.text,
+                            }}
+                          >
+                            {renderEmailBodyWithHighlight(sourceEmail.body_plain || '(no plain text body)', highlightExcerpt)}
                           </div>
                         </>
                       ) : (
@@ -300,7 +365,7 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
                       <>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12 }}>
                           <div>
-                            <label style={{ display: 'block', fontSize: 12, marginBottom: 3, fontWeight: 500 }}>Title</label>
+                            <label style={{ display: 'block', fontSize: 12, marginBottom: 3, fontWeight: 500 }}>Title <FieldConfBadge field="title" meta={extractionMeta} onClickExcerpt={handleExcerptClick} /></label>
                             <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)}
                               style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: `1px solid ${colors.border}`, fontSize: 13, fontFamily: 'inherit', boxSizing: 'border-box' }} />
                           </div>
@@ -314,24 +379,24 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
                             </select>
                           </div>
                           <div>
-                            <label style={{ display: 'block', fontSize: 12, marginBottom: 3, fontWeight: 500 }}>Date</label>
+                            <label style={{ display: 'block', fontSize: 12, marginBottom: 3, fontWeight: 500 }}>Date <FieldConfBadge field="date" meta={extractionMeta} onClickExcerpt={handleExcerptClick} /></label>
                             <input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)}
                               style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: `1px solid ${colors.border}`, fontSize: 13, fontFamily: 'inherit', boxSizing: 'border-box' }} />
                           </div>
                           <div style={{ display: 'flex', gap: 8 }}>
                             <div style={{ flex: 1 }}>
-                              <label style={{ display: 'block', fontSize: 12, marginBottom: 3, fontWeight: 500 }}>Start</label>
+                              <label style={{ display: 'block', fontSize: 12, marginBottom: 3, fontWeight: 500 }}>Start <FieldConfBadge field="start_time" meta={extractionMeta} onClickExcerpt={handleExcerptClick} /></label>
                               <input type="time" value={editStartTime} onChange={(e) => setEditStartTime(e.target.value)}
                                 style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: `1px solid ${colors.border}`, fontSize: 13, fontFamily: 'inherit', boxSizing: 'border-box' }} />
                             </div>
                             <div style={{ flex: 1 }}>
-                              <label style={{ display: 'block', fontSize: 12, marginBottom: 3, fontWeight: 500 }}>End</label>
+                              <label style={{ display: 'block', fontSize: 12, marginBottom: 3, fontWeight: 500 }}>End <FieldConfBadge field="end_time" meta={extractionMeta} onClickExcerpt={handleExcerptClick} /></label>
                               <input type="time" value={editEndTime} onChange={(e) => setEditEndTime(e.target.value)}
                                 style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: `1px solid ${colors.border}`, fontSize: 13, fontFamily: 'inherit', boxSizing: 'border-box' }} />
                             </div>
                           </div>
                           <div>
-                            <label style={{ display: 'block', fontSize: 12, marginBottom: 3, fontWeight: 500 }}>Venue</label>
+                            <label style={{ display: 'block', fontSize: 12, marginBottom: 3, fontWeight: 500 }}>Venue <FieldConfBadge field="location" meta={extractionMeta} onClickExcerpt={handleExcerptClick} /></label>
                             <input value={editVenue} onChange={(e) => setEditVenue(e.target.value)}
                               style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: `1px solid ${colors.border}`, fontSize: 13, fontFamily: 'inherit', boxSizing: 'border-box' }} />
                           </div>
@@ -346,7 +411,7 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
                               style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: `1px solid ${colors.border}`, fontSize: 13, fontFamily: 'inherit', boxSizing: 'border-box' }} />
                           </div>
                           <div>
-                            <label style={{ display: 'block', fontSize: 12, marginBottom: 3, fontWeight: 500 }}>Description</label>
+                            <label style={{ display: 'block', fontSize: 12, marginBottom: 3, fontWeight: 500 }}>Description <FieldConfBadge field="description" meta={extractionMeta} onClickExcerpt={handleExcerptClick} /></label>
                             <textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={2}
                               style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: `1px solid ${colors.border}`, fontSize: 13, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
                           </div>

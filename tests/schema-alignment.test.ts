@@ -86,7 +86,7 @@ const SCHEMA: Record<string, string[]> = {
     'start_date', 'start_time', 'end_time', 'location_name',
     'location_address', 'location_lat', 'location_lng', 'source_url',
     'confidence', 'status', 'matched_event_id', 'match_confidence',
-    'review_notes', 'created_at', 'reviewed_at',
+    'review_notes', 'created_at', 'reviewed_at', 'extraction_metadata',
   ],
 };
 
@@ -166,8 +166,8 @@ function extractColumnRefs(filePath: string): ColumnRef[] {
     // Match .select('col1, col2, ...') — extract individual column names
     const selectMatch = line.match(/\.select\(['"]([^'"]+)['"]/);
     if (selectMatch) {
-      // Strip joined table references: "region:regions (name, slug)" → ""
-      const selectStr = selectMatch[1].replace(/\w+:\w+\s*\([^)]*\)/g, '');
+      // Strip joined table references: "region:regions(name, slug)" and "newsletter_emails(subject, ...)" → ""
+      const selectStr = selectMatch[1].replace(/\w+(?::\w+)?\s*\([^)]*\)/g, '');
       for (const part of selectStr.split(',')) {
         const trimmed = part.trim();
         // Skip count options, remaining joined table refs, wildcards

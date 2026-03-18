@@ -17,6 +17,11 @@ import { supabaseAdmin } from './supabase.js';
 // Types
 // ---------------------------------------------------------------------------
 
+export interface ExtractionMetadata {
+  field_confidence: Record<string, number>;
+  excerpts: Record<string, string | null>;
+}
+
 export interface ExtractedEvent {
   title: string;
   description: string | null;
@@ -27,6 +32,7 @@ export interface ExtractedEvent {
   location_address: string | null;
   source_url: string | null;
   confidence: number;
+  extraction_metadata: ExtractionMetadata | null;
 }
 
 export interface DedupResult {
@@ -38,6 +44,26 @@ export interface DedupResult {
 // Zod schema for validating individual events from LLM response
 // ---------------------------------------------------------------------------
 
+const fieldConfidenceSchema = z.object({
+  title: z.number().min(0).max(1).optional().default(0),
+  description: z.number().min(0).max(1).optional().default(0),
+  date: z.number().min(0).max(1).optional().default(0),
+  start_time: z.number().min(0).max(1).optional().default(0),
+  end_time: z.number().min(0).max(1).optional().default(0),
+  location: z.number().min(0).max(1).optional().default(0),
+  url: z.number().min(0).max(1).optional().default(0),
+}).catchall(z.number());
+
+const excerptsSchema = z.object({
+  title: z.string().nullable().optional().default(null),
+  description: z.string().nullable().optional().default(null),
+  date: z.string().nullable().optional().default(null),
+  start_time: z.string().nullable().optional().default(null),
+  end_time: z.string().nullable().optional().default(null),
+  location: z.string().nullable().optional().default(null),
+  url: z.string().nullable().optional().default(null),
+}).catchall(z.string().nullable());
+
 const extractedEventSchema = z.object({
   title: z.string().min(1),
   description: z.string().nullable().optional().default(null),
@@ -47,6 +73,8 @@ const extractedEventSchema = z.object({
   location: z.string().nullable().optional().default(null),
   url: z.string().nullable().optional().default(null),
   confidence: z.number().min(0).max(1).optional().default(0.5),
+  field_confidence: fieldConfidenceSchema.optional().default({}),
+  excerpts: excerptsSchema.optional().default({}),
 });
 
 // ---------------------------------------------------------------------------
@@ -110,7 +138,9 @@ These newsletters come from Philadelphia neighborhood civic associations (QVNA, 
 
 ## Output schema
 
-Return a JSON object with an "events" array. For each event:
+Return a JSON object with an "events" array. For each event, include these fields:
+
+### Core fields (the extracted data)
 - title: the event name — use the actual event name, not the newsletter section heading (string, required)
 - description: 1-2 sentence summary. Include performers, themes, what to expect. Do NOT repeat the title, time, or location (string or null)
 - date: YYYY-MM-DD format. See date rules below (string or null)
@@ -118,7 +148,17 @@ Return a JSON object with an "events" array. For each event:
 - end_time: HH:MM in 24-hour format (string or null)
 - location: venue name and/or street address as written. Include both if available, e.g. "Johnny Brenda's, 1201 N Frankford Ave" (string or null)
 - url: direct link to the event page or ticket page, not the newsletter URL (string or null)
-- confidence: 0.0-1.0 (number). See scoring rubric below
+- confidence: 0.0-1.0 overall confidence (number). See scoring rubric below
+
+### Per-field confidence (how sure you are about each individual field)
+- field_confidence: an object mapping field names to 0.0-1.0 scores. Include: title, description, date, start_time, end_time, location, url. Score each field independently:
+  - 1.0: field value is explicitly and unambiguously stated in the email
+  - 0.7-0.9: field value is clearly implied or requires minor interpretation (e.g., "7pm" → "19:00")
+  - 0.4-0.6: field value is inferred from context but not directly stated
+  - 0.0: field is null / not found in the email
+
+### Source excerpts (the exact text you based each field on)
+- excerpts: an object mapping field names to the exact substring from the email that you used for that field. Copy the text verbatim — do not paraphrase. If a field is null (not found), use null for its excerpt too. These excerpts let the reviewer click through to see exactly what you read in the email.
 
 ## Critical rules for field accuracy
 
@@ -177,7 +217,7 @@ When in doubt, extract it with a low confidence score. The review queue handles 
 - **Below 0.3**: Marginal. Only include if there's a plausible reading as an attendable gathering.
 
 Example output:
-{"events": [{"title": "Jazz Night", "description": "Local jazz trio performing original compositions.", "date": "2026-03-21", "start_time": "20:00", "end_time": "23:00", "location": "Johnny Brenda's, 1201 N Frankford Ave", "url": null, "confidence": 0.95}]}
+{"events": [{"title": "Jazz Night", "description": "Local jazz trio performing original compositions.", "date": "2026-03-21", "start_time": "20:00", "end_time": "23:00", "location": "Johnny Brenda's, 1201 N Frankford Ave", "url": null, "confidence": 0.95, "field_confidence": {"title": 1.0, "description": 0.8, "date": 1.0, "start_time": 0.9, "end_time": 0.9, "location": 1.0, "url": 0.0}, "excerpts": {"title": "Jazz Night at Johnny Brenda's", "description": "Local jazz trio performing original compositions and standards", "date": "Friday March 21", "start_time": "8pm-11pm", "end_time": "8pm-11pm", "location": "Johnny Brenda's, 1201 N Frankford Ave", "url": null}}]}
 
 If no events are found: {"events": []}`;
 
@@ -254,8 +294,36 @@ export async function extractEventsFromEmail(
                     location: { type: ['string', 'null'] },
                     url: { type: ['string', 'null'] },
                     confidence: { type: 'number' },
+                    field_confidence: {
+                      type: 'object',
+                      properties: {
+                        title: { type: 'number' },
+                        description: { type: 'number' },
+                        date: { type: 'number' },
+                        start_time: { type: 'number' },
+                        end_time: { type: 'number' },
+                        location: { type: 'number' },
+                        url: { type: 'number' },
+                      },
+                      required: ['title', 'description', 'date', 'start_time', 'end_time', 'location', 'url'],
+                      additionalProperties: false,
+                    },
+                    excerpts: {
+                      type: 'object',
+                      properties: {
+                        title: { type: ['string', 'null'] },
+                        description: { type: ['string', 'null'] },
+                        date: { type: ['string', 'null'] },
+                        start_time: { type: ['string', 'null'] },
+                        end_time: { type: ['string', 'null'] },
+                        location: { type: ['string', 'null'] },
+                        url: { type: ['string', 'null'] },
+                      },
+                      required: ['title', 'description', 'date', 'start_time', 'end_time', 'location', 'url'],
+                      additionalProperties: false,
+                    },
                   },
-                  required: ['title', 'description', 'date', 'start_time', 'end_time', 'location', 'url', 'confidence'],
+                  required: ['title', 'description', 'date', 'start_time', 'end_time', 'location', 'url', 'confidence', 'field_confidence', 'excerpts'],
                   additionalProperties: false,
                 },
               },
@@ -339,6 +407,16 @@ export function parseExtractionResponse(raw: string): ExtractedEvent[] {
     }
 
     const e = result.data;
+
+    // Build extraction metadata if the LLM provided per-field data
+    let extractionMetadata: ExtractionMetadata | null = null;
+    if (e.field_confidence && Object.keys(e.field_confidence).length > 0) {
+      extractionMetadata = {
+        field_confidence: e.field_confidence,
+        excerpts: e.excerpts || {},
+      };
+    }
+
     events.push({
       title: e.title,
       description: e.description,
@@ -349,6 +427,7 @@ export function parseExtractionResponse(raw: string): ExtractedEvent[] {
       location_address: e.location, // Use location string as address for geocoding
       source_url: e.url,
       confidence: e.confidence,
+      extraction_metadata: extractionMetadata,
     });
   }
 

@@ -184,6 +184,10 @@ export interface EventCandidate {
   review_notes: string | null;
   created_at: string;
   reviewed_at: string | null;
+  extraction_metadata?: {
+    field_confidence: Record<string, number>;
+    excerpts: Record<string, string | null>;
+  } | null;
   newsletter_emails?: { subject: string } | null;
   newsletter_sources?: { name: string } | null;
 }

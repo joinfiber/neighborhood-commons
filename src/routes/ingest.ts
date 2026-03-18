@@ -238,6 +238,7 @@ async function processEmail(emailId: string): Promise<void> {
           confidence: event.confidence,
           matched_event_id: dedup.matched_event_id,
           match_confidence: dedup.match_confidence > 0 ? dedup.match_confidence : null,
+          extraction_metadata: event.extraction_metadata,
         });
 
       if (candidateError) {
