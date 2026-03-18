@@ -173,6 +173,19 @@ describe('parseExtractionResponse', () => {
     expect(events[0].title).toBe('Test Event');
   });
 
+  it('handles structured output wrapper { events: [...] }', () => {
+    const raw = JSON.stringify({
+      events: [
+        { title: 'Structured Event', description: null, date: '2025-04-01', start_time: '19:00', end_time: null, location: 'The Venue', url: null, confidence: 0.85 },
+      ],
+    });
+    const events = parseExtractionResponse(raw);
+    expect(events).toHaveLength(1);
+    expect(events[0].title).toBe('Structured Event');
+    expect(events[0].start_date).toBe('2025-04-01');
+    expect(events[0].confidence).toBe(0.85);
+  });
+
   it('skips events without required title field', () => {
     const raw = JSON.stringify([
       { title: 'Valid Event', confidence: 0.8 },

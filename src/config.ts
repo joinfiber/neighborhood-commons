@@ -60,6 +60,7 @@ const envSchema = z.object({
   // Newsletter ingestion: LLM extraction via inference.net
   INFERENCE_API_KEY: z.string().min(1).optional(),
   INFERENCE_API_URL: z.string().url().optional(),
+  INFERENCE_MODEL: z.string().min(1).optional(),
 
   // Mailgun inbound webhook signature validation
   MAILGUN_SIGNING_KEY: z.string().min(1).optional(),
@@ -164,6 +165,7 @@ export const config = {
   inference: {
     apiKey: env.INFERENCE_API_KEY || '',
     apiUrl: env.INFERENCE_API_URL || 'https://api.inference.net/v1',
+    model: env.INFERENCE_MODEL || 'inference-net/schematron-8b',
   },
 
   mailgunWebhook: {

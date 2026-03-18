@@ -130,18 +130,58 @@ export async function extractEventsFromEmail(
   const truncated = body.length > 15000 ? body.substring(0, 15000) + '\n[...truncated]' : body;
 
   try {
+    const model = config.inference.model;
+    console.log(`[NEWSLETTER] Calling ${model} for event extraction`);
+
+    // Build request body — use structured outputs for Schematron models
+    const requestBody: Record<string, unknown> = {
+      model,
+      messages: buildMessages(truncated),
+      temperature: 0.1,
+      max_tokens: 4096,
+    };
+
+    if (model.includes('schematron')) {
+      requestBody.response_format = {
+        type: 'json_schema',
+        json_schema: {
+          strict: true,
+          schema: {
+            type: 'object',
+            properties: {
+              events: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    title: { type: 'string' },
+                    description: { type: 'string' },
+                    date: { type: 'string' },
+                    start_time: { type: 'string' },
+                    end_time: { type: 'string' },
+                    location: { type: 'string' },
+                    url: { type: 'string' },
+                    confidence: { type: 'number' },
+                  },
+                  required: ['title', 'description', 'date', 'start_time', 'end_time', 'location', 'url', 'confidence'],
+                  additionalProperties: false,
+                },
+              },
+            },
+            required: ['events'],
+            additionalProperties: false,
+          },
+        },
+      };
+    }
+
     const response = await fetch(`${config.inference.apiUrl}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${config.inference.apiKey}`,
       },
-      body: JSON.stringify({
-        model: 'meta-llama/llama-3.3-70b-instruct/fp-8',
-        messages: buildMessages(truncated),
-        temperature: 0.1,
-        max_tokens: 4096,
-      }),
+      body: JSON.stringify(requestBody),
       signal: AbortSignal.timeout(30000),
     });
 
@@ -168,22 +208,33 @@ export async function extractEventsFromEmail(
 // ---------------------------------------------------------------------------
 
 export function parseExtractionResponse(raw: string): ExtractedEvent[] {
-  // Find JSON array in the response (LLM may wrap in markdown code blocks)
-  const jsonMatch = raw.match(/\[[\s\S]*\]/);
-  if (!jsonMatch) {
-    console.error('[NEWSLETTER] No JSON array found in LLM response');
-    return [];
-  }
-
+  // Try parsing the whole response first (structured output returns clean JSON)
   let parsed: unknown[];
   try {
-    parsed = JSON.parse(jsonMatch[0]);
+    const full = JSON.parse(raw);
+    if (Array.isArray(full)) {
+      parsed = full;
+    } else if (full && Array.isArray(full.events)) {
+      // Structured output wraps in { events: [...] }
+      parsed = full.events;
+    } else {
+      parsed = [];
+    }
   } catch {
-    console.error('[NEWSLETTER] Failed to parse LLM JSON response');
-    return [];
+    // Fallback: find JSON array in the response (LLM may wrap in markdown code blocks)
+    const jsonMatch = raw.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) {
+      console.error('[NEWSLETTER] No JSON array found in LLM response');
+      return [];
+    }
+    try {
+      parsed = JSON.parse(jsonMatch[0]);
+    } catch {
+      console.error('[NEWSLETTER] Failed to parse LLM JSON response');
+      return [];
+    }
+    if (!Array.isArray(parsed)) return [];
   }
-
-  if (!Array.isArray(parsed)) return [];
 
   const events: ExtractedEvent[] = [];
   for (const item of parsed) {
