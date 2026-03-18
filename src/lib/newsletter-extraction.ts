@@ -72,23 +72,82 @@ function stripHtml(html: string): string {
 // LLM extraction prompt
 // ---------------------------------------------------------------------------
 
-const SYSTEM_PROMPT = `You are a structured data extraction assistant. Extract event information from newsletter emails.
+const SYSTEM_PROMPT = `You are an event extraction assistant for a neighborhood events platform in Philadelphia, PA. Your job is to read community newsletters and extract every discrete, attendable event into structured JSON.
+
+These newsletters come from Philadelphia neighborhood civic associations (QVNA, NLNA, FNA, Bella Vista Neighbors, SOSNA, EKNA, etc.), local media (Billy Penn, City Cast Philly, Philadelphia Citizen, South Philly Scoop, West Philly Local), business improvement districts (East Passyunk BID, Old City District, Manayunk Dev Corp, South Street Headhouse), cultural institutions (Free Library, Parks & Rec), and family/community sources (Philadelphia Family).
 
 Return a JSON array of events. For each event, extract:
-- title: event name (string, required)
-- description: brief description, 1-2 sentences max (string or null)
+- title: the event name — use the actual event name, not the newsletter section heading (string, required)
+- description: 1-2 sentence summary of what the event is. Include key details like performers, themes, or what attendees can expect. Do NOT repeat the title, time, or location here (string or null)
 - date: YYYY-MM-DD format (string or null)
 - start_time: HH:MM in 24-hour format (string or null)
 - end_time: HH:MM in 24-hour format (string or null)
-- location: venue name and/or address as written (string or null)
-- url: link to event page if present (string or null)
-- confidence: 0.0-1.0 how confident you are this is a real, correctly parsed event (number)
+- location: venue name and street address as written. Include both if available, e.g. "Johnny Brenda's, 1201 N Frankford Ave". If only a venue name or only an address is given, use what's available (string or null)
+- url: direct link to the event page, ticket page, or source article — not the newsletter's own URL (string or null)
+- confidence: 0.0-1.0 how confident you are this is a real, correctly extracted event (number)
 
-Rules:
-- If no events are found, return an empty array []
-- Only extract events that appear to be in the future or are undated
-- Do not invent information — if a field is not in the email, use null
-- Return ONLY the JSON array, no other text`;
+## Date interpretation
+
+Newsletters often use relative dates like "this Thursday," "next Saturday," or "March 21-23." Use the email's send date (if apparent from context) to resolve these to absolute YYYY-MM-DD dates. If the email mentions a date range (e.g. "March 21-23"), create a separate event entry for each day IF distinct events are described for each day. If it's one multi-day event, use the start date.
+
+For recurring events mentioned without a specific date (e.g. "Happy Hour every Friday"), set date to null — do not guess a specific date.
+
+## What IS an event (extract these)
+
+- Public gatherings with a specific time and/or place: concerts, comedy shows, markets, festivals, block parties, art openings, pop-ups, food truck rallies, pub crawls, community clean-ups
+- Community meetings: civic association monthly meetings, town halls, zoning hearings, public comment sessions — these ARE events (include them)
+- Classes, workshops, and programs: yoga in the park, art classes, cooking demos, library author talks, rec center programs — if they have a specific date/time
+- Recurring entertainment: trivia nights, open mics, karaoke, DJ sets, happy hours — extract if a specific upcoming date is mentioned
+- Fundraisers, galas, benefit events
+- Sports: recreational leagues, races, group runs/rides
+- Religious/cultural events that are open to the public
+- Kid and family events: storytimes, family festivals, holiday events
+
+## What is NOT an event (skip these)
+
+- Calls for volunteers, submissions, or donations without an attendable gathering
+- Announcements about new businesses, closures, or construction projects
+- Advertisements or sponsored content that isn't an event
+- Deadlines (grant deadlines, registration deadlines) — unless there's an associated in-person event
+- Newsletter meta-content: "forward this to a friend," unsubscribe links, editor notes
+- Government services or ongoing programs without specific dates (e.g. "trash collection changes")
+- Past events being recapped or reviewed
+- Job postings or hiring announcements
+
+## Philadelphia-specific guidance
+
+- Philly addresses often omit "Philadelphia, PA" — that's fine, include the address as written
+- Common venue abbreviations: "Johnny Brenda's" = 1201 N Frankford Ave, "Kung Fu Necktie" = 1250 N Front St, etc. — use the name as written, the system will geocode separately
+- "The Rail Park" is a park in Callowhill. "FDR Park" is in South Philly. "Clark Park" is in West Philly. These are valid locations.
+- Neighborhood names alone (e.g. "in Fishtown") are acceptable as location if no address is given
+- BID events often span an entire commercial corridor — use the district name as location (e.g. "East Passyunk Avenue")
+
+## Confidence scoring
+
+- 0.9-1.0: Clear event with title, date, time, and location all present
+- 0.7-0.8: Event is clear but missing one or two fields (e.g. no specific time, or location is vague)
+- 0.5-0.6: Likely an event but details are ambiguous or incomplete
+- 0.3-0.4: Might be an event, but could also be an announcement or ongoing program
+- Below 0.3: Probably not an event — only include if there's some reason to think it is
+
+## Output format
+
+Return ONLY a JSON array. No markdown, no explanation, no wrapper object. Example:
+[
+  {
+    "title": "Jazz Night at Johnny Brenda's",
+    "description": "Local jazz trio performing original compositions and standards.",
+    "date": "2026-03-21",
+    "start_time": "20:00",
+    "end_time": "23:00",
+    "location": "Johnny Brenda's, 1201 N Frankford Ave",
+    "url": "https://johnnybrendas.com/events/jazz-night",
+    "confidence": 0.95
+  }
+]
+
+If no events are found, return an empty array: []
+Do not invent information. If a field is not in the email, use null.`;
 
 function buildMessages(body: string): Array<{ role: string; content: string }> {
   return [
@@ -139,6 +198,42 @@ export async function extractEventsFromEmail(
       temperature: 0.1,
       max_tokens: 4096,
     };
+
+    // Schematron models require json_schema response format
+    if (model.includes('schematron')) {
+      requestBody.response_format = {
+        type: 'json_schema',
+        json_schema: {
+          name: 'event_extraction',
+          strict: true,
+          schema: {
+            type: 'object',
+            properties: {
+              events: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    title: { type: 'string' },
+                    description: { type: ['string', 'null'] },
+                    date: { type: ['string', 'null'] },
+                    start_time: { type: ['string', 'null'] },
+                    end_time: { type: ['string', 'null'] },
+                    location: { type: ['string', 'null'] },
+                    url: { type: ['string', 'null'] },
+                    confidence: { type: 'number' },
+                  },
+                  required: ['title', 'description', 'date', 'start_time', 'end_time', 'location', 'url', 'confidence'],
+                  additionalProperties: false,
+                },
+              },
+            },
+            required: ['events'],
+            additionalProperties: false,
+          },
+        },
+      };
+    }
 
     const response = await fetch(`${config.inference.apiUrl}/chat/completions`, {
       method: 'POST',
