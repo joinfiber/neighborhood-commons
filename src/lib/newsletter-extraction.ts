@@ -253,8 +253,10 @@ export async function extractEventsFromEmail(
 
     const result = (await response.json()) as ChatCompletionResponse;
     const rawContent = result.choices?.[0]?.message?.content || '';
+    console.log(`[NEWSLETTER] LLM raw content (first 500): ${rawContent.substring(0, 500)}`);
 
     const events = parseExtractionResponse(rawContent);
+    console.log(`[NEWSLETTER] Parsed ${events.length} events from LLM response`);
     return { events, rawResponse: rawContent };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

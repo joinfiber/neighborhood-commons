@@ -188,10 +188,16 @@ async function processEmail(emailId: string): Promise<void> {
 
   try {
     // Extract events via LLM
-    const { events, rawResponse } = await extractEventsFromEmail(
-      email.body_html as string | null,
-      email.body_plain as string | null,
-    );
+    const bodyHtml = email.body_html as string | null;
+    const bodyPlain = email.body_plain as string | null;
+    console.log(`[NEWSLETTER] Processing email ${emailId}: html=${!!bodyHtml} (${bodyHtml?.length ?? 0} chars), plain=${!!bodyPlain} (${bodyPlain?.length ?? 0} chars)`);
+
+    const { events, rawResponse } = await extractEventsFromEmail(bodyHtml, bodyPlain);
+
+    console.log(`[NEWSLETTER] LLM returned ${events.length} events, raw response length: ${rawResponse.length}`);
+    if (rawResponse.length < 2000) {
+      console.log(`[NEWSLETTER] Raw LLM response: ${rawResponse}`);
+    }
 
     // Store raw LLM response for debugging
     await supabaseAdmin
