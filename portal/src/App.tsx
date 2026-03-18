@@ -13,6 +13,9 @@ import { AdminAccountDetailScreen } from './screens/AdminAccountDetailScreen';
 import { AdminCreateEventScreen } from './screens/AdminCreateEventScreen';
 import { AdminEditEventScreen } from './screens/AdminEditEventScreen';
 import { AdminAllEventsScreen } from './screens/AdminAllEventsScreen';
+import { AdminNewsletterSourcesScreen } from './screens/AdminNewsletterSourcesScreen';
+import { AdminNewsletterEmailsScreen } from './screens/AdminNewsletterEmailsScreen';
+import { AdminEventReviewScreen } from './screens/AdminEventReviewScreen';
 import { DevelopersScreen } from './screens/DevelopersScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { TermsScreen } from './screens/TermsScreen';
@@ -23,8 +26,9 @@ import { WorkspaceShell } from './components/WorkspaceShell';
 import { PlaceAutocomplete } from './components/PlaceAutocomplete';
 import type { PlaceResult } from './lib/api';
 
-function contentWidthForRoute(screen: string): 'normal' | 'wide' {
-  const wide = ['dashboard', 'creative', 'developers', 'admin-home', 'admin-events', 'admin-account', 'admin-create-event'];
+function contentWidthForRoute(screen: string): 'normal' | 'wide' | 'full' {
+  if (screen === 'share-event') return 'full';
+  const wide = ['dashboard', 'creative', 'developers', 'admin-home', 'admin-events', 'admin-account', 'admin-create-event', 'admin-newsletters', 'admin-newsletter-emails', 'admin-newsletter-email', 'admin-newsletter-review'];
   return wide.includes(screen) ? 'wide' : 'normal';
 }
 
@@ -371,6 +375,24 @@ export default function App() {
             }}
           />
         );
+      }
+
+      if (route.screen === 'admin-newsletters') {
+        return <AdminNewsletterSourcesScreen onNavigate={navigate} />;
+      }
+
+      if (route.screen === 'admin-newsletter-emails' || route.screen === 'admin-newsletter-email') {
+        return (
+          <AdminNewsletterEmailsScreen
+            emailId={route.params.id}
+            onNavigate={navigate}
+            onBack={back}
+          />
+        );
+      }
+
+      if (route.screen === 'admin-newsletter-review') {
+        return <AdminEventReviewScreen onNavigate={navigate} />;
       }
 
       // Default: admin dashboard

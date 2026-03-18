@@ -1517,4 +1517,415 @@ router.delete('/api-keys/:id', writeLimiter, async (req, res, next) => {
   }
 });
 
+// =============================================================================
+// NEWSLETTER INGESTION — Sources, Emails, and Event Candidates
+// =============================================================================
+
+const createNewsletterSourceSchema = z.object({
+  name: z.string().min(1).max(200),
+  sender_email: z.string().email().max(320).optional(),
+  notes: z.string().max(2000).optional(),
+  auto_approve: z.boolean().optional().default(false),
+});
+
+const updateNewsletterSourceSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  sender_email: z.string().email().max(320).optional().nullable(),
+  notes: z.string().max(2000).optional().nullable(),
+  auto_approve: z.boolean().optional(),
+  status: z.enum(['active', 'paused', 'retired']).optional(),
+});
+
+const approveCandidateSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
+  description: z.string().max(2000).optional(),
+  venue_name: z.string().max(200).optional(),
+  address: z.string().max(500).optional(),
+  category: z.enum(EVENT_CATEGORY_KEYS as [string, ...string[]]).optional(),
+  event_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  start_time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  end_time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  price: z.string().max(100).optional(),
+  event_timezone: z.string().max(50).optional(),
+});
+
+const rejectCandidateSchema = z.object({
+  review_notes: z.string().max(2000).optional(),
+});
+
+const duplicateCandidateSchema = z.object({
+  matched_event_id: z.string().uuid().optional(),
+});
+
+// ─── Newsletter Sources ─────────────────────────────────────────
+
+router.get('/newsletter-sources', portalLimiter, async (_req, res, next) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('newsletter_sources')
+      .select('id, name, sender_email, notes, auto_approve, status, created_at, last_received_at')
+      .order('last_received_at', { ascending: false, nullsFirst: false });
+
+    if (error) {
+      console.error('[COMMONS-ADMIN] Newsletter sources list error:', error.message);
+      throw createError('Failed to list newsletter sources', 500, 'SERVER_ERROR');
+    }
+
+    res.json({ sources: data || [] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/newsletter-sources', writeLimiter, async (req, res, next) => {
+  try {
+    const input = validateRequest(createNewsletterSourceSchema, req.body);
+
+    const { data, error } = await supabaseAdmin
+      .from('newsletter_sources')
+      .insert({
+        name: input.name,
+        sender_email: input.sender_email || null,
+        notes: input.notes || null,
+        auto_approve: input.auto_approve,
+      })
+      .select('id, name, sender_email, notes, auto_approve, status, created_at, last_received_at')
+      .single();
+
+    if (error) {
+      console.error('[COMMONS-ADMIN] Newsletter source create error:', error.message);
+      throw createError('Failed to create newsletter source', 500, 'SERVER_ERROR');
+    }
+
+    console.log(`[COMMONS-ADMIN] Created newsletter source "${input.name}"`);
+    res.status(201).json({ source: data });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch('/newsletter-sources/:id', writeLimiter, async (req, res, next) => {
+  try {
+    validateUuidParam(req.params.id, 'id');
+    const input = validateRequest(updateNewsletterSourceSchema, req.body);
+
+    // Build update object with only provided fields
+    const updates: Record<string, unknown> = {};
+    if (input.name !== undefined) updates.name = input.name;
+    if (input.sender_email !== undefined) updates.sender_email = input.sender_email;
+    if (input.notes !== undefined) updates.notes = input.notes;
+    if (input.auto_approve !== undefined) updates.auto_approve = input.auto_approve;
+    if (input.status !== undefined) updates.status = input.status;
+
+    if (Object.keys(updates).length === 0) {
+      throw createError('No fields to update', 400, 'VALIDATION_ERROR');
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('newsletter_sources')
+      .update(updates)
+      .eq('id', req.params.id)
+      .select('id, name, sender_email, notes, auto_approve, status, created_at, last_received_at')
+      .single();
+
+    if (error) {
+      console.error('[COMMONS-ADMIN] Newsletter source update error:', error.message);
+      throw createError('Failed to update newsletter source', 500, 'SERVER_ERROR');
+    }
+
+    if (!data) {
+      throw createError('Newsletter source not found', 404, 'NOT_FOUND');
+    }
+
+    console.log(`[COMMONS-ADMIN] Updated newsletter source ${req.params.id}`);
+    res.json({ source: data });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Newsletter Emails ──────────────────────────────────────────
+
+router.get('/newsletter-emails', portalLimiter, async (req, res, next) => {
+  try {
+    const sourceId = typeof req.query.source_id === 'string' ? req.query.source_id : undefined;
+    const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+
+    let query = supabaseAdmin
+      .from('newsletter_emails')
+      .select('id, source_id, message_id, sender_email, subject, received_at, processing_status, processing_error, candidate_count, newsletter_sources(name)')
+      .order('received_at', { ascending: false })
+      .limit(limit);
+
+    if (sourceId) {
+      validateUuidParam(sourceId, 'source_id');
+      query = query.eq('source_id', sourceId);
+    }
+    if (status) {
+      query = query.eq('processing_status', status);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('[COMMONS-ADMIN] Newsletter emails list error:', error.message);
+      throw createError('Failed to list newsletter emails', 500, 'SERVER_ERROR');
+    }
+
+    res.json({ emails: data || [] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/newsletter-emails/:id', portalLimiter, async (req, res, next) => {
+  try {
+    validateUuidParam(req.params.id, 'id');
+
+    const { data: email, error } = await supabaseAdmin
+      .from('newsletter_emails')
+      .select('id, source_id, message_id, sender_email, subject, body_html, body_plain, received_at, processing_status, processing_error, candidate_count, llm_response, newsletter_sources(name)')
+      .eq('id', req.params.id)
+      .single();
+
+    if (error || !email) {
+      throw createError('Newsletter email not found', 404, 'NOT_FOUND');
+    }
+
+    // Fetch candidates for this email
+    const { data: candidates } = await supabaseAdmin
+      .from('event_candidates')
+      .select('id, title, description, start_date, start_time, end_time, location_name, location_address, location_lat, location_lng, source_url, confidence, status, matched_event_id, match_confidence, review_notes, created_at, reviewed_at')
+      .eq('email_id', req.params.id)
+      .order('created_at', { ascending: true });
+
+    res.json({ email, candidates: candidates || [] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Event Candidates ───────────────────────────────────────────
+
+router.get('/event-candidates', portalLimiter, async (req, res, next) => {
+  try {
+    const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+
+    let query = supabaseAdmin
+      .from('event_candidates')
+      .select('id, email_id, source_id, title, description, start_date, start_time, end_time, location_name, location_address, location_lat, location_lng, source_url, confidence, status, matched_event_id, match_confidence, review_notes, created_at, reviewed_at, newsletter_emails(subject), newsletter_sources(name)')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (status) {
+      query = query.eq('status', status);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('[COMMONS-ADMIN] Event candidates list error:', error.message);
+      throw createError('Failed to list event candidates', 500, 'SERVER_ERROR');
+    }
+
+    res.json({ candidates: data || [] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/event-candidates/:id/approve', writeLimiter, async (req, res, next) => {
+  try {
+    validateUuidParam(req.params.id, 'id');
+    const overrides = req.body && Object.keys(req.body).length > 0
+      ? validateRequest(approveCandidateSchema, req.body)
+      : {};
+
+    // Fetch the candidate
+    const { data: candidate, error: fetchErr } = await supabaseAdmin
+      .from('event_candidates')
+      .select('id, title, description, start_date, start_time, end_time, location_name, location_address, location_lat, location_lng, source_url, confidence, status, source_id, newsletter_sources(name)')
+      .eq('id', req.params.id)
+      .single();
+
+    if (fetchErr || !candidate) {
+      throw createError('Event candidate not found', 404, 'NOT_FOUND');
+    }
+
+    if (candidate.status !== 'pending') {
+      throw createError(`Candidate is already ${candidate.status}`, 409, 'CONFLICT');
+    }
+
+    // Build event data from candidate + overrides
+    const title = overrides.title || (candidate.title as string);
+    const description = overrides.description || (candidate.description as string | null);
+    const eventDate = overrides.event_date || (candidate.start_date as string | null);
+    const startTime = overrides.start_time || (candidate.start_time as string | null);
+    const endTime = overrides.end_time || (candidate.end_time as string | null);
+    const venueName = overrides.venue_name || (candidate.location_name as string | null);
+    const address = overrides.address || (candidate.location_address as string | null);
+    const category = overrides.category || 'community';
+    const price = overrides.price || null;
+    const timezone = overrides.event_timezone || 'America/New_York';
+
+    if (!eventDate) {
+      throw createError('Event date is required to approve', 400, 'VALIDATION_ERROR');
+    }
+
+    // Build event_at timestamp
+    const timeStr = startTime || '12:00';
+    const eventAt = toTimestamptz(eventDate, timeStr, timezone);
+    const endTimeAt = endTime ? toTimestamptz(eventDate, endTime, timezone) : null;
+
+    // Source publisher from newsletter source name
+    const sourceName = (candidate.newsletter_sources as { name: string } | null)?.name;
+
+    // Insert the real event
+    const { data: event, error: insertErr } = await supabaseAdmin
+      .from('events')
+      .insert({
+        content: title,
+        description: description || null,
+        event_at: eventAt,
+        end_time: endTimeAt,
+        event_timezone: timezone,
+        place_name: venueName || null,
+        venue_address: address || null,
+        latitude: candidate.location_lat,
+        longitude: candidate.location_lng,
+        category,
+        price: price || null,
+        link_url: (candidate.source_url as string | null) || null,
+        source: 'newsletter',
+        source_method: 'newsletter',
+        source_publisher: sourceName || 'newsletter',
+        status: 'published',
+        visibility: 'public',
+        region_id: config.defaultRegionId || null,
+        start_time_required: !!startTime,
+      })
+      .select('id')
+      .single();
+
+    if (insertErr) {
+      console.error('[COMMONS-ADMIN] Event create from candidate error:', insertErr.message);
+      throw createError('Failed to create event from candidate', 500, 'SERVER_ERROR');
+    }
+
+    const eventId = event.id as string;
+
+    // Update candidate status
+    await supabaseAdmin
+      .from('event_candidates')
+      .update({
+        status: 'approved',
+        matched_event_id: eventId,
+        reviewed_at: new Date().toISOString(),
+      })
+      .eq('id', req.params.id);
+
+    // Fire-and-forget: geocode if needed
+    void geocodeEventIfNeeded(
+      eventId,
+      address,
+      candidate.location_lat as number | null,
+      candidate.location_lng as number | null,
+      null,
+    );
+
+    // Fire-and-forget: dispatch webhooks
+    void dispatchWebhooks('event.created', eventId).catch(() => {});
+
+    const adminId = getAdminUserId(req);
+    auditPortalAction('newsletter_candidate_approved', adminId, eventId, { candidate_id: req.params.id });
+    console.log(`[COMMONS-ADMIN] Approved candidate ${req.params.id} → event ${eventId}`);
+
+    res.status(201).json({ event_id: eventId, candidate_id: req.params.id });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/event-candidates/:id/reject', writeLimiter, async (req, res, next) => {
+  try {
+    validateUuidParam(req.params.id, 'id');
+    const input = req.body && Object.keys(req.body).length > 0
+      ? validateRequest(rejectCandidateSchema, req.body)
+      : {};
+
+    const { data: candidate, error: fetchErr } = await supabaseAdmin
+      .from('event_candidates')
+      .select('id, status')
+      .eq('id', req.params.id)
+      .single();
+
+    if (fetchErr || !candidate) {
+      throw createError('Event candidate not found', 404, 'NOT_FOUND');
+    }
+
+    if (candidate.status !== 'pending') {
+      throw createError(`Candidate is already ${candidate.status}`, 409, 'CONFLICT');
+    }
+
+    await supabaseAdmin
+      .from('event_candidates')
+      .update({
+        status: 'rejected',
+        review_notes: input.review_notes || null,
+        reviewed_at: new Date().toISOString(),
+      })
+      .eq('id', req.params.id);
+
+    const adminId = getAdminUserId(req);
+    auditPortalAction('newsletter_candidate_rejected', adminId, req.params.id);
+    console.log(`[COMMONS-ADMIN] Rejected candidate ${req.params.id}`);
+
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/event-candidates/:id/duplicate', writeLimiter, async (req, res, next) => {
+  try {
+    validateUuidParam(req.params.id, 'id');
+    const input = req.body && Object.keys(req.body).length > 0
+      ? validateRequest(duplicateCandidateSchema, req.body)
+      : {};
+
+    const { data: candidate, error: fetchErr } = await supabaseAdmin
+      .from('event_candidates')
+      .select('id, status, matched_event_id')
+      .eq('id', req.params.id)
+      .single();
+
+    if (fetchErr || !candidate) {
+      throw createError('Event candidate not found', 404, 'NOT_FOUND');
+    }
+
+    if (candidate.status !== 'pending') {
+      throw createError(`Candidate is already ${candidate.status}`, 409, 'CONFLICT');
+    }
+
+    await supabaseAdmin
+      .from('event_candidates')
+      .update({
+        status: 'duplicate',
+        matched_event_id: input.matched_event_id || (candidate.matched_event_id as string | null),
+        reviewed_at: new Date().toISOString(),
+      })
+      .eq('id', req.params.id);
+
+    const adminId = getAdminUserId(req);
+    auditPortalAction('newsletter_candidate_duplicate', adminId, req.params.id);
+    console.log(`[COMMONS-ADMIN] Marked candidate ${req.params.id} as duplicate`);
+
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

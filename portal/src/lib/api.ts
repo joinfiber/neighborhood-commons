@@ -3,6 +3,7 @@ import type {
   PortalAccount, PortalEvent, CreateEventParams, PlaceResult,
   CheckEmailResult, WhoamiResponse, PortalStats, AdminPortalEvent,
   SeedAccountParams, ActivityLogEntry,
+  NewsletterSource, NewsletterEmail, EventCandidate,
 } from './types';
 
 // Re-export all types for backward compatibility
@@ -10,6 +11,7 @@ export type {
   PortalAccount, PortalEvent, CreateEventParams, PlaceResult,
   UserRole, CheckEmailResult, WhoamiResponse, PortalStats,
   AdminPortalEvent, SeedAccountParams, ActivityLogEntry, EventFormData,
+  NewsletterSource, NewsletterEmail, EventCandidate,
 } from './types';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -384,6 +386,70 @@ export async function importConfirm(params: {
   return apiRequest<ImportConfirmResponse>('/api/portal/import/confirm', {
     method: 'POST',
     body: JSON.stringify(params),
+  });
+}
+
+// =============================================================================
+// NEWSLETTER ADMIN
+// =============================================================================
+
+export async function adminFetchNewsletterSources() {
+  return apiRequest<{ sources: NewsletterSource[] }>('/api/admin/newsletter-sources');
+}
+
+export async function adminCreateNewsletterSource(params: { name: string; sender_email?: string; notes?: string; auto_approve?: boolean }) {
+  return apiRequest<{ source: NewsletterSource }>('/api/admin/newsletter-sources', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+}
+
+export async function adminUpdateNewsletterSource(id: string, params: Partial<NewsletterSource>) {
+  return apiRequest<{ source: NewsletterSource }>(`/api/admin/newsletter-sources/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(params),
+  });
+}
+
+export async function adminFetchNewsletterEmails(filters?: { source_id?: string; status?: string; limit?: number }) {
+  const params = new URLSearchParams();
+  if (filters?.source_id) params.set('source_id', filters.source_id);
+  if (filters?.status) params.set('status', filters.status);
+  if (filters?.limit) params.set('limit', String(filters.limit));
+  const qs = params.toString();
+  return apiRequest<{ emails: NewsletterEmail[] }>(`/api/admin/newsletter-emails${qs ? `?${qs}` : ''}`);
+}
+
+export async function adminFetchNewsletterEmail(id: string) {
+  return apiRequest<{ email: NewsletterEmail; candidates: EventCandidate[] }>(`/api/admin/newsletter-emails/${id}`);
+}
+
+export async function adminFetchEventCandidates(filters?: { status?: string; limit?: number }) {
+  const params = new URLSearchParams();
+  if (filters?.status) params.set('status', filters.status);
+  if (filters?.limit) params.set('limit', String(filters.limit));
+  const qs = params.toString();
+  return apiRequest<{ candidates: EventCandidate[] }>(`/api/admin/event-candidates${qs ? `?${qs}` : ''}`);
+}
+
+export async function adminApproveCandidate(id: string, overrides?: Record<string, unknown>) {
+  return apiRequest<{ event_id: string; candidate_id: string }>(`/api/admin/event-candidates/${id}/approve`, {
+    method: 'POST',
+    body: JSON.stringify(overrides || {}),
+  });
+}
+
+export async function adminRejectCandidate(id: string, reviewNotes?: string) {
+  return apiRequest<{ success: boolean }>(`/api/admin/event-candidates/${id}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ review_notes: reviewNotes }),
+  });
+}
+
+export async function adminMarkCandidateDuplicate(id: string, matchedEventId?: string) {
+  return apiRequest<{ success: boolean }>(`/api/admin/event-candidates/${id}/duplicate`, {
+    method: 'POST',
+    body: JSON.stringify({ matched_event_id: matchedEventId }),
   });
 }
 

@@ -24,6 +24,10 @@ const routes: RoutePattern[] = [
   { pattern: /^#\/admin\/events\/([^/]+)\/edit/, screen: 'admin-edit-event', paramNames: ['id'] },
   { pattern: /^#\/admin\/events\/new/, screen: 'admin-create-event', paramNames: [] },
   { pattern: /^#\/admin\/events$/, screen: 'admin-events', paramNames: [] },
+  { pattern: /^#\/admin\/newsletters\/review$/, screen: 'admin-newsletter-review', paramNames: [] },
+  { pattern: /^#\/admin\/newsletters\/emails\/([^/]+)$/, screen: 'admin-newsletter-email', paramNames: ['id'] },
+  { pattern: /^#\/admin\/newsletters\/emails$/, screen: 'admin-newsletter-emails', paramNames: [] },
+  { pattern: /^#\/admin\/newsletters$/, screen: 'admin-newsletters', paramNames: [] },
   { pattern: /^#\/admin$/, screen: 'admin-home', paramNames: [] },
   { pattern: /^#\/$/, screen: 'dashboard', paramNames: [] },
 ];

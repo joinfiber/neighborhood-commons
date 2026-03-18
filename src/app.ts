@@ -29,6 +29,7 @@ import placesRoutes from './routes/places.js';
 import developerRoutes from './routes/developers.js';
 import contributeRoutes from './routes/contribute.js';
 import pageRoutes from './routes/pages.js';
+import ingestRoutes from './routes/ingest.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -90,13 +91,14 @@ export function createApp(): Express {
   app.use('/widget', publicCors);
   app.use('/pages.css', publicCors);
 
-  // Restricted CORS for portal, admin, webhooks, internal routes
+  // Restricted CORS for portal, admin, webhooks, internal, ingest routes
   app.use('/api/portal', privateCors);
   app.use('/api/admin', privateCors);
   app.use('/api/webhooks', privateCors);
   app.use('/api/internal', privateCors);
   app.use('/api/cron', privateCors);
   app.use('/api/places', privateCors);
+  app.use('/api/ingest', privateCors);
 
   // Response compression
   app.use(compression());
@@ -156,6 +158,9 @@ export function createApp(): Express {
 
   // ─── Places (venue search for portal) ──────────────────────────
   app.use('/api/places', placesRoutes);
+
+  // ─── Ingest (newsletter email webhook) ─────────────────────────
+  app.use('/api/ingest', ingestRoutes);
 
   // ─── .well-known discovery ───────────────────────────────────────
   app.get('/.well-known/neighborhood', (_req, res) => {

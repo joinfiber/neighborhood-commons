@@ -132,6 +132,62 @@ export interface ActivityLogEntry {
   created_at: string;
 }
 
+// =============================================================================
+// Newsletter Ingestion Types
+// =============================================================================
+
+export interface NewsletterSource {
+  id: string;
+  name: string;
+  sender_email: string | null;
+  notes: string | null;
+  auto_approve: boolean;
+  status: string;
+  created_at: string;
+  last_received_at: string | null;
+}
+
+export interface NewsletterEmail {
+  id: string;
+  source_id: string | null;
+  message_id: string | null;
+  sender_email: string;
+  subject: string;
+  body_html: string | null;
+  body_plain: string | null;
+  received_at: string;
+  processing_status: string;
+  processing_error: string | null;
+  candidate_count: number | null;
+  llm_response: string | null;
+  newsletter_sources?: { name: string } | null;
+}
+
+export interface EventCandidate {
+  id: string;
+  email_id: string;
+  source_id: string | null;
+  title: string;
+  description: string | null;
+  start_date: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  location_name: string | null;
+  location_address: string | null;
+  location_lat: number | null;
+  location_lng: number | null;
+  source_url: string | null;
+  confidence: number | null;
+  status: string;
+  matched_event_id: string | null;
+  match_confidence: number | null;
+  review_notes: string | null;
+  created_at: string;
+  reviewed_at: string | null;
+  newsletter_emails?: { subject: string } | null;
+  newsletter_sources?: { name: string } | null;
+}
+
 /** Data shape for the unified event form */
 export interface EventFormData {
   title: string;
