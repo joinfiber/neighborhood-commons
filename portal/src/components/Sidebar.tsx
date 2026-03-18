@@ -69,8 +69,8 @@ const icons = {
 };
 
 const BUSINESS_NAV: NavItem[] = [
-  { label: 'Events', icon: icons.calendar, hash: '#/', screens: ['dashboard', 'edit-event', 'create-event'] },
-  { label: 'Creative', icon: icons.share, hash: '#/creative', screens: ['creative', 'share-event'] },
+  { label: 'Your Events', icon: icons.calendar, hash: '#/', screens: ['dashboard', 'edit-event', 'create-event'] },
+  { label: 'Creative Tools', icon: icons.share, hash: '#/creative', screens: ['creative', 'share-event'] },
   { label: 'Developers', icon: icons.code, hash: '#/developers', screens: ['developers'] },
 ];
 
@@ -171,17 +171,22 @@ export function Sidebar({ role, activeScreen, businessName, businessAddress, onN
             onClick={() => handleNav('#/events/import')}
             style={{
               background: 'none',
-              border: 'none',
-              color: activeScreen === 'import-events' ? colors.accent : colors.dim,
-              fontSize: '12px',
+              border: `1px solid ${activeScreen === 'import-events' ? colors.accent : colors.border}`,
+              borderRadius: '6px',
+              color: activeScreen === 'import-events' ? colors.accent : colors.muted,
+              fontSize: '13px',
               cursor: 'pointer',
-              padding: '6px 4px 0',
+              padding: '7px 12px',
+              marginTop: '8px',
               fontFamily: 'inherit',
-              textAlign: 'left',
               width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
             }}
           >
-            or import from Eventbrite, Dice, Facebook...
+            {icons.import} Import Events
           </button>
         )}
       </div>

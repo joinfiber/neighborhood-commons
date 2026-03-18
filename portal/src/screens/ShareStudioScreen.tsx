@@ -8,7 +8,6 @@ import {
   renderTemplate,
   downloadCanvas,
   generateCaption,
-  canvasToUrl,
   slugify,
   CATEGORY_COLORS,
   type TemplateType,
@@ -26,14 +25,14 @@ export function ShareStudioScreen({ eventId, onDone }: ShareStudioScreenProps) {
   const [error, setError] = useState<string | null>(null);
 
   const [activeTemplate, setActiveTemplate] = useState<TemplateType>('story');
-  const [storyUrl, setStoryUrl] = useState<string | null>(null);
-  const [squareUrl, setSquareUrl] = useState<string | null>(null);
   const storyCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const squareCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
 
   const [caption, setCaption] = useState('');
   const [copied, setCopied] = useState(false);
   const [rendering, setRendering] = useState(false);
+  const [renderComplete, setRenderComplete] = useState(false);
 
   // Fetch event data
   useEffect(() => {
@@ -96,31 +95,35 @@ export function ShareStudioScreen({ eventId, onDone }: ShareStudioScreenProps) {
       storyCanvasRef.current = sc;
       squareCanvasRef.current = sqc;
 
-      const [sUrl, sqUrl] = await Promise.all([
-        canvasToUrl(sc),
-        canvasToUrl(sqc),
-      ]);
-
-      if (cancelled) return;
-
-      setStoryUrl(sUrl);
-      setSquareUrl(sqUrl);
       setCaption(generateCaption(eventData));
+      setRenderComplete(true);
       setRendering(false);
     })();
 
     return () => { cancelled = true; };
   }, [event]);
 
-  // Cleanup blob URLs on unmount
+  // Mount canvas preview directly into the DOM (avoids blob URL lifecycle issues)
   useEffect(() => {
-    const sUrl = storyUrl;
-    const sqUrl = squareUrl;
-    return () => {
-      if (sUrl) URL.revokeObjectURL(sUrl);
-      if (sqUrl) URL.revokeObjectURL(sqUrl);
-    };
-  }, [storyUrl, squareUrl]);
+    const container = previewRef.current;
+    if (!container || rendering || !renderComplete) return;
+
+    while (container.firstChild) container.removeChild(container.firstChild);
+
+    const canvas = activeTemplate === 'story' ? storyCanvasRef.current : squareCanvasRef.current;
+    if (!canvas) return;
+
+    // Clone canvas so the original stays intact for download
+    const clone = document.createElement('canvas');
+    clone.width = canvas.width;
+    clone.height = canvas.height;
+    const ctx = clone.getContext('2d');
+    if (ctx) ctx.drawImage(canvas, 0, 0);
+    clone.style.width = '100%';
+    clone.style.height = 'auto';
+    clone.style.display = 'block';
+    container.appendChild(clone);
+  }, [activeTemplate, rendering, renderComplete]);
 
   const handleDownload = () => {
     const canvas = activeTemplate === 'story' ? storyCanvasRef.current : squareCanvasRef.current;
@@ -165,8 +168,6 @@ export function ShareStudioScreen({ eventId, onDone }: ShareStudioScreenProps) {
     );
   }
 
-  const previewUrl = activeTemplate === 'story' ? storyUrl : squareUrl;
-
   return (
     <>
 
@@ -178,7 +179,7 @@ export function ShareStudioScreen({ eventId, onDone }: ShareStudioScreenProps) {
             style={{ ...styles.buttonText, padding: '0 0 8px 0' }}
             onClick={onDone}
           >
-            &larr; Dashboard
+            &larr; Creative Tools
           </button>
           <h1 style={{ ...styles.pageTitle, fontSize: '20px', margin: 0 }}>
             Share your event
@@ -205,27 +206,24 @@ export function ShareStudioScreen({ eventId, onDone }: ShareStudioScreenProps) {
         </div>
 
         {/* Preview */}
-        <div style={{
-          background: '#1a1a1a',
-          borderRadius: '12px',
-          overflow: 'hidden',
-          marginBottom: '16px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: rendering ? '300px' : undefined,
-        }}>
-          {rendering ? (
+        <div
+          ref={previewRef}
+          style={{
+            background: '#1a1a1a',
+            borderRadius: '12px',
+            overflow: 'hidden',
+            marginBottom: '16px',
+            minHeight: rendering ? '300px' : undefined,
+            display: rendering ? 'flex' : 'block',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {rendering && (
             <div style={{ color: '#666', fontSize: '14px', padding: '60px 20px' }}>
               Generating preview...
             </div>
-          ) : previewUrl ? (
-            <img
-              src={previewUrl}
-              alt={`${activeTemplate} preview`}
-              style={{ width: '100%', display: 'block' }}
-            />
-          ) : null}
+          )}
         </div>
 
         {/* Download Button */}
@@ -233,7 +231,7 @@ export function ShareStudioScreen({ eventId, onDone }: ShareStudioScreenProps) {
           className="btn-primary"
           style={{ ...styles.buttonPrimary, marginBottom: '24px' }}
           onClick={handleDownload}
-          disabled={rendering || !previewUrl}
+          disabled={rendering || !renderComplete}
         >
           Download {activeTemplate === 'story' ? 'Story' : 'Square'} Image
         </button>

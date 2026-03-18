@@ -71,27 +71,6 @@ const CATEGORY_EMOJIS: Record<string, string> = {
   community: '\u{1F3D8}\uFE0F', spectator: '\u{1F440}', other: '\u2728',
 };
 
-const CATEGORY_HASHTAGS: Record<string, string[]> = {
-  live_music: ['#LiveMusic', '#LocalMusic'],
-  dj_dance: ['#DJNight', '#DanceMusic'],
-  comedy: ['#Comedy', '#ComedyNight'],
-  karaoke: ['#Karaoke', '#KaraokeNight'],
-  open_mic: ['#OpenMic', '#LocalTalent'],
-  art_gallery: ['#ArtShow', '#LocalArt'],
-  film_screening: ['#FilmScreening', '#MovieNight'],
-  theatre: ['#Theatre', '#LocalTheatre'],
-  happy_hour: ['#HappyHour', '#AfterWork'],
-  food_drink: ['#Foodie', '#LocalEats'],
-  market_popup: ['#PopUp', '#ShopLocal'],
-  fitness_class: ['#FitnessClass', '#Workout'],
-  sports_rec: ['#Sports', '#Recreation'],
-  workshop_class: ['#Workshop', '#LearnSomethingNew'],
-  trivia_games: ['#TriviaNight', '#GameNight'],
-  community: ['#Community', '#Neighborhood'],
-  spectator: ['#LiveEvent', '#ThingsToDo'],
-  other: ['#LocalEvents', '#ThingsToDo'],
-};
-
 // =============================================================================
 // Font Loading
 // =============================================================================
@@ -503,15 +482,6 @@ export function generateCaption(event: ShareEventData): string {
       : event.description;
     lines.push(desc);
   }
-
-  lines.push('');
-  const tags = [
-    ...(CATEGORY_HASHTAGS[event.category] || ['#LocalEvents']),
-    '#NeighborhoodCommons',
-    '#PhillyEvents',
-    '#Fishtown',
-  ];
-  lines.push(tags.join(' '));
 
   return lines.join('\n');
 }
