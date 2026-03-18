@@ -30,7 +30,7 @@ function confidenceLabel(c: number | null): string {
 }
 
 function confidenceColor(c: number | null): string {
-  if (c == null) return colors.textMuted;
+  if (c == null) return colors.muted;
   if (c >= 0.8) return '#2e7d32';
   if (c >= 0.5) return '#e65100';
   return '#c62828';
@@ -169,7 +169,7 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
               padding: '6px 16px', fontSize: 13, borderRadius: 20,
               border: active ? `2px solid ${sc.fg}` : `1px solid ${colors.border}`,
               background: active ? sc.bg : 'white',
-              color: active ? sc.fg : colors.textMuted,
+              color: active ? sc.fg : colors.muted,
               cursor: 'pointer', fontFamily: 'inherit', fontWeight: active ? 600 : 400,
               textTransform: 'capitalize',
             }}>
@@ -180,9 +180,9 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
       </div>
 
       {loading ? (
-        <p style={{ color: colors.textMuted, fontSize: 14 }}>Loading candidates...</p>
+        <p style={{ color: colors.muted, fontSize: 14 }}>Loading candidates...</p>
       ) : candidates.length === 0 ? (
-        <p style={{ color: colors.textMuted, fontSize: 14 }}>
+        <p style={{ color: colors.muted, fontSize: 14 }}>
           No {activeTab} candidates.
         </p>
       ) : (
@@ -205,13 +205,13 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
                       <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>{c.title}</div>
-                      <div style={{ fontSize: 13, color: colors.textMuted }}>
+                      <div style={{ fontSize: 13, color: colors.muted }}>
                         {c.start_date || 'No date'}
                         {c.start_time && ` at ${c.start_time}`}
                         {c.end_time && `–${c.end_time}`}
                         {c.location_name && ` · ${c.location_name}`}
                       </div>
-                      <div style={{ fontSize: 12, color: colors.textMuted, marginTop: 4 }}>
+                      <div style={{ fontSize: 12, color: colors.muted, marginTop: 4 }}>
                         {c.newsletter_sources?.name && `Source: ${c.newsletter_sources.name}`}
                         {c.newsletter_emails?.subject && ` · "${c.newsletter_emails.subject}"`}
                       </div>
@@ -235,7 +235,7 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
                 {isExpanded && (
                   <div style={{ padding: '0 18px 18px', borderTop: `1px solid ${colors.border}` }}>
                     {c.description && (
-                      <p style={{ fontSize: 13, color: colors.textSecondary, margin: '12px 0' }}>{c.description}</p>
+                      <p style={{ fontSize: 13, color: colors.dim, margin: '12px 0' }}>{c.description}</p>
                     )}
                     {c.source_url && (
                       <p style={{ fontSize: 12, margin: '8px 0' }}>

@@ -79,7 +79,7 @@ export function AdminNewsletterEmailsScreen({ emailId, onNavigate, onBack }: Pro
 
   // Detail view
   if (emailId || detailEmail) {
-    if (detailLoading) return <p style={{ color: colors.textMuted }}>Loading email...</p>;
+    if (detailLoading) return <p style={{ color: colors.muted }}>Loading email...</p>;
     if (!detailEmail) return <p>Email not found.</p>;
 
     return (
@@ -93,7 +93,7 @@ export function AdminNewsletterEmailsScreen({ emailId, onNavigate, onBack }: Pro
 
         <div style={{ marginBottom: 24 }}>
           <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 600 }}>{detailEmail.subject}</h2>
-          <div style={{ fontSize: 13, color: colors.textMuted, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 13, color: colors.muted, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <span>From: {detailEmail.sender_email}</span>
             <span>Received: {formatDate(detailEmail.received_at)}</span>
             <StatusBadge status={detailEmail.processing_status} />
@@ -116,7 +116,7 @@ export function AdminNewsletterEmailsScreen({ emailId, onNavigate, onBack }: Pro
                     <span style={{ fontWeight: 600, fontSize: 14 }}>{c.title}</span>
                     <StatusBadge status={c.status} />
                   </div>
-                  <div style={{ fontSize: 13, color: colors.textMuted, marginTop: 4 }}>
+                  <div style={{ fontSize: 13, color: colors.muted, marginTop: 4 }}>
                     {c.start_date || 'No date'} {c.start_time ? `at ${c.start_time}` : ''}
                     {c.location_name && ` · ${c.location_name}`}
                     {c.confidence != null && ` · ${Math.round(c.confidence * 100)}% confidence`}
@@ -178,9 +178,9 @@ export function AdminNewsletterEmailsScreen({ emailId, onNavigate, onBack }: Pro
       </div>
 
       {loading ? (
-        <p style={{ color: colors.textMuted, fontSize: 14 }}>Loading emails...</p>
+        <p style={{ color: colors.muted, fontSize: 14 }}>Loading emails...</p>
       ) : emails.length === 0 ? (
-        <p style={{ color: colors.textMuted, fontSize: 14 }}>No inbound emails yet.</p>
+        <p style={{ color: colors.muted, fontSize: 14 }}>No inbound emails yet.</p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {emails.map((email) => (
@@ -195,7 +195,7 @@ export function AdminNewsletterEmailsScreen({ emailId, onNavigate, onBack }: Pro
             >
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>{email.subject}</div>
-                <div style={{ fontSize: 13, color: colors.textMuted }}>
+                <div style={{ fontSize: 13, color: colors.muted }}>
                   {email.sender_email}
                   {email.newsletter_sources?.name && ` · ${email.newsletter_sources.name}`}
                   {' · '}
@@ -204,7 +204,7 @@ export function AdminNewsletterEmailsScreen({ emailId, onNavigate, onBack }: Pro
               </div>
               <StatusBadge status={email.processing_status} />
               {email.candidate_count != null && (
-                <span style={{ fontSize: 13, color: colors.textMuted }}>{email.candidate_count} events</span>
+                <span style={{ fontSize: 13, color: colors.muted }}>{email.candidate_count} events</span>
               )}
             </button>
           ))}

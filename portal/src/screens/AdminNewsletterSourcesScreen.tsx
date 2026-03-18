@@ -123,7 +123,7 @@ export function AdminNewsletterSourcesScreen({ onNavigate }: Props) {
       {showForm && (
         <div style={{
           padding: 20, borderRadius: 12, border: `1px solid ${colors.border}`,
-          background: colors.surfaceLight, marginBottom: 20,
+          background: colors.bg, marginBottom: 20,
         }}>
           <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 600 }}>
             {editId ? 'Edit Source' : 'Add Newsletter Source'}
@@ -144,7 +144,7 @@ export function AdminNewsletterSourcesScreen({ onNavigate }: Props) {
                 placeholder="newsletter@example.com"
                 style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: `1px solid ${colors.border}`, fontSize: 14, fontFamily: 'inherit', boxSizing: 'border-box' }}
               />
-              <p style={{ fontSize: 12, color: colors.textMuted, margin: '4px 0 0' }}>Incoming emails from this address will be matched to this source.</p>
+              <p style={{ fontSize: 12, color: colors.muted, margin: '4px 0 0' }}>Incoming emails from this address will be matched to this source.</p>
             </div>
             <div>
               <label style={{ display: 'block', fontSize: 13, marginBottom: 4, fontWeight: 500 }}>Notes</label>
@@ -176,9 +176,9 @@ export function AdminNewsletterSourcesScreen({ onNavigate }: Props) {
       )}
 
       {loading ? (
-        <p style={{ color: colors.textMuted, fontSize: 14 }}>Loading sources...</p>
+        <p style={{ color: colors.muted, fontSize: 14 }}>Loading sources...</p>
       ) : sources.length === 0 ? (
-        <p style={{ color: colors.textMuted, fontSize: 14 }}>No newsletter sources yet. Add one to start ingesting events from email newsletters.</p>
+        <p style={{ color: colors.muted, fontSize: 14 }}>No newsletter sources yet. Add one to start ingesting events from email newsletters.</p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {sources.map((source) => (
@@ -197,12 +197,12 @@ export function AdminNewsletterSourcesScreen({ onNavigate }: Props) {
                     {source.status}
                   </span>
                 </div>
-                <div style={{ fontSize: 13, color: colors.textMuted }}>
+                <div style={{ fontSize: 13, color: colors.muted }}>
                   {source.sender_email || 'No sender email set'}
                   {' · '}
                   Last received: {formatDate(source.last_received_at)}
                 </div>
-                {source.notes && <div style={{ fontSize: 12, color: colors.textMuted, marginTop: 4 }}>{source.notes}</div>}
+                {source.notes && <div style={{ fontSize: 12, color: colors.muted, marginTop: 4 }}>{source.notes}</div>}
               </div>
               <button
                 onClick={() => toggleStatus(source)}
