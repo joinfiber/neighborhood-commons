@@ -7,7 +7,7 @@ import type { PortalAccount } from '../lib/api';
 interface WorkspaceShellProps {
   children: React.ReactNode;
   activeScreen: string;
-  contentWidth?: 'normal' | 'wide';
+  contentWidth?: 'normal' | 'wide' | 'full';
   role: 'business' | 'admin';
   account?: PortalAccount | null;
   onNavigate: (hash: string) => void;
@@ -33,7 +33,7 @@ export function WorkspaceShell({
     if (!isDesktop) setSidebarOpen(false);
   }, [activeScreen, isDesktop]);
 
-  const maxWidth = contentWidth === 'wide' ? '800px' : '600px';
+  const maxWidth = contentWidth === 'full' ? '100%' : contentWidth === 'wide' ? '800px' : '600px';
 
   return (
     <div style={styles.workspace}>
