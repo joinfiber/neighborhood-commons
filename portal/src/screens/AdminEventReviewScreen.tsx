@@ -8,7 +8,8 @@ import {
   adminRejectCandidate,
   adminMarkCandidateDuplicate,
 } from '../lib/api';
-import type { EventCandidate } from '../lib/types';
+import type { EventCandidate, PlaceResult } from '../lib/types';
+import { PlaceAutocomplete } from '../components/PlaceAutocomplete';
 
 interface Props {
   onNavigate: (hash: string) => void;
@@ -100,6 +101,9 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
   const [editCategory, setEditCategory] = useState('community');
   const [editDescription, setEditDescription] = useState('');
   const [editPrice, setEditPrice] = useState('');
+  const [editPlaceId, setEditPlaceId] = useState<string | undefined>();
+  const [editLat, setEditLat] = useState<number | undefined>();
+  const [editLng, setEditLng] = useState<number | undefined>();
   const [actionLoading, setActionLoading] = useState(false);
   const [sourceEmail, setSourceEmail] = useState<{ subject: string; body_plain: string | null; body_html: string | null; sender_email: string; received_at: string } | null>(null);
   const [sourceLoading, setSourceLoading] = useState(false);
@@ -140,6 +144,9 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
     setEditCategory('community');
     setEditDescription(candidate.description || '');
     setEditPrice('');
+    setEditPlaceId(undefined);
+    setEditLat(candidate.location_lat ?? undefined);
+    setEditLng(candidate.location_lng ?? undefined);
 
     // Fetch source email content and extraction metadata
     setSourceEmail(null);
@@ -167,6 +174,9 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
       end_time: editEndTime || undefined,
       venue_name: editVenue || undefined,
       address: editAddress || undefined,
+      place_id: editPlaceId,
+      latitude: editLat,
+      longitude: editLng,
       category: editCategory,
       description: editDescription || undefined,
       price: editPrice || undefined,
@@ -427,8 +437,24 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
                           </div>
                           <div>
                             <label style={{ display: 'block', fontSize: 12, marginBottom: 3, fontWeight: 500 }}>Venue <FieldConfBadge field="location" meta={extractionMeta} onClickExcerpt={handleExcerptClick} /></label>
-                            <input value={editVenue} onChange={(e) => setEditVenue(e.target.value)}
-                              style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: `1px solid ${colors.border}`, fontSize: 13, fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                            <PlaceAutocomplete
+                              value={editVenue}
+                              onChange={(val) => { setEditVenue(val); if (editPlaceId) { setEditPlaceId(undefined); } }}
+                              onSelect={(place: PlaceResult) => {
+                                setEditVenue(place.name);
+                                setEditAddress(place.address || '');
+                                setEditPlaceId(place.place_id);
+                                setEditLat(place.location?.latitude);
+                                setEditLng(place.location?.longitude);
+                              }}
+                              placeholder="Search venue..."
+                              inputStyle={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: `1px solid ${colors.border}`, fontSize: 13, fontFamily: 'inherit', boxSizing: 'border-box' as const }}
+                            />
+                            {editPlaceId && (
+                              <div style={{ fontSize: 11, color: '#2e7d32', marginTop: 2 }}>
+                                Matched to Google Place
+                              </div>
+                            )}
                           </div>
                           <div>
                             <label style={{ display: 'block', fontSize: 12, marginBottom: 3, fontWeight: 500 }}>Address</label>

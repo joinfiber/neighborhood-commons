@@ -8,9 +8,10 @@ interface PlaceAutocompleteProps {
   onSelect: (place: PlaceResult) => void;
   placeholder?: string;
   searchCoords?: { latitude: number; longitude: number };
+  inputStyle?: React.CSSProperties;
 }
 
-export function PlaceAutocomplete({ value, onChange, onSelect, placeholder, searchCoords }: PlaceAutocompleteProps) {
+export function PlaceAutocomplete({ value, onChange, onSelect, placeholder, searchCoords, inputStyle }: PlaceAutocompleteProps) {
   const [results, setResults] = useState<PlaceResult[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -60,7 +61,7 @@ export function PlaceAutocomplete({ value, onChange, onSelect, placeholder, sear
     <div ref={containerRef} style={{ position: 'relative' }}>
       <input
         type="text"
-        style={styles.input}
+        style={inputStyle || styles.input}
         value={value}
         onChange={(e) => handleChange(e.target.value)}
         placeholder={placeholder || 'Search venue...'}

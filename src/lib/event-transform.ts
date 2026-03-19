@@ -46,6 +46,10 @@ export interface PortalEventRow {
   // Contributor tracking (migration 020)
   source_method: string | null;
   source_publisher: string | null;
+  // Movie showtimes (migration 029)
+  runtime_minutes: number | null;
+  content_rating: string | null;
+  showtimes: Array<{ at: string }> | null;
   portal_accounts: { business_name: string; wheelchair_accessible?: boolean | null } | null;
 }
 
@@ -77,6 +81,9 @@ export interface NeighborhoodEvent {
   start_time_required: boolean;
   tags: string[];
   wheelchair_accessible: boolean | null;
+  runtime_minutes: number | null;
+  content_rating: string | null;
+  showtimes: Array<{ at: string }> | null;
   recurrence: { rrule: string } | null;
   source: {
     publisher: string;
@@ -208,6 +215,9 @@ export function toNeighborhoodEvent(row: PortalEventRow): NeighborhoodEvent {
     start_time_required: row.start_time_required ?? true,
     tags: row.tags || [],
     wheelchair_accessible: row.wheelchair_accessible ?? row.portal_accounts?.wheelchair_accessible ?? null,
+    runtime_minutes: row.runtime_minutes || null,
+    content_rating: row.content_rating || null,
+    showtimes: row.showtimes || null,
     recurrence: rrule ? { rrule } : null,
     source: {
       publisher: row.source_publisher || row.portal_accounts?.business_name || 'Neighborhood Commons',

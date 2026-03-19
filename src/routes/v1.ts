@@ -72,7 +72,7 @@ router.get('/', async (req, res, next) => {
 
     let query = supabaseAdmin
       .from('events')
-      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, source_method, source_publisher, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible)', { count: 'exact' })
+      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, runtime_minutes, content_rating, showtimes, source_method, source_publisher, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible)', { count: 'exact' })
       .eq('status', 'published')
       // Visibility: include events still relevant to browse feeds.
       // start_time_required=true events are visible until start; =false until end_time.
@@ -221,7 +221,7 @@ router.get('/:id', async (req, res, next) => {
 
     const { data: event, error } = await supabaseAdmin
       .from('events')
-      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, source_method, source_publisher, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible)')
+      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, runtime_minutes, content_rating, showtimes, source_method, source_publisher, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible)')
       .eq('id', id)
       .eq('status', 'published')
       .maybeSingle();
@@ -389,7 +389,7 @@ function escapeXml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, source_method, source_publisher, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible)';
+const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, runtime_minutes, content_rating, showtimes, source_method, source_publisher, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible)';
 
 /** Deduplicate series events: keep only the nearest upcoming instance per series_id. */
 function deduplicateSeries(events: Record<string, unknown>[]): Record<string, unknown>[] {

@@ -1407,7 +1407,8 @@ router.delete('/events/:id', writeLimiter, async (req, res, next) => {
       category: [], place_id: null,
       location: { name: '', address: null, lat: null, lng: null },
       url: null, images: [], organizer: { name: '', phone: null },
-      cost: null, series_id: null, series_instance_number: null, series_instance_count: null, start_time_required: true, tags: [], wheelchair_accessible: null, recurrence: null,
+      cost: null, series_id: null, series_instance_number: null, series_instance_count: null, start_time_required: true, tags: [], wheelchair_accessible: null,
+      runtime_minutes: null, content_rating: null, showtimes: null, recurrence: null,
       source: { publisher: 'neighborhood-commons', collected_at: new Date().toISOString(), method: 'portal', license: 'CC BY 4.0' },
     });
 
@@ -1595,6 +1596,9 @@ const approveCandidateSchema = z.object({
   description: z.string().max(2000).optional(),
   venue_name: z.string().max(200).optional(),
   address: z.string().max(500).optional(),
+  place_id: z.string().max(300).optional(),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
   category: z.enum(EVENT_CATEGORY_KEYS as [string, ...string[]]).optional(),
   event_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format (expected YYYY-MM-DD)').optional(),
   start_time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, 'Invalid time format (expected HH:MM)').transform(t => t.slice(0, 5)).optional(),
@@ -1975,6 +1979,9 @@ router.post('/event-candidates/:id/approve', writeLimiter, async (req, res, next
     const endTime = overrides.end_time || (candidate.end_time as string | null);
     const venueName = overrides.venue_name || (candidate.location_name as string | null);
     const address = overrides.address || (candidate.location_address as string | null);
+    const placeId = overrides.place_id || null;
+    const lat = overrides.latitude ?? (candidate.location_lat as number | null);
+    const lng = overrides.longitude ?? (candidate.location_lng as number | null);
     const category = overrides.category || 'community';
     const price = overrides.price || null;
     const timezone = overrides.event_timezone || 'America/New_York';
@@ -2002,16 +2009,17 @@ router.post('/event-candidates/:id/approve', writeLimiter, async (req, res, next
         event_at: eventAt,
         end_time: endTimeAt,
         event_timezone: timezone,
+        place_id: placeId,
         place_name: venueName || null,
         venue_address: address || null,
-        latitude: candidate.location_lat,
-        longitude: candidate.location_lng,
+        latitude: lat,
+        longitude: lng,
         category,
         price: price || null,
         link_url: (candidate.source_url as string | null) || null,
-        source: 'newsletter',
-        source_method: 'newsletter',
-        source_publisher: sourceName || 'newsletter',
+        source: 'portal',
+        source_method: candidate.feed_source_id ? 'feed' : 'newsletter',
+        source_publisher: sourceName || 'community',
         status: 'published',
         visibility: 'public',
         region_id: config.defaultRegionId || null,
@@ -2037,25 +2045,23 @@ router.post('/event-candidates/:id/approve', writeLimiter, async (req, res, next
       })
       .eq('id', req.params.id);
 
-    // Fire-and-forget: geocode if needed
-    void geocodeEventIfNeeded(
-      eventId,
-      address,
-      candidate.location_lat as number | null,
-      candidate.location_lng as number | null,
-      null,
-    );
-
-    // Fire-and-forget: download and re-encode candidate image
-    const candidateImageUrl = candidate.candidate_image_url as string | null;
-    if (candidateImageUrl) {
-      void downloadAndAttachImage(eventId, candidateImageUrl).catch((err) => {
-        console.error('[COMMONS-ADMIN] Candidate image download failed:', err instanceof Error ? err.message : err);
-      });
+    // Fire-and-forget: geocode if needed (skip if we already have coordinates from Places)
+    if (!lat || !lng) {
+      void geocodeEventIfNeeded(eventId, address, null, null, null);
     }
 
-    // Fire-and-forget: dispatch webhooks
+    // Fire-and-forget: download image (if any), then dispatch webhooks
+    // Image must finish before webhook so the payload includes the image URL
+    const candidateImageUrl = candidate.candidate_image_url as string | null;
     void (async () => {
+      if (candidateImageUrl) {
+        try {
+          await downloadAndAttachImage(eventId, candidateImageUrl);
+        } catch (err) {
+          console.error('[COMMONS-ADMIN] Candidate image download failed:', err instanceof Error ? err.message : err);
+        }
+      }
+      // Dispatch webhook after image is attached (or if no image)
       const { data: row } = await supabaseAdmin
         .from('events')
         .select(PORTAL_SELECT)

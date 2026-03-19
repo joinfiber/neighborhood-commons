@@ -41,6 +41,9 @@ function makeRow(overrides: Partial<PortalEventRow> = {}): PortalEventRow {
     created_at: '2026-03-10T12:00:00.000Z',
     source_method: null,
     source_publisher: null,
+    runtime_minutes: null,
+    content_rating: null,
+    showtimes: null,
     portal_accounts: { business_name: 'South Jazz Kitchen', wheelchair_accessible: null },
     ...overrides,
   };
@@ -357,6 +360,55 @@ describe('validateTags', () => {
 // ---------------------------------------------------------------------------
 // Wheelchair accessibility — resolution logic
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Movie showtimes
+// ---------------------------------------------------------------------------
+
+describe('toNeighborhoodEvent — movie showtimes', () => {
+  it('returns null for showtime fields when not set', () => {
+    const event = toNeighborhoodEvent(makeRow());
+    expect(event.runtime_minutes).toBeNull();
+    expect(event.content_rating).toBeNull();
+    expect(event.showtimes).toBeNull();
+  });
+
+  it('passes through runtime_minutes', () => {
+    const event = toNeighborhoodEvent(makeRow({ runtime_minutes: 135 }));
+    expect(event.runtime_minutes).toBe(135);
+  });
+
+  it('passes through content_rating', () => {
+    const event = toNeighborhoodEvent(makeRow({ content_rating: 'PG-13' }));
+    expect(event.content_rating).toBe('PG-13');
+  });
+
+  it('passes through showtimes array', () => {
+    const showtimes = [
+      { at: '2026-03-20T23:00:00Z' },
+      { at: '2026-03-21T01:30:00Z' },
+      { at: '2026-03-21T20:15:00Z' },
+    ];
+    const event = toNeighborhoodEvent(makeRow({ showtimes }));
+    expect(event.showtimes).toEqual(showtimes);
+  });
+
+  it('returns all movie fields together for a film_screening', () => {
+    const event = toNeighborhoodEvent(makeRow({
+      category: 'film_screening',
+      runtime_minutes: 120,
+      content_rating: 'R',
+      showtimes: [{ at: '2026-03-20T23:00:00Z' }],
+      series_id: 'movie-series-id',
+      recurrence: 'none',
+    }));
+    expect(event.runtime_minutes).toBe(120);
+    expect(event.content_rating).toBe('R');
+    expect(event.showtimes).toHaveLength(1);
+    expect(event.series_id).toBe('movie-series-id');
+    expect(event.recurrence).toBeNull();
+  });
+});
 
 describe('toNeighborhoodEvent — wheelchair_accessible', () => {
   it('returns null when both event and account are null', () => {
