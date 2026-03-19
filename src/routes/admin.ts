@@ -1597,11 +1597,11 @@ const approveCandidateSchema = z.object({
   address: z.string().max(500).optional(),
   category: z.enum(EVENT_CATEGORY_KEYS as [string, ...string[]]).optional(),
   event_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format (expected YYYY-MM-DD)').optional(),
-  start_time: z.string().regex(/^\d{2}:\d{2}$/, 'Invalid time format (expected HH:MM)').optional(),
-  end_time: z.string().regex(/^\d{2}:\d{2}$/, 'Invalid time format (expected HH:MM)').optional(),
+  start_time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, 'Invalid time format (expected HH:MM)').transform(t => t.slice(0, 5)).optional(),
+  end_time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, 'Invalid time format (expected HH:MM)').transform(t => t.slice(0, 5)).optional(),
   price: z.string().max(100).optional(),
   event_timezone: z.string().max(50).optional(),
-}).passthrough();
+});
 
 const rejectCandidateSchema = z.object({
   review_notes: z.string().max(2000).optional(),
@@ -1948,10 +1948,6 @@ router.get('/event-candidates/:id', portalLimiter, async (req, res, next) => {
 router.post('/event-candidates/:id/approve', writeLimiter, async (req, res, next) => {
   try {
     validateUuidParam(req.params.id, 'id');
-    const parseResult = approveCandidateSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      console.error('[COMMONS-ADMIN] Approve validation failed:', JSON.stringify(parseResult.error.errors), 'body:', JSON.stringify(req.body));
-    }
     const overrides = req.body && Object.keys(req.body).length > 0
       ? validateRequest(approveCandidateSchema, req.body)
       : {};
