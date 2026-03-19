@@ -1743,7 +1743,7 @@ router.get('/event-candidates/:id', portalLimiter, async (req, res, next) => {
 
     const { data: candidate, error } = await supabaseAdmin
       .from('event_candidates')
-      .select('id, email_id, source_id, title, description, start_date, start_time, end_time, location_name, location_address, location_lat, location_lng, source_url, confidence, status, matched_event_id, match_confidence, review_notes, created_at, reviewed_at, extraction_metadata, newsletter_emails(subject, body_plain, body_html, sender_email, created_at), newsletter_sources(name)')
+      .select('id, email_id, source_id, title, description, start_date, start_time, end_time, location_name, location_address, location_lat, location_lng, source_url, confidence, status, matched_event_id, match_confidence, review_notes, created_at, reviewed_at, extraction_metadata, newsletter_emails(subject, body_plain, body_html, sender_email, received_at), newsletter_sources(name)')
       .eq('id', req.params.id)
       .maybeSingle();
 

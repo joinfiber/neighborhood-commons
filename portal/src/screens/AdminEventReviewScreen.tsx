@@ -101,7 +101,7 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
   const [editDescription, setEditDescription] = useState('');
   const [editPrice, setEditPrice] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
-  const [sourceEmail, setSourceEmail] = useState<{ subject: string; body_plain: string | null; body_html: string | null; sender_email: string; created_at: string } | null>(null);
+  const [sourceEmail, setSourceEmail] = useState<{ subject: string; body_plain: string | null; body_html: string | null; sender_email: string; received_at: string } | null>(null);
   const [sourceLoading, setSourceLoading] = useState(false);
   const [extractionMeta, setExtractionMeta] = useState<{ field_confidence: Record<string, number>; excerpts: Record<string, string | null> } | null>(null);
   const [highlightExcerpt, setHighlightExcerpt] = useState<string | null>(null);
