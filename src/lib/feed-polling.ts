@@ -59,8 +59,11 @@ export async function pollFeedSource(source: FeedSourceRow): Promise<PollResult>
   };
 
   try {
+    // Normalize webcal:// to https:// (same protocol, different scheme for calendar apps)
+    const fetchUrl = source.feed_url.replace(/^webcal:\/\//i, 'https://');
+
     // Fetch the feed
-    const response = await fetch(source.feed_url, {
+    const response = await fetch(fetchUrl, {
       signal: AbortSignal.timeout(FEED_FETCH_TIMEOUT_MS),
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; NeighborhoodCommons/1.0)',
