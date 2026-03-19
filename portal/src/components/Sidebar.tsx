@@ -18,6 +18,7 @@ interface NavItem {
   icon: React.ReactNode;
   hash: string;
   screens: string[]; // which route screens this item matches
+  section?: string;  // optional section header shown above this item
 }
 
 const ICON_SIZE = 16;
@@ -78,6 +79,12 @@ const icons = {
       <path d="M2 7c3.9 0 7 3.1 7 7M2 2c6.6 0 12 5.4 12 12" />
     </svg>
   ),
+  inbox: (
+    <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 8l2.5-5h7L14 8" />
+      <path d="M2 8v5a1 1 0 001 1h10a1 1 0 001-1V8H10.5l-1 2h-3l-1-2H2z" />
+    </svg>
+  ),
 };
 
 const BUSINESS_NAV: NavItem[] = [
@@ -89,7 +96,8 @@ const BUSINESS_NAV: NavItem[] = [
 const ADMIN_NAV: NavItem[] = [
   { label: 'Accounts', icon: icons.people, hash: '#/admin', screens: ['admin-home', 'admin-account'] },
   { label: 'All Events', icon: icons.list, hash: '#/admin/events', screens: ['admin-events', 'admin-edit-event', 'admin-create-event'] },
-  { label: 'Newsletters', icon: icons.mail, hash: '#/admin/newsletters', screens: ['admin-newsletters', 'admin-newsletter-emails', 'admin-newsletter-email', 'admin-newsletter-review'] },
+  { label: 'Review Queue', icon: icons.inbox, hash: '#/admin/newsletters/review', screens: ['admin-newsletter-review'], section: 'Sources' },
+  { label: 'Newsletters', icon: icons.mail, hash: '#/admin/newsletters', screens: ['admin-newsletters', 'admin-newsletter-emails', 'admin-newsletter-email'] },
   { label: 'Feed Sources', icon: icons.rss, hash: '#/admin/feeds', screens: ['admin-feeds'] },
 ];
 
@@ -206,24 +214,38 @@ export function Sidebar({ role, activeScreen, businessName, businessAddress, onN
       </div>
 
       {/* Nav items */}
-      {navItems.map((item) => {
+      {navItems.map((item, i) => {
         const active = isActive(item);
+        const showSection = item.section && (i === 0 || navItems[i - 1]?.section !== item.section);
         return (
-          <button
-            key={item.label}
-            type="button"
-            className="sidebar-nav-item"
-            onClick={() => handleNav(item.hash)}
-            style={{
-              ...navItemBase,
-              background: active ? colors.accentDim : 'none',
-              color: active ? colors.accent : colors.muted,
-              fontWeight: active ? 500 : 400,
-            }}
-          >
-            {item.icon}
-            {item.label}
-          </button>
+          <div key={item.label}>
+            {showSection && (
+              <div style={{
+                fontSize: '10px',
+                fontWeight: 600,
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                color: colors.dim,
+                padding: '12px 20px 4px',
+              }}>
+                {item.section}
+              </div>
+            )}
+            <button
+              type="button"
+              className="sidebar-nav-item"
+              onClick={() => handleNav(item.hash)}
+              style={{
+                ...navItemBase,
+                background: active ? colors.accentDim : 'none',
+                color: active ? colors.accent : colors.muted,
+                fontWeight: active ? 500 : 400,
+              }}
+            >
+              {item.icon}
+              {item.label}
+            </button>
+          </div>
         );
       })}
 

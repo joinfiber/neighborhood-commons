@@ -112,9 +112,12 @@ export function AdminFeedSourcesScreen() {
     if (res.error) {
       setPollResult(`Error: ${res.error.message}`);
     } else {
-      const d = res.data;
-      const count = d?.result?.candidateCount ?? 0;
-      setPollResult(`Polled successfully: ${count} new candidate${count !== 1 ? 's' : ''}`);
+      const d = res.data?.result;
+      const count = d?.candidateCount ?? 0;
+      const skipped = d?.skippedDuplicates ?? 0;
+      const parts = [`${count} new candidate${count !== 1 ? 's' : ''}`];
+      if (skipped > 0) parts.push(`${skipped} already imported`);
+      setPollResult(`Polled: ${parts.join(', ')}`);
       load();
     }
     setTimeout(() => setPollResult(null), 5000);
