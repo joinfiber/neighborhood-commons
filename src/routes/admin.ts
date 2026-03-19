@@ -2162,4 +2162,233 @@ router.post('/event-candidates/:id/duplicate', writeLimiter, async (req, res, ne
   }
 });
 
+// =============================================================================
+// BATCH APPROVE AS SERIES
+// =============================================================================
+
+const batchApproveSeriesSchema = z.object({
+  candidate_ids: z.array(z.string().uuid()).min(2).max(100),
+  title: z.string().min(1).max(200),
+  description: z.string().max(2000).optional(),
+  venue_name: z.string().max(200).optional(),
+  address: z.string().max(500).optional(),
+  place_id: z.string().max(300).optional(),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+  category: z.enum(EVENT_CATEGORY_KEYS as [string, ...string[]]).default('community'),
+  start_time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).transform(t => t.slice(0, 5)).optional(),
+  end_time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).transform(t => t.slice(0, 5)).optional(),
+  price: z.string().max(100).optional(),
+  event_timezone: z.string().max(50).default('America/New_York'),
+  recurrence: z.string().max(100).default('weekly'),
+});
+
+/**
+ * Detect a recurrence pattern from a sorted list of date strings.
+ * Returns 'weekly', 'biweekly', 'monthly', or 'none'.
+ */
+function detectRecurrence(dates: string[]): string {
+  if (dates.length < 2) return 'none';
+  const sorted = [...dates].sort();
+  const gaps: number[] = [];
+  for (let i = 1; i < sorted.length; i++) {
+    const a = new Date(sorted[i - 1]!);
+    const b = new Date(sorted[i]!);
+    gaps.push(Math.round((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24)));
+  }
+  const avg = gaps.reduce((s, g) => s + g, 0) / gaps.length;
+  if (avg >= 5 && avg <= 9) return 'weekly';
+  if (avg >= 12 && avg <= 16) return 'biweekly';
+  if (avg >= 25 && avg <= 35) return 'monthly';
+  return 'weekly'; // default fallback
+}
+
+router.post('/event-candidates/batch-approve', writeLimiter, async (req, res, next) => {
+  try {
+    const input = validateRequest(batchApproveSeriesSchema, req.body);
+
+    // Fetch all candidates
+    const { data: candidates, error: fetchErr } = await supabaseAdmin
+      .from('event_candidates')
+      .select('id, title, start_date, start_time, end_time, location_name, location_address, location_lat, location_lng, source_url, status, source_id, feed_source_id, candidate_image_url, newsletter_sources(name), feed_sources(name)')
+      .in('id', input.candidate_ids);
+
+    if (fetchErr || !candidates || candidates.length === 0) {
+      throw createError('No candidates found', 404, 'NOT_FOUND');
+    }
+
+    // Verify all are pending
+    const nonPending = candidates.filter(c => c.status !== 'pending');
+    if (nonPending.length > 0) {
+      throw createError(`${nonPending.length} candidate(s) are not pending`, 409, 'CONFLICT');
+    }
+
+    // Sort by date
+    const sorted = [...candidates].sort((a, b) =>
+      (a.start_date as string || '').localeCompare(b.start_date as string || '')
+    );
+
+    const timezone = input.event_timezone;
+    const firstCandidate = sorted[0]!;
+
+    // Source info from first candidate
+    const sourceJoin = firstCandidate.newsletter_sources as unknown as { name: string } | null;
+    const feedJoin = firstCandidate.feed_sources as unknown as { name: string } | null;
+    const sourceName = sourceJoin?.name || feedJoin?.name;
+
+    // Auto-detect recurrence from dates if not explicitly set
+    const dates = sorted.map(c => c.start_date as string).filter(Boolean);
+    const recurrence = input.recurrence === 'weekly' ? detectRecurrence(dates) : input.recurrence;
+
+    const adminUserId = getAdminUserId();
+
+    // Build the template event data
+    const templateData: Record<string, unknown> = {
+      content: input.title,
+      description: input.description || null,
+      place_id: input.place_id || null,
+      place_name: input.venue_name || null,
+      venue_address: input.address || null,
+      latitude: input.latitude ?? null,
+      longitude: input.longitude ?? null,
+      category: input.category,
+      price: input.price || null,
+      link_url: (firstCandidate.source_url as string | null) || null,
+      source: 'portal',
+      source_method: firstCandidate.feed_source_id ? 'feed' : 'newsletter',
+      source_publisher: sourceName || 'community',
+      status: 'published',
+      visibility: 'public',
+      region_id: config.defaultRegionId || null,
+      start_time_required: !!input.start_time,
+    };
+
+    // Snapshot for base_event_data
+    const baseEventData: Record<string, unknown> = {};
+    const templateKeys = [
+      'content', 'description', 'place_name', 'venue_address', 'place_id',
+      'latitude', 'longitude', 'category', 'price', 'link_url',
+      'start_time_required',
+    ];
+    for (const key of templateKeys) {
+      if (key in templateData) baseEventData[key] = templateData[key];
+    }
+
+    // Create event_series
+    const { data: series, error: seriesErr } = await supabaseAdmin
+      .from('event_series')
+      .insert({
+        creator_account_id: null,
+        user_id: adminUserId,
+        recurrence,
+        recurrence_rule: { frequency: recurrence, count: sorted.length },
+        base_event_data: baseEventData,
+      })
+      .select('id')
+      .single();
+
+    if (seriesErr || !series) {
+      console.error('[COMMONS-ADMIN] Series create failed:', seriesErr?.message);
+      throw createError('Failed to create event series', 500, 'SERVER_ERROR');
+    }
+
+    // Build event rows — one per candidate, preserving each candidate's date
+    const eventRows = sorted.map((c, i) => {
+      const eventDate = c.start_date as string;
+      const startTime = input.start_time || (c.start_time as string) || '12:00';
+      const endTime = input.end_time || (c.end_time as string) || null;
+      const eventAt = toTimestamptz(eventDate, startTime, timezone);
+      let endTimeAt: string | null = null;
+      if (endTime) {
+        endTimeAt = toTimestamptz(eventDate, endTime, timezone);
+        if (new Date(endTimeAt) <= new Date(eventAt)) {
+          const nextDay = new Date(eventDate);
+          nextDay.setDate(nextDay.getDate() + 1);
+          endTimeAt = toTimestamptz(nextDay.toISOString().split('T')[0]!, endTime, timezone);
+        }
+      }
+
+      return {
+        ...templateData,
+        event_at: eventAt,
+        end_time: endTimeAt,
+        event_timezone: timezone,
+        recurrence,
+        series_id: series.id,
+        series_instance_number: i + 1,
+      };
+    });
+
+    const { data: events, error: insertErr } = await supabaseAdmin
+      .from('events')
+      .insert(eventRows)
+      .select('id, event_at')
+      .order('event_at', { ascending: true });
+
+    if (insertErr || !events) {
+      console.error('[COMMONS-ADMIN] Series events insert failed:', insertErr?.message);
+      throw createError('Failed to create series events', 500, 'SERVER_ERROR');
+    }
+
+    // Mark all candidates as approved, linking to their respective events
+    for (let i = 0; i < sorted.length; i++) {
+      await supabaseAdmin
+        .from('event_candidates')
+        .update({
+          status: 'approved',
+          matched_event_id: events[i]?.id || null,
+          reviewed_at: new Date().toISOString(),
+        })
+        .eq('id', sorted[i]!.id);
+    }
+
+    // Fire-and-forget: download image from first candidate that has one
+    const imageCandidate = sorted.find(c => c.candidate_image_url);
+    const firstEventId = events[0]?.id;
+    if (imageCandidate?.candidate_image_url && firstEventId) {
+      void (async () => {
+        try {
+          await downloadAndAttachImage(firstEventId, imageCandidate.candidate_image_url as string);
+        } catch (err) {
+          console.error('[COMMONS-ADMIN] Series image download failed:', err instanceof Error ? err.message : err);
+        }
+      })();
+    }
+
+    // Fire-and-forget: dispatch webhooks for each event
+    void (async () => {
+      for (const event of events) {
+        const { data: row } = await supabaseAdmin
+          .from('events')
+          .select(PORTAL_SELECT)
+          .eq('id', event.id)
+          .maybeSingle();
+        if (row) {
+          void dispatchWebhooks('event.created', event.id, toNeighborhoodEvent(row as unknown as PortalEventRow));
+        }
+      }
+    })().catch(() => {});
+
+    // Fire-and-forget: geocode if needed
+    if (!input.latitude || !input.longitude) {
+      void geocodeEventIfNeeded(firstEventId!, input.address || null, null, null, null);
+    }
+
+    const adminId = getAdminUserId();
+    auditPortalAction('newsletter_candidates_batch_approved', adminId, series.id, {
+      candidate_count: sorted.length,
+      event_count: events.length,
+    });
+    console.log(`[COMMONS-ADMIN] Batch approved ${sorted.length} candidates → series ${series.id} with ${events.length} events`);
+
+    res.status(201).json({
+      series_id: series.id,
+      event_count: events.length,
+      events: events.map(e => ({ id: e.id, event_at: e.event_at })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

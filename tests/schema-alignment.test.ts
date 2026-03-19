@@ -127,7 +127,7 @@ const JS_NOISE_WORDS = new Set([
   'error', 'success', 'failed', 'data', 'result', 'value',
   'token', 'body', 'headers', 'signal',
   'then', 'catch', 'finally', 'async', 'await',
-  'message', 'registered',
+  'message', 'registered', 'frequency',
 ]);
 
 interface ColumnRef {

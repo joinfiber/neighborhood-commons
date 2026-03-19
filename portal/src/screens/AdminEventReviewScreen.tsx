@@ -7,6 +7,7 @@ import {
   adminApproveCandidate,
   adminRejectCandidate,
   adminMarkCandidateDuplicate,
+  adminBatchApproveSeries,
 } from '../lib/api';
 import type { EventCandidate, PlaceResult } from '../lib/types';
 import { PlaceAutocomplete } from '../components/PlaceAutocomplete';
@@ -22,6 +23,12 @@ const statusColors: Record<string, { bg: string; fg: string }> = {
   approved: { bg: '#e8f5e9', fg: '#2e7d32' },
   rejected: { bg: '#ffebee', fg: '#c62828' },
   duplicate: { bg: '#f3e5f5', fg: '#6a1b9a' },
+};
+
+const inputStyle: React.CSSProperties = {
+  width: '100%', padding: '6px 10px', borderRadius: 6,
+  border: `1px solid ${colors.border}`, fontSize: 13,
+  fontFamily: 'inherit', boxSizing: 'border-box',
 };
 
 function confidenceLabel(c: number | null): string {
@@ -91,7 +98,11 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
-  // Edit state for approve-with-edits
+  // Multi-select for series approve
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showSeriesForm, setShowSeriesForm] = useState(false);
+
+  // Edit state for approve-with-edits (single + series shared fields)
   const [editTitle, setEditTitle] = useState('');
   const [editDate, setEditDate] = useState('');
   const [editStartTime, setEditStartTime] = useState('');
@@ -117,15 +128,74 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, [activeTab]);
+  useEffect(() => {
+    load();
+    setSelectedIds(new Set());
+    setShowSeriesForm(false);
+  }, [activeTab]);
 
   function handleExcerptClick(excerpt: string) {
     setHighlightExcerpt(excerpt);
-    // Scroll to the highlight after render
     setTimeout(() => {
       const el = document.getElementById('excerpt-highlight');
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 50);
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function openSeriesForm() {
+    // Pre-fill from the first selected candidate
+    const first = candidates.find(c => selectedIds.has(c.id));
+    if (first) {
+      setEditTitle(first.title);
+      setEditStartTime(first.start_time || '');
+      setEditEndTime(first.end_time || '');
+      setEditVenue(first.location_name || '');
+      setEditAddress(first.location_address || '');
+      setEditDescription(first.description || '');
+      setEditCategory('community');
+      setEditPrice('');
+      setEditPlaceId(undefined);
+      setEditLat(first.location_lat ?? undefined);
+      setEditLng(first.location_lng ?? undefined);
+    }
+    setShowSeriesForm(true);
+    setExpandedId(null);
+  }
+
+  async function handleBatchApprove() {
+    setActionLoading(true);
+    const res = await adminBatchApproveSeries({
+      candidate_ids: [...selectedIds],
+      title: editTitle,
+      description: editDescription || undefined,
+      venue_name: editVenue || undefined,
+      address: editAddress || undefined,
+      place_id: editPlaceId,
+      latitude: editLat,
+      longitude: editLng,
+      category: editCategory,
+      start_time: editStartTime || undefined,
+      end_time: editEndTime || undefined,
+      price: editPrice || undefined,
+    });
+    setActionLoading(false);
+    if (res.error) {
+      setToast(`Error: ${res.error.message}`);
+    } else {
+      setToast(`Series created: ${res.data?.event_count} events published`);
+      setSelectedIds(new Set());
+      setShowSeriesForm(false);
+      load();
+    }
   }
 
   function expand(candidate: EventCandidate) {
@@ -135,6 +205,7 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
       return;
     }
     setExpandedId(candidate.id);
+    setShowSeriesForm(false);
     setEditTitle(candidate.title);
     setEditDate(candidate.start_date || '');
     setEditStartTime(candidate.start_time || '');
@@ -223,6 +294,12 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
     }
   }, [toast]);
 
+  const selectedCandidates = candidates.filter(c => selectedIds.has(c.id));
+  const selectedDates = selectedCandidates
+    .map(c => c.start_date)
+    .filter(Boolean)
+    .sort() as string[];
+
   return (
     <div>
       {toast && (
@@ -266,6 +343,151 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
         })}
       </div>
 
+      {/* Multi-select toolbar */}
+      {activeTab === 'pending' && selectedIds.size >= 2 && !showSeriesForm && (
+        <div style={{
+          padding: '12px 16px', borderRadius: 10, background: '#e3f2fd',
+          border: '1px solid #90caf9', marginBottom: 16,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <span style={{ fontSize: 14, fontWeight: 500, color: '#1565c0' }}>
+            {selectedIds.size} candidates selected
+          </span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={openSeriesForm} style={{
+              padding: '6px 16px', borderRadius: 8, border: 'none',
+              background: '#1565c0', color: 'white', cursor: 'pointer',
+              fontFamily: 'inherit', fontSize: 13, fontWeight: 600,
+            }}>
+              Approve as Series
+            </button>
+            <button onClick={() => setSelectedIds(new Set())} style={{
+              padding: '6px 16px', borderRadius: 8, border: '1px solid #90caf9',
+              background: 'white', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13,
+            }}>
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Series approve form */}
+      {showSeriesForm && (
+        <div style={{
+          padding: 20, borderRadius: 12, border: '2px solid #1565c0',
+          background: 'white', marginBottom: 20,
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>
+              Approve {selectedIds.size} candidates as a recurring series
+            </h3>
+            <button onClick={() => setShowSeriesForm(false)} style={{
+              padding: '4px 12px', borderRadius: 6, border: `1px solid ${colors.border}`,
+              background: 'white', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12,
+            }}>
+              Cancel
+            </button>
+          </div>
+
+          {/* Dates preview */}
+          <div style={{
+            padding: '10px 14px', borderRadius: 8, background: '#f5f5f5',
+            marginBottom: 16, fontSize: 13,
+          }}>
+            <div style={{ fontWeight: 500, marginBottom: 6 }}>Dates ({selectedDates.length}):</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {selectedDates.map(d => (
+                <span key={d} style={{
+                  padding: '2px 10px', borderRadius: 12, background: '#e3f2fd',
+                  color: '#1565c0', fontSize: 12, fontWeight: 500,
+                }}>
+                  {new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Shared fields */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, marginBottom: 3, fontWeight: 500 }}>Series Title</label>
+              <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} style={inputStyle} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, marginBottom: 3, fontWeight: 500 }}>Category</label>
+              <select value={editCategory} onChange={(e) => setEditCategory(e.target.value)} style={inputStyle}>
+                {PORTAL_CATEGORY_KEYS.map((key) => (
+                  <option key={key} value={key}>{PORTAL_CATEGORIES[key].label}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', fontSize: 12, marginBottom: 3, fontWeight: 500 }}>Start Time</label>
+                <input type="time" value={editStartTime} onChange={(e) => setEditStartTime(e.target.value)} style={inputStyle} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', fontSize: 12, marginBottom: 3, fontWeight: 500 }}>End Time</label>
+                <input type="time" value={editEndTime} onChange={(e) => setEditEndTime(e.target.value)} style={inputStyle} />
+              </div>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, marginBottom: 3, fontWeight: 500 }}>Price</label>
+              <input value={editPrice} onChange={(e) => setEditPrice(e.target.value)} placeholder="Free, $10, etc." style={inputStyle} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, marginBottom: 3, fontWeight: 500 }}>Venue</label>
+              <PlaceAutocomplete
+                value={editVenue}
+                onChange={(val) => { setEditVenue(val); if (editPlaceId) { setEditPlaceId(undefined); } }}
+                onSelect={(place: PlaceResult) => {
+                  setEditVenue(place.name);
+                  setEditAddress(place.address || '');
+                  setEditPlaceId(place.place_id);
+                  setEditLat(place.location?.latitude);
+                  setEditLng(place.location?.longitude);
+                }}
+                placeholder="Search venue..."
+                inputStyle={inputStyle}
+              />
+              {editPlaceId && (
+                <div style={{ fontSize: 11, color: '#2e7d32', marginTop: 2 }}>Matched to Google Place</div>
+              )}
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, marginBottom: 3, fontWeight: 500 }}>Address</label>
+              <input value={editAddress} onChange={(e) => setEditAddress(e.target.value)} style={inputStyle} />
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={{ display: 'block', fontSize: 12, marginBottom: 3, fontWeight: 500 }}>Description</label>
+              <textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={2}
+                style={{ ...inputStyle, resize: 'vertical' as const }} />
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+            <button
+              onClick={handleBatchApprove}
+              disabled={actionLoading || !editTitle}
+              style={{
+                padding: '8px 24px', borderRadius: 8, border: 'none',
+                background: '#1565c0', color: 'white', cursor: 'pointer',
+                fontFamily: 'inherit', fontSize: 13, fontWeight: 600,
+                opacity: actionLoading || !editTitle ? 0.5 : 1,
+              }}
+            >
+              {actionLoading ? 'Creating series...' : `Approve ${selectedIds.size} as Series`}
+            </button>
+            <button onClick={() => setShowSeriesForm(false)} style={{
+              padding: '8px 20px', borderRadius: 8, border: `1px solid ${colors.border}`,
+              background: 'white', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13,
+            }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <p style={{ color: colors.muted, fontSize: 14 }}>Loading candidates...</p>
       ) : candidates.length === 0 ? (
@@ -276,60 +498,90 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {candidates.map((c) => {
             const isExpanded = expandedId === c.id;
+            const isSelected = selectedIds.has(c.id);
             return (
               <div key={c.id} style={{
-                borderRadius: 12, border: `1px solid ${isExpanded ? colors.accent : colors.border}`,
-                background: 'white', overflow: 'hidden',
+                borderRadius: 12,
+                border: `1px solid ${isSelected ? '#1565c0' : isExpanded ? colors.accent : colors.border}`,
+                background: isSelected ? '#f5f9ff' : 'white',
+                overflow: 'hidden',
               }}>
                 {/* Card header */}
-                <button
-                  onClick={() => expand(c)}
-                  style={{
-                    width: '100%', padding: '14px 18px', textAlign: 'left', fontFamily: 'inherit',
-                    background: 'none', border: 'none', cursor: 'pointer',
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
-                      {c.candidate_image_url && (
-                        <img
-                          src={c.candidate_image_url}
-                          alt=""
-                          style={{
-                            width: 56, height: 56, borderRadius: 8, objectFit: 'cover',
-                            flexShrink: 0, background: colors.bg,
-                          }}
-                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                        />
-                      )}
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>{c.title}</div>
-                        <div style={{ fontSize: 13, color: colors.muted }}>
-                          {c.start_date || 'No date'}
-                          {c.start_time && ` at ${c.start_time}`}
-                          {c.end_time && `–${c.end_time}`}
-                          {c.location_name && ` · ${c.location_name}`}
-                        </div>
-                        <div style={{ fontSize: 12, color: colors.muted, marginTop: 4 }}>
-                          {(c.newsletter_sources?.name || c.feed_sources?.name) && `Source: ${c.newsletter_sources?.name || c.feed_sources?.name}`}
-                          {c.newsletter_emails?.subject && ` · "${c.newsletter_emails.subject}"`}
-                        </div>
+                <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+                  {/* Checkbox for multi-select (pending tab only) */}
+                  {activeTab === 'pending' && (
+                    <div
+                      onClick={(e) => { e.stopPropagation(); toggleSelect(c.id); }}
+                      style={{
+                        padding: '16px 0 16px 14px', cursor: 'pointer',
+                        display: 'flex', alignItems: 'flex-start', flexShrink: 0,
+                      }}
+                    >
+                      <div style={{
+                        width: 18, height: 18, borderRadius: 4,
+                        border: `2px solid ${isSelected ? '#1565c0' : colors.border}`,
+                        background: isSelected ? '#1565c0' : 'white',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        transition: 'all 0.15s',
+                      }}>
+                        {isSelected && (
+                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                            <path d="M2.5 6L5 8.5L9.5 3.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        )}
                       </div>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                      {c.confidence != null && (
-                        <span style={{ fontSize: 12, fontWeight: 600, color: confidenceColor(c.confidence) }}>
-                          {confidenceLabel(c.confidence)} ({Math.round(c.confidence * 100)}%)
-                        </span>
-                      )}
-                      {c.matched_event_id && (
-                        <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, background: '#f3e5f5', color: '#6a1b9a', fontWeight: 500 }}>
-                          Possible duplicate
-                        </span>
-                      )}
+                  )}
+                  <button
+                    onClick={() => expand(c)}
+                    style={{
+                      flex: 1, padding: '14px 18px', textAlign: 'left', fontFamily: 'inherit',
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      paddingLeft: activeTab === 'pending' ? '8px' : '18px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
+                        {c.candidate_image_url && (
+                          <img
+                            src={c.candidate_image_url}
+                            alt=""
+                            style={{
+                              width: 56, height: 56, borderRadius: 8, objectFit: 'cover',
+                              flexShrink: 0, background: colors.bg,
+                            }}
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                          />
+                        )}
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>{c.title}</div>
+                          <div style={{ fontSize: 13, color: colors.muted }}>
+                            {c.start_date || 'No date'}
+                            {c.start_time && ` at ${c.start_time}`}
+                            {c.end_time && `–${c.end_time}`}
+                            {c.location_name && ` · ${c.location_name}`}
+                          </div>
+                          <div style={{ fontSize: 12, color: colors.muted, marginTop: 4 }}>
+                            {(c.newsletter_sources?.name || c.feed_sources?.name) && `Source: ${c.newsletter_sources?.name || c.feed_sources?.name}`}
+                            {c.newsletter_emails?.subject && ` · "${c.newsletter_emails.subject}"`}
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                        {c.confidence != null && (
+                          <span style={{ fontSize: 12, fontWeight: 600, color: confidenceColor(c.confidence) }}>
+                            {confidenceLabel(c.confidence)} ({Math.round(c.confidence * 100)}%)
+                          </span>
+                        )}
+                        {c.matched_event_id && (
+                          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, background: '#f3e5f5', color: '#6a1b9a', fontWeight: 500 }}>
+                            Possible duplicate
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </button>
+                  </button>
+                </div>
 
                 {/* Expanded edit/action panel */}
                 {isExpanded && (
@@ -406,13 +658,11 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12 }}>
                           <div>
                             <label style={{ display: 'block', fontSize: 12, marginBottom: 3, fontWeight: 500 }}>Title <FieldConfBadge field="title" meta={extractionMeta} onClickExcerpt={handleExcerptClick} /></label>
-                            <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)}
-                              style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: `1px solid ${colors.border}`, fontSize: 13, fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                            <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} style={inputStyle} />
                           </div>
                           <div>
                             <label style={{ display: 'block', fontSize: 12, marginBottom: 3, fontWeight: 500 }}>Category</label>
-                            <select value={editCategory} onChange={(e) => setEditCategory(e.target.value)}
-                              style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: `1px solid ${colors.border}`, fontSize: 13, fontFamily: 'inherit', boxSizing: 'border-box' }}>
+                            <select value={editCategory} onChange={(e) => setEditCategory(e.target.value)} style={inputStyle}>
                               {PORTAL_CATEGORY_KEYS.map((key) => (
                                 <option key={key} value={key}>{PORTAL_CATEGORIES[key].label}</option>
                               ))}
@@ -420,19 +670,16 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
                           </div>
                           <div>
                             <label style={{ display: 'block', fontSize: 12, marginBottom: 3, fontWeight: 500 }}>Date <FieldConfBadge field="date" meta={extractionMeta} onClickExcerpt={handleExcerptClick} /></label>
-                            <input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)}
-                              style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: `1px solid ${colors.border}`, fontSize: 13, fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                            <input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} style={inputStyle} />
                           </div>
                           <div style={{ display: 'flex', gap: 8 }}>
                             <div style={{ flex: 1 }}>
                               <label style={{ display: 'block', fontSize: 12, marginBottom: 3, fontWeight: 500 }}>Start <FieldConfBadge field="start_time" meta={extractionMeta} onClickExcerpt={handleExcerptClick} /></label>
-                              <input type="time" value={editStartTime} onChange={(e) => setEditStartTime(e.target.value)}
-                                style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: `1px solid ${colors.border}`, fontSize: 13, fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                              <input type="time" value={editStartTime} onChange={(e) => setEditStartTime(e.target.value)} style={inputStyle} />
                             </div>
                             <div style={{ flex: 1 }}>
                               <label style={{ display: 'block', fontSize: 12, marginBottom: 3, fontWeight: 500 }}>End <FieldConfBadge field="end_time" meta={extractionMeta} onClickExcerpt={handleExcerptClick} /></label>
-                              <input type="time" value={editEndTime} onChange={(e) => setEditEndTime(e.target.value)}
-                                style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: `1px solid ${colors.border}`, fontSize: 13, fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                              <input type="time" value={editEndTime} onChange={(e) => setEditEndTime(e.target.value)} style={inputStyle} />
                             </div>
                           </div>
                           <div>
@@ -448,7 +695,7 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
                                 setEditLng(place.location?.longitude);
                               }}
                               placeholder="Search venue..."
-                              inputStyle={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: `1px solid ${colors.border}`, fontSize: 13, fontFamily: 'inherit', boxSizing: 'border-box' as const }}
+                              inputStyle={inputStyle}
                             />
                             {editPlaceId && (
                               <div style={{ fontSize: 11, color: '#2e7d32', marginTop: 2 }}>
@@ -458,18 +705,16 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
                           </div>
                           <div>
                             <label style={{ display: 'block', fontSize: 12, marginBottom: 3, fontWeight: 500 }}>Address</label>
-                            <input value={editAddress} onChange={(e) => setEditAddress(e.target.value)}
-                              style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: `1px solid ${colors.border}`, fontSize: 13, fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                            <input value={editAddress} onChange={(e) => setEditAddress(e.target.value)} style={inputStyle} />
                           </div>
                           <div>
                             <label style={{ display: 'block', fontSize: 12, marginBottom: 3, fontWeight: 500 }}>Price</label>
-                            <input value={editPrice} onChange={(e) => setEditPrice(e.target.value)} placeholder="Free, $10, etc."
-                              style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: `1px solid ${colors.border}`, fontSize: 13, fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                            <input value={editPrice} onChange={(e) => setEditPrice(e.target.value)} placeholder="Free, $10, etc." style={inputStyle} />
                           </div>
                           <div>
                             <label style={{ display: 'block', fontSize: 12, marginBottom: 3, fontWeight: 500 }}>Description <FieldConfBadge field="description" meta={extractionMeta} onClickExcerpt={handleExcerptClick} /></label>
                             <textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={2}
-                              style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: `1px solid ${colors.border}`, fontSize: 13, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
+                              style={{ ...inputStyle, resize: 'vertical' as const }} />
                           </div>
                         </div>
 

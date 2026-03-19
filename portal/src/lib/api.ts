@@ -482,6 +482,13 @@ export async function adminMarkCandidateDuplicate(id: string, matchedEventId?: s
   });
 }
 
+export async function adminBatchApproveSeries(params: Record<string, unknown>) {
+  return apiRequest<{ series_id: string; event_count: number; events: Array<{ id: string; event_at: string }> }>('/api/admin/event-candidates/batch-approve', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+}
+
 // =============================================================================
 // PLACES
 // =============================================================================
