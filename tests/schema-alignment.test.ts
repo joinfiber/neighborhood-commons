@@ -87,6 +87,13 @@ const SCHEMA: Record<string, string[]> = {
     'location_address', 'location_lat', 'location_lng', 'source_url',
     'confidence', 'status', 'matched_event_id', 'match_confidence',
     'review_notes', 'created_at', 'reviewed_at', 'extraction_metadata', 'candidate_image_url',
+    'feed_source_id',
+  ],
+  feed_sources: [
+    'id', 'name', 'feed_url', 'feed_type', 'poll_interval_hours',
+    'status', 'default_location', 'default_timezone', 'notes',
+    'created_at', 'last_polled_at', 'last_poll_result', 'last_poll_error',
+    'last_event_count',
   ],
 };
 

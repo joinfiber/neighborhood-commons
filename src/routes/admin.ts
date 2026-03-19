@@ -27,6 +27,7 @@ import { generateAndStoreKey } from '../lib/api-keys.js';
 import { toNeighborhoodEvent, type PortalEventRow } from '../lib/event-transform.js';
 import { sanitizeUrl, checkApprovedDomain } from '../lib/url-sanitizer.js';
 import { geocodeEventIfNeeded, geocodeSeriesEvents } from '../lib/geocoding.js';
+import { pollFeedSource } from '../lib/feed-polling.js';
 import {
   toPortalEvent,
   portalInputToInsert,
@@ -1759,6 +1760,135 @@ router.get('/newsletter-emails/:id', portalLimiter, async (req, res, next) => {
   }
 });
 
+// ─── Feed Sources ───────────────────────────────────────────────
+
+const FEED_TYPES = ['ical', 'rss', 'eventbrite', 'agile_ticketing'] as const;
+
+const createFeedSourceSchema = z.object({
+  name: z.string().min(1).max(200),
+  feed_url: z.string().url(),
+  feed_type: z.enum(FEED_TYPES).optional().default('ical'),
+  poll_interval_hours: z.number().int().min(1).max(168).optional().default(24),
+  default_location: z.string().max(500).optional(),
+  default_timezone: z.string().max(100).optional().default('America/New_York'),
+  notes: z.string().max(2000).optional(),
+});
+
+const updateFeedSourceSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  feed_url: z.string().url().optional(),
+  feed_type: z.enum(FEED_TYPES).optional(),
+  poll_interval_hours: z.number().int().min(1).max(168).optional(),
+  default_location: z.string().max(500).nullable().optional(),
+  default_timezone: z.string().max(100).optional(),
+  notes: z.string().max(2000).nullable().optional(),
+  status: z.enum(['active', 'paused', 'retired']).optional(),
+});
+
+router.get('/feed-sources', portalLimiter, async (_req, res, next) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('feed_sources')
+      .select('id, name, feed_url, feed_type, poll_interval_hours, status, default_location, default_timezone, notes, created_at, last_polled_at, last_poll_result, last_poll_error, last_event_count')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('[COMMONS-ADMIN] Feed sources list error:', error.message);
+      throw createError('Failed to list feed sources', 500, 'SERVER_ERROR');
+    }
+
+    res.json({ sources: data || [] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/feed-sources', writeLimiter, async (req, res, next) => {
+  try {
+    const input = validateRequest(createFeedSourceSchema, req.body);
+
+    const { data: source, error } = await supabaseAdmin
+      .from('feed_sources')
+      .insert({
+        name: input.name,
+        feed_url: input.feed_url,
+        feed_type: input.feed_type,
+        poll_interval_hours: input.poll_interval_hours,
+        default_location: input.default_location || null,
+        default_timezone: input.default_timezone,
+        notes: input.notes || null,
+      })
+      .select('id, name, feed_url, feed_type, status')
+      .single();
+
+    if (error) {
+      console.error('[COMMONS-ADMIN] Create feed source error:', error.message);
+      throw createError('Failed to create feed source', 500, 'SERVER_ERROR');
+    }
+
+    const adminId = getAdminUserId();
+    auditPortalAction('feed_source_created', adminId, source.id as string);
+    console.log(`[COMMONS-ADMIN] Created feed source "${input.name}"`);
+
+    res.status(201).json({ source });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch('/feed-sources/:id', writeLimiter, async (req, res, next) => {
+  try {
+    validateUuidParam(req.params.id, 'id');
+    const input = validateRequest(updateFeedSourceSchema, req.body);
+
+    const { data: source, error } = await supabaseAdmin
+      .from('feed_sources')
+      .update(input)
+      .eq('id', req.params.id)
+      .select('id, name, feed_url, feed_type, poll_interval_hours, status, default_location, default_timezone, notes')
+      .single();
+
+    if (error) {
+      console.error('[COMMONS-ADMIN] Update feed source error:', error.message);
+      throw createError('Failed to update feed source', 500, 'SERVER_ERROR');
+    }
+
+    const adminId = getAdminUserId();
+    auditPortalAction('feed_source_updated', adminId, req.params.id);
+    res.json({ source });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/feed-sources/:id/poll', writeLimiter, async (req, res, next) => {
+  try {
+    validateUuidParam(req.params.id, 'id');
+
+    const { data: source, error: fetchErr } = await supabaseAdmin
+      .from('feed_sources')
+      .select('id, name, feed_url, feed_type, poll_interval_hours, status, default_location, default_timezone, last_polled_at')
+      .eq('id', req.params.id)
+      .single();
+
+    if (fetchErr || !source) {
+      throw createError('Feed source not found', 404, 'NOT_FOUND');
+    }
+
+    const result = await pollFeedSource(source as unknown as Parameters<typeof pollFeedSource>[0]);
+
+    const adminId = getAdminUserId();
+    auditPortalAction('feed_source_polled', adminId, req.params.id, {
+      candidates: result.candidateCount,
+      skipped: result.skippedDuplicates,
+    });
+
+    res.json({ result });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ─── Event Candidates ───────────────────────────────────────────
 
 router.get('/event-candidates', portalLimiter, async (req, res, next) => {
@@ -1768,7 +1898,7 @@ router.get('/event-candidates', portalLimiter, async (req, res, next) => {
 
     let query = supabaseAdmin
       .from('event_candidates')
-      .select('id, email_id, source_id, title, description, start_date, start_time, end_time, location_name, location_address, location_lat, location_lng, source_url, confidence, status, matched_event_id, match_confidence, review_notes, created_at, reviewed_at, candidate_image_url, newsletter_emails(subject), newsletter_sources(name)')
+      .select('id, email_id, source_id, feed_source_id, title, description, start_date, start_time, end_time, location_name, location_address, location_lat, location_lng, source_url, confidence, status, matched_event_id, match_confidence, review_notes, created_at, reviewed_at, candidate_image_url, newsletter_emails(subject), newsletter_sources(name), feed_sources(name)')
       .order('created_at', { ascending: false })
       .limit(limit);
 
@@ -1796,7 +1926,7 @@ router.get('/event-candidates/:id', portalLimiter, async (req, res, next) => {
 
     const { data: candidate, error } = await supabaseAdmin
       .from('event_candidates')
-      .select('id, email_id, source_id, title, description, start_date, start_time, end_time, location_name, location_address, location_lat, location_lng, source_url, confidence, status, matched_event_id, match_confidence, review_notes, created_at, reviewed_at, candidate_image_url, extraction_metadata, newsletter_emails(subject, body_plain, body_html, sender_email, received_at), newsletter_sources(name)')
+      .select('id, email_id, source_id, feed_source_id, title, description, start_date, start_time, end_time, location_name, location_address, location_lat, location_lng, source_url, confidence, status, matched_event_id, match_confidence, review_notes, created_at, reviewed_at, candidate_image_url, extraction_metadata, newsletter_emails(subject, body_plain, body_html, sender_email, received_at), newsletter_sources(name), feed_sources(name)')
       .eq('id', req.params.id)
       .maybeSingle();
 
@@ -1825,7 +1955,7 @@ router.post('/event-candidates/:id/approve', writeLimiter, async (req, res, next
     // Fetch the candidate
     const { data: candidate, error: fetchErr } = await supabaseAdmin
       .from('event_candidates')
-      .select('id, title, description, start_date, start_time, end_time, location_name, location_address, location_lat, location_lng, source_url, confidence, status, source_id, candidate_image_url, newsletter_sources(name)')
+      .select('id, title, description, start_date, start_time, end_time, location_name, location_address, location_lat, location_lng, source_url, confidence, status, source_id, feed_source_id, candidate_image_url, newsletter_sources(name), feed_sources(name)')
       .eq('id', req.params.id)
       .single();
 
@@ -1860,7 +1990,8 @@ router.post('/event-candidates/:id/approve', writeLimiter, async (req, res, next
 
     // Source publisher from newsletter source name
     const sourceJoin = candidate.newsletter_sources as unknown as { name: string } | null;
-    const sourceName = sourceJoin?.name;
+    const feedJoin = candidate.feed_sources as unknown as { name: string } | null;
+    const sourceName = sourceJoin?.name || feedJoin?.name;
 
     // Insert the real event
     const { data: event, error: insertErr } = await supabaseAdmin

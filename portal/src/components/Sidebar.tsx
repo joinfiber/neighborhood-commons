@@ -72,6 +72,12 @@ const icons = {
       <path d="M1.5 5l6.5 4 6.5-4" />
     </svg>
   ),
+  rss: (
+    <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 12a1.5 1.5 0 1 0 3 0 1.5 1.5 0 0 0-3 0" />
+      <path d="M2 7c3.9 0 7 3.1 7 7M2 2c6.6 0 12 5.4 12 12" />
+    </svg>
+  ),
 };
 
 const BUSINESS_NAV: NavItem[] = [
@@ -84,6 +90,7 @@ const ADMIN_NAV: NavItem[] = [
   { label: 'Accounts', icon: icons.people, hash: '#/admin', screens: ['admin-home', 'admin-account'] },
   { label: 'All Events', icon: icons.list, hash: '#/admin/events', screens: ['admin-events', 'admin-edit-event', 'admin-create-event'] },
   { label: 'Newsletters', icon: icons.mail, hash: '#/admin/newsletters', screens: ['admin-newsletters', 'admin-newsletter-emails', 'admin-newsletter-email', 'admin-newsletter-review'] },
+  { label: 'Feed Sources', icon: icons.rss, hash: '#/admin/feeds', screens: ['admin-feeds'] },
 ];
 
 const navItemBase: React.CSSProperties = {

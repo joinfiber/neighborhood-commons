@@ -163,10 +163,28 @@ export interface NewsletterEmail {
   newsletter_sources?: { name: string } | null;
 }
 
+export interface FeedSource {
+  id: string;
+  name: string;
+  feed_url: string;
+  feed_type: string;
+  poll_interval_hours: number;
+  status: string;
+  default_location: string | null;
+  default_timezone: string;
+  notes: string | null;
+  created_at: string;
+  last_polled_at: string | null;
+  last_poll_result: string | null;
+  last_poll_error: string | null;
+  last_event_count: number | null;
+}
+
 export interface EventCandidate {
   id: string;
-  email_id: string;
+  email_id: string | null;
   source_id: string | null;
+  feed_source_id?: string | null;
   title: string;
   description: string | null;
   start_date: string | null;
@@ -191,6 +209,7 @@ export interface EventCandidate {
   } | null;
   newsletter_emails?: { subject: string } | null;
   newsletter_sources?: { name: string } | null;
+  feed_sources?: { name: string } | null;
 }
 
 /** Data shape for the unified event form */

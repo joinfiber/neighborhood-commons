@@ -9,6 +9,7 @@ import { Router } from 'express';
 import { requireCronSecret } from '../middleware/cron-auth.js';
 import { retryFailedWebhooks } from '../lib/webhook-delivery.js';
 import { geocodeBackfill } from '../lib/geocoding.js';
+import { pollAllActiveSources } from '../lib/feed-polling.js';
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -39,6 +40,21 @@ router.post('/geocode-backfill', async (_req, res, next) => {
     const result = await geocodeBackfill();
 
     console.log(`[CRON] geocode-backfill completed: ${result.geocoded}/${result.processed} geocoded, ${result.failed} failed`);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /poll-feeds — Poll active feed sources for new events
+// ---------------------------------------------------------------------------
+
+router.post('/poll-feeds', async (_req, res, next) => {
+  try {
+    const result = await pollAllActiveSources();
+
+    console.log(`[CRON] poll-feeds completed: ${result.polled} sources polled, ${result.totalCandidates} new candidates`);
     res.json({ success: true, ...result });
   } catch (err) {
     next(err);

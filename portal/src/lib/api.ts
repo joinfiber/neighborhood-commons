@@ -3,7 +3,7 @@ import type {
   PortalAccount, PortalEvent, CreateEventParams, PlaceResult,
   CheckEmailResult, WhoamiResponse, PortalStats, AdminPortalEvent,
   SeedAccountParams, ActivityLogEntry,
-  NewsletterSource, NewsletterEmail, EventCandidate,
+  NewsletterSource, NewsletterEmail, EventCandidate, FeedSource,
 } from './types';
 
 // Re-export all types for backward compatibility
@@ -11,7 +11,7 @@ export type {
   PortalAccount, PortalEvent, CreateEventParams, PlaceResult,
   UserRole, CheckEmailResult, WhoamiResponse, PortalStats,
   AdminPortalEvent, SeedAccountParams, ActivityLogEntry, EventFormData,
-  NewsletterSource, NewsletterEmail, EventCandidate,
+  NewsletterSource, NewsletterEmail, EventCandidate, FeedSource,
 } from './types';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -408,6 +408,31 @@ export async function adminUpdateNewsletterSource(id: string, params: Partial<Ne
   return apiRequest<{ source: NewsletterSource }>(`/api/admin/newsletter-sources/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(params),
+  });
+}
+
+// Feed Sources
+export async function adminFetchFeedSources() {
+  return apiRequest<{ sources: FeedSource[] }>('/api/admin/feed-sources');
+}
+
+export async function adminCreateFeedSource(params: { name: string; feed_url: string; feed_type?: string; poll_interval_hours?: number; default_location?: string; default_timezone?: string; notes?: string }) {
+  return apiRequest<{ source: FeedSource }>('/api/admin/feed-sources', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+}
+
+export async function adminUpdateFeedSource(id: string, params: Partial<FeedSource>) {
+  return apiRequest<{ source: FeedSource }>(`/api/admin/feed-sources/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(params),
+  });
+}
+
+export async function adminPollFeedSource(id: string) {
+  return apiRequest<{ result: { sourceId: string; sourceName: string; candidateCount: number; skippedDuplicates: number; error: string | null } }>(`/api/admin/feed-sources/${id}/poll`, {
+    method: 'POST',
   });
 }
 

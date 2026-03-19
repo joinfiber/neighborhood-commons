@@ -301,7 +301,7 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
                           {c.location_name && ` · ${c.location_name}`}
                         </div>
                         <div style={{ fontSize: 12, color: colors.muted, marginTop: 4 }}>
-                          {c.newsletter_sources?.name && `Source: ${c.newsletter_sources.name}`}
+                          {(c.newsletter_sources?.name || c.feed_sources?.name) && `Source: ${c.newsletter_sources?.name || c.feed_sources?.name}`}
                           {c.newsletter_emails?.subject && ` · "${c.newsletter_emails.subject}"`}
                         </div>
                       </div>

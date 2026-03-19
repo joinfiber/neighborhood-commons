@@ -16,6 +16,7 @@ import { AdminAllEventsScreen } from './screens/AdminAllEventsScreen';
 import { AdminNewsletterSourcesScreen } from './screens/AdminNewsletterSourcesScreen';
 import { AdminNewsletterEmailsScreen } from './screens/AdminNewsletterEmailsScreen';
 import { AdminEventReviewScreen } from './screens/AdminEventReviewScreen';
+import { AdminFeedSourcesScreen } from './screens/AdminFeedSourcesScreen';
 import { DevelopersScreen } from './screens/DevelopersScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { TermsScreen } from './screens/TermsScreen';
@@ -28,7 +29,7 @@ import type { PlaceResult } from './lib/api';
 
 function contentWidthForRoute(screen: string): 'normal' | 'wide' | 'full' {
   if (screen === 'share-event') return 'full';
-  const wide = ['dashboard', 'creative', 'developers', 'admin-home', 'admin-events', 'admin-account', 'admin-create-event', 'admin-newsletters', 'admin-newsletter-emails', 'admin-newsletter-email', 'admin-newsletter-review'];
+  const wide = ['dashboard', 'creative', 'developers', 'admin-home', 'admin-events', 'admin-account', 'admin-create-event', 'admin-newsletters', 'admin-newsletter-emails', 'admin-newsletter-email', 'admin-newsletter-review', 'admin-feeds'];
   return wide.includes(screen) ? 'wide' : 'normal';
 }
 
@@ -393,6 +394,10 @@ export default function App() {
 
       if (route.screen === 'admin-newsletter-review') {
         return <AdminEventReviewScreen onNavigate={navigate} />;
+      }
+
+      if (route.screen === 'admin-feeds') {
+        return <AdminFeedSourcesScreen />;
       }
 
       // Default: admin dashboard
