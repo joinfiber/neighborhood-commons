@@ -167,6 +167,59 @@ const imageBodyLimit = expressJson({ limit: '12mb' });
  * Validate magic bytes, re-encode through sharp (strips metadata, kills polyglots),
  * upload to R2, and return the public serving URL.
  */
+/**
+ * Download an image from a URL, re-encode through Sharp, upload to R2,
+ * and set event_image_url. Used when approving newsletter candidates.
+ */
+async function downloadAndAttachImage(eventId: string, imageUrl: string): Promise<void> {
+  const response = await fetch(imageUrl, {
+    signal: AbortSignal.timeout(10000),
+    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NeighborhoodCommons/1.0)' },
+    redirect: 'follow',
+  });
+
+  if (!response.ok) {
+    console.log(`[COMMONS-ADMIN] Image download HTTP ${response.status} for ${imageUrl}`);
+    return;
+  }
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  if (buffer.length < 8) return;
+
+  // Magic byte check
+  const hex = buffer.subarray(0, 4).toString('hex').toLowerCase();
+  let valid = false;
+  for (const magic of Object.keys(SUPPORTED_MAGIC_BYTES)) {
+    if (hex.startsWith(magic)) { valid = true; break; }
+  }
+  if (!valid) {
+    console.log(`[COMMONS-ADMIN] Unsupported image format from ${imageUrl}`);
+    return;
+  }
+
+  // Re-encode through Sharp (strips metadata, kills polyglot payloads)
+  const processed = await sharp(buffer)
+    .rotate()
+    .resize(1200, 1200, { fit: 'inside', withoutEnlargement: true })
+    .jpeg({ quality: 90 })
+    .toBuffer();
+
+  const r2Key = `portal-events/${eventId}/image`;
+  const result = await uploadToR2(r2Key, new Uint8Array(processed), 'image/jpeg');
+  if (!result.success) {
+    console.error(`[COMMONS-ADMIN] R2 upload failed for candidate image on event ${eventId}`);
+    return;
+  }
+
+  const finalUrl = `${config.apiBaseUrl}/api/portal/events/${eventId}/image`;
+  await supabaseAdmin
+    .from('events')
+    .update({ event_image_url: finalUrl })
+    .eq('id', eventId);
+
+  console.log(`[COMMONS-ADMIN] Attached candidate image to event ${eventId}`);
+}
+
 async function processAndUploadImage(eventId: string, base64: string): Promise<string> {
   const buffer = Buffer.from(base64, 'base64');
   if (buffer.length < 8) {
@@ -1715,7 +1768,7 @@ router.get('/event-candidates', portalLimiter, async (req, res, next) => {
 
     let query = supabaseAdmin
       .from('event_candidates')
-      .select('id, email_id, source_id, title, description, start_date, start_time, end_time, location_name, location_address, location_lat, location_lng, source_url, confidence, status, matched_event_id, match_confidence, review_notes, created_at, reviewed_at, newsletter_emails(subject), newsletter_sources(name)')
+      .select('id, email_id, source_id, title, description, start_date, start_time, end_time, location_name, location_address, location_lat, location_lng, source_url, confidence, status, matched_event_id, match_confidence, review_notes, created_at, reviewed_at, candidate_image_url, newsletter_emails(subject), newsletter_sources(name)')
       .order('created_at', { ascending: false })
       .limit(limit);
 
@@ -1743,7 +1796,7 @@ router.get('/event-candidates/:id', portalLimiter, async (req, res, next) => {
 
     const { data: candidate, error } = await supabaseAdmin
       .from('event_candidates')
-      .select('id, email_id, source_id, title, description, start_date, start_time, end_time, location_name, location_address, location_lat, location_lng, source_url, confidence, status, matched_event_id, match_confidence, review_notes, created_at, reviewed_at, extraction_metadata, newsletter_emails(subject, body_plain, body_html, sender_email, received_at), newsletter_sources(name)')
+      .select('id, email_id, source_id, title, description, start_date, start_time, end_time, location_name, location_address, location_lat, location_lng, source_url, confidence, status, matched_event_id, match_confidence, review_notes, created_at, reviewed_at, candidate_image_url, extraction_metadata, newsletter_emails(subject, body_plain, body_html, sender_email, received_at), newsletter_sources(name)')
       .eq('id', req.params.id)
       .maybeSingle();
 
@@ -1772,7 +1825,7 @@ router.post('/event-candidates/:id/approve', writeLimiter, async (req, res, next
     // Fetch the candidate
     const { data: candidate, error: fetchErr } = await supabaseAdmin
       .from('event_candidates')
-      .select('id, title, description, start_date, start_time, end_time, location_name, location_address, location_lat, location_lng, source_url, confidence, status, source_id, newsletter_sources(name)')
+      .select('id, title, description, start_date, start_time, end_time, location_name, location_address, location_lat, location_lng, source_url, confidence, status, source_id, candidate_image_url, newsletter_sources(name)')
       .eq('id', req.params.id)
       .single();
 
@@ -1861,6 +1914,14 @@ router.post('/event-candidates/:id/approve', writeLimiter, async (req, res, next
       candidate.location_lng as number | null,
       null,
     );
+
+    // Fire-and-forget: download and re-encode candidate image
+    const candidateImageUrl = candidate.candidate_image_url as string | null;
+    if (candidateImageUrl) {
+      void downloadAndAttachImage(eventId, candidateImageUrl).catch((err) => {
+        console.error('[COMMONS-ADMIN] Candidate image download failed:', err instanceof Error ? err.message : err);
+      });
+    }
 
     // Fire-and-forget: dispatch webhooks
     void (async () => {

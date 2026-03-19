@@ -280,17 +280,30 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>{c.title}</div>
-                      <div style={{ fontSize: 13, color: colors.muted }}>
-                        {c.start_date || 'No date'}
-                        {c.start_time && ` at ${c.start_time}`}
-                        {c.end_time && `–${c.end_time}`}
-                        {c.location_name && ` · ${c.location_name}`}
-                      </div>
-                      <div style={{ fontSize: 12, color: colors.muted, marginTop: 4 }}>
-                        {c.newsletter_sources?.name && `Source: ${c.newsletter_sources.name}`}
-                        {c.newsletter_emails?.subject && ` · "${c.newsletter_emails.subject}"`}
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
+                      {c.candidate_image_url && (
+                        <img
+                          src={c.candidate_image_url}
+                          alt=""
+                          style={{
+                            width: 56, height: 56, borderRadius: 8, objectFit: 'cover',
+                            flexShrink: 0, background: colors.bg,
+                          }}
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                      )}
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>{c.title}</div>
+                        <div style={{ fontSize: 13, color: colors.muted }}>
+                          {c.start_date || 'No date'}
+                          {c.start_time && ` at ${c.start_time}`}
+                          {c.end_time && `–${c.end_time}`}
+                          {c.location_name && ` · ${c.location_name}`}
+                        </div>
+                        <div style={{ fontSize: 12, color: colors.muted, marginTop: 4 }}>
+                          {c.newsletter_sources?.name && `Source: ${c.newsletter_sources.name}`}
+                          {c.newsletter_emails?.subject && ` · "${c.newsletter_emails.subject}"`}
+                        </div>
                       </div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
@@ -320,6 +333,23 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
                           Source link
                         </a>
                       </p>
+                    )}
+
+                    {c.candidate_image_url && (
+                      <div style={{ margin: '12px 0' }}>
+                        <img
+                          src={c.candidate_image_url}
+                          alt={c.title}
+                          style={{
+                            maxWidth: '100%', maxHeight: 200, borderRadius: 8, objectFit: 'cover',
+                            background: colors.bg,
+                          }}
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                        <div style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
+                          Image from source page (will be re-encoded on approve)
+                        </div>
+                      </div>
                     )}
 
                     {/* Source email content */}

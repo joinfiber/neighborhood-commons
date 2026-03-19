@@ -184,6 +184,7 @@ export interface EventCandidate {
   review_notes: string | null;
   created_at: string;
   reviewed_at: string | null;
+  candidate_image_url?: string | null;
   extraction_metadata?: {
     field_confidence: Record<string, number>;
     excerpts: Record<string, string | null>;

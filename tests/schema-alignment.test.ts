@@ -86,7 +86,7 @@ const SCHEMA: Record<string, string[]> = {
     'start_date', 'start_time', 'end_time', 'location_name',
     'location_address', 'location_lat', 'location_lng', 'source_url',
     'confidence', 'status', 'matched_event_id', 'match_confidence',
-    'review_notes', 'created_at', 'reviewed_at', 'extraction_metadata',
+    'review_notes', 'created_at', 'reviewed_at', 'extraction_metadata', 'candidate_image_url',
   ],
 };
 

@@ -17,6 +17,7 @@ import {
   extractEventsFromEmail,
   geocodeCandidate,
   findDuplicate,
+  fetchImagesForCandidates,
 } from '../lib/newsletter-extraction.js';
 
 const router = Router();
@@ -207,6 +208,8 @@ async function processEmail(emailId: string): Promise<void> {
 
     // Process each extracted event
     let candidateCount = 0;
+    const insertedCandidates: Array<{ id: string; source_url: string | null }> = [];
+
     for (const event of events) {
       // Geocode location
       const coords = await geocodeCandidate(event.location_name, event.location_address);
@@ -220,7 +223,7 @@ async function processEmail(emailId: string): Promise<void> {
       });
 
       // Insert candidate
-      const { error: candidateError } = await supabaseAdmin
+      const { data: inserted, error: candidateError } = await supabaseAdmin
         .from('event_candidates')
         .insert({
           email_id: emailId,
@@ -239,13 +242,23 @@ async function processEmail(emailId: string): Promise<void> {
           matched_event_id: dedup.matched_event_id,
           match_confidence: dedup.match_confidence > 0 ? dedup.match_confidence : null,
           extraction_metadata: event.extraction_metadata,
-        });
+        })
+        .select('id')
+        .single();
 
       if (candidateError) {
         console.error('[NEWSLETTER] Failed to insert candidate:', candidateError.message);
       } else {
         candidateCount++;
+        insertedCandidates.push({ id: inserted.id as string, source_url: event.source_url });
       }
+    }
+
+    // Fetch images from source URLs (best-effort, parallel)
+    if (insertedCandidates.some(c => c.source_url)) {
+      void fetchAndUpdateCandidateImages(insertedCandidates).catch((err) => {
+        console.error('[NEWSLETTER] Image fetch error:', err instanceof Error ? err.message : err);
+      });
     }
 
     // Mark email as completed
@@ -270,6 +283,30 @@ async function processEmail(emailId: string): Promise<void> {
       })
       .eq('id', emailId);
   }
+}
+
+/**
+ * Fetch og:image from each candidate's source URL and update the row.
+ * Fire-and-forget — failures are logged but don't block processing.
+ */
+async function fetchAndUpdateCandidateImages(
+  candidates: Array<{ id: string; source_url: string | null }>,
+): Promise<void> {
+  const imageMap = await fetchImagesForCandidates(candidates);
+  if (imageMap.size === 0) return;
+
+  for (const candidate of candidates) {
+    if (!candidate.source_url) continue;
+    const imageUrl = imageMap.get(candidate.source_url);
+    if (!imageUrl) continue;
+
+    await supabaseAdmin
+      .from('event_candidates')
+      .update({ candidate_image_url: imageUrl })
+      .eq('id', candidate.id);
+  }
+
+  console.log(`[NEWSLETTER] Updated ${imageMap.size} candidates with images`);
 }
 
 export default router;

@@ -518,6 +518,106 @@ export function parseExtractionResponse(raw: string): ExtractedEvent[] {
 }
 
 // ---------------------------------------------------------------------------
+// Image discovery — fetch og:image from candidate source URLs
+// ---------------------------------------------------------------------------
+
+const IMAGE_FETCH_TIMEOUT_MS = 8000;
+
+/**
+ * Fetch a URL and extract the best image URL from meta tags.
+ * Priority: og:image > twitter:image > first large <img>.
+ * Returns null on any failure — this is best-effort.
+ */
+export async function fetchPageImage(url: string): Promise<string | null> {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(IMAGE_FETCH_TIMEOUT_MS),
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; NeighborhoodCommons/1.0)',
+        'Accept': 'text/html',
+      },
+      redirect: 'follow',
+    });
+
+    if (!response.ok) return null;
+
+    // Only read the first ~100KB — we just need the <head>
+    const reader = response.body?.getReader();
+    if (!reader) return null;
+
+    let html = '';
+    const decoder = new TextDecoder();
+    while (html.length < 100_000) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      html += decoder.decode(value, { stream: true });
+    }
+    reader.cancel().catch(() => {});
+
+    return extractImageFromHtml(html, url);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Extract image URL from HTML meta tags.
+ */
+function extractImageFromHtml(html: string, baseUrl: string): string | null {
+  // og:image
+  const ogMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+    || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
+  if (ogMatch?.[1]) return resolveUrl(ogMatch[1], baseUrl);
+
+  // twitter:image
+  const twMatch = html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i)
+    || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i);
+  if (twMatch?.[1]) return resolveUrl(twMatch[1], baseUrl);
+
+  return null;
+}
+
+function resolveUrl(url: string, base: string): string | null {
+  try {
+    return new URL(url, base).href;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch images for multiple candidates in parallel.
+ * Returns a map of source_url → image_url for those that succeeded.
+ */
+export async function fetchImagesForCandidates(
+  candidates: Array<{ source_url: string | null }>,
+): Promise<Map<string, string>> {
+  const imageMap = new Map<string, string>();
+  const uniqueUrls = [...new Set(
+    candidates.map(c => c.source_url).filter((u): u is string => !!u),
+  )];
+
+  if (uniqueUrls.length === 0) return imageMap;
+
+  console.log(`[NEWSLETTER] Fetching images from ${uniqueUrls.length} source URLs`);
+
+  const results = await Promise.allSettled(
+    uniqueUrls.map(async (url) => {
+      const imageUrl = await fetchPageImage(url);
+      if (imageUrl) imageMap.set(url, imageUrl);
+    }),
+  );
+
+  const found = results.filter(r => r.status === 'fulfilled').length;
+  console.log(`[NEWSLETTER] Found ${imageMap.size} images from ${found} successful fetches`);
+
+  return imageMap;
+}
+
+// ---------------------------------------------------------------------------
 // Geocoding for candidates
 // ---------------------------------------------------------------------------
 
