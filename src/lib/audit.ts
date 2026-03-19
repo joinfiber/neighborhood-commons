@@ -33,7 +33,10 @@ type PortalAuditAction =
   | 'admin_impersonation'
   | 'newsletter_candidate_approved'
   | 'newsletter_candidate_rejected'
-  | 'newsletter_candidate_duplicate';
+  | 'newsletter_candidate_duplicate'
+  | 'feed_source_created'
+  | 'feed_source_updated'
+  | 'feed_source_polled';
 
 /**
  * One-way hash for privacy-preserving logs.
