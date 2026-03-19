@@ -107,7 +107,7 @@ export async function pollFeedSource(source: FeedSourceRow): Promise<PollResult>
     console.log(`[FEED] ${futureEvents.length} future events (${events.length - futureEvents.length} past events skipped)`);
 
     // Process each event
-    const insertedCandidates: Array<{ id: string; source_url: string | null }> = [];
+    const insertedCandidates: Array<{ id: string; source_url: string | null; has_image: boolean }> = [];
 
     for (const event of futureEvents) {
       const candidate = mapImportedEventToCandidate(event, source);
@@ -170,13 +170,13 @@ export async function pollFeedSource(source: FeedSourceRow): Promise<PollResult>
         console.error(`[FEED] Insert error for "${candidate.title}":`, insertErr.message);
       } else {
         result.candidateCount++;
-        insertedCandidates.push({ id: inserted.id as string, source_url: candidate.source_url });
+        insertedCandidates.push({ id: inserted.id as string, source_url: candidate.source_url, has_image: !!candidate.image_url });
       }
     }
 
-    // Fire-and-forget: fetch og:image for candidates with source URLs
-    const needsImage = insertedCandidates.filter(c => c.source_url);
-    console.log(`[FEED] ${insertedCandidates.length} candidates inserted, ${needsImage.length} have source URLs for image fetch`);
+    // Fire-and-forget: fetch og:image for candidates that have a source URL but no image yet
+    const needsImage = insertedCandidates.filter(c => c.source_url && !c.has_image);
+    console.log(`[FEED] ${insertedCandidates.length} candidates inserted, ${needsImage.length} need og:image fetch`);
     if (needsImage.length > 0) {
       void fetchImagesForCandidates(needsImage).then(async (imageMap) => {
         console.log(`[FEED] Image fetch complete: ${imageMap.size} images found from ${needsImage.length} URLs`);

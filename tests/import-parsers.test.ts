@@ -218,6 +218,35 @@ END:VCALENDAR`;
     expect(events[0].venue_name).toBe('The Bar');
     expect(events[0].address).toBeNull();
   });
+
+  it('extracts image from ATTACH with FMTTYPE=image', () => {
+    const ical = `BEGIN:VCALENDAR
+BEGIN:VEVENT
+SUMMARY:Volunteer Day
+DTSTART;TZID=America/New_York:20260319T090000
+URL:https://fow.org/event/volunteer-day/
+ATTACH;FMTTYPE=image/jpeg:https://fow.org/wp-content/uploads/drains.jpg
+UID:vol-001
+END:VEVENT
+END:VCALENDAR`;
+    const events = parseIcalFeed(ical);
+    expect(events).toHaveLength(1);
+    expect(events[0].image_url).toBe('https://fow.org/wp-content/uploads/drains.jpg');
+    expect(events[0].url).toBe('https://fow.org/event/volunteer-day/');
+  });
+
+  it('ignores ATTACH without image FMTTYPE', () => {
+    const ical = `BEGIN:VCALENDAR
+BEGIN:VEVENT
+SUMMARY:Doc Event
+DTSTART:20260315T190000Z
+ATTACH;FMTTYPE=application/pdf:https://example.com/doc.pdf
+UID:doc-001
+END:VEVENT
+END:VCALENDAR`;
+    const events = parseIcalFeed(ical);
+    expect(events[0].image_url).toBeNull();
+  });
 });
 
 // =============================================================================

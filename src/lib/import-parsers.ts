@@ -109,6 +109,10 @@ export function parseIcalFeed(icalText: string, fallbackTimezone: string = 'Amer
         current[propFull] = value;
         current[baseProp] = value;
         current[baseProp + '_FULL'] = propFull;
+      } else if (baseProp === 'ATTACH') {
+        // Keep full property for FMTTYPE detection
+        current['ATTACH'] = value;
+        current['ATTACH_FULL'] = propFull;
       } else {
         current[baseProp] = value;
       }
@@ -160,10 +164,22 @@ function icalEventToImported(props: Record<string, string>, fallbackTimezone: st
     description: unescapeIcal(props['DESCRIPTION'] || '') || null,
     url: props['URL'] || null,
     cost: null,
-    image_url: null,
+    image_url: extractAttachImage(props) || null,
     external_id: props['UID'] || null,
     recurrence: mapRruleToRecurrence(props['RRULE'] || ''),
   };
+}
+
+/** Extract image URL from ATTACH property (e.g., ATTACH;FMTTYPE=image/jpeg:https://...) */
+function extractAttachImage(props: Record<string, string>): string | null {
+  const url = props['ATTACH'];
+  if (!url) return null;
+  const full = props['ATTACH_FULL'] || '';
+  // Only extract if it's an image FMTTYPE or looks like an image URL
+  if (/FMTTYPE=image\//i.test(full) || /\.(jpe?g|png|webp|gif)(\?|$)/i.test(url)) {
+    return url;
+  }
+  return null;
 }
 
 /** Extract TZID from a property string like "DTSTART;TZID=America/New_York" */
