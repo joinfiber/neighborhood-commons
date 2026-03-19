@@ -174,10 +174,12 @@ export async function pollFeedSource(source: FeedSourceRow): Promise<PollResult>
       }
     }
 
-    // Fire-and-forget: fetch og:image for candidates without images
+    // Fire-and-forget: fetch og:image for candidates with source URLs
     const needsImage = insertedCandidates.filter(c => c.source_url);
+    console.log(`[FEED] ${insertedCandidates.length} candidates inserted, ${needsImage.length} have source URLs for image fetch`);
     if (needsImage.length > 0) {
       void fetchImagesForCandidates(needsImage).then(async (imageMap) => {
+        console.log(`[FEED] Image fetch complete: ${imageMap.size} images found from ${needsImage.length} URLs`);
         for (const c of needsImage) {
           if (!c.source_url) continue;
           const imageUrl = imageMap.get(c.source_url);
