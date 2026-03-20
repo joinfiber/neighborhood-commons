@@ -2064,13 +2064,17 @@ router.post('/event-candidates/:id/approve', writeLimiter, async (req, res, next
       // Dispatch webhook after image is attached (or if no image)
       const { data: row } = await supabaseAdmin
         .from('events')
-        .select(PORTAL_SELECT)
+        .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible)`)
         .eq('id', eventId)
         .maybeSingle();
       if (row) {
         void dispatchWebhooks('event.created', eventId, toNeighborhoodEvent(row as unknown as PortalEventRow));
+      } else {
+        console.error(`[COMMONS-ADMIN] Webhook dispatch: event ${eventId} not found after insert`);
       }
-    })().catch(() => {});
+    })().catch((err) => {
+      console.error('[COMMONS-ADMIN] Approve webhook pipeline error:', err instanceof Error ? err.message : err);
+    });
 
     const adminId = getAdminUserId();
     auditPortalAction('newsletter_candidate_approved', adminId, eventId, { candidate_id: req.params.id });
@@ -2360,14 +2364,16 @@ router.post('/event-candidates/batch-approve', writeLimiter, async (req, res, ne
       for (const event of events) {
         const { data: row } = await supabaseAdmin
           .from('events')
-          .select(PORTAL_SELECT)
+          .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible)`)
           .eq('id', event.id)
           .maybeSingle();
         if (row) {
           void dispatchWebhooks('event.created', event.id, toNeighborhoodEvent(row as unknown as PortalEventRow));
         }
       }
-    })().catch(() => {});
+    })().catch((err) => {
+      console.error('[COMMONS-ADMIN] Batch approve webhook pipeline error:', err instanceof Error ? err.message : err);
+    });
 
     // Fire-and-forget: geocode if needed
     if (!input.latitude || !input.longitude) {
