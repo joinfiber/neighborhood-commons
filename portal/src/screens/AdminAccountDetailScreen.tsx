@@ -268,7 +268,7 @@ function buildDashboardItems(events: PortalEvent[], today: string): { upcoming: 
   const pastItems: DashboardItem[] = [];
 
   for (const [seriesId, seriesEvents] of seriesMap) {
-    seriesEvents.sort((a, b) => a.event_date.localeCompare(b.event_date));
+    seriesEvents.sort((a, b) => (a.event_date || '').localeCompare(b.event_date || ''));
     const upcomingInSeries = seriesEvents.filter((e) => e.event_date >= today);
     const nextEvent = upcomingInSeries[0] || seriesEvents[seriesEvents.length - 1]!;
     const group: SeriesGroup = { type: 'series', seriesId, events: seriesEvents, nextEvent };
@@ -283,13 +283,13 @@ function buildDashboardItems(events: PortalEvent[], today: string): { upcoming: 
   }
 
   upcomingItems.sort((a, b) => {
-    const dateA = a.type === 'series' ? a.nextEvent.event_date : a.event.event_date;
-    const dateB = b.type === 'series' ? b.nextEvent.event_date : b.event.event_date;
+    const dateA = (a.type === 'series' ? a.nextEvent?.event_date : a.event.event_date) || '';
+    const dateB = (b.type === 'series' ? b.nextEvent?.event_date : b.event.event_date) || '';
     return dateA.localeCompare(dateB);
   });
   pastItems.sort((a, b) => {
-    const dateA = a.type === 'series' ? a.nextEvent.event_date : a.event.event_date;
-    const dateB = b.type === 'series' ? b.nextEvent.event_date : b.event.event_date;
+    const dateA = (a.type === 'series' ? a.nextEvent?.event_date : a.event.event_date) || '';
+    const dateB = (b.type === 'series' ? b.nextEvent?.event_date : b.event.event_date) || '';
     return dateB.localeCompare(dateA);
   });
 
