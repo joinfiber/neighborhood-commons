@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useBreakpoint } from '../hooks/useBreakpoint';
 import { styles, colors, categoryColors, spacing, radii } from '../lib/styles';
 import type { EventFormData, PlaceResult } from '../lib/types';
@@ -11,6 +11,7 @@ import { ImageUpload } from './ImageUpload';
 import { ImageCropPreview } from './ImageCropPreview';
 import { TagPicker } from './TagPicker';
 import { getTagsForCategory, AGE_TAGS } from '../lib/tags';
+import { getRecurrenceDateStrings } from '../lib/recurrence';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -20,6 +21,7 @@ interface EventFormProps {
   mode: 'create' | 'edit' | 'admin-create';
   initialValues?: Partial<EventFormData>;
   hasExistingImage?: boolean;
+  existingImageUrl?: string; // URL of the current image (edit mode)
   onSubmit: (data: EventFormData) => Promise<{ error?: string } | void>;
   searchCoords?: { latitude: number; longitude: number };
   submitting?: boolean;
@@ -143,7 +145,7 @@ function EventPreview({ title, eventDate, startTime, endTime, venueName, address
 // ---------------------------------------------------------------------------
 
 export function EventForm({
-  mode, initialValues = {}, hasExistingImage: initialHasExistingImage = false,
+  mode, initialValues = {}, hasExistingImage: initialHasExistingImage = false, existingImageUrl,
   onSubmit, searchCoords, submitting = false, submitLabel, accountWheelchairAccessible,
 }: EventFormProps) {
 
@@ -236,6 +238,12 @@ export function EventForm({
   const hasAvailableTags = !!category && getTagsForCategory(category).length > 0;
   const catColor = category ? categoryColors[category] : null;
 
+  // Recurrence dates for calendar highlighting
+  const recurrenceDates = useMemo(() => {
+    if (recurrence === 'none' || !eventDate) return undefined;
+    return getRecurrenceDateStrings(eventDate, recurrence, instanceCount);
+  }, [eventDate, recurrence, instanceCount]);
+
   // ── Form ───────────────────────────────────────────────────────────────
 
   const formContent = (
@@ -249,14 +257,23 @@ export function EventForm({
       {showImage ? (
         <div style={{ marginBottom: spacing.lg }}>
           {!image && mode === 'edit' && hasExistingImage ? (
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '8px 12px', borderRadius: radii.md, background: colors.bg,
-              border: `1px solid ${colors.border}`, fontSize: '12px', color: colors.muted,
-            }}>
-              <span>Current image attached</span>
-              <button type="button" onClick={() => { setHasExistingImage(false); setShowImage(false); }}
-                style={{ ...styles.buttonText, color: colors.error, fontSize: '12px' }}>Remove</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              {existingImageUrl && (
+                <img src={existingImageUrl} alt="" style={{
+                  width: '120px', height: '68px', objectFit: 'cover',
+                  objectPosition: `center ${(initialValues?.image_focal_y ?? 0.5) * 100}%`,
+                  borderRadius: radii.sm, flexShrink: 0,
+                }} />
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <span style={{ fontSize: '13px', color: colors.muted }}>Current image</span>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button type="button" onClick={() => { setHasExistingImage(false); setShowImage(false); }}
+                    style={{ ...styles.buttonText, color: colors.error, fontSize: '12px', padding: 0 }}>Remove</button>
+                  <button type="button" onClick={() => { setHasExistingImage(false); }}
+                    style={{ ...styles.buttonText, fontSize: '12px', padding: 0 }}>Replace</button>
+                </div>
+              </div>
             </div>
           ) : !image ? (
             <ImageUpload value={image} onChange={(img) => { setImage(img); }} />
@@ -338,7 +355,7 @@ export function EventForm({
           alignItems: 'start',
         }}>
           {/* Left: inline calendar */}
-          <CalendarPicker value={eventDate} onChange={setEventDate} inline />
+          <CalendarPicker value={eventDate} onChange={setEventDate} inline highlightDates={recurrenceDates} />
 
           {/* Right: start, end, recurring — all stacked */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>

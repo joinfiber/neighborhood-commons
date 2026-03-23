@@ -224,6 +224,7 @@ export function AdminEditEventScreen({ eventId, accountId, onBack, onUpdated, on
           mode="edit"
           initialValues={initialValues}
           hasExistingImage={!!event.image_url}
+          existingImageUrl={event.image_url || undefined}
           onSubmit={handleSubmit}
           submitting={submitting}
           accountWheelchairAccessible={account?.wheelchair_accessible ?? null}

@@ -202,6 +202,62 @@ export function durationToInstanceCount(frequency: 'weekly' | 'biweekly' | 'mont
   }
 }
 
+/**
+ * Like getNextDates but returns YYYY-MM-DD strings for calendar highlighting.
+ * Includes the start date itself as the first element.
+ */
+export function getRecurrenceDateStrings(startDate: string, recurrence: string, instanceCount: number): string[] {
+  const start = new Date(startDate + 'T12:00:00');
+  if (isNaN(start.getTime()) || recurrence === 'none') return [];
+
+  const pad = (n: number) => n < 10 ? `0${n}` : `${n}`;
+  const toStr = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+  const dates: string[] = [toStr(start)];
+  const maxDates = instanceCount === 0 ? 26 : Math.min(instanceCount, 52);
+
+  const weeklyDays = parseWeeklyDays(recurrence);
+  if (weeklyDays) {
+    const cursor = new Date(start);
+    cursor.setDate(cursor.getDate() + 1);
+    let walked = 0;
+    while (dates.length < maxDates && walked < maxDates * 7 + 7) {
+      if (weeklyDays.includes(cursor.getDay())) dates.push(toStr(cursor));
+      cursor.setDate(cursor.getDate() + 1);
+      walked++;
+    }
+    return dates;
+  }
+
+  const ordinal = parseOrdinalRecurrence(recurrence);
+  if (ordinal) {
+    const dayIdx = DAY_NAMES.indexOf(ordinal.dayName as typeof DAY_NAMES[number]);
+    if (dayIdx < 0) return dates;
+    let month = start.getMonth();
+    let year = start.getFullYear();
+    for (let i = 0; i < maxDates - 1; i++) {
+      month++;
+      if (month > 11) { month = 0; year++; }
+      const d = getNthWeekdayOfMonth(year, month, dayIdx, ordinal.ordinal);
+      if (d) dates.push(toStr(d));
+    }
+    return dates;
+  }
+
+  for (let i = 1; i < maxDates; i++) {
+    const d = new Date(start);
+    switch (recurrence) {
+      case 'daily': d.setDate(d.getDate() + i); break;
+      case 'weekly': d.setDate(d.getDate() + i * 7); break;
+      case 'biweekly': d.setDate(d.getDate() + i * 14); break;
+      case 'monthly': d.setMonth(d.getMonth() + i); break;
+      default: return dates;
+    }
+    dates.push(toStr(d));
+  }
+  return dates;
+}
+
 /** Get the Nth occurrence of a weekday (0=Sun) in a given month/year. */
 function getNthWeekdayOfMonth(year: number, month: number, dayOfWeek: number, n: number): Date | null {
   // Find first occurrence of this weekday in the month

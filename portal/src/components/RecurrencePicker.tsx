@@ -1,15 +1,14 @@
 import { useMemo } from 'react';
-import { colors } from '../lib/styles';
+import { colors, radii } from '../lib/styles';
 import {
   getOrdinalWeekday,
   toOrdinalRecurrence,
-  getNextDates,
   parseWeeklyDays,
   toWeeklyDaysRecurrence,
   durationToInstanceCount,
 } from '../lib/recurrence';
 
-type Frequency = 'weekly' | 'biweekly' | 'monthly';
+type Frequency = 'weekly' | 'biweekly' | 'monthly' | 'ordinal';
 type Duration = 1 | 3 | 6 | 0;
 
 const DAY_PICKER_ORDER = [
@@ -32,22 +31,21 @@ const DURATION_OPTIONS: { months: Duration; label: string }[] = [
 interface RecurrencePickerProps {
   value: string;
   onChange: (recurrence: string) => void;
-  eventDate: string; // YYYY-MM-DD
-  instanceCount: number; // 0 = ongoing, 2-52 = fixed count
+  eventDate: string;
+  instanceCount: number;
   onInstanceCountChange: (count: number) => void;
 }
 
 export function RecurrencePicker({ value, onChange, eventDate, instanceCount, onInstanceCountChange }: RecurrencePickerProps) {
   const weeklyDays = parseWeeklyDays(value);
 
-  // Derive frequency from stored recurrence value
   const frequency: Frequency = useMemo(() => {
     if (value === 'biweekly') return 'biweekly';
-    if (value === 'monthly' || value.startsWith('ordinal_weekday:')) return 'monthly';
-    return 'weekly'; // weekly, daily, weekly_days all live under "Every week"
+    if (value.startsWith('ordinal_weekday:')) return 'ordinal';
+    if (value === 'monthly') return 'monthly';
+    return 'weekly';
   }, [value]);
 
-  // Selected days for the day picker (weekly frequency only)
   const selectedDays: number[] = useMemo(() => {
     if (weeklyDays) return weeklyDays;
     if (value === 'daily') return [0, 1, 2, 3, 4, 5, 6];
@@ -58,66 +56,43 @@ export function RecurrencePicker({ value, onChange, eventDate, instanceCount, on
     return [];
   }, [value, weeklyDays, frequency, eventDate]);
 
-  // Reverse-map instanceCount → duration preset
+  const freqForDuration = frequency === 'ordinal' ? 'monthly' as const : frequency;
+
   const duration: Duration = useMemo(() => {
     if (instanceCount === 0) return 0;
     for (const months of [1, 3, 6] as const) {
-      if (instanceCount === durationToInstanceCount(frequency, months)) return months;
+      if (instanceCount === durationToInstanceCount(freqForDuration, months)) return months;
     }
-    // Non-standard count (legacy stepper value): snap to closest
     if (instanceCount <= 4) return 1;
     if (instanceCount <= 13) return 3;
     return 6;
-  }, [instanceCount, frequency]);
+  }, [instanceCount, freqForDuration]);
 
-  // Ordinal weekday for monthly (e.g. "Every 3rd Thursday")
   const ordinal = useMemo(() => {
     if (!eventDate) return null;
     return getOrdinalWeekday(eventDate);
   }, [eventDate]);
 
-  // Summary: event count + date range
+  // Summary
   const summary = useMemo(() => {
-    if (!eventDate) return null;
+    if (!eventDate || instanceCount === 0) return null;
     const start = new Date(eventDate + 'T12:00:00');
     if (isNaN(start.getTime())) return null;
 
-    if (instanceCount === 0) return null; // ongoing uses subtitle instead
-
     const daysPerWeek = frequency === 'weekly' ? selectedDays.length : 1;
     const totalEvents = frequency === 'weekly' && daysPerWeek > 1
-      ? instanceCount * daysPerWeek
-      : instanceCount;
+      ? instanceCount * daysPerWeek : instanceCount;
 
     const endDate = new Date(start);
-    switch (frequency) {
-      case 'weekly':
-        endDate.setDate(endDate.getDate() + (instanceCount - 1) * 7);
-        break;
-      case 'biweekly':
-        endDate.setDate(endDate.getDate() + (instanceCount - 1) * 14);
-        break;
-      case 'monthly':
-        endDate.setMonth(endDate.getMonth() + instanceCount - 1);
-        break;
+    switch (freqForDuration) {
+      case 'weekly': endDate.setDate(endDate.getDate() + (instanceCount - 1) * 7); break;
+      case 'biweekly': endDate.setDate(endDate.getDate() + (instanceCount - 1) * 14); break;
+      case 'monthly': endDate.setMonth(endDate.getMonth() + instanceCount - 1); break;
     }
 
-    return `${totalEvents} event${totalEvents !== 1 ? 's' : ''} · ${formatShortDate(start)} – ${formatShortDate(endDate)}`;
-  }, [eventDate, instanceCount, frequency, selectedDays.length]);
-
-  // Preview dates
-  const previewCount = useMemo(() => {
-    if (instanceCount === 0) return 8;
-    const totalFuture = frequency === 'weekly' && selectedDays.length > 1
-      ? (instanceCount - 1) * selectedDays.length
-      : instanceCount - 1;
-    return Math.min(10, Math.max(0, totalFuture));
-  }, [instanceCount, frequency, selectedDays.length]);
-
-  const previewDates = useMemo(() => {
-    if (!eventDate || value === 'none') return [];
-    return getNextDates(eventDate, value, previewCount);
-  }, [eventDate, value, previewCount]);
+    const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return `${totalEvents} event${totalEvents !== 1 ? 's' : ''} · through ${fmt(endDate)}`;
+  }, [eventDate, instanceCount, frequency, freqForDuration, selectedDays.length]);
 
   // --- Handlers ---
 
@@ -132,6 +107,10 @@ export function RecurrencePicker({ value, onChange, eventDate, instanceCount, on
         onInstanceCountChange(durationToInstanceCount('biweekly', duration));
         break;
       case 'monthly':
+        onChange('monthly');
+        onInstanceCountChange(durationToInstanceCount('monthly', duration));
+        break;
+      case 'ordinal':
         if (ordinal) {
           onChange(toOrdinalRecurrence(ordinal.ordinal, ordinal.dayName));
         } else {
@@ -145,158 +124,103 @@ export function RecurrencePicker({ value, onChange, eventDate, instanceCount, on
   function handleDayToggle(dayIdx: number) {
     const current = new Set(selectedDays);
     if (current.has(dayIdx)) {
-      if (current.size <= 1) return; // keep at least one day
+      if (current.size <= 1) return;
       current.delete(dayIdx);
     } else {
       current.add(dayIdx);
     }
-
     const days = [...current];
-    if (days.length === 1) {
-      onChange('weekly');
-    } else {
-      onChange(toWeeklyDaysRecurrence(days));
-    }
+    onChange(days.length === 1 ? 'weekly' : toWeeklyDaysRecurrence(days));
     onInstanceCountChange(durationToInstanceCount('weekly', duration));
   }
 
   function handleDurationChange(months: Duration) {
-    onInstanceCountChange(durationToInstanceCount(frequency, months));
+    onInstanceCountChange(durationToInstanceCount(freqForDuration, months));
   }
 
   // --- Styles ---
 
-  const pillStyle = (active: boolean): React.CSSProperties => ({
-    display: 'inline-flex',
-    alignItems: 'center',
-    borderRadius: '16px',
-    padding: '5px 12px',
-    fontSize: '12px',
-    cursor: 'pointer',
-    transition: 'all 0.15s',
-    border: '1px solid',
-    userSelect: 'none',
-    fontFamily: 'inherit',
+  const chip = (active: boolean): React.CSSProperties => ({
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    borderRadius: radii.pill, padding: '4px 12px', fontSize: '12px',
+    cursor: 'pointer', transition: 'all 0.12s', border: '1px solid',
+    userSelect: 'none', fontFamily: 'inherit', fontWeight: active ? 500 : 400,
     background: active ? colors.accentDim : 'transparent',
     color: active ? colors.accent : colors.dim,
     borderColor: active ? colors.accentBorder : colors.border,
   });
 
+  const dayCircle = (active: boolean): React.CSSProperties => ({
+    width: '30px', height: '30px', borderRadius: '50%',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontSize: '11px', fontWeight: 600, cursor: 'pointer',
+    transition: 'all 0.12s', border: '1px solid', fontFamily: 'inherit',
+    background: active ? colors.accent : 'transparent',
+    color: active ? '#ffffff' : colors.dim,
+    borderColor: active ? colors.accent : colors.border,
+  });
+
   return (
-    <div>
-      {/* Frequency */}
-      <div style={{ display: 'flex', gap: '6px' }}>
-        <button type="button" onClick={() => handleFrequencyChange('weekly')} style={pillStyle(frequency === 'weekly')}>
-          Every week
+    <div style={{
+      background: colors.bg,
+      border: `1px solid ${colors.border}`,
+      borderRadius: radii.md,
+      padding: '12px 14px',
+    }}>
+      {/* ── Frequency ── */}
+      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+        <button type="button" onClick={() => handleFrequencyChange('weekly')} style={chip(frequency === 'weekly')}>
+          Weekly
         </button>
-        <button type="button" onClick={() => handleFrequencyChange('biweekly')} style={pillStyle(frequency === 'biweekly')}>
+        <button type="button" onClick={() => handleFrequencyChange('biweekly')} style={chip(frequency === 'biweekly')}>
           Every 2 weeks
         </button>
-        <button type="button" onClick={() => handleFrequencyChange('monthly')} style={pillStyle(frequency === 'monthly')}>
+        <button type="button" onClick={() => handleFrequencyChange('monthly')} style={chip(frequency === 'monthly')}>
           Monthly
         </button>
-      </div>
-
-      {/* Day picker — weekly only */}
-      {frequency === 'weekly' && (
-        <div style={{ marginTop: '8px', display: 'flex', gap: '4px' }}>
-          {DAY_PICKER_ORDER.map(({ idx, label }) => {
-            const active = selectedDays.includes(idx);
-            return (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => handleDayToggle(idx)}
-                style={{
-                  width: '34px',
-                  height: '34px',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  transition: 'all 0.15s',
-                  border: '1px solid',
-                  fontFamily: 'inherit',
-                  background: active ? colors.accentDim : 'transparent',
-                  color: active ? colors.accent : colors.dim,
-                  borderColor: active ? colors.accentBorder : colors.border,
-                }}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Monthly ordinal label */}
-      {frequency === 'monthly' && ordinal && (
-        <div style={{ marginTop: '8px', fontSize: '13px', color: colors.muted }}>
-          {ordinal.label}
-        </div>
-      )}
-
-      {/* Duration presets */}
-      <div style={{ marginTop: '10px', display: 'flex', gap: '6px', alignItems: 'center' }}>
-        <span style={{ fontSize: '12px', color: colors.dim, marginRight: '2px' }}>Duration:</span>
-        {DURATION_OPTIONS.map(({ months, label }) => (
-          <button
-            key={months}
-            type="button"
-            onClick={() => handleDurationChange(months)}
-            style={pillStyle(duration === months)}
-          >
-            {label}
+        {ordinal && (
+          <button type="button" onClick={() => handleFrequencyChange('ordinal')} style={chip(frequency === 'ordinal')}>
+            {ordinal.label}
           </button>
-        ))}
+        )}
       </div>
 
-      {/* Ongoing subtitle */}
-      {duration === 0 && (
-        <div style={{ marginTop: '4px', fontSize: '11px', color: colors.dim }}>
-          Creates 6 months of events
+      {/* ── Day picker (weekly only) ── */}
+      {frequency === 'weekly' && (
+        <div style={{ marginTop: '10px', display: 'flex', gap: '4px' }}>
+          {DAY_PICKER_ORDER.map(({ idx, label }) => (
+            <button key={idx} type="button" onClick={() => handleDayToggle(idx)} style={dayCircle(selectedDays.includes(idx))}>
+              {label}
+            </button>
+          ))}
         </div>
       )}
 
-      {/* Summary */}
+      {/* ── Duration ── */}
+      <div style={{ marginTop: '10px' }}>
+        <div style={{ fontSize: '11px', fontWeight: 500, color: colors.muted, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          Duration
+        </div>
+        <div style={{ display: 'flex', gap: '6px' }}>
+          {DURATION_OPTIONS.map(({ months, label }) => (
+            <button key={months} type="button" onClick={() => handleDurationChange(months)} style={chip(duration === months)}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Summary ── */}
       {summary && (
-        <div style={{ marginTop: '8px', fontSize: '12px', color: colors.muted }}>
+        <div className="tnum" style={{ marginTop: '10px', fontSize: '12px', color: colors.muted }}>
           {summary}
         </div>
       )}
-
-      {/* Preview dates */}
-      {previewDates.length > 0 && (
-        <div style={{ marginTop: '6px' }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-            {previewDates.map((date, i) => (
-              <span
-                key={i}
-                style={{
-                  background: colors.bg,
-                  border: `1px solid ${colors.border}`,
-                  borderRadius: '12px',
-                  padding: '2px 10px',
-                  fontSize: '11px',
-                  color: colors.muted,
-                }}
-              >
-                {date}
-              </span>
-            ))}
-            {instanceCount === 0 && (
-              <span style={{ fontSize: '11px', color: colors.dim, alignSelf: 'center' }}>...</span>
-            )}
-          </div>
+      {duration === 0 && (
+        <div style={{ marginTop: '4px', fontSize: '11px', color: colors.dim }}>
+          Creates 6 months of events, auto-renews
         </div>
       )}
     </div>
   );
-}
-
-function formatShortDate(date: Date): string {
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }

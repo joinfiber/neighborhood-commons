@@ -247,6 +247,7 @@ export function EditEventScreen({ id, accountWheelchairAccessible, onBack, onUpd
           mode="edit"
           initialValues={initialValues}
           hasExistingImage={!!event.image_url}
+          existingImageUrl={event.image_url || undefined}
           onSubmit={handleSubmit}
           submitting={submitting}
           accountWheelchairAccessible={accountWheelchairAccessible}

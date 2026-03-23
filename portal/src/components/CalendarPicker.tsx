@@ -5,6 +5,7 @@ interface CalendarPickerProps {
   value: string; // YYYY-MM-DD
   onChange: (date: string) => void;
   inline?: boolean; // always-visible square calendar (no dropdown trigger)
+  highlightDates?: string[]; // YYYY-MM-DD strings to highlight (e.g. recurring dates)
 }
 
 const DAY_HEADERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -24,7 +25,8 @@ function formatDisplay(value: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-export function CalendarPicker({ value, onChange, inline = false }: CalendarPickerProps) {
+export function CalendarPicker({ value, onChange, inline = false, highlightDates }: CalendarPickerProps) {
+  const highlightSet = useMemo(() => new Set(highlightDates || []), [highlightDates]);
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -137,6 +139,7 @@ export function CalendarPicker({ value, onChange, inline = false }: CalendarPick
       <div style={gridStyle}>
         {days.map(({ day, dateStr, inMonth }, i) => {
           const isSelected = dateStr === value;
+          const isHighlighted = highlightSet.has(dateStr) && !isSelected;
           const isToday = dateStr === todayStr;
           return (
             <button
@@ -145,10 +148,10 @@ export function CalendarPicker({ value, onChange, inline = false }: CalendarPick
               onClick={() => handleSelect(dateStr)}
               style={{
                 ...cellStyle,
-                color: isSelected ? '#ffffff' : inMonth ? colors.text : colors.dim,
-                background: isSelected ? colors.accent : 'transparent',
+                color: isSelected ? '#ffffff' : isHighlighted ? colors.accent : inMonth ? colors.text : colors.dim,
+                background: isSelected ? colors.accent : isHighlighted ? colors.accentDim : 'transparent',
                 borderRadius: radii.sm,
-                fontWeight: isSelected ? 600 : 400,
+                fontWeight: isSelected || isHighlighted ? 600 : 400,
                 position: 'relative' as const,
               }}
             >
