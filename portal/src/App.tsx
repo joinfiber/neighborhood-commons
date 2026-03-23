@@ -28,8 +28,9 @@ import { PlaceAutocomplete } from './components/PlaceAutocomplete';
 import type { PlaceResult } from './lib/api';
 
 function contentWidthForRoute(screen: string): 'normal' | 'wide' | 'full' {
-  if (screen === 'share-event') return 'full';
-  const wide = ['dashboard', 'creative', 'developers', 'admin-home', 'admin-events', 'admin-account', 'admin-create-event', 'admin-newsletters', 'admin-newsletter-emails', 'admin-newsletter-email', 'admin-newsletter-review', 'admin-feeds'];
+  const full = ['share-event', 'create-event', 'edit-event', 'admin-create-event', 'admin-edit-event'];
+  if (full.includes(screen)) return 'full';
+  const wide = ['dashboard', 'creative', 'developers', 'admin-home', 'admin-events', 'admin-account', 'admin-newsletters', 'admin-newsletter-emails', 'admin-newsletter-email', 'admin-newsletter-review', 'admin-feeds'];
   return wide.includes(screen) ? 'wide' : 'normal';
 }
 
