@@ -281,6 +281,193 @@ function SeriesCard({ series, onEditSeries, onEditNext, onExtend }: {
 }
 
 // ---------------------------------------------------------------------------
+// Dashboard Calendar View
+// ---------------------------------------------------------------------------
+
+const CAL_DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+function DashboardCalendar({ eventsByDate, onSelectEvent, today }: {
+  eventsByDate: Map<string, PortalEvent[]>;
+  onSelectEvent: (event: PortalEvent) => void;
+  today: string;
+}) {
+  const [viewYear, setViewYear] = useState(() => parseInt(today.substring(0, 4), 10));
+  const [viewMonth, setViewMonth] = useState(() => parseInt(today.substring(5, 7), 10) - 1);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+
+  const pad = (n: number) => n < 10 ? `0${n}` : `${n}`;
+  const toStr = (y: number, m: number, d: number) => `${y}-${pad(m + 1)}-${pad(d)}`;
+
+  const monthLabel = new Date(viewYear, viewMonth, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+  const days = useMemo(() => {
+    const firstDay = new Date(viewYear, viewMonth, 1);
+    const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+    const offset = firstDay.getDay();
+
+    const all: Array<{ day: number; dateStr: string; inMonth: boolean }> = [];
+    const prevDays = new Date(viewYear, viewMonth, 0).getDate();
+    for (let i = offset - 1; i >= 0; i--) {
+      const d = prevDays - i;
+      const m = viewMonth === 0 ? 11 : viewMonth - 1;
+      const y = viewMonth === 0 ? viewYear - 1 : viewYear;
+      all.push({ day: d, dateStr: toStr(y, m, d), inMonth: false });
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      all.push({ day: d, dateStr: toStr(viewYear, viewMonth, d), inMonth: true });
+    }
+    const rem = 7 - (all.length % 7);
+    if (rem < 7) {
+      for (let d = 1; d <= rem; d++) {
+        const m = viewMonth === 11 ? 0 : viewMonth + 1;
+        const y = viewMonth === 11 ? viewYear + 1 : viewYear;
+        all.push({ day: d, dateStr: toStr(y, m, d), inMonth: false });
+      }
+    }
+    return all;
+  }, [viewYear, viewMonth]);
+
+  const prevMonth = () => {
+    if (viewMonth === 0) { setViewMonth(11); setViewYear(viewYear - 1); }
+    else setViewMonth(viewMonth - 1);
+    setSelectedDate(null);
+  };
+  const nextMonth = () => {
+    if (viewMonth === 11) { setViewMonth(0); setViewYear(viewYear + 1); }
+    else setViewMonth(viewMonth + 1);
+    setSelectedDate(null);
+  };
+
+  const selectedEvents = selectedDate ? (eventsByDate.get(selectedDate) || []) : [];
+
+  return (
+    <div>
+      {/* Month nav */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+        <button type="button" onClick={prevMonth}
+          style={{ background: 'none', border: 'none', color: colors.muted, fontSize: '16px', cursor: 'pointer', padding: '4px 8px' }}>
+          ‹
+        </button>
+        <span style={{ fontSize: '14px', fontWeight: 500, color: colors.heading }}>{monthLabel}</span>
+        <button type="button" onClick={nextMonth}
+          style={{ background: 'none', border: 'none', color: colors.muted, fontSize: '16px', cursor: 'pointer', padding: '4px 8px' }}>
+          ›
+        </button>
+      </div>
+
+      {/* Day headers */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '1px', marginBottom: '2px' }}>
+        {CAL_DAYS.map((d, i) => (
+          <div key={i} style={{ textAlign: 'center', fontSize: '11px', color: colors.dim, padding: '4px 0', fontWeight: 500 }}>
+            {d}
+          </div>
+        ))}
+      </div>
+
+      {/* Calendar grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '1px' }}>
+        {days.map(({ day, dateStr, inMonth }, i) => {
+          const dayEvents = eventsByDate.get(dateStr) || [];
+          const hasEvents = dayEvents.length > 0;
+          const isToday = dateStr === today;
+          const isSelected = dateStr === selectedDate;
+          const isPast = dateStr < today;
+
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => setSelectedDate(isSelected ? null : dateStr)}
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start',
+                padding: '6px 2px', minHeight: '48px', border: 'none', cursor: 'pointer',
+                background: isSelected ? colors.accentDim : 'transparent',
+                borderRadius: radii.sm, fontFamily: 'inherit',
+                opacity: !inMonth ? 0.3 : isPast ? 0.5 : 1,
+                transition: 'background var(--motion-prop)',
+              }}
+            >
+              <span className="tnum" style={{
+                fontSize: '13px', fontWeight: isToday || isSelected ? 600 : 400,
+                color: isSelected ? colors.accent : isToday ? colors.accent : inMonth ? colors.text : colors.dim,
+                width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                borderRadius: '50%',
+                background: isToday && !isSelected ? colors.accentDim : 'transparent',
+              }}>
+                {day}
+              </span>
+              {hasEvents && (
+                <div style={{ display: 'flex', gap: '2px', marginTop: '2px' }}>
+                  {dayEvents.slice(0, 3).map((ev, j) => {
+                    const cc = categoryColors[ev.category];
+                    return (
+                      <span key={j} style={{
+                        width: '5px', height: '5px', borderRadius: '50%',
+                        background: cc?.fg || colors.muted,
+                      }} />
+                    );
+                  })}
+                  {dayEvents.length > 3 && (
+                    <span style={{ fontSize: '8px', color: colors.dim, lineHeight: 1 }}>+</span>
+                  )}
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Selected date events */}
+      {selectedDate && (
+        <div className="motion-fade-in" style={{ marginTop: '12px', borderTop: `1px solid ${colors.border}`, paddingTop: '12px' }}>
+          <div className="tnum" style={{ fontSize: '12px', fontWeight: 600, color: colors.muted, marginBottom: '8px' }}>
+            {fmtDate(selectedDate)} · {selectedEvents.length} event{selectedEvents.length !== 1 ? 's' : ''}
+          </div>
+          {selectedEvents.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              {selectedEvents.map((event) => (
+                <button
+                  key={event.id}
+                  type="button"
+                  onClick={() => onSelectEvent(event)}
+                  className="interactive-row"
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '10px',
+                    width: '100%', padding: '8px 12px', background: colors.card,
+                    border: `1px solid ${colors.border}`, borderRadius: radii.sm,
+                    cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
+                  }}
+                >
+                  <span style={{ fontSize: '13px', fontWeight: 500, color: colors.heading, flex: 1 }}>
+                    {event.title}
+                  </span>
+                  {(() => {
+                    const cc = categoryColors[event.category];
+                    const cl = PORTAL_CATEGORIES[event.category as PortalCategory]?.label;
+                    return cl ? (
+                      <span style={{
+                        fontSize: '9px', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase',
+                        padding: '2px 6px', borderRadius: radii.pill,
+                        background: cc?.bg || colors.bg, color: cc?.fg || colors.muted,
+                      }}>{cl}</span>
+                    ) : null;
+                  })()}
+                  <span className="tnum" style={{ fontSize: '12px', color: colors.muted }}>
+                    {fmtTime(event.start_time)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div style={{ fontSize: '13px', color: colors.dim }}>No events this day.</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Dashboard
 // ---------------------------------------------------------------------------
 
@@ -290,6 +477,7 @@ export function DashboardScreen({ account, onEditEvent, onShareEvent: _onShareEv
   const [loading, setLoading] = useState(true);
   const [showHistory, setShowHistory] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [view, setView] = useState<'list' | 'calendar'>('list');
   const [toast, setToast] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   const loadEvents = useCallback(async () => {
@@ -381,6 +569,19 @@ export function DashboardScreen({ account, onEditEvent, onShareEvent: _onShareEv
     return { upcoming: dateGroups, series: seriesGroups, pastEvents: past };
   }, [events, today]);
 
+  // Events per date for calendar view
+  const eventsByDate = useMemo(() => {
+    const map = new Map<string, PortalEvent[]>();
+    for (const e of events) {
+      const d = e.event_date || '';
+      if (!d) continue;
+      const arr = map.get(d) || [];
+      arr.push(e);
+      map.set(d, arr);
+    }
+    return map;
+  }, [events]);
+
   const handleDelete = async (event: PortalEvent) => {
     if (!confirm(`Delete "${event.title}"? This cannot be undone.`)) return;
     const res = await deleteEvent(event.id);
@@ -453,40 +654,68 @@ export function DashboardScreen({ account, onEditEvent, onShareEvent: _onShareEv
         </div>
       ) : (
         <>
-          {/* ═══ Upcoming — events grouped by date ════════════════════════ */}
+          {/* ═══ Upcoming — list or calendar view ═════════════════════════ */}
 
           {upcoming.length > 0 && (
             <section style={{ marginBottom: spacing.xl }}>
-              <div style={{ ...styles.sectionLabel, marginBottom: '12px' }}>
-                Upcoming
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {upcoming.slice(0, 14).map((group) => (
-                  <div key={group.date}>
-                    {/* Date pillar */}
-                    <div className="tnum" style={{
-                      fontSize: '12px', fontWeight: 600, color: colors.muted,
-                      marginBottom: '6px', letterSpacing: '0.02em',
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                <div style={styles.sectionLabel}>Upcoming</div>
+                <div style={{ display: 'flex', gap: '2px', background: colors.bg, borderRadius: radii.sm, padding: '2px' }}>
+                  <button type="button" onClick={() => setView('list')}
+                    style={{
+                      background: view === 'list' ? colors.card : 'transparent',
+                      border: view === 'list' ? `1px solid ${colors.border}` : '1px solid transparent',
+                      borderRadius: radii.sm, padding: '3px 8px', cursor: 'pointer',
+                      fontSize: '11px', fontFamily: 'inherit', color: view === 'list' ? colors.text : colors.dim,
+                      transition: 'all var(--motion-prop)',
                     }}>
-                      {group.date === today ? 'Today' : group.label}
-                    </div>
-                    {/* Events for this date */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      {group.events.map((event) => (
-                        <EventRow
-                          key={event.id}
-                          event={event}
-                          onEdit={() => onEditEvent(event)}
-                          onDelete={() => handleDelete(event)}
-                          isPast={false}
-                          expanded={expandedId === event.id}
-                          onToggle={() => setExpandedId(expandedId === event.id ? null : event.id)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                ))}
+                    List
+                  </button>
+                  <button type="button" onClick={() => setView('calendar')}
+                    style={{
+                      background: view === 'calendar' ? colors.card : 'transparent',
+                      border: view === 'calendar' ? `1px solid ${colors.border}` : '1px solid transparent',
+                      borderRadius: radii.sm, padding: '3px 8px', cursor: 'pointer',
+                      fontSize: '11px', fontFamily: 'inherit', color: view === 'calendar' ? colors.text : colors.dim,
+                      transition: 'all var(--motion-prop)',
+                    }}>
+                    Calendar
+                  </button>
+                </div>
               </div>
+              {view === 'list' ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {upcoming.slice(0, 14).map((group) => (
+                    <div key={group.date}>
+                      <div className="tnum" style={{
+                        fontSize: '12px', fontWeight: 600, color: colors.muted,
+                        marginBottom: '6px', letterSpacing: '0.02em',
+                      }}>
+                        {group.date === today ? 'Today' : group.label}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        {group.events.map((event) => (
+                          <EventRow
+                            key={event.id}
+                            event={event}
+                            onEdit={() => onEditEvent(event)}
+                            onDelete={() => handleDelete(event)}
+                            isPast={false}
+                            expanded={expandedId === event.id}
+                            onToggle={() => setExpandedId(expandedId === event.id ? null : event.id)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <DashboardCalendar
+                  eventsByDate={eventsByDate}
+                  onSelectEvent={onEditEvent}
+                  today={today}
+                />
+              )}
             </section>
           )}
 
