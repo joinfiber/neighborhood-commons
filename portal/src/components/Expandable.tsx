@@ -8,57 +8,82 @@ interface ExpandableProps {
 /**
  * Animates content expand/collapse using measured height.
  * Content is always in the DOM (for measurement), clipped when collapsed.
- * Open: transitions max-height from 0 to measured height, then removes max-height.
- * Close: sets max-height to current height, then transitions to 0.
+ * Open: transitions max-height from 0 → measured (200ms ease-out).
+ * Close: transitions max-height from measured → 0 (120ms linear).
  */
 export function Expandable({ open, children }: ExpandableProps) {
   const contentRef = useRef<HTMLDivElement>(null);
-  const [height, setHeight] = useState<number | 'auto'>(open ? 'auto' : 0);
+  const [maxHeight, setMaxHeight] = useState<string>(open ? 'none' : '0px');
   const [overflow, setOverflow] = useState<'hidden' | 'visible'>(open ? 'visible' : 'hidden');
-  const prevOpen = useRef(open);
+  const [opacity, setOpacity] = useState(open ? 1 : 0);
+  const isOpen = useRef(open);
 
   useEffect(() => {
     const el = contentRef.current;
     if (!el) return;
 
-    if (open && !prevOpen.current) {
-      // Opening: measure, set to 0, then animate to measured height
-      const measured = el.scrollHeight;
+    if (open && !isOpen.current) {
+      // Opening
+      isOpen.current = true;
       setOverflow('hidden');
-      setHeight(0);
-      // Force reflow so the browser registers the 0 state
-      void el.offsetHeight;
-      setHeight(measured);
-      // After transition, remove max-height constraint so content can reflow
-      const timer = setTimeout(() => {
-        setHeight('auto');
-        setOverflow('visible');
-      }, 200); // matches --motion-open
-      return () => clearTimeout(timer);
+      setMaxHeight('0px');
+      setOpacity(0);
+
+      // Frame 1: browser paints at 0px
+      requestAnimationFrame(() => {
+        const h = el.scrollHeight;
+        setMaxHeight(`${h}px`);
+        setOpacity(1);
+
+        // After transition, free the height so content can reflow
+        const timer = setTimeout(() => {
+          setMaxHeight('none');
+          setOverflow('visible');
+        }, 220);
+        // Store cleanup
+        el.dataset.timer = String(timer);
+      });
     }
 
-    if (!open && prevOpen.current) {
-      // Closing: set to current height, then animate to 0
-      const measured = el.scrollHeight;
-      setOverflow('hidden');
-      setHeight(measured);
-      void el.offsetHeight;
-      setHeight(0);
-    }
+    if (!open && isOpen.current) {
+      // Closing
+      isOpen.current = false;
 
-    prevOpen.current = open;
+      // Clear any pending open timer
+      if (el.dataset.timer) {
+        clearTimeout(Number(el.dataset.timer));
+        delete el.dataset.timer;
+      }
+
+      // Capture current height
+      const h = el.scrollHeight;
+      setOverflow('hidden');
+      setMaxHeight(`${h}px`);
+      setOpacity(1);
+
+      // Frame 1: browser paints at current height
+      requestAnimationFrame(() => {
+        // Frame 2: now transition to 0
+        requestAnimationFrame(() => {
+          setMaxHeight('0px');
+          setOpacity(0);
+        });
+      });
+    }
   }, [open]);
+
+  const closing = maxHeight === '0px' && !open;
 
   return (
     <div
       ref={contentRef}
       style={{
-        maxHeight: height === 'auto' ? undefined : `${height}px`,
+        maxHeight: maxHeight === 'none' ? undefined : maxHeight,
         overflow,
-        opacity: height === 0 ? 0 : 1,
-        transition: height === 0
-          ? 'max-height 120ms linear, opacity 120ms linear'
-          : 'max-height 200ms ease-out, opacity 200ms ease-out',
+        opacity,
+        transition: closing
+          ? 'max-height 120ms linear, opacity 100ms linear'
+          : 'max-height 200ms ease-out, opacity 150ms ease-out',
       }}
     >
       {children}
