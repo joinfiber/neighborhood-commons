@@ -64,7 +64,7 @@ router.get('/', async (req, res, next) => {
   try {
     const params = validateRequest(listSchema, req.query);
 
-    const today = new Date().toISOString();
+    const nowUtc = new Date().toISOString();
     const collapseSeries = params.collapse_series === 'true';
 
     // When collapsing series, over-fetch to compensate for dedup reducing the result set.
@@ -72,12 +72,12 @@ router.get('/', async (req, res, next) => {
 
     let query = supabaseAdmin
       .from('events')
-      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, runtime_minutes, content_rating, showtimes, source_method, source_publisher, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible)', { count: 'exact' })
+      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, runtime_minutes, content_rating, showtimes, source_method, source_publisher, portal_accounts!events_creator_account_id_fkey(business_name, status, wheelchair_accessible)', { count: 'exact' })
       .eq('status', 'published')
       // Visibility: include events still relevant to browse feeds.
       // start_time_required=true events are visible until start; =false until end_time.
       // We over-fetch here (event_at OR end_time >= now) and filter precisely below.
-      .or(`event_at.gte.${today},end_time.gte.${today}`)
+      .or(`event_at.gte.${nowUtc},end_time.gte.${nowUtc}`)
       .order('event_at', { ascending: true })
       .range(params.offset, params.offset + fetchLimit - 1);
 
@@ -93,12 +93,15 @@ router.get('/', async (req, res, next) => {
       query = query.eq('recurrence', 'none');
     }
 
-    // Date range filters (compare against event_at, using ET boundary)
+    // Date range filters (compare against event_at, using UTC day boundaries).
+    // Consumers should use ISO 8601 date strings (YYYY-MM-DD). These are interpreted
+    // as UTC boundaries. For timezone-aware filtering, use start_after/start_before
+    // with full ISO 8601 datetime strings including offset.
     if (params.start_after) {
-      query = query.gte('event_at', params.start_after + 'T00:00:00-05:00');
+      query = query.gte('event_at', params.start_after + 'T00:00:00Z');
     }
     if (params.start_before) {
-      query = query.lte('event_at', params.start_before + 'T23:59:59-05:00');
+      query = query.lte('event_at', params.start_before + 'T23:59:59Z');
     }
 
     // Category filter (by slug)
@@ -119,13 +122,14 @@ router.get('/', async (req, res, next) => {
       }
     }
 
-    // Geo filtering
+    // Geo filtering (bounding-box approximation)
     if (params.near) {
       const [lat, lng] = params.near.split(',').map(Number);
       if (lat !== undefined && lng !== undefined && !isNaN(lat) && !isNaN(lng)) {
         const radiusKm = params.radius_km || 10;
-        const latDelta = radiusKm / 111;
-        const lngDelta = radiusKm / (111 * Math.cos(lat * Math.PI / 180));
+        const KM_PER_DEGREE_LATITUDE = 111; // Approximate km per degree at Earth's surface
+        const latDelta = radiusKm / KM_PER_DEGREE_LATITUDE;
+        const lngDelta = radiusKm / (KM_PER_DEGREE_LATITUDE * Math.cos(lat * Math.PI / 180));
 
         query = query
           .not('latitude', 'is', null)
@@ -154,19 +158,24 @@ router.get('/', async (req, res, next) => {
 
     // Visibility filtering: respect start_time_required semantics
     // - start_time_required=true: visible until start time
-    // - start_time_required=false: visible until end_time (or start + 3h if no end)
-    const now = new Date(today);
+    // - start_time_required=false: visible until end_time (or start + default fallback if no end)
+    const OPEN_WINDOW_DEFAULT_HOURS = 3; // Events without end_time stay visible for this duration after start
+    const now = new Date(nowUtc);
     const visible = ((events || []) as unknown as Record<string, unknown>[]).filter((row) => {
+      // Exclude events from suspended accounts — their events should not appear in public feeds
+      const account = row.portal_accounts as Record<string, unknown> | null;
+      if (account && account.status === 'suspended') return false;
+
       const startTimeRequired = (row.start_time_required as boolean) ?? true;
       const eventAt = new Date(row.event_at as string);
       if (startTimeRequired) {
         return eventAt >= now;
       }
-      // Open-window event: visible until end_time, or start + 3h fallback
+      // Open-window event: visible until end_time, or start + fallback duration
       if (row.end_time) {
         return new Date(row.end_time as string) >= now;
       }
-      const fallback = new Date(eventAt.getTime() + 3 * 60 * 60 * 1000);
+      const fallback = new Date(eventAt.getTime() + OPEN_WINDOW_DEFAULT_HOURS * 60 * 60 * 1000);
       return fallback >= now;
     });
 
@@ -221,7 +230,7 @@ router.get('/:id', async (req, res, next) => {
 
     const { data: event, error } = await supabaseAdmin
       .from('events')
-      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, runtime_minutes, content_rating, showtimes, source_method, source_publisher, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible)')
+      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, runtime_minutes, content_rating, showtimes, source_method, source_publisher, portal_accounts!events_creator_account_id_fkey(business_name, status, wheelchair_accessible)')
       .eq('id', id)
       .eq('status', 'published')
       .maybeSingle();
@@ -231,7 +240,9 @@ router.get('/:id', async (req, res, next) => {
       throw createError('Failed to fetch event', 500, 'SERVER_ERROR');
     }
 
-    if (!event) {
+    // Exclude events from suspended accounts — don't leak existence
+    const account = (event as unknown as Record<string, unknown>)?.portal_accounts as Record<string, unknown> | null;
+    if (!event || (account && account.status === 'suspended')) {
       throw createError('Event not found', 404, 'NOT_FOUND');
     }
 
@@ -389,7 +400,7 @@ function escapeXml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, runtime_minutes, content_rating, showtimes, source_method, source_publisher, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible)';
+const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, runtime_minutes, content_rating, showtimes, source_method, source_publisher, portal_accounts!events_creator_account_id_fkey(business_name, status, wheelchair_accessible)';
 
 /** Deduplicate series events: keep only the nearest upcoming instance per series_id. */
 function deduplicateSeries(events: Record<string, unknown>[]): Record<string, unknown>[] {
@@ -422,7 +433,12 @@ export async function icsHandler(_req: import('express').Request, res: import('e
 
     if (error) throw createError('Failed to fetch events', 500, 'SERVER_ERROR');
 
-    const deduped = deduplicateSeries((events || []) as unknown as Record<string, unknown>[]);
+    // Filter out events from suspended accounts before dedup
+    const active = ((events || []) as unknown as Record<string, unknown>[]).filter((row) => {
+      const acct = row.portal_accounts as Record<string, unknown> | null;
+      return !acct || acct.status !== 'suspended';
+    });
+    const deduped = deduplicateSeries(active);
 
     // Collect unique timezones to emit VTIMEZONE blocks (RFC 5545 §3.6.5)
     const timezones = new Set<string>();
@@ -495,7 +511,12 @@ export async function rssHandler(_req: import('express').Request, res: import('e
 
     if (error) throw createError('Failed to fetch events', 500, 'SERVER_ERROR');
 
-    const deduped = deduplicateSeries((events || []) as unknown as Record<string, unknown>[]);
+    // Filter out events from suspended accounts
+    const activeEvents = ((events || []) as unknown as Record<string, unknown>[]).filter((row) => {
+      const acct = row.portal_accounts as Record<string, unknown> | null;
+      return !acct || acct.status !== 'suspended';
+    });
+    const deduped = deduplicateSeries(activeEvents);
     const baseUrl = 'https://commons.joinfiber.app';
 
     const items = deduped.map((row) => {

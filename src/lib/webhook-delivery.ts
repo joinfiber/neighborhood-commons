@@ -305,7 +305,8 @@ async function handleDeliveryFailure(
   errorMessage: string,
 ): Promise<void> {
   const canRetry = attemptNumber < MAX_RETRIES;
-  const retryDelayMs = canRetry ? Math.pow(5, attemptNumber) * 60_000 : 0;
+  // Exponential backoff: attempt 1 → 1min, attempt 2 → 5min, attempt 3 → 25min
+  const retryDelayMs = canRetry ? Math.pow(5, attemptNumber - 1) * 60_000 : 0;
 
   await supabaseAdmin
     .from('webhook_deliveries')
@@ -373,15 +374,30 @@ export async function retryFailedWebhooks(): Promise<number> {
 
   if (!deliveries || deliveries.length === 0) return 0;
 
-  let retried = 0;
-  for (const d of deliveries) {
-    const { data: sub } = await supabaseAdmin
+  // Batch-fetch subscriptions and events to avoid N+1 queries.
+  // Without this: 50 deliveries × 2 lookups each = 101 queries.
+  // With this: 3 queries total regardless of batch size.
+  const subIds = [...new Set(deliveries.map(d => d.subscription_id))];
+  const eventIds = [...new Set(deliveries.map(d => d.event_id))];
+
+  const [{ data: subs }, { data: events }] = await Promise.all([
+    supabaseAdmin
       .from('webhook_subscriptions')
       .select('id, url, signing_secret, signing_secret_encrypted')
-      .eq('id', d.subscription_id)
-      .eq('status', 'active')
-      .maybeSingle();
+      .in('id', subIds)
+      .eq('status', 'active'),
+    supabaseAdmin
+      .from('events')
+      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, runtime_minutes, content_rating, showtimes, price, link_url, event_image_url, created_at, source_method, source_publisher, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible)')
+      .in('id', eventIds),
+  ]);
 
+  const subMap = new Map((subs || []).map(s => [s.id, s]));
+  const eventMap = new Map((events || []).map(e => [e.id, e]));
+
+  let retried = 0;
+  for (const d of deliveries) {
+    const sub = subMap.get(d.subscription_id);
     if (!sub) {
       await supabaseAdmin
         .from('webhook_deliveries')
@@ -390,14 +406,7 @@ export async function retryFailedWebhooks(): Promise<number> {
       continue;
     }
 
-    // Fetch the event data for the retry payload
-    const { data: event } = await supabaseAdmin
-      .from('events')
-      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, runtime_minutes, content_rating, showtimes, price, link_url, event_image_url, created_at, source_method, source_publisher, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible)')
-      .eq('id', d.event_id)
-      .eq('source', 'portal')
-      .maybeSingle();
-
+    const event = eventMap.get(d.event_id);
     if (!event) {
       await supabaseAdmin
         .from('webhook_deliveries')

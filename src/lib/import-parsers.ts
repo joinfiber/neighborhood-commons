@@ -163,11 +163,42 @@ function icalEventToImported(props: Record<string, string>, fallbackTimezone: st
     address,
     description: unescapeIcal(props['DESCRIPTION'] || '') || null,
     url: props['URL'] || null,
-    cost: null,
+    cost: extractPriceFromText(unescapeIcal(props['DESCRIPTION'] || '')),
     image_url: extractAttachImage(props) || null,
     external_id: props['UID'] || null,
     recurrence: mapRruleToRecurrence(props['RRULE'] || ''),
   };
+}
+
+/**
+ * Extract price/cost from free-text description.
+ * iCal has no standard price property, so we look for common patterns:
+ * "$10", "$5-$15", "$10/person", "Free", "No cover", "Donation", "PWYC", etc.
+ */
+function extractPriceFromText(text: string): string | null {
+  if (!text) return null;
+
+  // Check for free indicators first
+  if (/\bfree\b/i.test(text) && !/\bfree\s*(drink|beer|food|parking|wifi|t-shirt|shirt|gift|giveaway)/i.test(text)) {
+    return 'Free';
+  }
+  if (/\bno\s+(cover|charge|cost|fee)\b/i.test(text)) return 'Free';
+  if (/\bfree\s+(admission|entry|event)\b/i.test(text)) return 'Free';
+
+  // Dollar amount patterns: $10, $5.00, $10-$20, $10-20, $10/$15
+  const dollarMatch = text.match(/\$\d+(?:\.\d{2})?(?:\s*[-–\/]\s*\$?\d+(?:\.\d{2})?)?(?:\s*\/\s*(?:person|ticket|head|couple|pair|family))?/i);
+  if (dollarMatch) return dollarMatch[0].trim();
+
+  // "Tickets: $10" or "Cost: $10" or "Price: $10" or "Admission: $10"
+  const labeledMatch = text.match(/(?:tickets?|cost|price|admission|cover|entry|fee)\s*[:=]\s*(\$\d+(?:\.\d{2})?(?:\s*[-–\/]\s*\$?\d+(?:\.\d{2})?)?)/i);
+  if (labeledMatch) return labeledMatch[1].trim();
+
+  // Donation-based
+  if (/\b(?:donation|pay\s+what\s+you\s+(?:can|want|wish)|pwyc|sliding\s+scale)\b/i.test(text)) {
+    return 'Donation';
+  }
+
+  return null;
 }
 
 /** Extract image URL from ATTACH property (e.g., ATTACH;FMTTYPE=image/jpeg:https://...) */

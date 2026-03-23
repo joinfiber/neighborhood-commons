@@ -43,7 +43,7 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
  */
 export function validateUuidParam(value: unknown, name: string): asserts value is string {
   if (!value || typeof value !== 'string' || !UUID_REGEX.test(value)) {
-    throw createError(`Invalid ${name}`, 400, 'VALIDATION_ERROR');
+    throw createError(`Invalid ${name} — expected a UUID (e.g., 550e8400-e29b-41d4-a716-446655440000)`, 400, 'VALIDATION_ERROR');
   }
 }
 

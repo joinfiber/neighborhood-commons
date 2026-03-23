@@ -19,6 +19,7 @@ import {
   findDuplicate,
   fetchImagesForCandidates,
 } from '../lib/newsletter-extraction.js';
+import { classifyCandidates } from '../lib/candidate-classification.js';
 
 const router = Router();
 
@@ -86,7 +87,13 @@ router.post('/email', writeLimiter, async (req, res, next) => {
       return;
     }
 
-    // Dedup: check if we already have this message_id
+    // Extract just the email address from "Name <email>" format (needed for dedup + source matching)
+    const emailMatch = senderEmail.match(/<([^>]+)>/) || [null, senderEmail];
+    const cleanSender = (emailMatch[1] || senderEmail).toLowerCase().trim();
+
+    // Dedup: check if we already have this email.
+    // Primary key: message_id when available. Fallback: composite of sender + subject + date
+    // to catch duplicates when Mailgun omits Message-Id (NULL != NULL in SQL).
     if (messageId) {
       const { data: existing } = await supabaseAdmin
         .from('newsletter_emails')
@@ -99,12 +106,27 @@ router.post('/email', writeLimiter, async (req, res, next) => {
         res.status(200).json({ received: true, duplicate: true });
         return;
       }
+    } else {
+      // No Message-Id: dedup by sender + subject + recent window (same day)
+      const todayStart = new Date();
+      todayStart.setUTCHours(0, 0, 0, 0);
+      const { data: existing } = await supabaseAdmin
+        .from('newsletter_emails')
+        .select('id')
+        .eq('sender_email', cleanSender)
+        .eq('subject', subject)
+        .gte('created_at', todayStart.toISOString())
+        .is('message_id', null)
+        .maybeSingle();
+
+      if (existing) {
+        console.log(`[NEWSLETTER] Duplicate email (no message_id, same sender+subject today), skipping`);
+        res.status(200).json({ received: true, duplicate: true });
+        return;
+      }
     }
 
     // Match sender to a known newsletter source
-    // Extract just the email address from "Name <email>" format
-    const emailMatch = senderEmail.match(/<([^>]+)>/) || [null, senderEmail];
-    const cleanSender = (emailMatch[1] || senderEmail).toLowerCase().trim();
 
     const { data: source } = await supabaseAdmin
       .from('newsletter_sources')
@@ -208,7 +230,7 @@ async function processEmail(emailId: string): Promise<void> {
 
     // Process each extracted event
     let candidateCount = 0;
-    const insertedCandidates: Array<{ id: string; source_url: string | null }> = [];
+    const insertedCandidates: Array<{ id: string; source_url: string | null; title: string; description: string | null; price: string | null }> = [];
 
     for (const event of events) {
       // Geocode location
@@ -250,7 +272,7 @@ async function processEmail(emailId: string): Promise<void> {
         console.error('[NEWSLETTER] Failed to insert candidate:', candidateError.message);
       } else {
         candidateCount++;
-        insertedCandidates.push({ id: inserted.id as string, source_url: event.source_url });
+        insertedCandidates.push({ id: inserted.id as string, source_url: event.source_url, title: event.title, description: event.description, price: null });
       }
     }
 
@@ -258,6 +280,13 @@ async function processEmail(emailId: string): Promise<void> {
     if (insertedCandidates.some(c => c.source_url)) {
       void fetchAndUpdateCandidateImages(insertedCandidates).catch((err) => {
         console.error('[NEWSLETTER] Image fetch error:', err instanceof Error ? err.message : err);
+      });
+    }
+
+    // Fire-and-forget: classify candidates via LLM (category + tags)
+    if (insertedCandidates.length > 0) {
+      void classifyCandidates(insertedCandidates).catch(err => {
+        console.error('[NEWSLETTER] Classification error:', err instanceof Error ? err.message : err);
       });
     }
 

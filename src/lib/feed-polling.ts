@@ -11,6 +11,7 @@
 import { supabaseAdmin } from './supabase.js';
 import { parseIcalFeed, parseEventbritePage, detectFormat, type ImportedEvent } from './import-parsers.js';
 import { geocodeCandidate, findDuplicate, fetchImagesForCandidates } from './newsletter-extraction.js';
+import { classifyCandidates } from './candidate-classification.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -107,7 +108,7 @@ export async function pollFeedSource(source: FeedSourceRow): Promise<PollResult>
     console.log(`[FEED] ${futureEvents.length} future events (${events.length - futureEvents.length} past events skipped)`);
 
     // Process each event
-    const insertedCandidates: Array<{ id: string; source_url: string | null; has_image: boolean }> = [];
+    const insertedCandidates: Array<{ id: string; source_url: string | null; has_image: boolean; title: string; description: string | null; price: string | null }> = [];
 
     for (const event of futureEvents) {
       const candidate = mapImportedEventToCandidate(event, source);
@@ -162,6 +163,7 @@ export async function pollFeedSource(source: FeedSourceRow): Promise<PollResult>
           matched_event_id: dedup.matched_event_id,
           match_confidence: dedup.match_confidence > 0 ? dedup.match_confidence : null,
           candidate_image_url: candidate.image_url,
+          price: candidate.price,
         })
         .select('id')
         .single();
@@ -170,7 +172,7 @@ export async function pollFeedSource(source: FeedSourceRow): Promise<PollResult>
         console.error(`[FEED] Insert error for "${candidate.title}":`, insertErr.message);
       } else {
         result.candidateCount++;
-        insertedCandidates.push({ id: inserted.id as string, source_url: candidate.source_url, has_image: !!candidate.image_url });
+        insertedCandidates.push({ id: inserted.id as string, source_url: candidate.source_url, has_image: !!candidate.image_url, title: candidate.title, description: candidate.description, price: candidate.price });
       }
     }
 
@@ -192,6 +194,13 @@ export async function pollFeedSource(source: FeedSourceRow): Promise<PollResult>
         }
       }).catch(err => {
         console.error('[FEED] Image fetch error:', err instanceof Error ? err.message : err);
+      });
+    }
+
+    // Fire-and-forget: classify candidates via LLM
+    if (insertedCandidates.length > 0) {
+      void classifyCandidates(insertedCandidates).catch(err => {
+        console.error('[FEED] Classification error:', err instanceof Error ? err.message : err);
       });
     }
 
@@ -270,6 +279,7 @@ function mapImportedEventToCandidate(
   location_address: string | null;
   source_url: string | null;
   image_url: string | null;
+  price: string | null;
 } {
   // Parse ISO 8601 start into date + time
   const startDate = event.start ? event.start.slice(0, 10) : null; // YYYY-MM-DD
@@ -286,6 +296,7 @@ function mapImportedEventToCandidate(
     location_address: event.address || null,
     source_url: event.url || null,
     image_url: event.image_url || null,
+    price: event.cost || null,
   };
 }
 

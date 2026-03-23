@@ -119,6 +119,11 @@ export function createApp(): Express {
     res.sendFile(path.join(__dirname, '../public/llms.txt'), { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
   });
 
+  // ─── OpenAPI spec ─────────────────────────────────────────────────
+  app.get('/api/v1/openapi.json', (_req, res) => {
+    res.sendFile(path.join(__dirname, '../public/openapi.json'), { headers: { 'Content-Type': 'application/json' } });
+  });
+
   // ─── Public Data API ─────────────────────────────────────────────
   app.use('/api/events', publicRoutes);
 
