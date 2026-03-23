@@ -1,10 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { PORTAL_CATEGORIES, type PortalCategory } from '../lib/categories';
-import { colors } from '../lib/styles';
-import { fetchEvents, batchUpdateEvents, batchDeleteEvents, extendEventSeries, type PortalEvent, type PortalAccount } from '../lib/api';
+import { colors, categoryColors, styles, spacing, radii } from '../lib/styles';
+import { fetchEvents, extendEventSeries, type PortalEvent, type PortalAccount } from '../lib/api';
 import { EventRowSkeleton } from '../components/Skeleton';
-import { BulkEditBar } from '../components/BulkEditBar';
-import { ConfirmDialog } from '../components/ConfirmDialog';
+import { formatRecurrenceLabel } from '../lib/recurrence';
 
 interface DashboardScreenProps {
   account: PortalAccount;
@@ -12,335 +11,191 @@ interface DashboardScreenProps {
   onShareEvent: (event: PortalEvent) => void;
 }
 
-function formatDate(dateStr: string): string {
-  const d = new Date(dateStr + 'T12:00:00');
-  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function fmtDate(d: string): string {
+  return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
-function formatTime(time: string): string {
-  const [h, m] = time.split(':');
+function fmtTime(t: string): string {
+  const [h, m] = t.split(':');
   const hour = parseInt(h!, 10);
-  const ampm = hour >= 12 ? 'PM' : 'AM';
-  const h12 = hour % 12 || 12;
-  return `${h12}:${m} ${ampm}`;
+  return `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`;
 }
 
-function recurrenceLabel(recurrence: string): string | null {
-  if (recurrence === 'none' || !recurrence) return null;
-  if (recurrence === 'daily') return 'Daily';
-  if (recurrence === 'weekly') return 'Weekly';
-  if (recurrence === 'biweekly') return 'Every 2 weeks';
-  if (recurrence === 'monthly') return 'Monthly';
-  if (recurrence.startsWith('weekly_days:')) {
-    const days = recurrence.replace('weekly_days:', '').split(',');
-    const dayNames: Record<string, string> = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
-    return days.map((d) => dayNames[d] || d).join(', ');
-  }
-  if (recurrence.startsWith('ordinal_weekday:')) {
-    const [, ordStr, day] = recurrence.split(':');
-    const ord = parseInt(ordStr!, 10);
-    const ordinals = ['', '1st', '2nd', '3rd', '4th'];
-    const dayName = day ? day.charAt(0).toUpperCase() + day.slice(1) : '';
-    return `${ordinals[ord] || ord} ${dayName}`;
-  }
-  return null;
+function todayStr(): string {
+  const d = new Date();
+  const pad = (n: number) => n < 10 ? `0${n}` : `${n}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-// =============================================================================
-// TYPES
-// =============================================================================
-
-interface EventGroup {
-  type: 'single';
-  event: PortalEvent;
-}
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 interface SeriesGroup {
-  type: 'series';
   seriesId: string;
-  events: PortalEvent[]; // sorted by event_date ascending
-  nextEvent: PortalEvent; // first upcoming, or last if all past
+  title: string;
+  category: string;
+  recurrence: string;
+  startTime: string;
+  endTime: string | null;
+  events: PortalEvent[];
+  nextEvent: PortalEvent | null;
+  upcomingCount: number;
 }
 
-type DashboardItem = EventGroup | SeriesGroup;
+interface DateGroup {
+  date: string;
+  label: string;
+  events: PortalEvent[];
+}
 
-// =============================================================================
-// EVENT CARD
-// =============================================================================
+// ---------------------------------------------------------------------------
+// Event Row
+// ---------------------------------------------------------------------------
 
-function EventCard({ event, onClick, onShare, selected, onToggle, selectMode }: {
-  event: PortalEvent;
-  onClick: () => void;
-  onShare: () => void;
-  selected: boolean;
-  onToggle: (id: string) => void;
-  selectMode: boolean;
+function EventRow({ event, onClick, isPast }: {
+  event: PortalEvent; onClick: () => void; isPast: boolean;
 }) {
-  const cat = PORTAL_CATEGORIES[event.category as PortalCategory];
-  const today = new Date().toISOString().split('T')[0]!;
-  const isPast = event.event_date < today;
+  const catColor = categoryColors[event.category];
+  const catLabel = PORTAL_CATEGORIES[event.category as PortalCategory]?.label;
 
   return (
-    <div
+    <button
+      type="button"
+      onClick={onClick}
       className="interactive-row"
       style={{
-        background: colors.card,
-        border: `1px solid ${selected ? colors.accent : colors.border}`,
-        borderRadius: '10px',
-        padding: '14px 16px',
-        cursor: 'pointer',
-        transition: 'border-color 0.15s',
-        opacity: isPast ? 0.5 : 1,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '6px',
-        minHeight: '90px',
+        display: 'flex', alignItems: 'center', gap: '12px',
+        width: '100%', padding: '10px 14px', background: colors.card,
+        border: `1px solid ${colors.border}`, borderRadius: radii.md,
+        cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
+        opacity: isPast ? 0.5 : 1, transition: 'border-color 0.15s, box-shadow 0.15s',
       }}
-      onClick={() => selectMode ? onToggle(event.id) : onClick()}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-        <div style={{ fontSize: '15px', color: colors.cream, fontWeight: 500, lineHeight: 1.3, flex: 1 }}>
+      {/* Title */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: '14px', fontWeight: 500, color: colors.heading, lineHeight: 1.3,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {event.title}
         </div>
-        {selectMode ? (
-          <div
-            onClick={(e) => { e.stopPropagation(); onToggle(event.id); }}
-            style={{
-              width: '18px',
-              height: '18px',
-              borderRadius: '3px',
-              border: `1.5px solid ${selected ? colors.accent : colors.dim}`,
-              background: selected ? colors.accent : 'transparent',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-              cursor: 'pointer',
-            }}
-          >
-            {selected && (
-              <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-                <path d="M2 6l3 3 5-5" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            )}
+        {event.venue_name && (
+          <div style={{ fontSize: '12px', color: colors.dim, marginTop: '1px',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {event.venue_name}
           </div>
-        ) : (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onShare(); }}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', flexShrink: 0 }}
-            title="Share"
-          >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <path d="M4 12V14H12V12" stroke={colors.dim} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M8 10V3M5 5.5L8 2.5L11 5.5" stroke={colors.dim} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
         )}
       </div>
-      <div style={{ fontSize: '13px', color: colors.muted }}>
-        {formatDate(event.event_date)} · {formatTime(event.start_time)}
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-        {cat && (
-          <span style={{ fontSize: '11px', color: colors.dim }}>{cat.label}</span>
-        )}
-        {event.status === 'pending_review' && (
-          <span style={{
-            fontSize: '10px',
-            color: colors.pending,
-            background: colors.pendingBg,
-            border: `1px solid ${colors.pendingBorder}`,
-            borderRadius: '10px',
-            padding: '1px 6px',
-          }}>
-            pending
-          </span>
-        )}
-      </div>
-    </div>
+
+      {/* Category badge */}
+      {catLabel && (
+        <span style={{
+          fontSize: '10px', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase',
+          padding: '2px 8px', borderRadius: radii.pill, flexShrink: 0,
+          background: catColor?.bg || colors.bg, color: catColor?.fg || colors.muted,
+        }}>
+          {catLabel}
+        </span>
+      )}
+
+      {/* Time */}
+      <span className="tnum" style={{ fontSize: '13px', color: colors.muted, flexShrink: 0, fontWeight: 500 }}>
+        {fmtTime(event.start_time)}
+      </span>
+    </button>
   );
 }
 
-// =============================================================================
-// SERIES CARD
-// =============================================================================
+// ---------------------------------------------------------------------------
+// Series Card
+// ---------------------------------------------------------------------------
 
-function SeriesCard({ group, onClick, onShare, selectedIds, onToggle, selectMode, onExtend, onEditInstances }: {
-  group: SeriesGroup;
-  onClick: (event: PortalEvent) => void;
-  onShare: (event: PortalEvent) => void;
-  selectedIds: Set<string>;
-  onToggle: (id: string) => void;
-  selectMode: boolean;
-  onExtend: (seriesId: string) => void;
-  onEditInstances: () => void;
+function SeriesCard({ series, onEditSeries, onEditNext, onExtend }: {
+  series: SeriesGroup;
+  onEditSeries: () => void;
+  onEditNext: () => void;
+  onExtend: () => void;
 }) {
-  const { nextEvent, events } = group;
-  const cat = PORTAL_CATEGORIES[nextEvent.category as PortalCategory];
-  const today = new Date().toISOString().split('T')[0]!;
-  const upcomingCount = events.filter((e) => e.event_date >= today).length;
-  const totalCount = events.length;
-  const allSelected = events.every((e) => selectedIds.has(e.id));
-  const someSelected = events.some((e) => selectedIds.has(e.id));
-  const rec = recurrenceLabel(nextEvent.recurrence);
-  const runningLow = upcomingCount <= 5 && upcomingCount > 0;
-  const expired = upcomingCount === 0;
-
-  const toggleAll = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    for (const ev of events) onToggle(ev.id);
-  };
+  const catColor = categoryColors[series.category];
+  const catLabel = PORTAL_CATEGORIES[series.category as PortalCategory]?.label;
+  const recLabel = formatRecurrenceLabel(series.recurrence);
+  const runningLow = series.upcomingCount > 0 && series.upcomingCount <= 5;
+  const expired = series.upcomingCount === 0;
 
   return (
-    <div
-      className="interactive-row"
-      style={{
-        background: colors.card,
-        border: `1px solid ${someSelected ? colors.accent : colors.border}`,
-        borderRadius: '10px',
-        padding: '14px 16px',
-        cursor: 'pointer',
-        transition: 'border-color 0.15s',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '6px',
-        minHeight: '90px',
-      }}
-      onClick={() => selectMode ? toggleAll({ stopPropagation: () => {} } as React.MouseEvent) : onClick(nextEvent)}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-        <div style={{ fontSize: '15px', color: colors.cream, fontWeight: 500, lineHeight: 1.3, flex: 1 }}>
-          {nextEvent.title}
-        </div>
-        {selectMode ? (
-          <div
-            onClick={toggleAll}
-            style={{
-              width: '18px',
-              height: '18px',
-              borderRadius: '3px',
-              border: `1.5px solid ${allSelected ? colors.accent : colors.dim}`,
-              background: allSelected ? colors.accent : 'transparent',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-              cursor: 'pointer',
-            }}
-          >
-            {allSelected && (
-              <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-                <path d="M2 6l3 3 5-5" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            )}
+    <div style={{
+      background: colors.card, border: `1px solid ${colors.border}`,
+      borderRadius: radii.md, padding: '14px 16px',
+      opacity: expired ? 0.6 : 1,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: '15px', fontWeight: 600, color: colors.heading, lineHeight: 1.3 }}>
+            {series.title}
           </div>
-        ) : (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onShare(nextEvent); }}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', flexShrink: 0 }}
-            title="Share"
-          >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <path d="M4 12V14H12V12" stroke={colors.dim} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M8 10V3M5 5.5L8 2.5L11 5.5" stroke={colors.dim} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-        )}
-      </div>
-      <div style={{ fontSize: '13px', color: colors.muted }}>
-        Next: {formatDate(nextEvent.event_date)} · {formatTime(nextEvent.start_time)}
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-        {rec && (
-          <span style={{
-            fontSize: '11px',
-            color: colors.accent,
-            background: colors.accentDim,
-            border: `1px solid ${colors.accentBorder}`,
-            borderRadius: '10px',
-            padding: '1px 8px',
-          }}>
-            {rec}
-          </span>
-        )}
-        <span style={{ fontSize: '11px', color: colors.dim }}>
-          {upcomingCount} upcoming · {totalCount} total
-        </span>
-        {cat && (
-          <span style={{ fontSize: '11px', color: colors.dim }}>· {cat.label}</span>
-        )}
-        {nextEvent.status === 'pending_review' && (
-          <span style={{
-            fontSize: '10px',
-            color: colors.pending,
-            background: colors.pendingBg,
-            border: `1px solid ${colors.pendingBorder}`,
-            borderRadius: '10px',
-            padding: '1px 6px',
-          }}>
-            pending
-          </span>
-        )}
-      </div>
-      {!selectMode && (
-        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '2px' }}>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onEditInstances(); }}
-            style={{
-              background: 'transparent',
-              color: colors.dim,
-              border: `1px solid ${colors.border}`,
-              borderRadius: '6px',
-              fontSize: '11px',
-              padding: '4px 10px',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-            }}
-          >
-            Edit instances
-          </button>
-          {(runningLow || expired) && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onExtend(group.seriesId); }}
-              style={{
-                background: expired ? colors.accent : 'transparent',
-                color: expired ? '#ffffff' : colors.accent,
-                border: expired ? 'none' : `1px solid ${colors.accentBorder}`,
-                borderRadius: '6px',
-                fontSize: '11px',
-                fontWeight: 500,
-                padding: '4px 10px',
-                cursor: 'pointer',
-              }}
-            >
-              {expired ? 'Renew 6 months' : `Renew (${upcomingCount} left)`}
-            </button>
-          )}
+          <div className="tnum" style={{ fontSize: '13px', color: colors.muted, marginTop: '3px' }}>
+            {recLabel} · {fmtTime(series.startTime)}
+            {series.endTime && <> – {fmtTime(series.endTime)}</>}
+          </div>
+          <div style={{ fontSize: '12px', color: colors.dim, marginTop: '2px' }}>
+            {series.nextEvent && <>Next: {fmtDate(series.nextEvent.event_date)} · </>}
+            {series.upcomingCount} upcoming
+          </div>
         </div>
-      )}
+        {catLabel && (
+          <span style={{
+            fontSize: '10px', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase',
+            padding: '2px 8px', borderRadius: radii.pill, flexShrink: 0,
+            background: catColor?.bg || colors.bg, color: catColor?.fg || colors.muted,
+          }}>
+            {catLabel}
+          </span>
+        )}
+      </div>
+
+      {/* Actions */}
+      <div style={{ display: 'flex', gap: '12px', marginTop: '10px', alignItems: 'center' }}>
+        <button type="button" onClick={onEditSeries} className="btn-text"
+          style={{ ...styles.buttonText, padding: 0, fontSize: '12px' }}>
+          Edit series
+        </button>
+        {series.nextEvent && (
+          <button type="button" onClick={onEditNext} className="btn-text"
+            style={{ ...styles.buttonText, padding: 0, fontSize: '12px' }}>
+            Edit next
+          </button>
+        )}
+        {(runningLow || expired) && (
+          <button type="button" onClick={onExtend}
+            style={{
+              background: expired ? colors.accent : 'transparent',
+              color: expired ? '#fff' : colors.accent,
+              border: expired ? 'none' : `1px solid ${colors.accentBorder}`,
+              borderRadius: radii.sm, padding: '3px 10px', fontSize: '11px',
+              fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
+              marginLeft: 'auto',
+            }}>
+            {expired ? 'Renew' : `${series.upcomingCount} left — extend`}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
 
-// =============================================================================
-// DASHBOARD
-// =============================================================================
+// ---------------------------------------------------------------------------
+// Dashboard
+// ---------------------------------------------------------------------------
 
-export function DashboardScreen({ account, onEditEvent, onShareEvent }: DashboardScreenProps) {
+export function DashboardScreen({ account, onEditEvent, onShareEvent: _onShareEvent }: DashboardScreenProps) {
+  void _onShareEvent; // retained for future use
   const [events, setEvents] = useState<PortalEvent[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Multi-select (per-series bulk edit)
-  const [selectMode, setSelectMode] = useState(false);
-  const [selectSeriesId, setSelectSeriesId] = useState<string | null>(null);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [applying, setApplying] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [toast, setToast] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const loadEvents = useCallback(async () => {
     setLoading(true);
@@ -351,62 +206,6 @@ export function DashboardScreen({ account, onEditEvent, onShareEvent }: Dashboar
 
   useEffect(() => { loadEvents(); }, [loadEvents]);
 
-  const exitSelectMode = () => {
-    setSelectMode(false);
-    setSelectSeriesId(null);
-    setSelectedIds(new Set());
-  };
-
-  const enterSeriesSelectMode = (seriesId: string, eventIds: string[]) => {
-    setSelectMode(true);
-    setSelectSeriesId(seriesId);
-    setSelectedIds(new Set(eventIds));
-  };
-
-  const toggleSelect = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const handleBulkApply = async (updates: Record<string, unknown>) => {
-    setApplying(true);
-    const res = await batchUpdateEvents(Array.from(selectedIds), updates);
-    setApplying(false);
-    if (res.error) {
-      setToast({ text: res.error.message, type: 'error' });
-    } else {
-      setToast({ text: `Updated ${res.data?.updated || 0} event${(res.data?.updated || 0) !== 1 ? 's' : ''}`, type: 'success' });
-      exitSelectMode();
-      loadEvents();
-    }
-  };
-
-  const handleExtendSeries = async (seriesId: string) => {
-    setApplying(true);
-    const res = await extendEventSeries(seriesId);
-    setApplying(false);
-    if (res.error) {
-      setToast({ text: res.error.message, type: 'error' });
-    } else {
-      setToast({ text: `Added ${res.data?.added || 0} events`, type: 'success' });
-      loadEvents();
-    }
-  };
-
-  const handleBulkDelete = async () => {
-    setConfirmDelete(false);
-    setApplying(true);
-    const result = await batchDeleteEvents(Array.from(selectedIds));
-    setApplying(false);
-    setToast({ text: `Deleted ${result.deleted} event${result.deleted !== 1 ? 's' : ''}`, type: 'success' });
-    exitSelectMode();
-    loadEvents();
-  };
-
   useEffect(() => {
     if (toast) {
       const t = setTimeout(() => setToast(null), 3000);
@@ -414,10 +213,11 @@ export function DashboardScreen({ account, onEditEvent, onShareEvent }: Dashboar
     }
   }, [toast]);
 
-  const today = new Date().toISOString().split('T')[0]!;
+  const today = todayStr();
 
-  // Group events into Recurring (series) and One-off (singles)
-  const buildSections = () => {
+  // ── Build sections ─────────────────────────────────────────────────────
+
+  const { upcoming, series, pastEvents } = useMemo(() => {
     const seriesMap = new Map<string, PortalEvent[]>();
     const singles: PortalEvent[] = [];
 
@@ -431,197 +231,224 @@ export function DashboardScreen({ account, onEditEvent, onShareEvent }: Dashboar
       }
     }
 
-    const recurring: SeriesGroup[] = [];
+    // Build series groups
+    const seriesGroups: SeriesGroup[] = [];
     for (const [seriesId, seriesEvents] of seriesMap) {
       seriesEvents.sort((a, b) => a.event_date.localeCompare(b.event_date));
       const upcomingInSeries = seriesEvents.filter((e) => e.event_date >= today);
-      const nextEvent = upcomingInSeries[0] || seriesEvents[seriesEvents.length - 1]!;
-      recurring.push({ type: 'series', seriesId, events: seriesEvents, nextEvent });
+      const nextEvent = upcomingInSeries[0] || null;
+      const representative = nextEvent || seriesEvents[seriesEvents.length - 1]!;
+      seriesGroups.push({
+        seriesId,
+        title: representative.title,
+        category: representative.category,
+        recurrence: representative.recurrence,
+        startTime: representative.start_time,
+        endTime: representative.end_time,
+        events: seriesEvents,
+        nextEvent,
+        upcomingCount: upcomingInSeries.length,
+      });
     }
-    // Active series first (have upcoming events), then expired, each sorted by next date
-    recurring.sort((a, b) => {
-      const aHasUpcoming = a.events.some((e) => e.event_date >= today);
-      const bHasUpcoming = b.events.some((e) => e.event_date >= today);
-      if (aHasUpcoming !== bHasUpcoming) return aHasUpcoming ? -1 : 1;
-      return a.nextEvent.event_date.localeCompare(b.nextEvent.event_date);
+    // Active series first, then expired
+    seriesGroups.sort((a, b) => {
+      if (a.upcomingCount > 0 && b.upcomingCount === 0) return -1;
+      if (a.upcomingCount === 0 && b.upcomingCount > 0) return 1;
+      const aDate = a.nextEvent?.event_date || 'z';
+      const bDate = b.nextEvent?.event_date || 'z';
+      return aDate.localeCompare(bDate);
     });
 
-    // One-offs: upcoming first (ascending), then past (descending)
-    const upcomingSingles = singles.filter((e) => e.event_date >= today).sort((a, b) => a.event_date.localeCompare(b.event_date));
-    const pastSingles = singles.filter((e) => e.event_date < today).sort((a, b) => b.event_date.localeCompare(a.event_date));
-    const oneOff = [...upcomingSingles, ...pastSingles];
+    // Build upcoming (all upcoming events — series instances + one-offs — grouped by date)
+    const allUpcoming = [
+      ...events.filter((e) => e.event_date >= today),
+    ].sort((a, b) => a.event_date.localeCompare(b.event_date) || a.start_time.localeCompare(b.start_time));
 
-    return { recurring, oneOff };
+    const dateGroups: DateGroup[] = [];
+    for (const event of allUpcoming) {
+      const last = dateGroups[dateGroups.length - 1];
+      if (last && last.date === event.event_date) {
+        last.events.push(event);
+      } else {
+        dateGroups.push({
+          date: event.event_date,
+          label: fmtDate(event.event_date),
+          events: [event],
+        });
+      }
+    }
+
+    // Past events (most recent first)
+    const past = singles
+      .filter((e) => e.event_date < today)
+      .sort((a, b) => b.event_date.localeCompare(a.event_date));
+
+    return { upcoming: dateGroups, series: seriesGroups, pastEvents: past };
+  }, [events, today]);
+
+  const handleExtend = async (seriesId: string) => {
+    const res = await extendEventSeries(seriesId);
+    if (res.error) {
+      setToast({ text: res.error.message, type: 'error' });
+    } else {
+      setToast({ text: `Added ${res.data?.added || 0} events`, type: 'success' });
+      loadEvents();
+    }
   };
 
-  const { recurring, oneOff } = buildSections();
-
-  const renderGrid = (items: DashboardItem[]) => (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
-      gap: '8px',
-    }}>
-      {items.map((item) => {
-        if (item.type === 'series') {
-          return (
-            <SeriesCard
-              key={item.seriesId}
-              group={item}
-              onClick={onEditEvent}
-              onShare={onShareEvent}
-              selectedIds={selectedIds}
-              onToggle={toggleSelect}
-              selectMode={selectMode && selectSeriesId === item.seriesId}
-              onExtend={handleExtendSeries}
-              onEditInstances={() => enterSeriesSelectMode(item.seriesId, item.events.map((e) => e.id))}
-            />
-          );
-        }
-        return (
-          <EventCard
-            key={item.event.id}
-            event={item.event}
-            onClick={() => onEditEvent(item.event)}
-            onShare={() => onShareEvent(item.event)}
-            selected={selectedIds.has(item.event.id)}
-            onToggle={toggleSelect}
-            selectMode={false}
-          />
-        );
-      })}
-    </div>
-  );
+  // ── Render ─────────────────────────────────────────────────────────────
 
   return (
-    <>
-        {/* Verification banner */}
-        {account.status === 'pending' && (
-          <div style={{
-            background: '#fef3cd',
-            border: '1px solid #fde68a',
-            borderRadius: '8px',
-            padding: '10px 14px',
-            marginBottom: '14px',
-            fontSize: '13px',
-            lineHeight: 1.5,
-            color: colors.text,
-          }}>
-            <strong style={{ color: '#92600a' }}>Review in progress</strong> — your events will appear once we've reviewed your account. This usually takes less than a day.
-          </div>
-        )}
+    <div style={{ maxWidth: '720px', width: '100%' }}>
 
-        {/* Toast */}
-        {toast && (
-          <div style={{
-            background: toast.type === 'success' ? colors.successBg : colors.errorBg,
-            color: toast.type === 'success' ? colors.success : colors.error,
-            borderRadius: '6px',
-            padding: '8px 12px',
-            fontSize: '13px',
-            marginBottom: '10px',
-          }}>
-            {toast.text}
-          </div>
-        )}
+      {/* Toast */}
+      {toast && (
+        <div style={{
+          background: toast.type === 'success' ? colors.successBg : colors.errorBg,
+          color: toast.type === 'success' ? colors.success : colors.error,
+          borderRadius: radii.sm, padding: '8px 12px', fontSize: '13px', marginBottom: '14px',
+        }}>
+          {toast.text}
+        </div>
+      )}
 
-        {/* Bulk edit bar (shown when editing series instances) */}
-        {selectMode && selectedIds.size > 0 && (
-          <div style={{ marginBottom: '14px' }}>
-            <BulkEditBar
-              selectedCount={selectedIds.size}
-              onApply={handleBulkApply}
-              onCancel={exitSelectMode}
-              applying={applying}
-            />
-            <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-              {selectedIds.size > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setConfirmDelete(true)}
-                  disabled={applying}
-                  style={{
-                    background: 'transparent',
-                    border: `1px solid ${colors.error}30`,
-                    color: colors.error,
-                    borderRadius: '6px',
-                    padding: '6px 12px',
-                    fontSize: '12px',
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                  }}
-                >
-                  Delete ({selectedIds.size})
-                </button>
-              )}
-              <div style={{ flex: 1 }} />
+      {/* Pending account banner */}
+      {account.status === 'pending' && (
+        <div style={{
+          background: colors.pendingBg, border: `1px solid ${colors.pendingBorder}`,
+          borderRadius: radii.md, padding: '10px 14px', marginBottom: '14px',
+          fontSize: '13px', lineHeight: 1.5, color: colors.text,
+        }}>
+          <strong style={{ color: colors.pending }}>Review in progress</strong> — your events will appear once we've reviewed your account.
+        </div>
+      )}
+
+      {/* ═══ Loading ══════════════════════════════════════════════════════ */}
+
+      {loading ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <EventRowSkeleton />
+          <EventRowSkeleton />
+          <EventRowSkeleton />
+        </div>
+      ) : events.length === 0 ? (
+
+        /* ═══ Empty state ═════════════════════════════════════════════════ */
+
+        <div style={{ textAlign: 'center', padding: '60px 24px' }}>
+          <div style={{ fontSize: '16px', color: colors.heading, marginBottom: '6px', fontWeight: 500 }}>
+            Your event schedule lives here.
+          </div>
+          <div style={{ fontSize: '14px', color: colors.muted, marginBottom: '24px', lineHeight: 1.5 }}>
+            Add your recurring programs and one-off events.<br />
+            They'll appear across neighborhood apps.
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* ═══ Upcoming — events grouped by date ════════════════════════ */}
+
+          {upcoming.length > 0 && (
+            <section style={{ marginBottom: spacing.xl }}>
+              <div style={{ ...styles.sectionLabel, marginBottom: '12px' }}>
+                Upcoming
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {upcoming.slice(0, 14).map((group) => (
+                  <div key={group.date}>
+                    {/* Date pillar */}
+                    <div className="tnum" style={{
+                      fontSize: '12px', fontWeight: 600, color: colors.muted,
+                      marginBottom: '6px', letterSpacing: '0.02em',
+                    }}>
+                      {group.date === today ? 'Today' : group.label}
+                    </div>
+                    {/* Events for this date */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {group.events.map((event) => (
+                        <EventRow
+                          key={event.id}
+                          event={event}
+                          onClick={() => onEditEvent(event)}
+                          isPast={false}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* ═══ Your Programming — series as named programs ══════════════ */}
+
+          {series.length > 0 && (
+            <section style={{ marginBottom: spacing.xl }}>
+              <div style={{ ...styles.sectionLabel, marginBottom: '12px' }}>
+                Your Programming
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {series.map((s) => (
+                  <SeriesCard
+                    key={s.seriesId}
+                    series={s}
+                    onEditSeries={() => {
+                      // Edit the next upcoming instance (series template editing via instance)
+                      const target = s.nextEvent || s.events[s.events.length - 1];
+                      if (target) onEditEvent(target);
+                    }}
+                    onEditNext={() => {
+                      if (s.nextEvent) onEditEvent(s.nextEvent);
+                    }}
+                    onExtend={() => handleExtend(s.seriesId)}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* ═══ Past events — collapsed by default ══════════════════════ */}
+
+          {pastEvents.length > 0 && (
+            <section>
               <button
                 type="button"
-                onClick={exitSelectMode}
+                onClick={() => setShowHistory(!showHistory)}
                 style={{
-                  background: 'none',
-                  border: 'none',
-                  color: colors.dim,
-                  fontSize: '12px',
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  width: '100%', padding: '10px 0', background: 'none', border: 'none',
+                  cursor: 'pointer', fontFamily: 'inherit',
                 }}
               >
-                Done
+                <span style={{ ...styles.sectionLabel, margin: 0 }}>
+                  Past events ({pastEvents.length})
+                </span>
+                <span style={{ fontSize: '12px', color: colors.dim, transition: 'transform 0.15s',
+                  transform: showHistory ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+                  ▸
+                </span>
               </button>
-            </div>
-          </div>
-        )}
-
-        {/* ── Event grid ── */}
-        {loading ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <EventRowSkeleton />
-            <EventRowSkeleton />
-            <EventRowSkeleton />
-          </div>
-        ) : events.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '48px 24px' }}>
-            <div style={{ fontSize: '15px', color: colors.cream, marginBottom: '4px' }}>
-              No events yet
-            </div>
-            <div style={{ fontSize: '13px', color: colors.muted }}>
-              Post your first event to reach the neighborhood.
-            </div>
-          </div>
-        ) : (
-          <>
-            {recurring.length > 0 && (
-              <div style={{ marginBottom: '24px' }}>
-                <div style={{ fontSize: '12px', fontWeight: 500, color: colors.dim, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '10px' }}>
-                  Recurring ({recurring.length})
+              {showHistory && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', paddingBottom: spacing.lg }}>
+                  {pastEvents.slice(0, 20).map((event) => (
+                    <EventRow
+                      key={event.id}
+                      event={event}
+                      onClick={() => onEditEvent(event)}
+                      isPast={true}
+                    />
+                  ))}
+                  {pastEvents.length > 20 && (
+                    <div style={{ fontSize: '12px', color: colors.dim, padding: '8px 0', textAlign: 'center' }}>
+                      Showing 20 of {pastEvents.length}
+                    </div>
+                  )}
                 </div>
-                {renderGrid(recurring)}
-              </div>
-            )}
-            {oneOff.length > 0 && (
-              <div style={{ marginBottom: '24px' }}>
-                <div style={{ fontSize: '12px', fontWeight: 500, color: colors.dim, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '10px' }}>
-                  One-off ({oneOff.length})
-                </div>
-                {renderGrid(oneOff.map((e) => ({ type: 'single' as const, event: e })))}
-              </div>
-            )}
-          </>
-        )}
-
-        {/* Delete confirmation */}
-        {confirmDelete && (
-          <ConfirmDialog
-            title={`Delete ${selectedIds.size} event${selectedIds.size !== 1 ? 's' : ''}?`}
-            message="This cannot be undone. Deleted events are removed from all feeds immediately."
-            confirmLabel="Delete"
-            destructive
-            loading={applying}
-            onConfirm={handleBulkDelete}
-            onCancel={() => setConfirmDelete(false)}
-          />
-        )}
-    </>
+              )}
+            </section>
+          )}
+        </>
+      )}
+    </div>
   );
 }
