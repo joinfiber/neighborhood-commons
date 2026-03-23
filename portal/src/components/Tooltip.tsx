@@ -44,7 +44,6 @@ export function Tooltip({ id, content }: TooltipProps) {
         ?
       </button>
 
-      {/* Desktop: popover anchored to the right of the icon */}
       {isDesktop && open && (
         <span
           id={id}
@@ -63,7 +62,6 @@ export function Tooltip({ id, content }: TooltipProps) {
         </span>
       )}
 
-      {/* Mobile: inline expansion below */}
       {!isDesktop && open && (
         <span
           id={id}

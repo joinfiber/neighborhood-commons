@@ -1,29 +1,25 @@
 /* =============================================================================
-   Portal CSS — interactive states, animations, and utility classes.
-   Layout and static tokens remain in lib/styles.ts (inline CSSProperties).
+   Portal CSS — Geist Sans / Inter. Warm neutrals. World-class CMS.
    ============================================================================= */
 
 :root {
   --color-accent: #2c2c2c;
-  --color-accent-dim: #2c2c2c06;
-  --color-accent-border: #2c2c2c15;
-  --color-bg: #f7f7f5;
+  --color-accent-dim: #2c2c2c08;
+  --color-accent-border: #2c2c2c20;
+  --color-bg: #f8f8f6;
   --color-card: #ffffff;
-  --color-border: #e8e6e1;
+  --color-border: #e4e1dc;
   --color-heading: #1a1917;
   --color-text: #37352f;
   --color-muted: #6b6660;
   --color-dim: #9c9791;
   --color-error: #c0392b;
   --color-error-bg: #fef2f2;
-  --color-error-border: #f5c6c0;
   --color-success: #2d8a4e;
   --color-success-bg: #ecfdf3;
-  --color-success-border: #b7e4c7;
   --color-pending: #92600a;
   --color-pending-bg: #fef9ee;
-  --color-pending-border: #f5e6b8;
-  /* Legacy alias */
+  /* Legacy */
   --color-cream: #1a1917;
 }
 
@@ -42,13 +38,13 @@ body {
   --color-bg: #0f0f0e;
   --color-card: #181715;
   --color-border: #2a2825;
+  --color-heading: #f5f0e8;
   --color-cream: #f5f0e8;
   --color-text: #d4d0c8;
   --color-muted: #7a7670;
   --color-dim: #4a4740;
   --color-error: #D4725C;
   --color-success: #7A9E7E;
-  --color-success-dim: #7A9E7E18;
 }
 
 /* =============================================================================
@@ -61,18 +57,19 @@ body {
 }
 
 @keyframes fadeUp {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-.fade-up { animation: fadeUp 0.35s ease both; }
+.fade-up { animation: fadeUp 0.3s ease both; }
 
 /* =============================================================================
-   Interactive form states
+   Form inputs — focus glow
    ============================================================================= */
 
 input:focus, select:focus, textarea:focus {
   border-color: var(--color-accent) !important;
+  box-shadow: 0 0 0 3px rgba(44, 44, 44, 0.06);
   outline: none;
 }
 
@@ -81,19 +78,37 @@ input::placeholder, textarea::placeholder {
 }
 
 /* =============================================================================
+   Title input — underline style, headline presence
+   ============================================================================= */
+
+.title-input {
+  transition: border-color 0.15s;
+}
+
+.title-input:focus {
+  border-bottom-color: var(--color-accent) !important;
+}
+
+.title-input::placeholder {
+  color: var(--color-dim);
+  font-weight: 400;
+}
+
+/* =============================================================================
    Interactive rows
    ============================================================================= */
 
 .interactive-row {
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .interactive-row:hover {
   border-color: var(--color-accent-border) !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
 
 /* =============================================================================
-   Dropdown items (PlaceAutocomplete, selects)
+   Dropdown items
    ============================================================================= */
 
 .dropdown-item {
@@ -105,7 +120,7 @@ input::placeholder, textarea::placeholder {
 }
 
 /* =============================================================================
-   Button interactive states
+   Buttons
    ============================================================================= */
 
 .btn-primary {
@@ -113,7 +128,7 @@ input::placeholder, textarea::placeholder {
 }
 
 .btn-primary:hover:not(:disabled) {
-  opacity: 0.9;
+  opacity: 0.88;
 }
 
 .btn-primary:active:not(:disabled) {
@@ -121,8 +136,8 @@ input::placeholder, textarea::placeholder {
 }
 
 .btn-primary:disabled {
-  opacity: 0.5;
-  cursor: default;
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .btn-secondary {
@@ -133,8 +148,13 @@ input::placeholder, textarea::placeholder {
   border-color: var(--color-accent-border) !important;
 }
 
+.btn-secondary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .btn-text:hover {
-  color: var(--color-cream) !important;
+  color: var(--color-heading) !important;
 }
 
 /* =============================================================================
@@ -167,7 +187,7 @@ input::placeholder, textarea::placeholder {
 }
 
 /* =============================================================================
-   Toast animations
+   Toast
    ============================================================================= */
 
 @keyframes toastIn {
@@ -180,16 +200,11 @@ input::placeholder, textarea::placeholder {
   to { opacity: 0; transform: translateX(-50%) translateY(-12px); }
 }
 
-.toast-enter {
-  animation: toastIn 0.25s ease both;
-}
-
-.toast-exit {
-  animation: toastOut 0.2s ease both;
-}
+.toast-enter { animation: toastIn 0.25s ease both; }
+.toast-exit { animation: toastOut 0.2s ease both; }
 
 /* =============================================================================
-   Focus-visible for keyboard navigation
+   Focus-visible
    ============================================================================= */
 
 :focus-visible {
@@ -202,7 +217,7 @@ button:focus:not(:focus-visible) {
 }
 
 /* =============================================================================
-   Sidebar navigation
+   Sidebar
    ============================================================================= */
 
 .sidebar-nav-item {
@@ -211,10 +226,10 @@ button:focus:not(:focus-visible) {
 
 .sidebar-nav-item:hover {
   background: var(--color-accent-dim) !important;
-  color: var(--color-cream) !important;
+  color: var(--color-heading) !important;
 }
 
-/* Mobile sidebar overlay */
+/* Mobile sidebar */
 .sidebar-overlay-backdrop {
   position: fixed;
   inset: 0;
@@ -238,24 +253,6 @@ button:focus:not(:focus-visible) {
 }
 
 /* =============================================================================
-   Title input — self-reflective headline field
-   ============================================================================= */
-
-.title-input {
-  border: 1px solid transparent !important;
-  transition: border-color 0.15s, background 0.15s;
-}
-
-.title-input:hover {
-  background: var(--color-accent-dim);
-}
-
-.title-input:focus {
-  border-color: var(--color-accent) !important;
-  background: var(--color-card);
-}
-
-/* =============================================================================
    Tooltip
    ============================================================================= */
 
@@ -275,14 +272,21 @@ button:focus:not(:focus-visible) {
 }
 
 .tooltip-popup {
-  animation: tooltipFadeIn 0.15s ease both;
+  animation: tooltipFadeIn 0.12s ease both;
 }
 
 /* =============================================================================
-   Disabled button cursor fix
+   Category pill colors — applied via data attribute or class
    ============================================================================= */
 
-.btn-primary:disabled,
-.btn-secondary:disabled {
-  cursor: not-allowed !important;
+.category-pill {
+  font-feature-settings: 'tnum' 1;
+}
+
+/* =============================================================================
+   Tabular numbers for dates, times, prices
+   ============================================================================= */
+
+.tnum {
+  font-feature-settings: 'tnum' 1;
 }

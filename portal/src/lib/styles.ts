@@ -1,12 +1,12 @@
 /**
  * Portal Design Tokens
  *
- * Light work-focused palette for the logged-in portal.
- * loginColors preserves the dark brand palette for the marketing/login page.
+ * World-class CMS design system. Geist Sans / Inter. Warm neutrals.
+ * Every token is intentional. Every color has a role.
  */
 
 // ---------------------------------------------------------------------------
-// Spacing & Radii — reference vocabulary for consistent sizing
+// Spacing & Radii
 // ---------------------------------------------------------------------------
 
 export const radii = {
@@ -27,7 +27,7 @@ export const spacing = {
 } as const;
 
 // ---------------------------------------------------------------------------
-// Dark palette — used only by LoginScreen and marketing pages
+// Dark palette — login/marketing only
 // ---------------------------------------------------------------------------
 
 export const loginColors = {
@@ -47,23 +47,23 @@ export const loginColors = {
 } as const;
 
 // ---------------------------------------------------------------------------
-// Light work palette — every logged-in screen and component
+// Light work palette — every logged-in screen
 // ---------------------------------------------------------------------------
 
 export const colors = {
-  // Core palette
+  // Core surfaces
   accent: '#2c2c2c',
-  accentDim: '#2c2c2c06',
-  accentBorder: '#2c2c2c15',
-  bg: '#f7f7f5',
+  accentDim: '#2c2c2c08',
+  accentBorder: '#2c2c2c20',
+  bg: '#f8f8f6',
   card: '#ffffff',
-  border: '#e8e6e1',
+  border: '#e4e1dc',
 
   // Typography hierarchy
-  heading: '#1a1917',       // near-black — page titles, prominent text
-  text: '#37352f',          // primary body text
-  muted: '#6b6660',         // secondary text, labels
-  dim: '#9c9791',           // tertiary text, placeholders, disabled
+  heading: '#1a1917',
+  text: '#37352f',
+  muted: '#6b6660',
+  dim: '#9c9791',
 
   // Semantic status
   error: '#c0392b',
@@ -81,17 +81,51 @@ export const colors = {
   successDim: '#ecfdf3',
 } as const;
 
+// ---------------------------------------------------------------------------
+// Category colors — subtle tints matching Fiber's palette (light mode)
+// ---------------------------------------------------------------------------
+
+export const categoryColors: Record<string, { fg: string; bg: string }> = {
+  live_music:     { fg: '#C43F27', bg: '#fef0ed' },
+  dj_dance:       { fg: '#9245DB', bg: '#f8f0fe' },
+  comedy:         { fg: '#8F660D', bg: '#fef8ec' },
+  trivia_games:   { fg: '#5558DA', bg: '#f0f0fe' },
+  karaoke:        { fg: '#C4327B', bg: '#fef0f6' },
+  open_mic:       { fg: '#6C3FE8', bg: '#f3effe' },
+  art_gallery:    { fg: '#9356A3', bg: '#f6f0f8' },
+  film_screening: { fg: '#B03040', bg: '#fef0f2' },
+  theatre:        { fg: '#A82CC0', bg: '#f8edfe' },
+  workshop_class: { fg: '#B0530B', bg: '#fef4ec' },
+  happy_hour:     { fg: '#8F6719', bg: '#fef8ee' },
+  food_drink:     { fg: '#A15D18', bg: '#fef5ec' },
+  market_popup:   { fg: '#127A73', bg: '#edfaf9' },
+  fitness_class:  { fg: '#0F7A4E', bg: '#edfcf4' },
+  community:      { fg: '#0B7D31', bg: '#edfcf0' },
+  sports_rec:     { fg: '#2A69D1', bg: '#eef4fe' },
+  spectator:      { fg: '#0E6F9E', bg: '#edf7fe' },
+  other:          { fg: '#656D7D', bg: '#f4f4f6' },
+};
+
+// ---------------------------------------------------------------------------
+// Input base
+// ---------------------------------------------------------------------------
+
 const inputBase: React.CSSProperties = {
   background: colors.card,
   border: `1px solid ${colors.border}`,
-  borderRadius: '8px',
+  borderRadius: radii.md,
   color: colors.text,
   fontSize: '15px',
   padding: '10px 12px',
+  minHeight: '44px',
   outline: 'none',
   width: '100%',
-  transition: 'border-color 0.15s',
+  transition: 'border-color 0.15s, box-shadow 0.15s',
 };
+
+// ---------------------------------------------------------------------------
+// Styles
+// ---------------------------------------------------------------------------
 
 export const styles = {
   // Layout
@@ -124,7 +158,7 @@ export const styles = {
     zIndex: 1,
   },
 
-  // Split layout (landing page — dark)
+  // Split layout (login — dark)
   splitLayout: {
     display: 'flex',
     minHeight: '100vh',
@@ -156,35 +190,38 @@ export const styles = {
   card: {
     background: colors.card,
     border: `1px solid ${colors.border}`,
-    borderRadius: '12px',
-    padding: '24px',
+    borderRadius: radii.lg,
+    padding: spacing.lg,
   },
 
   // Typography
   pageTitle: {
-    fontSize: '24px',
-    fontWeight: 500 as const,
+    fontSize: '22px',
+    fontWeight: 600 as const,
     color: colors.heading,
-    letterSpacing: '0.01em',
+    letterSpacing: '-0.01em',
+    lineHeight: 1.3,
   },
   sectionLabel: {
-    fontSize: '13px',
+    fontSize: '12px',
     fontWeight: 600 as const,
     textTransform: 'uppercase' as const,
     letterSpacing: '0.06em',
     color: colors.muted,
   },
   formLabel: {
-    fontSize: '14px',
+    fontSize: '13px',
     fontWeight: 500 as const,
     color: colors.text,
     marginBottom: '6px',
     display: 'block' as const,
+    lineHeight: 1.4,
   },
   helperText: {
     fontSize: '12px',
     color: colors.dim,
     marginTop: '4px',
+    lineHeight: 1.4,
   },
 
   // Inputs
@@ -208,10 +245,10 @@ export const styles = {
     background: colors.accent,
     color: '#ffffff',
     border: 'none',
-    borderRadius: '8px',
+    borderRadius: radii.md,
     padding: '12px 24px',
     fontSize: '15px',
-    fontWeight: 500,
+    fontWeight: 500 as const,
     cursor: 'pointer',
     width: '100%',
     transition: 'opacity 0.15s, transform 0.15s',
@@ -220,10 +257,10 @@ export const styles = {
     background: 'transparent',
     color: colors.text,
     border: `1px solid ${colors.border}`,
-    borderRadius: '8px',
+    borderRadius: radii.md,
     padding: '12px 24px',
     fontSize: '15px',
-    fontWeight: 400,
+    fontWeight: 400 as const,
     cursor: 'pointer',
     transition: 'border-color 0.15s',
   },
@@ -240,13 +277,14 @@ export const styles = {
   pill: {
     display: 'inline-flex',
     alignItems: 'center',
-    borderRadius: '16px',
-    padding: '5px 12px',
+    borderRadius: radii.pill,
+    padding: '6px 14px',
     fontSize: '13px',
     cursor: 'pointer',
     transition: 'all 0.15s',
     border: '1px solid',
     userSelect: 'none' as const,
+    fontWeight: 500 as const,
   },
   pillActive: {
     background: colors.accentDim,
@@ -279,7 +317,7 @@ export const styles = {
     margin: '6px 0',
   },
 
-  // Ambient glow — login/marketing pages only
+  // Ambient glow — login only
   ambientGlow: {
     position: 'fixed' as const,
     top: '-200px',
@@ -294,7 +332,7 @@ export const styles = {
     animation: 'drift 22s ease-in-out infinite',
   },
 
-  // Workspace layout — sidebar CMS shell
+  // Workspace layout
   workspace: {
     display: 'flex',
     minHeight: '100vh',
@@ -324,29 +362,32 @@ export const styles = {
     padding: '40px 20px',
   },
 
-  // Self-reflective title input — reads as a headline, not a text field
+  // ── Form-specific tokens ──────────────────────────────────────────────
+
+  // Title input — self-reflective headline
   titleInput: {
     fontSize: '20px',
     fontWeight: 600 as const,
-    padding: '14px 16px',
-    border: '1px solid transparent',
-    borderRadius: radii.md,
+    padding: '12px 0',
+    border: 'none',
+    borderBottom: `1px solid transparent`,
+    borderRadius: 0,
     background: 'transparent',
     color: colors.heading,
     letterSpacing: '-0.01em',
     outline: 'none',
     width: '100%',
-    transition: 'border-color 0.15s, background 0.15s',
+    transition: 'border-color 0.15s',
   },
 
-  // Form field grouping
+  // Field grouping
   fieldGroup: {
     marginBottom: spacing.lg,
   },
   fieldDivider: {
     border: 'none',
     borderTop: `1px solid ${colors.border}`,
-    margin: `${spacing.xl} 0`,
+    margin: `${spacing.xxl} 0`,
   },
 
   // Tooltip
@@ -394,7 +435,7 @@ export const styles = {
     border: 0,
   },
 
-  // Optional label treatment
+  // Optional label
   optionalLabel: {
     color: colors.dim,
     fontWeight: 400 as const,
@@ -406,7 +447,7 @@ export const styles = {
     position: 'sticky' as const,
     bottom: 0,
     background: colors.bg,
-    padding: '12px 0',
+    padding: '16px 0',
     marginTop: spacing.sm,
     zIndex: 10,
     borderTop: `1px solid ${colors.border}`,
@@ -414,13 +455,13 @@ export const styles = {
 } as const;
 
 // ---------------------------------------------------------------------------
-// Dark login styles — mirrors key shared styles using loginColors
+// Dark login styles
 // ---------------------------------------------------------------------------
 
 const loginInputBase: React.CSSProperties = {
   background: loginColors.bg,
   border: `1px solid ${loginColors.border}`,
-  borderRadius: '8px',
+  borderRadius: radii.md,
   color: loginColors.text,
   fontSize: '14px',
   padding: '10px 12px',
@@ -445,10 +486,10 @@ export const loginStyles = {
     background: loginColors.accent,
     color: '#0f0f0e',
     border: 'none',
-    borderRadius: '8px',
+    borderRadius: radii.md,
     padding: '12px 24px',
     fontSize: '14px',
-    fontWeight: 500,
+    fontWeight: 500 as const,
     cursor: 'pointer',
     width: '100%',
     transition: 'opacity 0.15s, transform 0.15s',
@@ -463,7 +504,7 @@ export const loginStyles = {
   },
   pageTitle: {
     fontSize: '20px',
-    fontWeight: 300,
+    fontWeight: 300 as const,
     color: loginColors.cream,
     letterSpacing: '0.06em',
   },
@@ -475,5 +516,3 @@ export const loginStyles = {
     display: 'block' as const,
   },
 } as const;
-
-// Animations and interactive styles are in portal.css

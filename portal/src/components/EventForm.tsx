@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useBreakpoint } from '../hooks/useBreakpoint';
-import { styles, colors } from '../lib/styles';
+import { styles, colors, categoryColors, spacing, radii } from '../lib/styles';
 import type { EventFormData, PlaceResult } from '../lib/types';
 import { PORTAL_CATEGORIES, PORTAL_CATEGORY_KEYS } from '../lib/categories';
 import { CalendarPicker } from './CalendarPicker';
@@ -14,10 +14,10 @@ import { Tooltip } from './Tooltip';
 import { getTagsForCategory, AGE_TAGS } from '../lib/tags';
 
 // ---------------------------------------------------------------------------
-// Tooltip content — all contextual help text in one place for easy editing
+// Tooltip content
 // ---------------------------------------------------------------------------
 
-const TOOLTIPS = {
+const TIPS = {
   endTime: 'Adding an end time helps people plan their evening and lets apps show duration. Leave blank if the event winds down naturally.',
   recurrence: 'Recurring events post once and repeat on your schedule. You can always edit individual dates later.',
   venue: 'Search for your venue to auto-fill the address and map pin. This helps people find your event in location-based apps.',
@@ -30,7 +30,7 @@ const TOOLTIPS = {
 } as const;
 
 // ---------------------------------------------------------------------------
-// Props — unchanged from previous version
+// Props
 // ---------------------------------------------------------------------------
 
 interface EventFormProps {
@@ -44,6 +44,10 @@ interface EventFormProps {
   accountWheelchairAccessible?: boolean | null;
 }
 
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
 export function EventForm({
   mode,
   initialValues = {},
@@ -55,6 +59,7 @@ export function EventForm({
   accountWheelchairAccessible,
 }: EventFormProps) {
   // ── State ──────────────────────────────────────────────────────────────
+
   const [title, setTitle] = useState(initialValues.title || '');
   const [venueName, setVenueName] = useState(initialValues.venue_name || '');
   const [address, setAddress] = useState(initialValues.address || '');
@@ -80,7 +85,6 @@ export function EventForm({
   const [linkError, setLinkError] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  // Venue display: show pre-filled card until user taps "Change"
   const hasPrefilledVenue = !!(initialValues.venue_name && mode !== 'edit');
   const [editingVenue, setEditingVenue] = useState(!hasPrefilledVenue);
 
@@ -114,7 +118,6 @@ export function EventForm({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title || !venueName || !eventDate || !startTime || !category) return;
-
     setError(null);
 
     const data: EventFormData = {
@@ -144,9 +147,7 @@ export function EventForm({
 
     try {
       const result = await onSubmit(data);
-      if (result?.error) {
-        setError(result.error);
-      }
+      if (result?.error) setError(result.error);
     } catch {
       setError('Something went wrong. Please try again.');
     }
@@ -156,387 +157,382 @@ export function EventForm({
   const isValid = !!(title && venueName && eventDate && startTime && category);
   const hasAvailableTags = !!category && getTagsForCategory(category).length > 0;
   const repeats = recurrence !== 'none';
+  const catColor = category ? categoryColors[category] : null;
 
   // ── Render ─────────────────────────────────────────────────────────────
 
   return (
     <>
+      {/* Error banner */}
       {error && (
         <div style={{
           background: colors.errorBg,
           color: colors.error,
           padding: '10px 14px',
-          borderRadius: '8px',
+          borderRadius: radii.md,
           fontSize: '14px',
-          marginBottom: '16px',
+          marginBottom: spacing.md,
+          border: `1px solid ${colors.errorBorder}`,
         }}>
           {error}
         </div>
       )}
 
-      <form onSubmit={handleSubmit}>
-        <div style={styles.card}>
+      <form onSubmit={handleSubmit} style={{ maxWidth: '680px', width: '100%' }}>
 
-          {/* ═══════════════════════════════════════════════════════════════
-              SECTION 1: ESSENTIALS — what, when, where, what kind
-              ═══════════════════════════════════════════════════════════════ */}
+        {/* ═══════════════════════════════════════════════════════════════════
+            ESSENTIALS — what, when, where, what kind
+            ═══════════════════════════════════════════════════════════════════ */}
 
-          {/* ── Title ── */}
-          <div style={styles.fieldGroup}>
-            <label style={styles.srOnly}>Event name</label>
-            <input
-              className="title-input"
-              style={styles.titleInput}
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Event name"
-              required
-              aria-describedby={undefined}
-            />
-          </div>
+        {/* Title */}
+        <div style={{ marginBottom: spacing.xl }}>
+          <label style={styles.srOnly}>Event name</label>
+          <input
+            className="title-input"
+            style={styles.titleInput}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Event name"
+            required
+          />
+        </div>
 
-          {/* ── Date + Start Time ── */}
-          <div style={styles.fieldGroup}>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
-              gap: '12px',
-            }}>
-              <div>
-                <label style={styles.formLabel}>Date</label>
-                <CalendarPicker value={eventDate} onChange={setEventDate} />
-              </div>
-              <div>
-                <label style={styles.formLabel}>Start</label>
-                <TimePicker value={startTime || '19:00'} onChange={setStartTime} />
-              </div>
+        {/* Date + Start Time */}
+        <div style={styles.fieldGroup}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+            gap: spacing.md,
+          }}>
+            <div>
+              <label style={styles.formLabel}>Date</label>
+              <CalendarPicker value={eventDate} onChange={setEventDate} />
             </div>
-          </div>
-
-          {/* ── End Time (always visible) ── */}
-          <div style={styles.fieldGroup}>
-            <label style={styles.formLabel}>
-              End time{' '}
-              <span style={styles.optionalLabel}>(optional)</span>
-              <Tooltip id="tip-end-time" content={TOOLTIPS.endTime} />
-            </label>
-            {endTime ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <TimePicker value={endTime} onChange={setEndTime} />
-                <button
-                  type="button"
-                  onClick={() => setEndTime('')}
-                  aria-label="Remove end time"
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: colors.dim,
-                    cursor: 'pointer',
-                    fontSize: '16px',
-                    padding: '4px',
-                    lineHeight: 1,
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setEndTime('21:00')}
-                style={{
-                  ...styles.input,
-                  color: colors.dim,
-                  cursor: 'pointer',
-                  textAlign: 'left' as const,
-                }}
-              >
-                Set end time
-              </button>
-            )}
-          </div>
-
-          {/* ── Recurrence (always visible) ── */}
-          <div style={styles.fieldGroup}>
-            <label style={styles.formLabel}>
-              Repeats
-              <Tooltip id="tip-recurrence" content={TOOLTIPS.recurrence} />
-            </label>
-            <div style={{ display: 'flex', gap: '6px', marginBottom: repeats ? '12px' : 0 }}>
-              <button
-                type="button"
-                style={{
-                  ...styles.pill,
-                  ...(repeats ? styles.pillInactive : styles.pillActive),
-                }}
-                onClick={() => { setRecurrence('none'); }}
-              >
-                One-time
-              </button>
-              <button
-                type="button"
-                style={{
-                  ...styles.pill,
-                  ...(repeats ? styles.pillActive : styles.pillInactive),
-                }}
-                onClick={() => {
-                  if (!repeats) {
-                    setRecurrence('weekly');
-                    setInstanceCount(4);
-                  }
-                }}
-              >
-                Repeats
-              </button>
-            </div>
-            {repeats && (
-              <RecurrencePicker
-                value={recurrence}
-                onChange={setRecurrence}
-                eventDate={eventDate}
-                instanceCount={instanceCount}
-                onInstanceCountChange={setInstanceCount}
-              />
-            )}
-          </div>
-
-          {/* ── Venue ── */}
-          <div style={styles.fieldGroup}>
-            <label style={styles.formLabel}>
-              Venue
-              <Tooltip id="tip-venue" content={TOOLTIPS.venue} />
-            </label>
-            {!editingVenue && venueName ? (
-              <div style={{
-                background: colors.bg,
-                border: `1px solid ${colors.border}`,
-                borderRadius: '8px',
-                padding: '12px 14px',
-              }}>
-                <div style={{ fontSize: '15px', fontWeight: 500, color: colors.text }}>
-                  {venueName}
-                </div>
-                {address && (
-                  <div style={{ fontSize: '13px', color: colors.muted, marginTop: '2px' }}>
-                    {address}
-                  </div>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setEditingVenue(true)}
-                  style={{
-                    ...styles.buttonText,
-                    padding: '2px 0',
-                    marginTop: '6px',
-                    fontSize: '12px',
-                  }}
-                >
-                  Change
-                </button>
-              </div>
-            ) : (
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
-                gap: '10px',
-              }}>
-                <div>
-                  <PlaceAutocomplete
-                    value={venueName}
-                    onChange={setVenueName}
-                    onSelect={handlePlaceSelect}
-                    placeholder="Venue name"
-                    searchCoords={searchCoords}
-                  />
-                </div>
-                <div>
-                  <input
-                    style={styles.input}
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    placeholder={mode === 'create' ? 'Auto-fills from venue' : 'Address'}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* ── Category ── */}
-          <div style={styles.fieldGroup}>
-            <label style={styles.formLabel}>
-              Category
-              <Tooltip id="tip-category" content={TOOLTIPS.category} />
-            </label>
-            <select
-              style={{ ...styles.select, fontFamily: 'inherit' }}
-              value={category}
-              onChange={(e) => handleCategoryChange(e.target.value)}
-              required
-              aria-describedby="tip-category"
-            >
-              <option value="">Choose a category...</option>
-              {PORTAL_CATEGORY_KEYS.map((key) => (
-                <option key={key} value={key}>
-                  {PORTAL_CATEGORIES[key].label}
-                </option>
-              ))}
-            </select>
-
-            {category === 'other' && (
-              <div style={{ marginTop: '10px' }}>
-                <label style={styles.formLabel}>Custom category</label>
-                <input
-                  style={styles.input}
-                  value={customCategory}
-                  onChange={(e) => setCustomCategory(e.target.value)}
-                  placeholder="e.g., Book club"
-                  maxLength={50}
-                />
-              </div>
-            )}
-          </div>
-
-          {/* ── Tags (always visible when category has tags) ── */}
-          <div style={styles.fieldGroup}>
-            <label style={styles.formLabel}>
-              Tags{' '}
-              <span style={styles.optionalLabel}>(optional)</span>
-              <Tooltip id="tip-tags" content={TOOLTIPS.tags} />
-            </label>
-            {hasAvailableTags ? (
-              <TagPicker category={category} value={tags} onChange={setTags} />
-            ) : (
-              <div style={{ fontSize: '13px', color: colors.dim }}>
-                {category
-                  ? 'No tags available for this category.'
-                  : 'Select a category first to see available tags.'}
-              </div>
-            )}
-          </div>
-
-          {/* ═══════════════════════════════════════════════════════════════
-              DIVIDER — essentials above, enrichment below
-              ═══════════════════════════════════════════════════════════════ */}
-
-          <hr style={styles.fieldDivider} />
-
-          {/* ═══════════════════════════════════════════════════════════════
-              SECTION 2: ENRICHMENT — image, description, price, link
-              ═══════════════════════════════════════════════════════════════ */}
-
-          {/* ── Image ── */}
-          <div style={styles.fieldGroup}>
-            <label style={styles.formLabel}>
-              Photo{' '}
-              <span style={styles.optionalLabel}>(optional)</span>
-              <Tooltip id="tip-image" content={TOOLTIPS.image} />
-            </label>
-            {mode === 'edit' && hasExistingImage && !image && (
-              <div style={{
-                background: colors.bg,
-                border: `1px solid ${colors.border}`,
-                borderRadius: '8px',
-                padding: '12px',
-                marginBottom: '8px',
-                fontSize: '12px',
-                color: colors.muted,
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}>
-                <span>Current image attached</span>
-                <button
-                  type="button"
-                  className="btn-text"
-                  style={{ ...styles.buttonText, color: colors.error }}
-                  onClick={() => setHasExistingImage(false)}
-                  aria-label="Remove current image"
-                >
-                  Remove
-                </button>
-              </div>
-            )}
-            <ImageUpload value={image} onChange={setImage} />
-            {image && (
-              <ImageCropPreview
-                imageSrc={image}
-                focalY={imageFocalY}
-                onFocalYChange={setImageFocalY}
-              />
-            )}
-          </div>
-
-          {/* ── Description ── */}
-          <div style={styles.fieldGroup}>
-            <label style={styles.formLabel}>
-              Description{' '}
-              <span style={styles.optionalLabel}>(optional)</span>
-              <Tooltip id="tip-description" content={TOOLTIPS.description} />
-            </label>
-            <textarea
-              style={{ ...styles.textarea, minHeight: '100px' }}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="What should people know about this event?"
-              aria-describedby="tip-description"
-            />
-          </div>
-
-          {/* ── Price + Link ── */}
-          <div style={styles.fieldGroup}>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
-              gap: '12px',
-            }}>
-              <div>
-                <label style={styles.formLabel}>
-                  Price{' '}
-                  <span style={styles.optionalLabel}>(optional)</span>
-                  <Tooltip id="tip-price" content={TOOLTIPS.price} />
-                </label>
-                <input
-                  style={styles.input}
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
-                  placeholder="Free, $10, $5–15..."
-                />
-              </div>
-              <div>
-                <label style={styles.formLabel}>
-                  Link{' '}
-                  <span style={styles.optionalLabel}>(optional)</span>
-                  <Tooltip id="tip-link" content={TOOLTIPS.link} />
-                </label>
-                <input
-                  style={{
-                    ...styles.input,
-                    ...(linkError ? { borderColor: colors.error } : {}),
-                  }}
-                  value={ticketUrl}
-                  onChange={(e) => { setTicketUrl(e.target.value); setLinkError(''); }}
-                  onBlur={() => {
-                    if (!ticketUrl.trim()) { setLinkError(''); return; }
-                    const normalized = normalizeUrl(ticketUrl);
-                    if (normalized !== ticketUrl) setTicketUrl(normalized);
-                    if (!isValidUrl(normalized)) {
-                      setLinkError('Enter a URL like eventbrite.com/your-event');
-                    }
-                  }}
-                  placeholder="eventbrite.com/your-event"
-                />
-                {linkError && (
-                  <div style={{ fontSize: '11px', color: colors.error, marginTop: '4px' }}>
-                    {linkError}
-                  </div>
-                )}
-              </div>
+            <div>
+              <label style={styles.formLabel}>Start time</label>
+              <TimePicker value={startTime || '19:00'} onChange={setStartTime} />
             </div>
           </div>
         </div>
 
-        {/* ── Submit ── */}
-        <div style={isMobile ? styles.stickySubmit : { marginTop: '16px' }}>
+        {/* End Time */}
+        <div style={styles.fieldGroup}>
+          <label style={styles.formLabel}>
+            End time{' '}
+            <span style={styles.optionalLabel}>(optional)</span>
+            <Tooltip id="tip-end-time" content={TIPS.endTime} />
+          </label>
+          {endTime ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ flex: 1 }}>
+                <TimePicker value={endTime} onChange={setEndTime} />
+              </div>
+              <button
+                type="button"
+                onClick={() => setEndTime('')}
+                aria-label="Remove end time"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: colors.dim,
+                  cursor: 'pointer',
+                  fontSize: '18px',
+                  padding: '4px 8px',
+                  lineHeight: 1,
+                  borderRadius: radii.sm,
+                  transition: 'color 0.15s',
+                }}
+              >
+                ×
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setEndTime('21:00')}
+              style={{
+                ...styles.input,
+                color: colors.dim,
+                cursor: 'pointer',
+                textAlign: 'left' as const,
+              }}
+            >
+              Set end time
+            </button>
+          )}
+        </div>
+
+        {/* Recurrence */}
+        <div style={styles.fieldGroup}>
+          <label style={styles.formLabel}>
+            Repeats
+            <Tooltip id="tip-recurrence" content={TIPS.recurrence} />
+          </label>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: repeats ? spacing.md : 0 }}>
+            <button
+              type="button"
+              style={{ ...styles.pill, ...(repeats ? styles.pillInactive : styles.pillActive) }}
+              onClick={() => setRecurrence('none')}
+            >
+              One-time
+            </button>
+            <button
+              type="button"
+              style={{ ...styles.pill, ...(repeats ? styles.pillActive : styles.pillInactive) }}
+              onClick={() => { if (!repeats) { setRecurrence('weekly'); setInstanceCount(4); } }}
+            >
+              Repeats
+            </button>
+          </div>
+          {repeats && (
+            <RecurrencePicker
+              value={recurrence}
+              onChange={setRecurrence}
+              eventDate={eventDate}
+              instanceCount={instanceCount}
+              onInstanceCountChange={setInstanceCount}
+            />
+          )}
+        </div>
+
+        {/* Venue */}
+        <div style={styles.fieldGroup}>
+          <label style={styles.formLabel}>
+            Venue
+            <Tooltip id="tip-venue" content={TIPS.venue} />
+          </label>
+          {!editingVenue && venueName ? (
+            <div style={{
+              background: colors.bg,
+              border: `1px solid ${colors.border}`,
+              borderRadius: radii.md,
+              padding: '12px 14px',
+            }}>
+              <div style={{ fontSize: '15px', fontWeight: 500, color: colors.text }}>
+                {venueName}
+              </div>
+              {address && (
+                <div style={{ fontSize: '13px', color: colors.muted, marginTop: '2px' }}>
+                  {address}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => setEditingVenue(true)}
+                style={{ ...styles.buttonText, padding: '2px 0', marginTop: '6px', fontSize: '12px' }}
+              >
+                Change venue
+              </button>
+            </div>
+          ) : (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+              gap: '10px',
+            }}>
+              <PlaceAutocomplete
+                value={venueName}
+                onChange={setVenueName}
+                onSelect={handlePlaceSelect}
+                placeholder="Venue name"
+                searchCoords={searchCoords}
+              />
+              <input
+                style={styles.input}
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder={mode === 'create' ? 'Auto-fills from venue' : 'Address'}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Category */}
+        <div style={styles.fieldGroup}>
+          <label style={styles.formLabel}>
+            Category
+            <Tooltip id="tip-category" content={TIPS.category} />
+          </label>
+          <select
+            style={{
+              ...styles.select,
+              fontFamily: 'inherit',
+              ...(catColor ? {
+                borderColor: catColor.fg + '30',
+                backgroundColor: catColor.bg,
+                color: catColor.fg,
+                fontWeight: 500,
+              } : {}),
+            }}
+            value={category}
+            onChange={(e) => handleCategoryChange(e.target.value)}
+            required
+          >
+            <option value="">Choose a category...</option>
+            {PORTAL_CATEGORY_KEYS.map((key) => (
+              <option key={key} value={key}>
+                {PORTAL_CATEGORIES[key].label}
+              </option>
+            ))}
+          </select>
+
+          {category === 'other' && (
+            <div style={{ marginTop: '10px' }}>
+              <label style={styles.formLabel}>Custom category</label>
+              <input
+                style={styles.input}
+                value={customCategory}
+                onChange={(e) => setCustomCategory(e.target.value)}
+                placeholder="e.g., Book club"
+                maxLength={50}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Tags */}
+        <div style={styles.fieldGroup}>
+          <label style={styles.formLabel}>
+            Tags{' '}
+            <span style={styles.optionalLabel}>(optional)</span>
+            <Tooltip id="tip-tags" content={TIPS.tags} />
+          </label>
+          {hasAvailableTags ? (
+            <TagPicker category={category} value={tags} onChange={setTags} />
+          ) : (
+            <div style={{ fontSize: '13px', color: colors.dim, padding: '8px 0' }}>
+              {category
+                ? 'No tags available for this category.'
+                : 'Select a category first to see available tags.'}
+            </div>
+          )}
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════════
+            DIVIDER
+            ═══════════════════════════════════════════════════════════════════ */}
+
+        <hr style={styles.fieldDivider} />
+
+        {/* ═══════════════════════════════════════════════════════════════════
+            ENRICHMENT — image, description, price, link
+            ═══════════════════════════════════════════════════════════════════ */}
+
+        {/* Image */}
+        <div style={styles.fieldGroup}>
+          <label style={styles.formLabel}>
+            Photo{' '}
+            <span style={styles.optionalLabel}>(optional)</span>
+            <Tooltip id="tip-image" content={TIPS.image} />
+          </label>
+          {mode === 'edit' && hasExistingImage && !image && (
+            <div style={{
+              background: colors.bg,
+              border: `1px solid ${colors.border}`,
+              borderRadius: radii.md,
+              padding: '12px',
+              marginBottom: '8px',
+              fontSize: '12px',
+              color: colors.muted,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}>
+              <span>Current image attached</span>
+              <button
+                type="button"
+                className="btn-text"
+                style={{ ...styles.buttonText, color: colors.error }}
+                onClick={() => setHasExistingImage(false)}
+                aria-label="Remove current image"
+              >
+                Remove
+              </button>
+            </div>
+          )}
+          <ImageUpload value={image} onChange={setImage} />
+          {image && (
+            <ImageCropPreview
+              imageSrc={image}
+              focalY={imageFocalY}
+              onFocalYChange={setImageFocalY}
+            />
+          )}
+        </div>
+
+        {/* Description */}
+        <div style={styles.fieldGroup}>
+          <label style={styles.formLabel}>
+            Description{' '}
+            <span style={styles.optionalLabel}>(optional)</span>
+            <Tooltip id="tip-description" content={TIPS.description} />
+          </label>
+          <textarea
+            style={{ ...styles.textarea, minHeight: '120px' }}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="What should people know about this event?"
+          />
+        </div>
+
+        {/* Price + Link */}
+        <div style={styles.fieldGroup}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+            gap: spacing.md,
+          }}>
+            <div>
+              <label style={styles.formLabel}>
+                Price{' '}
+                <span style={styles.optionalLabel}>(optional)</span>
+                <Tooltip id="tip-price" content={TIPS.price} />
+              </label>
+              <input
+                style={styles.input}
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                placeholder="Free, $10, $5–15..."
+              />
+            </div>
+            <div>
+              <label style={styles.formLabel}>
+                Link{' '}
+                <span style={styles.optionalLabel}>(optional)</span>
+                <Tooltip id="tip-link" content={TIPS.link} />
+              </label>
+              <input
+                style={{
+                  ...styles.input,
+                  ...(linkError ? { borderColor: colors.error, boxShadow: `0 0 0 3px ${colors.error}10` } : {}),
+                }}
+                value={ticketUrl}
+                onChange={(e) => { setTicketUrl(e.target.value); setLinkError(''); }}
+                onBlur={() => {
+                  if (!ticketUrl.trim()) { setLinkError(''); return; }
+                  const normalized = normalizeUrl(ticketUrl);
+                  if (normalized !== ticketUrl) setTicketUrl(normalized);
+                  if (!isValidUrl(normalized)) {
+                    setLinkError('Enter a URL like eventbrite.com/your-event');
+                  }
+                }}
+                placeholder="eventbrite.com/your-event"
+                inputMode="url"
+              />
+              {linkError && (
+                <div style={{ fontSize: '12px', color: colors.error, marginTop: '4px' }}>
+                  {linkError}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════════
+            SUBMIT
+            ═══════════════════════════════════════════════════════════════════ */}
+
+        <div style={isMobile ? styles.stickySubmit : { marginTop: spacing.xl }}>
           <button
             type="submit"
             className="btn-primary"
