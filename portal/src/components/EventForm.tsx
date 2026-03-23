@@ -10,24 +10,7 @@ import { PlaceAutocomplete } from './PlaceAutocomplete';
 import { ImageUpload } from './ImageUpload';
 import { ImageCropPreview } from './ImageCropPreview';
 import { TagPicker } from './TagPicker';
-import { Tooltip } from './Tooltip';
 import { getTagsForCategory, AGE_TAGS } from '../lib/tags';
-
-// ---------------------------------------------------------------------------
-// Tooltip content
-// ---------------------------------------------------------------------------
-
-const TIPS = {
-  endTime: 'Adding an end time helps people plan their evening and lets apps show duration. Leave blank if the event winds down naturally.',
-  recurrence: 'Recurring events post once and repeat on your schedule. You can always edit individual dates later.',
-  venue: 'Search for your venue to auto-fill the address and map pin. This helps people find your event in location-based apps.',
-  category: 'Choose the category that best describes the experience. This is how people filter and discover your event.',
-  tags: 'Tags describe the experience — what to expect when you show up. Select all that apply.',
-  image: 'A photo makes your event stand out in feeds and cards. Avoid images with text — they get cropped differently by every app.',
-  description: 'A few sentences about what to expect. Keep it conversational — this shows up in event listings and search results.',
-  price: 'A quick note about cost. Free is worth saying — it\'s a strong draw.',
-  link: 'A link to tickets, registration, or more info. We\'ll add https:// if you skip it.',
-} as const;
 
 // ---------------------------------------------------------------------------
 // Props
@@ -56,27 +39,50 @@ function normalizeUrl(raw: string): string {
 }
 
 function isValidUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url);
-    return parsed.hostname.includes('.');
-  } catch {
-    return false;
-  }
+  try { return new URL(url).hostname.includes('.'); }
+  catch { return false; }
 }
 
-function formatPreviewDate(dateStr: string): string {
-  if (!dateStr) return '';
-  const d = new Date(dateStr + 'T12:00:00');
-  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+function fmtDate(d: string): string {
+  if (!d) return '';
+  return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
-function formatPreviewTime(time: string): string {
-  if (!time) return '';
-  const [h, m] = time.split(':');
+function fmtTime(t: string): string {
+  if (!t) return '';
+  const [h, m] = t.split(':');
   const hour = parseInt(h!, 10);
-  const ampm = hour >= 12 ? 'PM' : 'AM';
-  const h12 = hour % 12 || 12;
-  return `${h12}:${m} ${ampm}`;
+  return `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`;
+}
+
+// ---------------------------------------------------------------------------
+// Reusable: compact "+" add trigger for optional fields
+// ---------------------------------------------------------------------------
+
+function AddTrigger({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+        background: 'none',
+        border: 'none',
+        color: colors.muted,
+        fontSize: '14px',
+        cursor: 'pointer',
+        padding: '8px 0',
+        fontFamily: 'inherit',
+        transition: 'color 0.15s',
+      }}
+      className="btn-text"
+    >
+      <span style={{ fontSize: '16px', lineHeight: 1, fontWeight: 300 }}>+</span>
+      {label}
+    </button>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -94,155 +100,70 @@ function EventPreview({
 }) {
   const catColor = category ? categoryColors[category] : null;
   const catLabel = category ? PORTAL_CATEGORIES[category as PortalCategory]?.label : null;
-  const hasContent = title || eventDate || venueName;
 
-  if (!hasContent) {
+  if (!title && !eventDate && !venueName) {
     return (
-      <div style={{
-        color: colors.dim,
-        fontSize: '14px',
-        textAlign: 'center',
-        padding: '48px 24px',
-      }}>
-        Start filling in the form to see a preview.
+      <div style={{ color: colors.dim, fontSize: '13px', textAlign: 'center', padding: '40px 20px', lineHeight: 1.6 }}>
+        Your event listing will appear here as you fill in the details.
       </div>
     );
   }
 
   return (
     <div>
-      {/* Hero image */}
       {image && (
-        <div style={{
-          width: '100%',
-          aspectRatio: '16 / 9',
-          borderRadius: radii.lg,
-          overflow: 'hidden',
-          marginBottom: spacing.md,
-          background: colors.border,
-        }}>
-          <img
-            src={image}
-            alt=""
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              objectPosition: `center ${imageFocalY * 100}%`,
-            }}
-          />
+        <div style={{ width: '100%', aspectRatio: '16 / 9', borderRadius: radii.md, overflow: 'hidden', marginBottom: '14px', background: colors.border }}>
+          <img src={image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: `center ${imageFocalY * 100}%` }} />
         </div>
       )}
 
-      {/* Category badge */}
       {catLabel && (
-        <div style={{ marginBottom: '10px' }}>
+        <div style={{ marginBottom: '8px' }}>
           <span style={{
-            display: 'inline-block',
-            fontSize: '11px',
-            fontWeight: 600,
-            letterSpacing: '0.04em',
-            textTransform: 'uppercase',
-            padding: '3px 10px',
-            borderRadius: radii.pill,
-            background: catColor?.bg || colors.bg,
-            color: catColor?.fg || colors.muted,
+            fontSize: '10px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase',
+            padding: '2px 8px', borderRadius: radii.pill,
+            background: catColor?.bg || colors.bg, color: catColor?.fg || colors.muted,
           }}>
             {catLabel}
           </span>
         </div>
       )}
 
-      {/* Title */}
-      <div style={{
-        fontSize: '20px',
-        fontWeight: 600,
-        color: colors.heading,
-        lineHeight: 1.3,
-        letterSpacing: '-0.01em',
-        marginBottom: '8px',
-      }}>
+      <div style={{ fontSize: '18px', fontWeight: 600, color: colors.heading, lineHeight: 1.3, letterSpacing: '-0.01em', marginBottom: '6px' }}>
         {title || <span style={{ color: colors.dim }}>Event name</span>}
       </div>
 
-      {/* Date + Time */}
       {(eventDate || startTime) && (
-        <div className="tnum" style={{
-          fontSize: '14px',
-          color: colors.text,
-          marginBottom: '6px',
-          fontWeight: 500,
-        }}>
-          {formatPreviewDate(eventDate)}
-          {startTime && <>{eventDate ? ' · ' : ''}{formatPreviewTime(startTime)}</>}
-          {endTime && <> – {formatPreviewTime(endTime)}</>}
+        <div className="tnum" style={{ fontSize: '13px', color: colors.text, marginBottom: '4px', fontWeight: 500 }}>
+          {fmtDate(eventDate)}
+          {startTime && <>{eventDate ? ' · ' : ''}{fmtTime(startTime)}</>}
+          {endTime && <> – {fmtTime(endTime)}</>}
         </div>
       )}
 
-      {/* Venue */}
-      {venueName && (
-        <div style={{ fontSize: '14px', color: colors.muted, marginBottom: '4px' }}>
-          {venueName}
-        </div>
-      )}
-      {address && (
-        <div style={{ fontSize: '13px', color: colors.dim, marginBottom: spacing.md }}>
-          {address}
-        </div>
-      )}
+      {venueName && <div style={{ fontSize: '13px', color: colors.muted, marginBottom: '2px' }}>{venueName}</div>}
+      {address && <div style={{ fontSize: '12px', color: colors.dim, marginBottom: '12px' }}>{address}</div>}
 
-      {/* Price */}
-      {price && (
-        <div style={{
-          fontSize: '14px',
-          fontWeight: 500,
-          color: colors.text,
-          marginBottom: spacing.md,
-        }}>
-          {price}
-        </div>
-      )}
+      {price && <div style={{ fontSize: '13px', fontWeight: 500, color: colors.text, marginBottom: '12px' }}>{price}</div>}
 
-      {/* Description */}
       {description && (
-        <div style={{
-          fontSize: '14px',
-          color: colors.text,
-          lineHeight: 1.6,
-          marginBottom: spacing.md,
-          whiteSpace: 'pre-wrap',
-        }}>
-          {description}
+        <div style={{ fontSize: '13px', color: colors.text, lineHeight: 1.6, marginBottom: '12px', whiteSpace: 'pre-wrap' }}>
+          {description.length > 140 ? description.substring(0, 140) + '...' : description}
         </div>
       )}
 
-      {/* Tags */}
       {tags.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: spacing.md }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '12px' }}>
           {tags.map((tag) => (
-            <span key={tag} style={{
-              fontSize: '11px',
-              padding: '2px 8px',
-              borderRadius: radii.pill,
-              background: colors.bg,
-              color: colors.muted,
-              border: `1px solid ${colors.border}`,
-            }}>
+            <span key={tag} style={{ fontSize: '10px', padding: '2px 6px', borderRadius: radii.pill, background: colors.bg, color: colors.dim, border: `1px solid ${colors.border}` }}>
               {tag.replace(/-/g, ' ')}
             </span>
           ))}
         </div>
       )}
 
-      {/* Link */}
       {ticketUrl && (
-        <div style={{
-          fontSize: '13px',
-          color: colors.muted,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}>
+        <div style={{ fontSize: '12px', color: colors.dim, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {ticketUrl.replace(/^https?:\/\//, '')}
         </div>
       )}
@@ -291,6 +212,14 @@ export function EventForm({
   const [linkError, setLinkError] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  // Progressive disclosure — enrichment fields expand on demand
+  const [showDescription, setShowDescription] = useState(() => !!initialValues.description);
+  const [showPrice, setShowPrice] = useState(() => !!initialValues.price);
+  const [showLink, setShowLink] = useState(() => !!initialValues.ticket_url);
+  const [showEndTime, setShowEndTime] = useState(() => !!initialValues.end_time);
+  const [showRecurrence, setShowRecurrence] = useState(() => !!initialValues.recurrence && initialValues.recurrence !== 'none');
+  const [showImage, setShowImage] = useState(() => !!initialValues.image || initialHasExistingImage);
+
   const hasPrefilledVenue = !!(initialValues.venue_name && mode !== 'edit');
   const [editingVenue, setEditingVenue] = useState(!hasPrefilledVenue);
 
@@ -306,9 +235,7 @@ export function EventForm({
       const filtered = prev.filter((t) => allowed.includes(t));
       const ageOptions = allowed.filter((t) => ageSlugs.includes(t));
       const singleAge = ageOptions.length === 1 ? ageOptions[0] : undefined;
-      if (singleAge && !filtered.some((t) => ageSlugs.includes(t))) {
-        return [...filtered, singleAge];
-      }
+      if (singleAge && !filtered.some((t) => ageSlugs.includes(t))) return [...filtered, singleAge];
       return filtered;
     });
   }
@@ -335,8 +262,7 @@ export function EventForm({
       recurrence,
       address: address || undefined,
       place_id: placeId || undefined,
-      latitude,
-      longitude,
+      latitude, longitude,
       end_time: endTime || undefined,
       custom_category: category === 'other' ? customCategory || undefined : undefined,
       instance_count: recurrence !== 'none' ? instanceCount : undefined,
@@ -354,111 +280,82 @@ export function EventForm({
     try {
       const result = await onSubmit(data);
       if (result?.error) setError(result.error);
-    } catch {
-      setError('Something went wrong. Please try again.');
-    }
+    } catch { setError('Something went wrong. Please try again.'); }
   }
 
   const submitLabel_ = submitLabel || (mode === 'edit' ? 'Save Changes' : 'Post Event');
   const isValid = !!(title && venueName && eventDate && startTime && category);
   const hasAvailableTags = !!category && getTagsForCategory(category).length > 0;
-  const repeats = recurrence !== 'none';
   const catColor = category ? categoryColors[category] : null;
 
-  // ── Form fields ────────────────────────────────────────────────────────
+  // ── Form ───────────────────────────────────────────────────────────────
 
   const formContent = (
     <form onSubmit={handleSubmit}>
 
-      {/* ═══ VENUE CONTEXT ════════════════════════════════════════════════
-          When pre-filled, venue sits at the top as a compact context bar.
-          Collapsible — tap to expand and edit. Saves vertical space for
-          business users who always post from the same location.
-          ═══════════════════════════════════════════════════════════════════ */}
+      {/* ═══ COVER IMAGE (compact trigger or thumbnail) ═══════════════════ */}
 
-      {!editingVenue && venueName ? (
-        <div
+      {showImage ? (
+        <div style={{ marginBottom: spacing.lg }}>
+          {mode === 'edit' && hasExistingImage && !image && (
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '8px 12px', borderRadius: radii.md, marginBottom: '8px',
+              background: colors.bg, border: `1px solid ${colors.border}`, fontSize: '12px', color: colors.muted,
+            }}>
+              <span>Current image attached</span>
+              <button type="button" onClick={() => { setHasExistingImage(false); setShowImage(false); }}
+                style={{ ...styles.buttonText, color: colors.error, fontSize: '12px' }} aria-label="Remove image">
+                Remove
+              </button>
+            </div>
+          )}
+          <ImageUpload value={image} onChange={setImage} />
+          {image && (
+            <div style={{ marginTop: '8px' }}>
+              <ImageCropPreview imageSrc={image} focalY={imageFocalY} onFocalYChange={setImageFocalY} />
+              <button type="button" onClick={() => { setImage(null); setShowImage(false); }}
+                style={{ ...styles.buttonText, fontSize: '12px', padding: '4px 0', marginTop: '6px' }}>
+                Remove image
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setShowImage(true)}
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '10px 14px',
-            marginBottom: spacing.xl,
-            background: colors.bg,
-            border: `1px solid ${colors.border}`,
-            borderRadius: radii.md,
-            cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: '8px',
+            width: '100%', padding: '14px 16px', marginBottom: spacing.lg,
+            background: colors.bg, border: `1px dashed ${colors.border}`, borderRadius: radii.md,
+            color: colors.muted, fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit',
             transition: 'border-color 0.15s',
           }}
           className="interactive-row"
-          onClick={() => setEditingVenue(true)}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke={colors.muted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-              <path d="M8 1.5C5.5 1.5 3.5 3.5 3.5 6c0 3.5 4.5 8.5 4.5 8.5s4.5-5 4.5-8.5c0-2.5-2-4.5-4.5-4.5z" />
-              <circle cx="8" cy="6" r="1.5" />
-            </svg>
-            <div style={{ minWidth: 0 }}>
-              <span style={{ fontSize: '14px', fontWeight: 500, color: colors.text }}>
-                {venueName}
-              </span>
-              {address && (
-                <span style={{ fontSize: '13px', color: colors.dim, marginLeft: '6px' }}>
-                  {address}
-                </span>
-              )}
-            </div>
-          </div>
-          <span style={{ fontSize: '12px', color: colors.dim, flexShrink: 0, marginLeft: '12px' }}>
-            Edit
-          </span>
-        </div>
-      ) : (
-        /* Venue editing — shown when no pre-fill or user tapped "Edit" */
-        <div style={styles.fieldGroup}>
-          <label style={styles.formLabel}>
-            Venue
-            <Tooltip id="tip-venue" content={TIPS.venue} />
-          </label>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
-            gap: '10px',
-          }}>
-            <PlaceAutocomplete
-              value={venueName}
-              onChange={setVenueName}
-              onSelect={handlePlaceSelect}
-              placeholder="Venue name"
-              searchCoords={searchCoords}
-            />
-            <input
-              style={styles.input}
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder={mode === 'create' ? 'Auto-fills from venue' : 'Address'}
-            />
-          </div>
-          {hasPrefilledVenue && (
-            <button
-              type="button"
-              onClick={() => setEditingVenue(false)}
-              style={{ ...styles.buttonText, padding: '4px 0', marginTop: '8px', fontSize: '12px' }}
-            >
-              Cancel
-            </button>
-          )}
-        </div>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="1.5" y="2.5" width="13" height="11" rx="2" />
+            <circle cx="5.5" cy="6" r="1.5" />
+            <path d="M14.5 10.5l-3-3-4 4-2-2-4 4" />
+          </svg>
+          Add cover image
+        </button>
       )}
 
-      {/* ═══ ESSENTIALS ═══════════════════════════════════════════════════ */}
+      {/* ═══ TITLE — Tier 1, headline presence ════════════════════════════ */}
 
-      {/* Title */}
-      <div style={{ marginBottom: spacing.xl }}>
+      <div style={{ marginBottom: spacing.lg }}>
         <label style={styles.srOnly}>Event name</label>
         <input
           className="title-input"
-          style={styles.titleInput}
+          style={{
+            ...styles.titleInput,
+            background: colors.card,
+            border: `1px solid ${colors.border}`,
+            borderRadius: radii.md,
+            padding: '14px 16px',
+          }}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Event name"
@@ -466,252 +363,220 @@ export function EventForm({
         />
       </div>
 
-      {/* Date + Start Time */}
-      <div style={styles.fieldGroup}>
+      {/* ═══ DATE + TIME — compact metadata row ═══════════════════════════ */}
+
+      <div style={{ marginBottom: spacing.lg }}>
         <div style={{
           display: 'grid',
-          gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
-          gap: spacing.md,
+          gridTemplateColumns: isMobile ? '1fr' : (showEndTime ? '1fr 1fr 1fr' : '1fr 1fr'),
+          gap: '10px',
         }}>
           <div>
             <label style={styles.formLabel}>Date</label>
             <CalendarPicker value={eventDate} onChange={setEventDate} />
           </div>
           <div>
-            <label style={styles.formLabel}>Start time</label>
+            <label style={styles.formLabel}>Start</label>
             <TimePicker value={startTime || '19:00'} onChange={setStartTime} />
           </div>
+          {showEndTime && (
+            <div>
+              <label style={{ ...styles.formLabel, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                End
+                <button type="button" onClick={() => { setEndTime(''); setShowEndTime(false); }}
+                  style={{ background: 'none', border: 'none', color: colors.dim, cursor: 'pointer', fontSize: '13px', padding: 0, fontFamily: 'inherit' }}>
+                  ×
+                </button>
+              </label>
+              <TimePicker value={endTime || '21:00'} onChange={setEndTime} />
+            </div>
+          )}
         </div>
       </div>
 
-      {/* End Time */}
-      <div style={styles.fieldGroup}>
-        <label style={styles.formLabel}>
-          End time{' '}
-          <span style={styles.optionalLabel}>(optional)</span>
-          <Tooltip id="tip-end-time" content={TIPS.endTime} />
-        </label>
-        {endTime ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ flex: 1 }}>
-              <TimePicker value={endTime} onChange={setEndTime} />
+      {/* ═══ VENUE — context bar when pre-filled, inline when editing ═════ */}
+
+      <div style={{ marginBottom: spacing.lg }}>
+        {!editingVenue && venueName ? (
+          <div
+            className="interactive-row"
+            onClick={() => setEditingVenue(true)}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '10px 16px', background: colors.card, cursor: 'pointer',
+              border: `1px solid ${colors.border}`, borderRadius: radii.md, transition: 'border-color 0.15s',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke={colors.muted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <path d="M8 1.5C5.5 1.5 3.5 3.5 3.5 6c0 3.5 4.5 8.5 4.5 8.5s4.5-5 4.5-8.5c0-2.5-2-4.5-4.5-4.5z" />
+                <circle cx="8" cy="6" r="1.5" />
+              </svg>
+              <div style={{ minWidth: 0 }}>
+                <span style={{ fontSize: '14px', fontWeight: 500, color: colors.text }}>{venueName}</span>
+                {address && <span style={{ fontSize: '13px', color: colors.dim, marginLeft: '6px' }}>{address}</span>}
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={() => setEndTime('')}
-              aria-label="Remove end time"
-              style={{
-                background: 'none', border: 'none', color: colors.dim,
-                cursor: 'pointer', fontSize: '18px', padding: '4px 8px',
-                lineHeight: 1, borderRadius: radii.sm, transition: 'color 0.15s',
-              }}
-            >
-              ×
-            </button>
+            <span style={{ fontSize: '12px', color: colors.dim, flexShrink: 0, marginLeft: '12px' }}>Edit</span>
           </div>
         ) : (
-          <button
-            type="button"
-            onClick={() => setEndTime('21:00')}
-            style={{ ...styles.input, color: colors.dim, cursor: 'pointer', textAlign: 'left' as const }}
-          >
-            Set end time
-          </button>
+          <div>
+            <label style={styles.formLabel}>Venue</label>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '10px' }}>
+              <PlaceAutocomplete value={venueName} onChange={setVenueName} onSelect={handlePlaceSelect}
+                placeholder="Venue name" searchCoords={searchCoords} />
+              <input style={styles.input} value={address} onChange={(e) => setAddress(e.target.value)}
+                placeholder={mode === 'create' ? 'Auto-fills from venue' : 'Address'} />
+            </div>
+            {hasPrefilledVenue && (
+              <button type="button" onClick={() => setEditingVenue(false)}
+                style={{ ...styles.buttonText, padding: '4px 0', marginTop: '6px', fontSize: '12px' }}>
+                Cancel
+              </button>
+            )}
+          </div>
         )}
       </div>
 
-      {/* Recurrence */}
-      <div style={styles.fieldGroup}>
-        <label style={styles.formLabel}>
-          Repeats
-          <Tooltip id="tip-recurrence" content={TIPS.recurrence} />
-        </label>
-        <div style={{ display: 'flex', gap: '8px', marginBottom: repeats ? spacing.md : 0 }}>
-          <button
-            type="button"
-            style={{ ...styles.pill, ...(repeats ? styles.pillInactive : styles.pillActive) }}
-            onClick={() => setRecurrence('none')}
-          >
-            One-time
-          </button>
-          <button
-            type="button"
-            style={{ ...styles.pill, ...(repeats ? styles.pillActive : styles.pillInactive) }}
-            onClick={() => { if (!repeats) { setRecurrence('weekly'); setInstanceCount(4); } }}
-          >
-            Repeats
-          </button>
-        </div>
-        {repeats && (
-          <RecurrencePicker
-            value={recurrence}
-            onChange={setRecurrence}
-            eventDate={eventDate}
-            instanceCount={instanceCount}
-            onInstanceCountChange={setInstanceCount}
-          />
-        )}
-      </div>
+      {/* ═══ CATEGORY — the one required metadata choice ══════════════════ */}
 
-      {/* Category */}
-      <div style={styles.fieldGroup}>
-        <label style={styles.formLabel}>
-          Category
-          <Tooltip id="tip-category" content={TIPS.category} />
-        </label>
+      <div style={{ marginBottom: spacing.lg }}>
+        <label style={styles.formLabel}>Category</label>
         <select
           style={{
             ...styles.select, fontFamily: 'inherit',
-            ...(catColor ? {
-              borderColor: catColor.fg + '30',
-              backgroundColor: catColor.bg,
-              color: catColor.fg,
-              fontWeight: 500,
-            } : {}),
+            ...(catColor ? { borderColor: catColor.fg + '30', backgroundColor: catColor.bg, color: catColor.fg, fontWeight: 500 } : {}),
           }}
           value={category}
           onChange={(e) => handleCategoryChange(e.target.value)}
           required
         >
-          <option value="">Choose a category...</option>
+          <option value="">Choose category...</option>
           {PORTAL_CATEGORY_KEYS.map((key) => (
             <option key={key} value={key}>{PORTAL_CATEGORIES[key].label}</option>
           ))}
         </select>
         {category === 'other' && (
-          <div style={{ marginTop: '10px' }}>
-            <label style={styles.formLabel}>Custom category</label>
-            <input
-              style={styles.input}
-              value={customCategory}
-              onChange={(e) => setCustomCategory(e.target.value)}
-              placeholder="e.g., Book club"
-              maxLength={50}
-            />
-          </div>
+          <input style={{ ...styles.input, marginTop: '8px' }} value={customCategory}
+            onChange={(e) => setCustomCategory(e.target.value)} placeholder="e.g., Book club" maxLength={50} />
         )}
       </div>
 
-      {/* Tags */}
-      <div style={styles.fieldGroup}>
-        <label style={styles.formLabel}>
-          Tags <span style={styles.optionalLabel}>(optional)</span>
-          <Tooltip id="tip-tags" content={TIPS.tags} />
-        </label>
-        {hasAvailableTags ? (
+      {/* ═══ TAGS — appears only when category has tags ═══════════════════ */}
+
+      {hasAvailableTags && (
+        <div style={{ marginBottom: spacing.lg }}>
           <TagPicker category={category} value={tags} onChange={setTags} />
-        ) : (
-          <div style={{ fontSize: '13px', color: colors.dim, padding: '8px 0' }}>
-            {category ? 'No tags available for this category.' : 'Select a category first to see available tags.'}
-          </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* ═══ DIVIDER ══════════════════════════════════════════════════════ */}
+      {/* ═══ ENRICHMENT — progressive disclosure via "+" triggers ═════════ */}
 
-      <hr style={styles.fieldDivider} />
+      <div style={{ borderTop: `1px solid ${colors.border}`, paddingTop: spacing.lg, marginTop: spacing.sm }}>
 
-      {/* ═══ ENRICHMENT ═══════════════════════════════════════════════════ */}
-
-      {/* Image */}
-      <div style={styles.fieldGroup}>
-        <label style={styles.formLabel}>
-          Photo <span style={styles.optionalLabel}>(optional)</span>
-          <Tooltip id="tip-image" content={TIPS.image} />
-        </label>
-        {mode === 'edit' && hasExistingImage && !image && (
-          <div style={{
-            background: colors.bg, border: `1px solid ${colors.border}`,
-            borderRadius: radii.md, padding: '12px', marginBottom: '8px',
-            fontSize: '12px', color: colors.muted,
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          }}>
-            <span>Current image attached</span>
-            <button
-              type="button" className="btn-text"
-              style={{ ...styles.buttonText, color: colors.error }}
-              onClick={() => setHasExistingImage(false)}
-              aria-label="Remove current image"
-            >
-              Remove
-            </button>
-          </div>
-        )}
-        <ImageUpload value={image} onChange={setImage} />
-        {image && (
-          <ImageCropPreview imageSrc={image} focalY={imageFocalY} onFocalYChange={setImageFocalY} />
-        )}
-      </div>
-
-      {/* Description */}
-      <div style={styles.fieldGroup}>
-        <label style={styles.formLabel}>
-          Description <span style={styles.optionalLabel}>(optional)</span>
-          <Tooltip id="tip-description" content={TIPS.description} />
-        </label>
-        <textarea
-          style={{ ...styles.textarea, minHeight: '120px' }}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="What should people know about this event?"
-        />
-      </div>
-
-      {/* Price + Link */}
-      <div style={styles.fieldGroup}>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
-          gap: spacing.md,
-        }}>
-          <div>
-            <label style={styles.formLabel}>
-              Price <span style={styles.optionalLabel}>(optional)</span>
-              <Tooltip id="tip-price" content={TIPS.price} />
+        {/* Description */}
+        {showDescription ? (
+          <div style={{ marginBottom: spacing.lg }}>
+            <label style={{ ...styles.formLabel, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              Description
+              {!description && (
+                <button type="button" onClick={() => setShowDescription(false)}
+                  style={{ background: 'none', border: 'none', color: colors.dim, cursor: 'pointer', fontSize: '12px', padding: 0, fontFamily: 'inherit' }}>
+                  ×
+                </button>
+              )}
             </label>
-            <input
-              style={styles.input}
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              placeholder="Free, $10, $5–15..."
+            <textarea
+              style={{ ...styles.textarea, minHeight: '100px' }}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="What should people know about this event?"
+              autoFocus
             />
           </div>
-          <div>
-            <label style={styles.formLabel}>
-              Link <span style={styles.optionalLabel}>(optional)</span>
-              <Tooltip id="tip-link" content={TIPS.link} />
+        ) : null}
+
+        {/* Price */}
+        {showPrice ? (
+          <div style={{ marginBottom: spacing.lg }}>
+            <label style={{ ...styles.formLabel, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              Price
+              {!price && (
+                <button type="button" onClick={() => setShowPrice(false)}
+                  style={{ background: 'none', border: 'none', color: colors.dim, cursor: 'pointer', fontSize: '12px', padding: 0, fontFamily: 'inherit' }}>
+                  ×
+                </button>
+              )}
+            </label>
+            <input style={styles.input} value={price} onChange={(e) => setPrice(e.target.value)}
+              placeholder="Free, $10, $5–15..." autoFocus />
+          </div>
+        ) : null}
+
+        {/* Link */}
+        {showLink ? (
+          <div style={{ marginBottom: spacing.lg }}>
+            <label style={{ ...styles.formLabel, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              Link
+              {!ticketUrl && (
+                <button type="button" onClick={() => setShowLink(false)}
+                  style={{ background: 'none', border: 'none', color: colors.dim, cursor: 'pointer', fontSize: '12px', padding: 0, fontFamily: 'inherit' }}>
+                  ×
+                </button>
+              )}
             </label>
             <input
-              style={{
-                ...styles.input,
-                ...(linkError ? { borderColor: colors.error, boxShadow: `0 0 0 3px ${colors.error}10` } : {}),
-              }}
+              style={{ ...styles.input, ...(linkError ? { borderColor: colors.error } : {}) }}
               value={ticketUrl}
               onChange={(e) => { setTicketUrl(e.target.value); setLinkError(''); }}
               onBlur={() => {
                 if (!ticketUrl.trim()) { setLinkError(''); return; }
                 const normalized = normalizeUrl(ticketUrl);
                 if (normalized !== ticketUrl) setTicketUrl(normalized);
-                if (!isValidUrl(normalized)) setLinkError('Enter a URL like eventbrite.com/your-event');
+                if (!isValidUrl(normalized)) setLinkError('Enter a valid URL');
               }}
               placeholder="eventbrite.com/your-event"
               inputMode="url"
+              autoFocus
             />
-            {linkError && (
-              <div style={{ fontSize: '12px', color: colors.error, marginTop: '4px' }}>{linkError}</div>
-            )}
+            {linkError && <div style={{ fontSize: '12px', color: colors.error, marginTop: '4px' }}>{linkError}</div>}
           </div>
+        ) : null}
+
+        {/* Recurrence (shown via trigger) */}
+        {showRecurrence ? (
+          <div style={{ marginBottom: spacing.lg }}>
+            <label style={{ ...styles.formLabel, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              Repeats
+              <button type="button" onClick={() => { setRecurrence('none'); setShowRecurrence(false); }}
+                style={{ background: 'none', border: 'none', color: colors.dim, cursor: 'pointer', fontSize: '12px', padding: 0, fontFamily: 'inherit' }}>
+                ×
+              </button>
+            </label>
+            <RecurrencePicker
+              value={recurrence === 'none' ? 'weekly' : recurrence}
+              onChange={(v) => setRecurrence(v)}
+              eventDate={eventDate}
+              instanceCount={instanceCount}
+              onInstanceCountChange={setInstanceCount}
+            />
+          </div>
+        ) : null}
+
+        {/* ── "+" triggers for fields not yet shown ────────────────────── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          {!showDescription && <AddTrigger label="Add description" onClick={() => setShowDescription(true)} />}
+          {!showPrice && <AddTrigger label="Add price" onClick={() => setShowPrice(true)} />}
+          {!showLink && <AddTrigger label="Add link" onClick={() => setShowLink(true)} />}
+          {!showEndTime && <AddTrigger label="Set end time" onClick={() => { setShowEndTime(true); if (!endTime) setEndTime('21:00'); }} />}
+          {!showRecurrence && <AddTrigger label="Make recurring" onClick={() => { setShowRecurrence(true); if (recurrence === 'none') setRecurrence('weekly'); }} />}
         </div>
       </div>
 
       {/* ═══ SUBMIT ═══════════════════════════════════════════════════════ */}
 
       <div style={isMobile ? styles.stickySubmit : { marginTop: spacing.xl }}>
-        <button
-          type="submit" className="btn-primary"
-          style={styles.buttonPrimary}
-          disabled={submitting || !isValid}
-        >
+        <button type="submit" className="btn-primary" style={styles.buttonPrimary} disabled={submitting || !isValid}>
           {submitting ? (mode === 'edit' ? 'Saving...' : 'Posting...') : submitLabel_}
         </button>
       </div>
@@ -724,67 +589,32 @@ export function EventForm({
     <>
       {error && (
         <div style={{
-          background: colors.errorBg, color: colors.error,
-          padding: '10px 14px', borderRadius: radii.md, fontSize: '14px',
-          marginBottom: spacing.md, border: `1px solid ${colors.errorBorder}`,
-          maxWidth: isDesktop ? '1080px' : '680px', width: '100%',
+          background: colors.errorBg, color: colors.error, padding: '10px 14px',
+          borderRadius: radii.md, fontSize: '14px', marginBottom: spacing.md,
+          border: `1px solid ${colors.errorBorder}`, maxWidth: isDesktop ? '1080px' : '680px', width: '100%',
         }}>
           {error}
         </div>
       )}
 
       {isDesktop ? (
-        /* Desktop: form + live preview side by side */
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 340px',
-          gap: spacing.xxl,
-          maxWidth: '1080px',
-          width: '100%',
-          alignItems: 'start',
-        }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: spacing.xxl, maxWidth: '1040px', width: '100%', alignItems: 'start' }}>
           <div>{formContent}</div>
-          <div style={{
-            position: 'sticky',
-            top: '40px',
-          }}>
-            <div style={{
-              fontSize: '11px',
-              fontWeight: 600,
-              textTransform: 'uppercase' as const,
-              letterSpacing: '0.06em',
-              color: colors.dim,
-              marginBottom: spacing.md,
-            }}>
+          <div style={{ position: 'sticky', top: '40px' }}>
+            <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: colors.dim, marginBottom: '12px' }}>
               Preview
             </div>
-            <div style={{
-              background: colors.card,
-              border: `1px solid ${colors.border}`,
-              borderRadius: radii.lg,
-              padding: spacing.lg,
-              minHeight: '200px',
-            }}>
+            <div style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radii.lg, padding: '20px', minHeight: '180px' }}>
               <EventPreview
-                title={title}
-                eventDate={eventDate}
-                startTime={startTime}
-                endTime={endTime}
-                venueName={venueName}
-                address={address}
-                category={category}
-                tags={tags}
-                description={description}
-                price={price}
-                ticketUrl={ticketUrl}
-                image={image}
-                imageFocalY={imageFocalY}
+                title={title} eventDate={eventDate} startTime={startTime} endTime={endTime}
+                venueName={venueName} address={address} category={category} tags={tags}
+                description={description} price={price} ticketUrl={ticketUrl}
+                image={image} imageFocalY={imageFocalY}
               />
             </div>
           </div>
         </div>
       ) : (
-        /* Mobile/tablet: form only */
         <div style={{ maxWidth: '680px', width: '100%' }}>
           {formContent}
         </div>
