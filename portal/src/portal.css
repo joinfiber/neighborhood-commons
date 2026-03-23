@@ -100,25 +100,11 @@ body {
   animation: motionFadeIn var(--motion-open) both;
 }
 
-/* Expand: applied to a wrapper with max-height + overflow hidden.
-   The wrapper transitions max-height; content fades in. */
-.motion-expand {
-  overflow: hidden;
-  transition: max-height var(--motion-open), opacity var(--motion-open);
-  opacity: 1;
-}
-
-.motion-expand[data-collapsed="true"] {
-  max-height: 0 !important;
-  opacity: 0;
-  transition: max-height var(--motion-close), opacity var(--motion-close);
-}
-
-/* Content inside an expanding section — fades in after expand starts */
-.motion-expand-content {
-  animation: motionFadeIn var(--motion-open) both;
-  animation-delay: 50ms;
-}
+/* Expand/collapse is handled by the Expandable component using
+   measured max-height transitions. No CSS class needed — the
+   component manages height, overflow, and opacity directly.
+   Open: 200ms ease-out (space grows, pushing siblings down).
+   Close: 120ms linear (space collapses, instant compliance). */
 
 /* =============================================================================
    Form inputs — focus glow

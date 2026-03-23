@@ -3,6 +3,7 @@ import { PORTAL_CATEGORIES, type PortalCategory } from '../lib/categories';
 import { colors, categoryColors, styles, spacing, radii } from '../lib/styles';
 import { fetchEvents, extendEventSeries, deleteEvent, type PortalEvent, type PortalAccount } from '../lib/api';
 import { EventRowSkeleton } from '../components/Skeleton';
+import { Expandable } from '../components/Expandable';
 import { formatRecurrenceLabel } from '../lib/recurrence';
 
 interface DashboardScreenProps {
@@ -114,8 +115,8 @@ function EventRow({ event, onEdit, onDelete, isPast, expanded, onToggle }: {
       </button>
 
       {/* Expanded detail — full event info */}
-      {expanded && (
-        <div className="motion-expand-content" style={{ padding: '0 14px 14px', borderTop: `1px solid ${colors.border}` }}>
+      <Expandable open={expanded}>
+        <div style={{ padding: '0 14px 14px', borderTop: `1px solid ${colors.border}` }}>
           <div style={{ display: 'flex', gap: '14px', paddingTop: '12px' }}>
 
             {/* Thumbnail */}
@@ -198,7 +199,7 @@ function EventRow({ event, onEdit, onDelete, isPast, expanded, onToggle }: {
             </button>
           </div>
         </div>
-      )}
+      </Expandable>
     </div>
   );
 }
