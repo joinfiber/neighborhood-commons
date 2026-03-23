@@ -15,11 +15,13 @@ interface DashboardScreenProps {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function fmtDate(d: string): string {
+function fmtDate(d: string | null): string {
+  if (!d) return '';
   return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
-function fmtTime(t: string): string {
+function fmtTime(t: string | null): string {
+  if (!t) return '';
   const [h, m] = t.split(':');
   const hour = parseInt(h!, 10);
   return `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`;
