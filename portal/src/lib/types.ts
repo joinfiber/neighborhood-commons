@@ -210,6 +210,9 @@ export interface EventCandidate {
   newsletter_emails?: { subject: string } | null;
   newsletter_sources?: { name: string } | null;
   feed_sources?: { name: string } | null;
+  price?: string | null;
+  category?: string | null;
+  tags?: string[] | null;
 }
 
 /** Data shape for the unified event form */
