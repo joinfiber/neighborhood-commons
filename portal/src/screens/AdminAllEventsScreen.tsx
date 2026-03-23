@@ -11,12 +11,14 @@ interface AdminAllEventsScreenProps {
   onViewAccount: (accountId: string) => void;
 }
 
-function formatDate(dateStr: string): string {
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return '';
   const d = new Date(dateStr + 'T12:00:00');
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
-function formatTime(time: string): string {
+function formatTime(time: string | null): string {
+  if (!time) return '';
   const [h, m] = time.split(':');
   const hour = parseInt(h!, 10);
   const ampm = hour >= 12 ? 'PM' : 'AM';
