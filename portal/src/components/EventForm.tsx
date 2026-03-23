@@ -325,38 +325,48 @@ export function EventForm({
       </div>
 
       {/* ═══ DATE + TIME SECTION ══════════════════════════════════════════
-          Date and start time always visible. End time and recurrence
-          are "+" triggers within this section — they're temporal metadata.
+          Calendar on the left (square, always visible).
+          Start time, optional end time stacked on the right.
+          Make recurring in its own row below.
           ═════════════════════════════════════════════════════════════════ */}
 
       <div style={{ marginBottom: spacing.lg }}>
         <div style={{
           display: 'grid',
-          gridTemplateColumns: isMobile ? '1fr' : (showEndTime ? '1fr 1fr 1fr' : '1fr 1fr'),
-          gap: '10px', marginBottom: (showRecurrence || (!showEndTime || !showRecurrence)) ? '8px' : 0,
+          gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+          gap: spacing.md,
+          alignItems: 'start',
         }}>
-          <div>
-            <CalendarPicker value={eventDate} onChange={setEventDate} />
-          </div>
-          <div>
-            <label style={styles.formLabel}>Start</label>
-            <TimePicker value={startTime || '19:00'} onChange={setStartTime} />
-          </div>
-          {showEndTime && (
+          {/* Left: inline calendar */}
+          <CalendarPicker value={eventDate} onChange={setEventDate} inline />
+
+          {/* Right: time controls stacked */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <div>
-              <label style={{ ...styles.formLabel, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                End
-                <button type="button" onClick={() => { setEndTime(''); setShowEndTime(false); }}
-                  style={{ background: 'none', border: 'none', color: colors.dim, cursor: 'pointer', fontSize: '13px', padding: 0, fontFamily: 'inherit' }}>×</button>
-              </label>
-              <TimePicker value={endTime || '21:00'} onChange={setEndTime} />
+              <label style={styles.formLabel}>Start</label>
+              <TimePicker value={startTime || '19:00'} onChange={setStartTime} />
             </div>
-          )}
+
+            {showEndTime ? (
+              <div>
+                <label style={{ ...styles.formLabel, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  End
+                  <button type="button" onClick={() => { setEndTime(''); setShowEndTime(false); }}
+                    style={{ background: 'none', border: 'none', color: colors.dim, cursor: 'pointer', fontSize: '13px', padding: 0, fontFamily: 'inherit' }}>
+                    ×
+                  </button>
+                </label>
+                <TimePicker value={endTime || '21:00'} onChange={setEndTime} />
+              </div>
+            ) : (
+              <AddTrigger label="End time" onClick={() => { setShowEndTime(true); if (!endTime) setEndTime('21:00'); }} />
+            )}
+          </div>
         </div>
 
-        {/* Recurrence — inline in the date section */}
-        {showRecurrence && (
-          <div style={{ marginTop: '8px' }}>
+        {/* Make recurring — its own row, left-aligned */}
+        {showRecurrence ? (
+          <div style={{ marginTop: spacing.md }}>
             <label style={{ ...styles.formLabel, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               Repeats
               <button type="button" onClick={() => { setRecurrence('none'); setShowRecurrence(false); }}
@@ -365,13 +375,11 @@ export function EventForm({
             <RecurrencePicker value={recurrence === 'none' ? 'weekly' : recurrence} onChange={setRecurrence}
               eventDate={eventDate} instanceCount={instanceCount} onInstanceCountChange={setInstanceCount} />
           </div>
+        ) : (
+          <div style={{ marginTop: '4px' }}>
+            <AddTrigger label="Make recurring" onClick={() => { setShowRecurrence(true); if (recurrence === 'none') setRecurrence('weekly'); }} />
+          </div>
         )}
-
-        {/* Date section "+" triggers */}
-        <div style={{ display: 'flex', gap: '16px' }}>
-          {!showEndTime && <AddTrigger label="End time" onClick={() => { setShowEndTime(true); if (!endTime) setEndTime('21:00'); }} />}
-          {!showRecurrence && <AddTrigger label="Make recurring" onClick={() => { setShowRecurrence(true); if (recurrence === 'none') setRecurrence('weekly'); }} />}
-        </div>
       </div>
 
       {/* ═══ VENUE ════════════════════════════════════════════════════════ */}

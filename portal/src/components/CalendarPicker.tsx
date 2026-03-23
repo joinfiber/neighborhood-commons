@@ -1,9 +1,10 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { colors } from '../lib/styles';
+import { colors, radii } from '../lib/styles';
 
 interface CalendarPickerProps {
   value: string; // YYYY-MM-DD
   onChange: (date: string) => void;
+  inline?: boolean; // always-visible square calendar (no dropdown trigger)
 }
 
 const DAY_HEADERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -23,7 +24,7 @@ function formatDisplay(value: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-export function CalendarPicker({ value, onChange }: CalendarPickerProps) {
+export function CalendarPicker({ value, onChange, inline = false }: CalendarPickerProps) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -37,9 +38,9 @@ export function CalendarPicker({ value, onChange }: CalendarPickerProps) {
   const [viewYear, setViewYear] = useState(initialYear);
   const [viewMonth, setViewMonth] = useState(initialMonth);
 
-  // Close on click outside
+  // Close dropdown on click outside (only relevant when not inline)
   useEffect(() => {
-    if (!open) return;
+    if (inline || !open) return;
     const handler = (e: MouseEvent) => {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
         setOpen(false);
@@ -47,7 +48,7 @@ export function CalendarPicker({ value, onChange }: CalendarPickerProps) {
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
+  }, [open, inline]);
 
   const { days } = useMemo(() => {
     const firstDay = new Date(viewYear, viewMonth, 1);
@@ -94,11 +95,10 @@ export function CalendarPicker({ value, onChange }: CalendarPickerProps) {
 
   const handleSelect = (dateStr: string) => {
     onChange(dateStr);
-    setOpen(false);
+    if (!inline) setOpen(false);
   };
 
   const handleOpen = () => {
-    // Sync view to current value when opening
     if (selected) {
       setViewYear(selected.getFullYear());
       setViewMonth(selected.getMonth());
@@ -111,9 +111,76 @@ export function CalendarPicker({ value, onChange }: CalendarPickerProps) {
     year: 'numeric',
   });
 
+  // ── The calendar grid (shared between inline and dropdown modes) ──
+
+  const calendarGrid = (
+    <>
+      {/* Month nav */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+        <button type="button" onClick={prevMonth} style={navBtn}>&#8249;</button>
+        <span style={{ fontSize: '12px', fontWeight: 500, color: colors.heading, letterSpacing: '0.02em' }}>
+          {monthLabel}
+        </span>
+        <button type="button" onClick={nextMonth} style={navBtn}>&#8250;</button>
+      </div>
+
+      {/* Day headers */}
+      <div style={gridStyle}>
+        {DAY_HEADERS.map((d, i) => (
+          <div key={i} style={{ textAlign: 'center', fontSize: '10px', color: colors.dim, padding: '2px 0', userSelect: 'none' }}>
+            {d}
+          </div>
+        ))}
+      </div>
+
+      {/* Day cells */}
+      <div style={gridStyle}>
+        {days.map(({ day, dateStr, inMonth }, i) => {
+          const isSelected = dateStr === value;
+          const isToday = dateStr === todayStr;
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => handleSelect(dateStr)}
+              style={{
+                ...cellStyle,
+                color: isSelected ? '#ffffff' : inMonth ? colors.text : colors.dim,
+                background: isSelected ? colors.accent : 'transparent',
+                borderRadius: radii.sm,
+                fontWeight: isSelected ? 600 : 400,
+                position: 'relative' as const,
+              }}
+            >
+              {day}
+              {isToday && !isSelected && (
+                <span style={{
+                  position: 'absolute' as const, bottom: '2px', left: '50%',
+                  transform: 'translateX(-50%)', width: '3px', height: '3px',
+                  borderRadius: '50%', background: colors.accent,
+                }} />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </>
+  );
+
+  // ── Inline mode: always-visible calendar ──
+
+  if (inline) {
+    return (
+      <div style={inlineStyle}>
+        {calendarGrid}
+      </div>
+    );
+  }
+
+  // ── Dropdown mode: click-to-open (original behavior) ──
+
   return (
     <div ref={wrapperRef} style={{ position: 'relative' }}>
-      {/* Collapsed: styled input */}
       <button
         type="button"
         onClick={handleOpen}
@@ -127,69 +194,30 @@ export function CalendarPicker({ value, onChange }: CalendarPickerProps) {
         <span style={{ color: colors.dim, fontSize: '10px' }}>&#9662;</span>
       </button>
 
-      {/* Expanded: dropdown calendar */}
       {open && (
         <div style={dropdownStyle}>
-          {/* Month nav */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-            <button type="button" onClick={prevMonth} style={navBtn}>&#8249;</button>
-            <span style={{ fontSize: '11px', fontWeight: 500, color: colors.cream, letterSpacing: '0.02em' }}>
-              {monthLabel}
-            </span>
-            <button type="button" onClick={nextMonth} style={navBtn}>&#8250;</button>
-          </div>
-
-          {/* Day headers */}
-          <div style={gridStyle}>
-            {DAY_HEADERS.map((d, i) => (
-              <div key={i} style={{ textAlign: 'center', fontSize: '9px', color: colors.dim, padding: '1px 0', userSelect: 'none' }}>
-                {d}
-              </div>
-            ))}
-          </div>
-
-          {/* Day cells */}
-          <div style={gridStyle}>
-            {days.map(({ day, dateStr, inMonth }, i) => {
-              const isSelected = dateStr === value;
-              const isToday = dateStr === todayStr;
-
-              return (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => handleSelect(dateStr)}
-                  style={{
-                    ...cellStyle,
-                    color: isSelected ? '#ffffff' : inMonth ? colors.text : colors.dim,
-                    background: isSelected ? colors.accent : 'transparent',
-                    borderRadius: '4px',
-                    fontWeight: isSelected ? 600 : 400,
-                    position: 'relative' as const,
-                  }}
-                >
-                  {day}
-                  {isToday && !isSelected && (
-                    <span style={{
-                      position: 'absolute' as const,
-                      bottom: '1px',
-                      left: '50%',
-                      transform: 'translateX(-50%)',
-                      width: '2px',
-                      height: '2px',
-                      borderRadius: '50%',
-                      background: colors.accent,
-                    }} />
-                  )}
-                </button>
-              );
-            })}
-          </div>
+          {calendarGrid}
         </div>
       )}
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Styles
+// ---------------------------------------------------------------------------
+
+const inlineStyle: React.CSSProperties = {
+  background: colors.card,
+  border: `1px solid ${colors.border}`,
+  borderRadius: radii.lg,
+  padding: '12px',
+  width: '100%',
+  aspectRatio: '1',
+  display: 'flex',
+  flexDirection: 'column',
+  justifyContent: 'center',
+};
 
 const triggerStyle: React.CSSProperties = {
   background: colors.bg,
@@ -249,7 +277,7 @@ const cellStyle: React.CSSProperties = {
   minHeight: '24px',
   border: 'none',
   cursor: 'pointer',
-  fontSize: '11px',
+  fontSize: '12px',
   transition: 'background 0.1s',
   fontFamily: 'inherit',
 };
