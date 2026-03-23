@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useHashRoute } from './hooks/useHashRoute';
 import { claimAccount, fetchAccount, fetchWhoami, updateProfile, setImpersonation, type PortalAccount, type UserRole } from './lib/api';
-import { colors, styles } from './lib/styles';
+import { colors, styles, spacing, radii } from './lib/styles';
 import { LoginScreen } from './screens/LoginScreen';
 import { DashboardScreen } from './screens/DashboardScreen';
 import { CreateEventScreen } from './screens/CreateEventScreen';
@@ -28,7 +28,7 @@ import { PlaceAutocomplete } from './components/PlaceAutocomplete';
 import type { PlaceResult } from './lib/api';
 
 function contentWidthForRoute(screen: string): 'normal' | 'wide' | 'full' {
-  const full = ['share-event', 'create-event', 'edit-event', 'admin-create-event', 'admin-edit-event'];
+  const full = ['share-event', 'create-event', 'edit-event', 'admin-create-event', 'admin-edit-event', 'profile'];
   if (full.includes(screen)) return 'full';
   const wide = ['dashboard', 'creative', 'developers', 'admin-home', 'admin-events', 'admin-account', 'admin-newsletters', 'admin-newsletter-emails', 'admin-newsletter-email', 'admin-newsletter-review', 'admin-feeds'];
   return wide.includes(screen) ? 'wide' : 'normal';
@@ -601,8 +601,6 @@ function OnboardingScreen({ account, onComplete, onSkip }: {
 }) {
   const [venueName, setVenueName] = useState(account.default_venue_name || account.business_name);
   const [selectedPlace, setSelectedPlace] = useState<PlaceResult | null>(null);
-  const [website, setWebsite] = useState(account.website || '');
-  const [phone, setPhone] = useState(account.phone || '');
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -619,90 +617,55 @@ function OnboardingScreen({ account, onComplete, onSkip }: {
       params.default_latitude = selectedPlace.location?.latitude ?? null;
       params.default_longitude = selectedPlace.location?.longitude ?? null;
     }
-    if (website) params.website = website;
-    if (phone) params.phone = phone;
 
-    if (Object.keys(params).length === 0) {
-      onSkip();
-      return;
-    }
+    if (Object.keys(params).length === 0) { onSkip(); return; }
 
     const res = await updateProfile(params as Parameters<typeof updateProfile>[0]);
     setSaving(false);
-
-    if (res.data?.account) {
-      onComplete(res.data.account);
-    } else {
-      setErr(res.error?.message || 'Failed to save');
-    }
+    if (res.data?.account) onComplete(res.data.account);
+    else setErr(res.error?.message || 'Failed to save');
   };
 
   return (
     <div style={styles.page}>
       <div style={{ ...styles.content, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '80vh' }}>
-        <div className="fade-up" style={{ ...styles.card, maxWidth: '440px', width: '100%' }}>
-          <h2 style={{ ...styles.pageTitle, textAlign: 'center', marginBottom: '4px' }}>
-            Tell us about your business
+        <div className="motion-fade-in" style={{ ...styles.card, maxWidth: '420px', width: '100%' }}>
+          <h2 style={{ ...styles.pageTitle, textAlign: 'center', marginBottom: '6px' }}>
+            Where is your business?
           </h2>
-          <p style={{ fontSize: '13px', color: colors.muted, textAlign: 'center', marginBottom: '24px' }}>
-            This helps neighbors find you. You can always change this later.
+          <p style={{ fontSize: '13px', color: colors.muted, textAlign: 'center', marginBottom: spacing.lg, lineHeight: 1.5 }}>
+            This auto-fills the venue on your events. You can change it anytime in your profile.
           </p>
 
           {err && (
-            <div style={{ background: '#fef2f2', color: colors.error, padding: '10px 14px', borderRadius: '8px', fontSize: '14px', marginBottom: '16px' }}>
+            <div style={{ background: colors.errorBg, color: colors.error, padding: '10px 14px', borderRadius: radii.md, fontSize: '14px', marginBottom: spacing.md }}>
               {err}
             </div>
           )}
 
           <form onSubmit={handleSave}>
-            <div style={{ marginBottom: '14px' }}>
-              <label style={styles.formLabel}>Business address</label>
+            <div style={{ marginBottom: spacing.lg }}>
               <PlaceAutocomplete
                 value={venueName || ''}
                 onChange={setVenueName}
-                onSelect={(place) => {
-                  setSelectedPlace(place);
-                  setVenueName(place.name);
-                }}
+                onSelect={(place) => { setSelectedPlace(place); setVenueName(place.name); }}
                 placeholder="Search for your business..."
               />
               {selectedPlace?.address && (
-                <div style={{ fontSize: '12px', color: colors.muted, marginTop: '4px' }}>
+                <div style={{ fontSize: '12px', color: colors.muted, marginTop: '6px' }}>
                   {selectedPlace.address}
                 </div>
               )}
             </div>
 
-            <div style={{ marginBottom: '14px' }}>
-              <label style={styles.formLabel}>Website (optional)</label>
-              <input
-                type="url"
-                placeholder="https://yourbusiness.com"
-                value={website}
-                onChange={(e) => setWebsite(e.target.value)}
-                style={styles.input}
-              />
-            </div>
-
-            <div style={{ marginBottom: '20px' }}>
-              <label style={styles.formLabel}>Phone (optional)</label>
-              <input
-                type="tel"
-                placeholder="(215) 555-0100"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                style={styles.input}
-              />
-            </div>
-
             <button type="submit" className="btn-primary" style={styles.buttonPrimary} disabled={saving}>
-              {saving ? 'Saving...' : 'Save & Continue'}
+              {saving ? 'Saving...' : 'Continue'}
             </button>
           </form>
 
-          <div style={{ textAlign: 'center', marginTop: '12px' }}>
+          <div style={{ textAlign: 'center', marginTop: '10px' }}>
             <button type="button" className="btn-text" style={styles.buttonText} onClick={onSkip}>
-              Skip for now
+              Skip — I'll add it later
             </button>
           </div>
         </div>
