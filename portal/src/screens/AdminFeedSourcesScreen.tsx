@@ -130,9 +130,9 @@ export function AdminFeedSourcesScreen() {
 
   const resultColor = (r: string | null) => {
     if (!r) return colors.muted;
-    if (r === 'success') return '#2e7d32';
-    if (r === 'failed') return '#c62828';
-    return '#e65100';
+    if (r === 'success') return colors.success;
+    if (r === 'failed') return colors.error;
+    return colors.pending;
   };
 
   return (
@@ -140,8 +140,8 @@ export function AdminFeedSourcesScreen() {
       {pollResult && (
         <div style={{
           position: 'fixed', top: 16, right: 16, padding: '10px 20px', borderRadius: 10,
-          background: pollResult.startsWith('Error') ? '#ffebee' : '#e8f5e9',
-          color: pollResult.startsWith('Error') ? '#c62828' : '#2e7d32',
+          background: pollResult.startsWith('Error') ? colors.errorBg : colors.successBg,
+          color: pollResult.startsWith('Error') ? colors.error : colors.success,
           fontSize: 14, fontWeight: 500, zIndex: 1000, boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
         }}>
           {pollResult}
@@ -233,7 +233,7 @@ export function AdminFeedSourcesScreen() {
                 style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: `1px solid ${colors.border}`, fontSize: 14, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }}
               />
             </div>
-            {error && <p style={{ color: '#c00', fontSize: 13, margin: 0 }}>{error}</p>}
+            {error && <p style={{ color: colors.error, fontSize: 13, margin: 0 }}>{error}</p>}
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={handleSave} disabled={saving} style={{
                 padding: '8px 20px', borderRadius: 8, border: 'none', background: colors.accent,
@@ -270,14 +270,14 @@ export function AdminFeedSourcesScreen() {
                     <span style={{ fontWeight: 600, fontSize: 15 }}>{source.name}</span>
                     <span style={{
                       fontSize: 11, padding: '2px 8px', borderRadius: 10, fontWeight: 600,
-                      background: source.status === 'active' ? '#e8f5e9' : source.status === 'paused' ? '#fff3e0' : '#f5f5f5',
-                      color: source.status === 'active' ? '#2e7d32' : source.status === 'paused' ? '#e65100' : '#666',
+                      background: source.status === 'active' ? colors.successBg : source.status === 'paused' ? colors.pendingBg : colors.bg,
+                      color: source.status === 'active' ? colors.success : source.status === 'paused' ? colors.pending : colors.muted,
                     }}>
                       {source.status}
                     </span>
                     <span style={{
                       fontSize: 11, padding: '2px 8px', borderRadius: 10,
-                      background: '#e3f2fd', color: '#1565c0', fontWeight: 500,
+                      background: colors.accentDim, color: colors.accent, fontWeight: 500,
                     }}>
                       {source.feed_type === 'agile_ticketing' ? 'Agile Ticketing' : source.feed_type.toUpperCase()}
                     </span>
@@ -296,7 +296,7 @@ export function AdminFeedSourcesScreen() {
                     )}
                   </div>
                   {source.last_poll_error && (
-                    <div style={{ fontSize: 12, color: '#c62828', marginTop: 4 }}>
+                    <div style={{ fontSize: 12, color: colors.error, marginTop: 4 }}>
                       Error: {source.last_poll_error}
                     </div>
                   )}

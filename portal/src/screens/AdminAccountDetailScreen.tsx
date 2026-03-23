@@ -508,8 +508,8 @@ export function AdminAccountDetailScreen({ accountId, onBack, onCreateEvent, onE
             fontSize: '11px',
             padding: '2px 8px',
             borderRadius: '4px',
-            background: account.status === 'pending' ? '#fef3cd' : account.status === 'rejected' ? '#fef2f2' : account.status === 'suspended' ? '#fef2f2' : account.claimed_at ? colors.successDim : colors.accentDim,
-            color: account.status === 'pending' ? '#92600a' : account.status === 'rejected' ? colors.error : account.status === 'suspended' ? colors.error : account.claimed_at ? colors.success : colors.accent,
+            background: account.status === 'pending' ? colors.pendingBg : account.status === 'rejected' ? colors.errorBg : account.status === 'suspended' ? colors.errorBg : account.claimed_at ? colors.successBg : colors.accentDim,
+            color: account.status === 'pending' ? colors.pending : account.status === 'rejected' ? colors.error : account.status === 'suspended' ? colors.error : account.claimed_at ? colors.success : colors.accent,
           }}>
             {account.status === 'pending' ? 'Pending' : account.status === 'rejected' ? 'Rejected' : account.status === 'suspended' ? 'Suspended' : account.claimed_at ? 'Claimed' : 'Managed'}
           </span>
@@ -752,7 +752,7 @@ export function AdminAccountDetailScreen({ accountId, onBack, onCreateEvent, onE
         {/* Toast */}
         {toast && (
           <div style={{
-            background: toast.type === 'success' ? colors.successDim : '#fef2f2',
+            background: toast.type === 'success' ? colors.successBg : colors.errorBg,
             color: toast.type === 'success' ? colors.success : colors.error,
             borderRadius: '6px', padding: '8px 12px', fontSize: '13px', marginBottom: '10px',
           }}>

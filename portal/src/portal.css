@@ -10,13 +10,21 @@
   --color-bg: #f7f7f5;
   --color-card: #ffffff;
   --color-border: #e8e6e1;
-  --color-cream: #1a1917;
+  --color-heading: #1a1917;
   --color-text: #37352f;
   --color-muted: #6b6660;
   --color-dim: #9c9791;
   --color-error: #c0392b;
+  --color-error-bg: #fef2f2;
+  --color-error-border: #f5c6c0;
   --color-success: #2d8a4e;
-  --color-success-dim: #2d8a4e0c;
+  --color-success-bg: #ecfdf3;
+  --color-success-border: #b7e4c7;
+  --color-pending: #92600a;
+  --color-pending-bg: #fef9ee;
+  --color-pending-border: #f5e6b8;
+  /* Legacy alias */
+  --color-cream: #1a1917;
 }
 
 body {

@@ -226,8 +226,8 @@ export function AdminDashboardScreen({ email, onViewAccount, onViewAllEvents, on
                   fontSize: '11px',
                   padding: '2px 8px',
                   borderRadius: '4px',
-                  background: account.status === 'pending' ? '#fef3cd' : account.claimed_at ? colors.successDim : colors.accentDim,
-                  color: account.status === 'pending' ? '#92600a' : account.claimed_at ? colors.success : colors.accent,
+                  background: account.status === 'pending' ? colors.pendingBg : account.claimed_at ? colors.successDim : colors.accentDim,
+                  color: account.status === 'pending' ? colors.pending : account.claimed_at ? colors.success : colors.accent,
                 }}>
                   {account.status === 'pending' ? 'Pending' : account.status === 'rejected' ? 'Rejected' : account.claimed_at ? 'Claimed' : 'Managed'}
                 </span>
@@ -261,13 +261,13 @@ function PendingAccountsSection({ accounts, onApprove, onReject, onViewAccount }
 
   return (
     <div style={{
-      background: '#fef3cd',
-      border: `1px solid #fde68a`,
+      background: colors.pendingBg,
+      border: `1px solid ${colors.pendingBorder}`,
       borderRadius: '10px',
       padding: '16px',
       marginBottom: '24px',
     }}>
-      <div style={{ ...styles.sectionLabel, marginBottom: '12px', color: '#92600a' }}>
+      <div style={{ ...styles.sectionLabel, marginBottom: '12px', color: colors.pending }}>
         Pending Verification ({accounts.length})
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>

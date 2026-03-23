@@ -51,19 +51,34 @@ export const loginColors = {
 // ---------------------------------------------------------------------------
 
 export const colors = {
+  // Core palette
   accent: '#2c2c2c',
   accentDim: '#2c2c2c06',
   accentBorder: '#2c2c2c15',
   bg: '#f7f7f5',
   card: '#ffffff',
   border: '#e8e6e1',
-  cream: '#1a1917',
-  text: '#37352f',
-  muted: '#6b6660',
-  dim: '#9c9791',
+
+  // Typography hierarchy
+  heading: '#1a1917',       // near-black — page titles, prominent text
+  text: '#37352f',          // primary body text
+  muted: '#6b6660',         // secondary text, labels
+  dim: '#9c9791',           // tertiary text, placeholders, disabled
+
+  // Semantic status
   error: '#c0392b',
+  errorBg: '#fef2f2',
+  errorBorder: '#f5c6c0',
   success: '#2d8a4e',
-  successDim: '#2d8a4e0c',
+  successBg: '#ecfdf3',
+  successBorder: '#b7e4c7',
+  pending: '#92600a',
+  pendingBg: '#fef9ee',
+  pendingBorder: '#f5e6b8',
+
+  // Legacy aliases
+  cream: '#1a1917',
+  successDim: '#ecfdf3',
 } as const;
 
 const inputBase: React.CSSProperties = {
@@ -149,7 +164,7 @@ export const styles = {
   pageTitle: {
     fontSize: '24px',
     fontWeight: 500 as const,
-    color: colors.cream,
+    color: colors.heading,
     letterSpacing: '0.01em',
   },
   sectionLabel: {
@@ -317,7 +332,7 @@ export const styles = {
     border: '1px solid transparent',
     borderRadius: radii.md,
     background: 'transparent',
-    color: colors.cream,
+    color: colors.heading,
     letterSpacing: '-0.01em',
     outline: 'none',
     width: '100%',
@@ -355,14 +370,14 @@ export const styles = {
   },
   tooltipContent: {
     position: 'absolute' as const,
-    background: colors.cream,
+    background: colors.heading,
     color: '#e8e6e1',
     fontSize: '12px',
     lineHeight: '1.5',
     padding: '8px 12px',
     borderRadius: radii.md,
     maxWidth: '220px',
-    zIndex: 100,
+    zIndex: 200,
     boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
   },
 

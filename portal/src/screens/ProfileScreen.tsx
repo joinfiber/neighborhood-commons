@@ -103,7 +103,7 @@ export function ProfileScreen({ account, onAccountUpdated }: ProfileScreenProps)
         {/* Toast */}
         {toast && (
           <div style={{
-            background: toast.type === 'success' ? colors.successDim : '#fef2f2',
+            background: toast.type === 'success' ? colors.successBg : colors.errorBg,
             color: toast.type === 'success' ? colors.success : colors.error,
             borderRadius: '6px', padding: '8px 12px', fontSize: '13px', marginBottom: '14px',
           }}>

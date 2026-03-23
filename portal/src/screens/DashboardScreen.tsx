@@ -148,9 +148,9 @@ function EventCard({ event, onClick, onShare, selected, onToggle, selectMode }: 
         {event.status === 'pending_review' && (
           <span style={{
             fontSize: '10px',
-            color: '#92600a',
-            background: '#fef3cd',
-            border: '1px solid #fde68a',
+            color: colors.pending,
+            background: colors.pendingBg,
+            border: `1px solid ${colors.pendingBorder}`,
             borderRadius: '10px',
             padding: '1px 6px',
           }}>
@@ -274,9 +274,9 @@ function SeriesCard({ group, onClick, onShare, selectedIds, onToggle, selectMode
         {nextEvent.status === 'pending_review' && (
           <span style={{
             fontSize: '10px',
-            color: '#92600a',
-            background: '#fef3cd',
-            border: '1px solid #fde68a',
+            color: colors.pending,
+            background: colors.pendingBg,
+            border: `1px solid ${colors.pendingBorder}`,
             borderRadius: '10px',
             padding: '1px 6px',
           }}>
@@ -514,7 +514,7 @@ export function DashboardScreen({ account, onEditEvent, onShareEvent }: Dashboar
         {/* Toast */}
         {toast && (
           <div style={{
-            background: toast.type === 'success' ? colors.successDim : '#fef2f2',
+            background: toast.type === 'success' ? colors.successBg : colors.errorBg,
             color: toast.type === 'success' ? colors.success : colors.error,
             borderRadius: '6px',
             padding: '8px 12px',

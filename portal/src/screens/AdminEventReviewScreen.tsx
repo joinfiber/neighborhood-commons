@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { colors } from '../lib/styles';
 import { PORTAL_CATEGORIES, PORTAL_CATEGORY_KEYS } from '../lib/categories';
+import { EVENT_TAGS, getTagsForCategory, type EventTag } from '../lib/tags';
 import {
   adminFetchEventCandidates,
   adminFetchCandidateDetail,
@@ -19,10 +20,10 @@ interface Props {
 const STATUS_TABS = ['pending', 'approved', 'rejected', 'duplicate'] as const;
 
 const statusColors: Record<string, { bg: string; fg: string }> = {
-  pending: { bg: '#fff3e0', fg: '#e65100' },
-  approved: { bg: '#e8f5e9', fg: '#2e7d32' },
-  rejected: { bg: '#ffebee', fg: '#c62828' },
-  duplicate: { bg: '#f3e5f5', fg: '#6a1b9a' },
+  pending: { bg: colors.pendingBg, fg: colors.pending },
+  approved: { bg: colors.successBg, fg: colors.success },
+  rejected: { bg: colors.errorBg, fg: colors.error },
+  duplicate: { bg: '#f3f2f0', fg: colors.muted },
 };
 
 const inputStyle: React.CSSProperties = {
@@ -40,9 +41,9 @@ function confidenceLabel(c: number | null): string {
 
 function confidenceColor(c: number | null): string {
   if (c == null) return colors.muted;
-  if (c >= 0.8) return '#2e7d32';
-  if (c >= 0.5) return '#e65100';
-  return '#c62828';
+  if (c >= 0.8) return colors.success;
+  if (c >= 0.5) return colors.pending;
+  return colors.error;
 }
 
 function renderEmailBodyWithHighlight(body: string, excerpt: string | null) {
@@ -52,7 +53,7 @@ function renderEmailBodyWithHighlight(body: string, excerpt: string | null) {
   return (
     <>
       {body.substring(0, idx)}
-      <mark id="excerpt-highlight" style={{ background: '#fff3cd', padding: '1px 2px', borderRadius: 2 }}>
+      <mark id="excerpt-highlight" style={{ background: colors.pendingBg, padding: '1px 2px', borderRadius: 2 }}>
         {body.substring(idx, idx + excerpt.length)}
       </mark>
       {body.substring(idx + excerpt.length)}
@@ -71,7 +72,7 @@ function FieldConfBadge({ field, meta, onClickExcerpt }: {
 
   const excerpt = meta.excerpts[field];
   const pct = Math.round(conf * 100);
-  const color = conf >= 0.8 ? '#2e7d32' : conf >= 0.5 ? '#e65100' : '#999';
+  const color = conf >= 0.8 ? colors.success : conf >= 0.5 ? colors.pending : colors.dim;
 
   return (
     <span
@@ -112,6 +113,7 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
   const [editCategory, setEditCategory] = useState('community');
   const [editDescription, setEditDescription] = useState('');
   const [editPrice, setEditPrice] = useState('');
+  const [editTags, setEditTags] = useState<string[]>([]);
   const [editPlaceId, setEditPlaceId] = useState<string | undefined>();
   const [editLat, setEditLat] = useState<number | undefined>();
   const [editLng, setEditLng] = useState<number | undefined>();
@@ -161,8 +163,9 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
       setEditVenue(first.location_name || '');
       setEditAddress(first.location_address || '');
       setEditDescription(first.description || '');
-      setEditCategory('community');
-      setEditPrice('');
+      setEditCategory(first.category || 'community');
+      setEditTags(Array.isArray(first.tags) ? first.tags : []);
+      setEditPrice(first.price || '');
       setEditPlaceId(undefined);
       setEditLat(first.location_lat ?? undefined);
       setEditLng(first.location_lng ?? undefined);
@@ -183,6 +186,7 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
       latitude: editLat,
       longitude: editLng,
       category: editCategory,
+      tags: editTags.length > 0 ? editTags : undefined,
       start_time: editStartTime || undefined,
       end_time: editEndTime || undefined,
       price: editPrice || undefined,
@@ -212,9 +216,10 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
     setEditEndTime(candidate.end_time || '');
     setEditVenue(candidate.location_name || '');
     setEditAddress(candidate.location_address || '');
-    setEditCategory('community');
+    setEditCategory(candidate.category || 'community');
+    setEditTags(Array.isArray(candidate.tags) ? candidate.tags : []);
     setEditDescription(candidate.description || '');
-    setEditPrice('');
+    setEditPrice(candidate.price || '');
     setEditPlaceId(undefined);
     setEditLat(candidate.location_lat ?? undefined);
     setEditLng(candidate.location_lng ?? undefined);
@@ -249,6 +254,7 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
       latitude: editLat,
       longitude: editLng,
       category: editCategory,
+      tags: editTags.length > 0 ? editTags : undefined,
       description: editDescription || undefined,
       price: editPrice || undefined,
     });
@@ -305,8 +311,8 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
       {toast && (
         <div style={{
           position: 'fixed', top: 16, right: 16, padding: '10px 20px', borderRadius: 10,
-          background: toast.startsWith('Error') ? '#ffebee' : '#e8f5e9',
-          color: toast.startsWith('Error') ? '#c62828' : '#2e7d32',
+          background: toast.startsWith('Error') ? colors.errorBg : colors.successBg,
+          color: toast.startsWith('Error') ? colors.error : colors.success,
           fontSize: 14, fontWeight: 500, zIndex: 1000, boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
         }}>
           {toast}
@@ -346,23 +352,23 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
       {/* Multi-select toolbar */}
       {activeTab === 'pending' && selectedIds.size >= 2 && !showSeriesForm && (
         <div style={{
-          padding: '12px 16px', borderRadius: 10, background: '#e3f2fd',
-          border: '1px solid #90caf9', marginBottom: 16,
+          padding: '12px 16px', borderRadius: 10, background: colors.accentDim,
+          border: `1px solid ${colors.accentBorder}`, marginBottom: 16,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
-          <span style={{ fontSize: 14, fontWeight: 500, color: '#1565c0' }}>
+          <span style={{ fontSize: 14, fontWeight: 500, color: colors.accent }}>
             {selectedIds.size} candidates selected
           </span>
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={openSeriesForm} style={{
               padding: '6px 16px', borderRadius: 8, border: 'none',
-              background: '#1565c0', color: 'white', cursor: 'pointer',
+              background: colors.accent, color: 'white', cursor: 'pointer',
               fontFamily: 'inherit', fontSize: 13, fontWeight: 600,
             }}>
               Approve as Series
             </button>
             <button onClick={() => setSelectedIds(new Set())} style={{
-              padding: '6px 16px', borderRadius: 8, border: '1px solid #90caf9',
+              padding: '6px 16px', borderRadius: 8, border: `1px solid ${colors.accentBorder}`,
               background: 'white', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13,
             }}>
               Clear
@@ -374,7 +380,7 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
       {/* Series approve form */}
       {showSeriesForm && (
         <div style={{
-          padding: 20, borderRadius: 12, border: '2px solid #1565c0',
+          padding: 20, borderRadius: 12, border: `2px solid ${colors.accent}`,
           background: 'white', marginBottom: 20,
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -398,8 +404,8 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {selectedDates.map(d => (
                 <span key={d} style={{
-                  padding: '2px 10px', borderRadius: 12, background: '#e3f2fd',
-                  color: '#1565c0', fontSize: 12, fontWeight: 500,
+                  padding: '2px 10px', borderRadius: 12, background: colors.accentDim,
+                  color: colors.accent, fontSize: 12, fontWeight: 500,
                 }}>
                   {new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
                 </span>
@@ -451,7 +457,7 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
                 inputStyle={inputStyle}
               />
               {editPlaceId && (
-                <div style={{ fontSize: 11, color: '#2e7d32', marginTop: 2 }}>Matched to Google Place</div>
+                <div style={{ fontSize: 11, color: colors.success, marginTop: 2 }}>Matched to Google Place</div>
               )}
             </div>
             <div>
@@ -463,6 +469,30 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
               <textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={2}
                 style={{ ...inputStyle, resize: 'vertical' as const }} />
             </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={{ display: 'block', fontSize: 12, marginBottom: 5, fontWeight: 500 }}>Tags</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {getTagsForCategory(editCategory).map((tag) => {
+                  const active = editTags.includes(tag);
+                  return (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => setEditTags(prev => active ? prev.filter(t => t !== tag) : [...prev, tag])}
+                      style={{
+                        padding: '3px 10px', borderRadius: 12, fontSize: 12, cursor: 'pointer',
+                        border: `1px solid ${active ? colors.accent : colors.border}`,
+                        background: active ? colors.accentDim : 'white',
+                        color: active ? colors.accent : colors.muted,
+                        fontWeight: active ? 600 : 400,
+                      }}
+                    >
+                      {EVENT_TAGS[tag].label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
 
           <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
@@ -471,7 +501,7 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
               disabled={actionLoading || !editTitle}
               style={{
                 padding: '8px 24px', borderRadius: 8, border: 'none',
-                background: '#1565c0', color: 'white', cursor: 'pointer',
+                background: colors.accent, color: 'white', cursor: 'pointer',
                 fontFamily: 'inherit', fontSize: 13, fontWeight: 600,
                 opacity: actionLoading || !editTitle ? 0.5 : 1,
               }}
@@ -502,7 +532,7 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
             return (
               <div key={c.id} style={{
                 borderRadius: 12,
-                border: `1px solid ${isSelected ? '#1565c0' : isExpanded ? colors.accent : colors.border}`,
+                border: `1px solid ${isSelected ? colors.accent : isExpanded ? colors.accent : colors.border}`,
                 background: isSelected ? '#f5f9ff' : 'white',
                 overflow: 'hidden',
               }}>
@@ -519,8 +549,8 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
                     >
                       <div style={{
                         width: 18, height: 18, borderRadius: 4,
-                        border: `2px solid ${isSelected ? '#1565c0' : colors.border}`,
-                        background: isSelected ? '#1565c0' : 'white',
+                        border: `2px solid ${isSelected ? colors.accent : colors.border}`,
+                        background: isSelected ? colors.accent : 'white',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         transition: 'all 0.15s',
                       }}>
@@ -560,11 +590,37 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
                             {c.start_time && ` at ${c.start_time}`}
                             {c.end_time && `–${c.end_time}`}
                             {c.location_name && ` · ${c.location_name}`}
+                            {c.price && ` · ${c.price}`}
                           </div>
                           <div style={{ fontSize: 12, color: colors.muted, marginTop: 4 }}>
                             {(c.newsletter_sources?.name || c.feed_sources?.name) && `Source: ${c.newsletter_sources?.name || c.feed_sources?.name}`}
                             {c.newsletter_emails?.subject && ` · "${c.newsletter_emails.subject}"`}
                           </div>
+                          {(() => {
+                            const cat = c.category;
+                            const tgs = Array.isArray(c.tags) ? c.tags : [];
+                            if (!cat && tgs.length === 0) return null;
+                            return (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                                {cat && cat !== 'community' && PORTAL_CATEGORIES[cat as keyof typeof PORTAL_CATEGORIES] && (
+                                  <span style={{
+                                    fontSize: 11, padding: '1px 8px', borderRadius: 10,
+                                    background: colors.accentDim, color: colors.accent, fontWeight: 600,
+                                  }}>
+                                    {PORTAL_CATEGORIES[cat as keyof typeof PORTAL_CATEGORIES].label}
+                                  </span>
+                                )}
+                                {tgs.slice(0, 4).map((tag: string) => (
+                                  <span key={tag} style={{
+                                    fontSize: 11, padding: '1px 7px', borderRadius: 10,
+                                    background: '#f0f0f0', color: '#555',
+                                  }}>
+                                    {EVENT_TAGS[tag as EventTag]?.label || tag}
+                                  </span>
+                                ))}
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
@@ -698,7 +754,7 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
                               inputStyle={inputStyle}
                             />
                             {editPlaceId && (
-                              <div style={{ fontSize: 11, color: '#2e7d32', marginTop: 2 }}>
+                              <div style={{ fontSize: 11, color: colors.success, marginTop: 2 }}>
                                 Matched to Google Place
                               </div>
                             )}
@@ -718,13 +774,39 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
                           </div>
                         </div>
 
+                        {/* Tags */}
+                        <div style={{ marginTop: 10 }}>
+                          <label style={{ display: 'block', fontSize: 12, marginBottom: 5, fontWeight: 500 }}>Tags</label>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                            {getTagsForCategory(editCategory).map((tag) => {
+                              const active = editTags.includes(tag);
+                              return (
+                                <button
+                                  key={tag}
+                                  type="button"
+                                  onClick={() => setEditTags(prev => active ? prev.filter(t => t !== tag) : [...prev, tag])}
+                                  style={{
+                                    padding: '3px 10px', borderRadius: 12, fontSize: 12, cursor: 'pointer',
+                                    border: `1px solid ${active ? colors.accent : colors.border}`,
+                                    background: active ? colors.accentDim : 'white',
+                                    color: active ? colors.accent : colors.muted,
+                                    fontWeight: active ? 600 : 400,
+                                  }}
+                                >
+                                  {EVENT_TAGS[tag].label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
                         <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
                           <button
                             onClick={() => handleApprove(c.id)}
                             disabled={actionLoading || !editDate}
                             style={{
                               padding: '8px 20px', borderRadius: 8, border: 'none',
-                              background: '#2e7d32', color: 'white', cursor: 'pointer',
+                              background: colors.success, color: 'white', cursor: 'pointer',
                               fontFamily: 'inherit', fontSize: 13, fontWeight: 600,
                               opacity: actionLoading || !editDate ? 0.5 : 1,
                             }}
@@ -735,8 +817,8 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
                             onClick={() => handleReject(c.id)}
                             disabled={actionLoading}
                             style={{
-                              padding: '8px 20px', borderRadius: 8, border: `1px solid #c62828`,
-                              background: 'white', color: '#c62828', cursor: 'pointer',
+                              padding: '8px 20px', borderRadius: 8, border: `1px solid ${colors.error}`,
+                              background: 'white', color: colors.error, cursor: 'pointer',
                               fontFamily: 'inherit', fontSize: 13, fontWeight: 500,
                               opacity: actionLoading ? 0.5 : 1,
                             }}
