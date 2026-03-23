@@ -3,6 +3,8 @@ import { colors, radii } from '../lib/styles';
 import {
   getOrdinalWeekday,
   toOrdinalRecurrence,
+  parseWeeklyDays,
+  toWeeklyDaysRecurrence,
   durationToInstanceCount,
 } from '../lib/recurrence';
 
@@ -24,13 +26,31 @@ interface RecurrencePickerProps {
   onInstanceCountChange: (count: number) => void;
 }
 
+const DAY_PICKER = [
+  { idx: 1, label: 'M' }, { idx: 2, label: 'T' }, { idx: 3, label: 'W' },
+  { idx: 4, label: 'Th' }, { idx: 5, label: 'F' }, { idx: 6, label: 'Sa' }, { idx: 0, label: 'Su' },
+];
+
 export function RecurrencePicker({ value, onChange, eventDate, instanceCount, onInstanceCountChange }: RecurrencePickerProps) {
+  const weeklyDays = parseWeeklyDays(value);
+
   const frequency: Frequency = useMemo(() => {
     if (value === 'biweekly') return 'biweekly';
     if (value.startsWith('ordinal_weekday:')) return 'ordinal';
     if (value === 'monthly') return 'monthly';
     return 'weekly';
   }, [value]);
+
+  // Selected days for multi-day weekly (e.g., Mon–Fri happy hour)
+  const selectedDays: number[] = useMemo(() => {
+    if (weeklyDays) return weeklyDays;
+    if (value === 'daily') return [0, 1, 2, 3, 4, 5, 6];
+    if (frequency === 'weekly') {
+      const d = eventDate ? new Date(eventDate + 'T12:00:00') : null;
+      return d && !isNaN(d.getTime()) ? [d.getDay()] : [1];
+    }
+    return [];
+  }, [value, weeklyDays, frequency, eventDate]);
 
   const freqForDuration = frequency === 'ordinal' ? 'monthly' as const : frequency;
 
@@ -55,7 +75,9 @@ export function RecurrencePicker({ value, onChange, eventDate, instanceCount, on
     const start = new Date(eventDate + 'T12:00:00');
     if (isNaN(start.getTime())) return null;
 
-    const totalEvents = instanceCount;
+    const daysPerWeek = frequency === 'weekly' ? selectedDays.length : 1;
+    const totalEvents = frequency === 'weekly' && daysPerWeek > 1
+      ? instanceCount * daysPerWeek : instanceCount;
 
     const endDate = new Date(start);
     switch (freqForDuration) {
@@ -66,7 +88,7 @@ export function RecurrencePicker({ value, onChange, eventDate, instanceCount, on
 
     const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     return `${totalEvents} event${totalEvents !== 1 ? 's' : ''} · through ${fmt(endDate)}`;
-  }, [eventDate, instanceCount, frequency, freqForDuration]);
+  }, [eventDate, instanceCount, frequency, freqForDuration, selectedDays.length]);
 
   // --- Handlers ---
 
@@ -93,6 +115,19 @@ export function RecurrencePicker({ value, onChange, eventDate, instanceCount, on
         onInstanceCountChange(durationToInstanceCount('monthly', duration));
         break;
     }
+  }
+
+  function handleDayToggle(dayIdx: number) {
+    const current = new Set(selectedDays);
+    if (current.has(dayIdx)) {
+      if (current.size <= 1) return; // keep at least one
+      current.delete(dayIdx);
+    } else {
+      current.add(dayIdx);
+    }
+    const days = [...current];
+    onChange(days.length === 1 ? 'weekly' : toWeeklyDaysRecurrence(days));
+    onInstanceCountChange(durationToInstanceCount('weekly', duration));
   }
 
   function handleDurationChange(months: Duration) {
@@ -137,6 +172,29 @@ export function RecurrencePicker({ value, onChange, eventDate, instanceCount, on
           </button>
         )}
       </div>
+
+      {/* ── Day picker (weekly — for multi-day patterns like Mon–Fri happy hour) ── */}
+      {frequency === 'weekly' && (
+        <div style={{ marginTop: '10px', display: 'flex', gap: '4px' }}>
+          {DAY_PICKER.map(({ idx, label }) => {
+            const active = selectedDays.includes(idx);
+            return (
+              <button key={idx} type="button" onClick={() => handleDayToggle(idx)}
+                style={{
+                  width: '30px', height: '30px', borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '11px', fontWeight: 600, cursor: 'pointer',
+                  transition: 'all 0.12s', border: '1px solid', fontFamily: 'inherit',
+                  background: active ? colors.accent : 'transparent',
+                  color: active ? '#ffffff' : colors.dim,
+                  borderColor: active ? colors.accent : colors.border,
+                }}>
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* ── Duration ── */}
       <div style={{ marginTop: '10px' }}>
