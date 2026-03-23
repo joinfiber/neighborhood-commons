@@ -48,20 +48,77 @@ body {
 }
 
 /* =============================================================================
-   Animations
+   Motion System
+
+   Four primitives. Every animation is a direct consequence of state change.
+
+   Open/appear:  200ms ease-out  — welcomes in
+   Close/disappear: 120ms linear — instant compliance
+   Property change: 150ms ease   — hover, focus, color
+   Press: 100ms                  — tactile, immediate
+
+   Tokens:
+   --motion-open:   200ms ease-out
+   --motion-close:  120ms linear
+   --motion-prop:   150ms ease
+   --motion-press:  100ms ease
    ============================================================================= */
+
+:root {
+  --motion-open: 200ms ease-out;
+  --motion-close: 120ms linear;
+  --motion-prop: 150ms ease;
+  --motion-press: 100ms ease;
+}
+
+/* ── Keyframes ─────────────────────────────────────────────────────────── */
 
 @keyframes drift {
   0%, 100% { transform: translateX(-50%) translateY(0); }
   50% { transform: translateX(-45%) translateY(20px); }
 }
 
-@keyframes fadeUp {
-  from { opacity: 0; transform: translateY(8px); }
+@keyframes motionFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-.fade-up { animation: fadeUp 0.3s ease both; }
+@keyframes motionFadeOut {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(4px); }
+}
+
+/* ── Utility classes ───────────────────────────────────────────────────── */
+
+/* Content appearing (screens, panels, new elements) */
+.motion-fade-in {
+  animation: motionFadeIn var(--motion-open) both;
+}
+
+/* Legacy alias */
+.fade-up {
+  animation: motionFadeIn var(--motion-open) both;
+}
+
+/* Expand: applied to a wrapper with max-height + overflow hidden.
+   The wrapper transitions max-height; content fades in. */
+.motion-expand {
+  overflow: hidden;
+  transition: max-height var(--motion-open), opacity var(--motion-open);
+  opacity: 1;
+}
+
+.motion-expand[data-collapsed="true"] {
+  max-height: 0 !important;
+  opacity: 0;
+  transition: max-height var(--motion-close), opacity var(--motion-close);
+}
+
+/* Content inside an expanding section — fades in after expand starts */
+.motion-expand-content {
+  animation: motionFadeIn var(--motion-open) both;
+  animation-delay: 50ms;
+}
 
 /* =============================================================================
    Form inputs — focus glow
@@ -82,7 +139,7 @@ input::placeholder, textarea::placeholder {
    ============================================================================= */
 
 .title-input {
-  transition: border-color 0.15s;
+  transition: border-color var(--motion-prop);
 }
 
 .title-input:focus {
@@ -99,7 +156,7 @@ input::placeholder, textarea::placeholder {
    ============================================================================= */
 
 .interactive-row {
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color var(--motion-prop), box-shadow var(--motion-prop);
 }
 
 .interactive-row:hover {
@@ -112,7 +169,7 @@ input::placeholder, textarea::placeholder {
    ============================================================================= */
 
 .dropdown-item {
-  transition: background 0.1s;
+  transition: background var(--motion-press);
 }
 
 .dropdown-item:hover {
@@ -124,7 +181,7 @@ input::placeholder, textarea::placeholder {
    ============================================================================= */
 
 .btn-primary {
-  transition: opacity 0.15s, transform 0.15s;
+  transition: opacity var(--motion-prop), transform var(--motion-press);
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -141,7 +198,7 @@ input::placeholder, textarea::placeholder {
 }
 
 .btn-secondary {
-  transition: border-color 0.15s;
+  transition: border-color var(--motion-prop);
 }
 
 .btn-secondary:hover:not(:disabled) {
@@ -183,7 +240,7 @@ input::placeholder, textarea::placeholder {
   align-items: center;
   justify-content: center;
   z-index: 2000;
-  animation: fadeUp 0.15s ease both;
+  animation: motionFadeIn var(--motion-open) both;
 }
 
 /* =============================================================================
@@ -200,8 +257,8 @@ input::placeholder, textarea::placeholder {
   to { opacity: 0; transform: translateX(-50%) translateY(-12px); }
 }
 
-.toast-enter { animation: toastIn 0.25s ease both; }
-.toast-exit { animation: toastOut 0.2s ease both; }
+.toast-enter { animation: toastIn var(--motion-open) both; }
+.toast-exit { animation: toastOut var(--motion-close) both; }
 
 /* =============================================================================
    Focus-visible
@@ -221,7 +278,7 @@ button:focus:not(:focus-visible) {
    ============================================================================= */
 
 .sidebar-nav-item {
-  transition: background 0.15s, color 0.15s;
+  transition: background var(--motion-prop), color var(--motion-prop);
 }
 
 .sidebar-nav-item:hover {
@@ -236,20 +293,20 @@ button:focus:not(:focus-visible) {
   background: rgba(0, 0, 0, 0.3);
   z-index: 99;
   opacity: 0;
-  animation: fadeIn 0.15s ease forwards;
+  animation: motionBackdropIn var(--motion-open) forwards;
 }
 
-@keyframes fadeIn {
+@keyframes motionBackdropIn {
   to { opacity: 1; }
 }
 
-@keyframes slideInLeft {
+@keyframes motionSlideIn {
   from { transform: translateX(-100%); }
   to { transform: translateX(0); }
 }
 
 .sidebar-slide-in {
-  animation: slideInLeft 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: motionSlideIn var(--motion-open) forwards;
 }
 
 /* =============================================================================
@@ -257,7 +314,7 @@ button:focus:not(:focus-visible) {
    ============================================================================= */
 
 .tooltip-icon {
-  transition: border-color 0.15s, color 0.15s;
+  transition: border-color var(--motion-prop), color var(--motion-prop);
 }
 
 .tooltip-icon:hover,
@@ -266,13 +323,8 @@ button:focus:not(:focus-visible) {
   color: var(--color-muted);
 }
 
-@keyframes tooltipFadeIn {
-  from { opacity: 0; transform: translateY(2px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
 .tooltip-popup {
-  animation: tooltipFadeIn 0.12s ease both;
+  animation: motionFadeIn var(--motion-open) both;
 }
 
 /* =============================================================================

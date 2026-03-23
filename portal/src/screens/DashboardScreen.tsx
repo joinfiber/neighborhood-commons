@@ -68,7 +68,7 @@ function EventRow({ event, onEdit, onDelete, isPast, expanded, onToggle }: {
     <div style={{
       background: colors.card, border: `1px solid ${expanded ? colors.accentBorder : colors.border}`,
       borderRadius: radii.md, opacity: isPast ? 0.5 : 1,
-      transition: 'border-color 0.15s',
+      transition: 'border-color var(--motion-prop)',
     }}>
       {/* Collapsed row — always visible */}
       <button
@@ -113,7 +113,7 @@ function EventRow({ event, onEdit, onDelete, isPast, expanded, onToggle }: {
 
       {/* Expanded detail — full event info */}
       {expanded && (
-        <div style={{ padding: '0 14px 14px', borderTop: `1px solid ${colors.border}` }}>
+        <div className="motion-expand-content" style={{ padding: '0 14px 14px', borderTop: `1px solid ${colors.border}` }}>
           <div style={{ display: 'flex', gap: '14px', paddingTop: '12px' }}>
 
             {/* Thumbnail */}
@@ -531,13 +531,13 @@ export function DashboardScreen({ account, onEditEvent, onShareEvent: _onShareEv
                 <span style={{ ...styles.sectionLabel, margin: 0 }}>
                   Past events ({pastEvents.length})
                 </span>
-                <span style={{ fontSize: '12px', color: colors.dim, transition: 'transform 0.15s',
+                <span style={{ fontSize: '12px', color: colors.dim, transition: 'transform var(--motion-prop)',
                   transform: showHistory ? 'rotate(90deg)' : 'rotate(0deg)' }}>
                   ▸
                 </span>
               </button>
               {showHistory && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', paddingBottom: spacing.lg }}>
+                <div className="motion-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '4px', paddingBottom: spacing.lg }}>
                   {pastEvents.slice(0, 20).map((event) => (
                     <EventRow
                       key={event.id}
