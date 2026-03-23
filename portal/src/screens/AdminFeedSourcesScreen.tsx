@@ -154,7 +154,7 @@ export function AdminFeedSourcesScreen() {
           onClick={() => { resetForm(); setShowForm(true); }}
           style={{
             padding: '8px 16px', fontSize: 13, borderRadius: 8, border: 'none',
-            background: colors.accent, color: 'white', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600,
+            background: colors.accent, color: colors.card, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600,
           }}
         >
           + Add Feed
@@ -237,14 +237,14 @@ export function AdminFeedSourcesScreen() {
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={handleSave} disabled={saving} style={{
                 padding: '8px 20px', borderRadius: 8, border: 'none', background: colors.accent,
-                color: 'white', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 600,
+                color: colors.card, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 600,
                 opacity: saving ? 0.6 : 1,
               }}>
                 {saving ? 'Saving...' : editId ? 'Save Changes' : 'Add Feed'}
               </button>
               <button onClick={resetForm} style={{
                 padding: '8px 20px', borderRadius: 8, border: `1px solid ${colors.border}`,
-                background: 'white', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13,
+                background: colors.card, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13,
               }}>
                 Cancel
               </button>
@@ -262,7 +262,7 @@ export function AdminFeedSourcesScreen() {
           {sources.map((source) => (
             <div key={source.id} style={{
               padding: '16px 20px', borderRadius: 12, border: `1px solid ${colors.border}`,
-              background: 'white',
+              background: colors.card,
             }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -308,7 +308,7 @@ export function AdminFeedSourcesScreen() {
                     disabled={pollingId === source.id}
                     style={{
                       padding: '6px 12px', fontSize: 12, borderRadius: 6, border: `1px solid ${colors.accent}`,
-                      background: 'white', color: colors.accent, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500,
+                      background: colors.card, color: colors.accent, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500,
                       opacity: pollingId === source.id ? 0.6 : 1,
                     }}
                   >
@@ -318,7 +318,7 @@ export function AdminFeedSourcesScreen() {
                     onClick={() => toggleStatus(source)}
                     style={{
                       padding: '6px 12px', fontSize: 12, borderRadius: 6, border: `1px solid ${colors.border}`,
-                      background: 'white', cursor: 'pointer', fontFamily: 'inherit',
+                      background: colors.card, cursor: 'pointer', fontFamily: 'inherit',
                     }}
                   >
                     {source.status === 'active' ? 'Pause' : 'Activate'}
@@ -327,7 +327,7 @@ export function AdminFeedSourcesScreen() {
                     onClick={() => startEdit(source)}
                     style={{
                       padding: '6px 12px', fontSize: 12, borderRadius: 6, border: `1px solid ${colors.border}`,
-                      background: 'white', cursor: 'pointer', fontFamily: 'inherit',
+                      background: colors.card, cursor: 'pointer', fontFamily: 'inherit',
                     }}
                   >
                     Edit

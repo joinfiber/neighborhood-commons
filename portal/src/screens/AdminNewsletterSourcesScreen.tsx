@@ -94,7 +94,7 @@ export function AdminNewsletterSourcesScreen({ onNavigate }: Props) {
             onClick={() => onNavigate('#/admin/newsletters/review')}
             style={{
               padding: '8px 16px', fontSize: 13, borderRadius: 8, border: `1px solid ${colors.border}`,
-              background: 'white', cursor: 'pointer', fontFamily: 'inherit',
+              background: colors.card, cursor: 'pointer', fontFamily: 'inherit',
             }}
           >
             Review Queue
@@ -103,7 +103,7 @@ export function AdminNewsletterSourcesScreen({ onNavigate }: Props) {
             onClick={() => onNavigate('#/admin/newsletters/emails')}
             style={{
               padding: '8px 16px', fontSize: 13, borderRadius: 8, border: `1px solid ${colors.border}`,
-              background: 'white', cursor: 'pointer', fontFamily: 'inherit',
+              background: colors.card, cursor: 'pointer', fontFamily: 'inherit',
             }}
           >
             Inbound Emails
@@ -112,7 +112,7 @@ export function AdminNewsletterSourcesScreen({ onNavigate }: Props) {
             onClick={() => { resetForm(); setShowForm(true); }}
             style={{
               padding: '8px 16px', fontSize: 13, borderRadius: 8, border: 'none',
-              background: colors.accent, color: 'white', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600,
+              background: colors.accent, color: colors.card, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600,
             }}
           >
             + Add Source
@@ -159,14 +159,14 @@ export function AdminNewsletterSourcesScreen({ onNavigate }: Props) {
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={handleSave} disabled={saving} style={{
                 padding: '8px 20px', borderRadius: 8, border: 'none', background: colors.accent,
-                color: 'white', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 600,
+                color: colors.card, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 600,
                 opacity: saving ? 0.6 : 1,
               }}>
                 {saving ? 'Saving...' : editId ? 'Save Changes' : 'Add Source'}
               </button>
               <button onClick={resetForm} style={{
                 padding: '8px 20px', borderRadius: 8, border: `1px solid ${colors.border}`,
-                background: 'white', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13,
+                background: colors.card, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13,
               }}>
                 Cancel
               </button>
@@ -184,7 +184,7 @@ export function AdminNewsletterSourcesScreen({ onNavigate }: Props) {
           {sources.map((source) => (
             <div key={source.id} style={{
               padding: '16px 20px', borderRadius: 12, border: `1px solid ${colors.border}`,
-              background: 'white', display: 'flex', alignItems: 'center', gap: 16,
+              background: colors.card, display: 'flex', alignItems: 'center', gap: 16,
             }}>
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
@@ -208,7 +208,7 @@ export function AdminNewsletterSourcesScreen({ onNavigate }: Props) {
                 onClick={() => toggleStatus(source)}
                 style={{
                   padding: '6px 12px', fontSize: 12, borderRadius: 6, border: `1px solid ${colors.border}`,
-                  background: 'white', cursor: 'pointer', fontFamily: 'inherit',
+                  background: colors.card, cursor: 'pointer', fontFamily: 'inherit',
                 }}
               >
                 {source.status === 'active' ? 'Pause' : 'Activate'}
@@ -217,7 +217,7 @@ export function AdminNewsletterSourcesScreen({ onNavigate }: Props) {
                 onClick={() => startEdit(source)}
                 style={{
                   padding: '6px 12px', fontSize: 12, borderRadius: 6, border: `1px solid ${colors.border}`,
-                  background: 'white', cursor: 'pointer', fontFamily: 'inherit',
+                  background: colors.card, cursor: 'pointer', fontFamily: 'inherit',
                 }}
               >
                 Edit

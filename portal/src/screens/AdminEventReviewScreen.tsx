@@ -324,7 +324,7 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
         <h2 style={{ margin: 0, fontSize: 22, fontWeight: 600 }}>Event Review Queue</h2>
         <button onClick={() => onNavigate('#/admin/newsletters')} style={{
           padding: '8px 16px', fontSize: 13, borderRadius: 8, border: `1px solid ${colors.border}`,
-          background: 'white', cursor: 'pointer', fontFamily: 'inherit',
+          background: colors.card, cursor: 'pointer', fontFamily: 'inherit',
         }}>
           &larr; Sources
         </button>
@@ -339,7 +339,7 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
             <button key={tab} onClick={() => setActiveTab(tab)} style={{
               padding: '6px 16px', fontSize: 13, borderRadius: 20,
               border: active ? `2px solid ${sc.fg}` : `1px solid ${colors.border}`,
-              background: active ? sc.bg : 'white',
+              background: active ? sc.bg : colors.card,
               color: active ? sc.fg : colors.muted,
               cursor: 'pointer', fontFamily: 'inherit', fontWeight: active ? 600 : 400,
               textTransform: 'capitalize',
@@ -363,14 +363,14 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={openSeriesForm} style={{
               padding: '6px 16px', borderRadius: 8, border: 'none',
-              background: colors.accent, color: 'white', cursor: 'pointer',
+              background: colors.accent, color: colors.card, cursor: 'pointer',
               fontFamily: 'inherit', fontSize: 13, fontWeight: 600,
             }}>
               Approve as Series
             </button>
             <button onClick={() => setSelectedIds(new Set())} style={{
               padding: '6px 16px', borderRadius: 8, border: `1px solid ${colors.accentBorder}`,
-              background: 'white', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13,
+              background: colors.card, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13,
             }}>
               Clear
             </button>
@@ -382,7 +382,7 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
       {showSeriesForm && (
         <div style={{
           padding: 20, borderRadius: 12, border: `2px solid ${colors.accent}`,
-          background: 'white', marginBottom: 20,
+          background: colors.card, marginBottom: 20,
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>
@@ -390,7 +390,7 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
             </h3>
             <button onClick={() => setShowSeriesForm(false)} style={{
               padding: '4px 12px', borderRadius: 6, border: `1px solid ${colors.border}`,
-              background: 'white', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12,
+              background: colors.card, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12,
             }}>
               Cancel
             </button>
@@ -483,7 +483,7 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
                       style={{
                         padding: '3px 10px', borderRadius: 12, fontSize: 12, cursor: 'pointer',
                         border: `1px solid ${active ? colors.accent : colors.border}`,
-                        background: active ? colors.accentDim : 'white',
+                        background: active ? colors.accentDim : colors.card,
                         color: active ? colors.accent : colors.muted,
                         fontWeight: active ? 600 : 400,
                       }}
@@ -502,7 +502,7 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
               disabled={actionLoading || !editTitle}
               style={{
                 padding: '8px 24px', borderRadius: 8, border: 'none',
-                background: colors.accent, color: 'white', cursor: 'pointer',
+                background: colors.accent, color: colors.card, cursor: 'pointer',
                 fontFamily: 'inherit', fontSize: 13, fontWeight: 600,
                 opacity: actionLoading || !editTitle ? 0.5 : 1,
               }}
@@ -511,7 +511,7 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
             </button>
             <button onClick={() => setShowSeriesForm(false)} style={{
               padding: '8px 20px', borderRadius: 8, border: `1px solid ${colors.border}`,
-              background: 'white', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13,
+              background: colors.card, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13,
             }}>
               Cancel
             </button>
@@ -534,7 +534,7 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
               <div key={c.id} style={{
                 borderRadius: 12,
                 border: `1px solid ${isSelected ? colors.accent : isExpanded ? colors.accent : colors.border}`,
-                background: isSelected ? '#f5f9ff' : 'white',
+                background: isSelected ? '#f5f9ff' : colors.card,
                 overflow: 'hidden',
               }}>
                 {/* Card header */}
@@ -551,7 +551,7 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
                       <div style={{
                         width: 18, height: 18, borderRadius: 4,
                         border: `2px solid ${isSelected ? colors.accent : colors.border}`,
-                        background: isSelected ? colors.accent : 'white',
+                        background: isSelected ? colors.accent : colors.card,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         transition: 'all 0.15s',
                       }}>
@@ -789,7 +789,7 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
                                   style={{
                                     padding: '3px 10px', borderRadius: 12, fontSize: 12, cursor: 'pointer',
                                     border: `1px solid ${active ? colors.accent : colors.border}`,
-                                    background: active ? colors.accentDim : 'white',
+                                    background: active ? colors.accentDim : colors.card,
                                     color: active ? colors.accent : colors.muted,
                                     fontWeight: active ? 600 : 400,
                                   }}
@@ -807,7 +807,7 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
                             disabled={actionLoading || !editDate}
                             style={{
                               padding: '8px 20px', borderRadius: 8, border: 'none',
-                              background: colors.success, color: 'white', cursor: 'pointer',
+                              background: colors.success, color: colors.card, cursor: 'pointer',
                               fontFamily: 'inherit', fontSize: 13, fontWeight: 600,
                               opacity: actionLoading || !editDate ? 0.5 : 1,
                             }}
@@ -819,7 +819,7 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
                             disabled={actionLoading}
                             style={{
                               padding: '8px 20px', borderRadius: 8, border: `1px solid ${colors.error}`,
-                              background: 'white', color: colors.error, cursor: 'pointer',
+                              background: colors.card, color: colors.error, cursor: 'pointer',
                               fontFamily: 'inherit', fontSize: 13, fontWeight: 500,
                               opacity: actionLoading ? 0.5 : 1,
                             }}
@@ -832,7 +832,7 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
                               disabled={actionLoading}
                               style={{
                                 padding: '8px 20px', borderRadius: 8, border: `1px solid #6a1b9a`,
-                                background: 'white', color: '#6a1b9a', cursor: 'pointer',
+                                background: colors.card, color: '#6a1b9a', cursor: 'pointer',
                                 fontFamily: 'inherit', fontSize: 13, fontWeight: 500,
                                 opacity: actionLoading ? 0.5 : 1,
                               }}

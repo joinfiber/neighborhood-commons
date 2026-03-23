@@ -110,7 +110,7 @@ export function AdminNewsletterEmailsScreen({ emailId, onNavigate, onBack }: Pro
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {detailCandidates.map((c) => (
                 <div key={c.id} style={{
-                  padding: '12px 16px', borderRadius: 10, border: `1px solid ${colors.border}`, background: 'white',
+                  padding: '12px 16px', borderRadius: 10, border: `1px solid ${colors.border}`, background: colors.card,
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontWeight: 600, fontSize: 14 }}>{c.title}</span>
@@ -132,7 +132,7 @@ export function AdminNewsletterEmailsScreen({ emailId, onNavigate, onBack }: Pro
             <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>Email Body</h3>
             <div style={{
               padding: 16, borderRadius: 10, border: `1px solid ${colors.border}`,
-              background: 'white', maxHeight: 500, overflow: 'auto', fontSize: 13,
+              background: colors.card, maxHeight: 500, overflow: 'auto', fontSize: 13,
             }}>
               <div dangerouslySetInnerHTML={{ __html: detailEmail.body_html }} />
             </div>
@@ -149,7 +149,7 @@ export function AdminNewsletterEmailsScreen({ emailId, onNavigate, onBack }: Pro
         <h2 style={{ margin: 0, fontSize: 22, fontWeight: 600 }}>Inbound Emails</h2>
         <button onClick={() => onNavigate('#/admin/newsletters')} style={{
           padding: '8px 16px', fontSize: 13, borderRadius: 8, border: `1px solid ${colors.border}`,
-          background: 'white', cursor: 'pointer', fontFamily: 'inherit',
+          background: colors.card, cursor: 'pointer', fontFamily: 'inherit',
         }}>
           &larr; Sources
         </button>
@@ -189,7 +189,7 @@ export function AdminNewsletterEmailsScreen({ emailId, onNavigate, onBack }: Pro
               onClick={() => onNavigate(`#/admin/newsletters/emails/${email.id}`)}
               style={{
                 padding: '14px 18px', borderRadius: 10, border: `1px solid ${colors.border}`,
-                background: 'white', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+                background: colors.card, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
                 display: 'flex', alignItems: 'center', gap: 12, width: '100%',
               }}
             >
