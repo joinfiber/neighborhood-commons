@@ -228,3 +228,53 @@ button:focus:not(:focus-visible) {
 .sidebar-slide-in {
   animation: slideInLeft 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* =============================================================================
+   Title input — self-reflective headline field
+   ============================================================================= */
+
+.title-input {
+  border: 1px solid transparent !important;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.title-input:hover {
+  background: var(--color-accent-dim);
+}
+
+.title-input:focus {
+  border-color: var(--color-accent) !important;
+  background: var(--color-card);
+}
+
+/* =============================================================================
+   Tooltip
+   ============================================================================= */
+
+.tooltip-icon {
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.tooltip-icon:hover,
+.tooltip-icon:focus-visible {
+  border-color: var(--color-muted);
+  color: var(--color-muted);
+}
+
+@keyframes tooltipFadeIn {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.tooltip-popup {
+  animation: tooltipFadeIn 0.15s ease both;
+}
+
+/* =============================================================================
+   Disabled button cursor fix
+   ============================================================================= */
+
+.btn-primary:disabled,
+.btn-secondary:disabled {
+  cursor: not-allowed !important;
+}

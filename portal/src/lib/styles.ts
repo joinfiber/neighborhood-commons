@@ -6,6 +6,27 @@
  */
 
 // ---------------------------------------------------------------------------
+// Spacing & Radii — reference vocabulary for consistent sizing
+// ---------------------------------------------------------------------------
+
+export const radii = {
+  sm: '6px',
+  md: '8px',
+  lg: '12px',
+  xl: '16px',
+  pill: '9999px',
+} as const;
+
+export const spacing = {
+  xs: '4px',
+  sm: '8px',
+  md: '16px',
+  lg: '24px',
+  xl: '32px',
+  xxl: '48px',
+} as const;
+
+// ---------------------------------------------------------------------------
 // Dark palette — used only by LoginScreen and marketing pages
 // ---------------------------------------------------------------------------
 
@@ -286,6 +307,94 @@ export const styles = {
     flexDirection: 'column' as const,
     alignItems: 'center',
     padding: '40px 20px',
+  },
+
+  // Self-reflective title input — reads as a headline, not a text field
+  titleInput: {
+    fontSize: '20px',
+    fontWeight: 600 as const,
+    padding: '14px 16px',
+    border: '1px solid transparent',
+    borderRadius: radii.md,
+    background: 'transparent',
+    color: colors.cream,
+    letterSpacing: '-0.01em',
+    outline: 'none',
+    width: '100%',
+    transition: 'border-color 0.15s, background 0.15s',
+  },
+
+  // Form field grouping
+  fieldGroup: {
+    marginBottom: spacing.lg,
+  },
+  fieldDivider: {
+    border: 'none',
+    borderTop: `1px solid ${colors.border}`,
+    margin: `${spacing.xl} 0`,
+  },
+
+  // Tooltip
+  tooltipIcon: {
+    display: 'inline-flex' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    width: '16px',
+    height: '16px',
+    borderRadius: '50%',
+    border: `1px solid ${colors.border}`,
+    background: 'transparent',
+    color: colors.dim,
+    fontSize: '10px',
+    cursor: 'help',
+    marginLeft: '6px',
+    padding: 0,
+    lineHeight: 1,
+    fontFamily: 'inherit',
+    verticalAlign: 'middle' as const,
+  },
+  tooltipContent: {
+    position: 'absolute' as const,
+    background: colors.cream,
+    color: '#e8e6e1',
+    fontSize: '12px',
+    lineHeight: '1.5',
+    padding: '8px 12px',
+    borderRadius: radii.md,
+    maxWidth: '220px',
+    zIndex: 100,
+    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+  },
+
+  // Accessibility
+  srOnly: {
+    position: 'absolute' as const,
+    width: '1px',
+    height: '1px',
+    padding: 0,
+    margin: '-1px',
+    overflow: 'hidden' as const,
+    clip: 'rect(0,0,0,0)',
+    whiteSpace: 'nowrap' as const,
+    border: 0,
+  },
+
+  // Optional label treatment
+  optionalLabel: {
+    color: colors.dim,
+    fontWeight: 400 as const,
+    fontSize: '12px',
+  },
+
+  // Mobile sticky submit
+  stickySubmit: {
+    position: 'sticky' as const,
+    bottom: 0,
+    background: colors.bg,
+    padding: '12px 0',
+    marginTop: spacing.sm,
+    zIndex: 10,
+    borderTop: `1px solid ${colors.border}`,
   },
 } as const;
 

@@ -9,9 +9,29 @@ import { RecurrencePicker } from './RecurrencePicker';
 import { PlaceAutocomplete } from './PlaceAutocomplete';
 import { ImageUpload } from './ImageUpload';
 import { ImageCropPreview } from './ImageCropPreview';
-import { EventPreviews } from './EventPreviews';
 import { TagPicker } from './TagPicker';
+import { Tooltip } from './Tooltip';
 import { getTagsForCategory, AGE_TAGS } from '../lib/tags';
+
+// ---------------------------------------------------------------------------
+// Tooltip content — all contextual help text in one place for easy editing
+// ---------------------------------------------------------------------------
+
+const TOOLTIPS = {
+  endTime: 'Adding an end time helps people plan their evening and lets apps show duration. Leave blank if the event winds down naturally.',
+  recurrence: 'Recurring events post once and repeat on your schedule. You can always edit individual dates later.',
+  venue: 'Search for your venue to auto-fill the address and map pin. This helps people find your event in location-based apps.',
+  category: 'Choose the category that best describes the experience. This is how people filter and discover your event.',
+  tags: 'Tags describe the experience — what to expect when you show up. Select all that apply.',
+  image: 'A photo makes your event stand out in feeds and cards. Avoid images with text — they get cropped differently by every app.',
+  description: 'A few sentences about what to expect. Keep it conversational — this shows up in event listings and search results.',
+  price: 'A quick note about cost. Free is worth saying — it\'s a strong draw.',
+  link: 'A link to tickets, registration, or more info. We\'ll add https:// if you skip it.',
+} as const;
+
+// ---------------------------------------------------------------------------
+// Props — unchanged from previous version
+// ---------------------------------------------------------------------------
 
 interface EventFormProps {
   mode: 'create' | 'edit' | 'admin-create';
@@ -34,6 +54,7 @@ export function EventForm({
   submitLabel,
   accountWheelchairAccessible,
 }: EventFormProps) {
+  // ── State ──────────────────────────────────────────────────────────────
   const [title, setTitle] = useState(initialValues.title || '');
   const [venueName, setVenueName] = useState(initialValues.venue_name || '');
   const [address, setAddress] = useState(initialValues.address || '');
@@ -47,14 +68,9 @@ export function EventForm({
   const [customCategory, setCustomCategory] = useState(initialValues.custom_category || '');
   const [recurrence, setRecurrence] = useState(initialValues.recurrence || 'none');
   const [instanceCount, setInstanceCount] = useState(initialValues.instance_count || 4);
-  const [startTimeRequired, setStartTimeRequired] = useState(initialValues.start_time_required ?? true);
   const [tags, setTags] = useState<string[]>(initialValues.tags || []);
-  const [wheelchairAccessible, setWheelchairAccessible] = useState<boolean | null>(
-    initialValues.wheelchair_accessible ?? accountWheelchairAccessible ?? null,
-  );
   const [description, setDescription] = useState(initialValues.description || '');
   const [price, setPrice] = useState(initialValues.price || '');
-  const [rsvpLimit, setRsvpLimit] = useState<number | null>(initialValues.rsvp_limit ?? null);
   const [ticketUrl, setTicketUrl] = useState(initialValues.ticket_url || '');
 
   const [hasExistingImage, setHasExistingImage] = useState(initialHasExistingImage);
@@ -64,11 +80,13 @@ export function EventForm({
   const [linkError, setLinkError] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  // Expandable sections — start open if values already exist
-  const [showTags, setShowTags] = useState(() => (initialValues.tags?.length ?? 0) > 0);
-  const [showRecurrence, setShowRecurrence] = useState(() =>
-    !!initialValues.recurrence && initialValues.recurrence !== 'none'
-  );
+  // Venue display: show pre-filled card until user taps "Change"
+  const hasPrefilledVenue = !!(initialValues.venue_name && mode !== 'edit');
+  const [editingVenue, setEditingVenue] = useState(!hasPrefilledVenue);
+
+  const { isMobile } = useBreakpoint();
+
+  // ── Handlers ───────────────────────────────────────────────────────────
 
   function handleCategoryChange(newCategory: string) {
     setCategory(newCategory);
@@ -76,7 +94,6 @@ export function EventForm({
     const ageSlugs = AGE_TAGS as string[];
     setTags((prev) => {
       const filtered = prev.filter((t) => allowed.includes(t));
-      // Auto-add when category has exactly one age option
       const ageOptions = allowed.filter((t) => ageSlugs.includes(t));
       const singleAge = ageOptions.length === 1 ? ageOptions[0] : undefined;
       if (singleAge && !filtered.some((t) => ageSlugs.includes(t))) {
@@ -114,10 +131,10 @@ export function EventForm({
       end_time: endTime || undefined,
       custom_category: category === 'other' ? customCategory || undefined : undefined,
       instance_count: recurrence !== 'none' ? instanceCount : undefined,
-      start_time_required: startTimeRequired,
+      start_time_required: true,
       tags: tags.length > 0 ? tags : undefined,
-      wheelchair_accessible: wheelchairAccessible,
-      rsvp_limit: rsvpLimit,
+      wheelchair_accessible: accountWheelchairAccessible ?? null,
+      rsvp_limit: null,
       description: description || undefined,
       price: price || undefined,
       ticket_url: ticketUrl ? normalizeUrl(ticketUrl) || undefined : undefined,
@@ -135,11 +152,12 @@ export function EventForm({
     }
   }
 
-  const { isMobile } = useBreakpoint();
   const label = submitLabel || (mode === 'edit' ? 'Save Changes' : 'Post Event');
   const isValid = !!(title && venueName && eventDate && startTime && category);
-
   const hasAvailableTags = !!category && getTagsForCategory(category).length > 0;
+  const repeats = recurrence !== 'none';
+
+  // ── Render ─────────────────────────────────────────────────────────────
 
   return (
     <>
@@ -158,141 +176,203 @@ export function EventForm({
 
       <form onSubmit={handleSubmit}>
         <div style={styles.card}>
+
+          {/* ═══════════════════════════════════════════════════════════════
+              SECTION 1: ESSENTIALS — what, when, where, what kind
+              ═══════════════════════════════════════════════════════════════ */}
+
           {/* ── Title ── */}
-          <div style={{ marginBottom: '16px' }}>
+          <div style={styles.fieldGroup}>
+            <label style={styles.srOnly}>Event name</label>
             <input
-              style={{
-                ...styles.input,
-                fontSize: '18px',
-                fontWeight: 500,
-                padding: '12px 14px',
-              }}
+              className="title-input"
+              style={styles.titleInput}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="What's happening?"
+              placeholder="Event name"
               required
+              aria-describedby={undefined}
             />
           </div>
 
-          {/* ── Venue + Address ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px', marginBottom: '16px' }}>
-            <div>
-              <label style={styles.formLabel}>Venue</label>
-              <PlaceAutocomplete
-                value={venueName}
-                onChange={setVenueName}
-                onSelect={handlePlaceSelect}
-                placeholder="Venue name"
-                searchCoords={searchCoords}
-              />
-            </div>
-            <div>
-              <label style={styles.formLabel}>Address</label>
-              <input
-                style={styles.input}
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder={mode === 'create' ? 'Auto-fills from venue' : undefined}
-              />
-            </div>
-          </div>
-
-          {/* ── Date ── */}
-          <div style={{ marginBottom: '16px' }}>
-            <label style={styles.formLabel}>Date</label>
-            <CalendarPicker value={eventDate} onChange={setEventDate} />
-          </div>
-
-          {/* ── Times ── */}
-          <div style={{ marginBottom: '16px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>
+          {/* ── Date + Start Time ── */}
+          <div style={styles.fieldGroup}>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+              gap: '12px',
+            }}>
+              <div>
+                <label style={styles.formLabel}>Date</label>
+                <CalendarPicker value={eventDate} onChange={setEventDate} />
+              </div>
               <div>
                 <label style={styles.formLabel}>Start</label>
                 <TimePicker value={startTime || '19:00'} onChange={setStartTime} />
               </div>
-              <div>
-                <label style={styles.formLabel}>End <span style={{ color: colors.dim, fontWeight: 400 }}>(optional)</span></label>
-                {endTime ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <TimePicker value={endTime} onChange={setEndTime} />
-                    <button
-                      type="button"
-                      onClick={() => setEndTime('')}
-                      style={{ background: 'none', border: 'none', color: colors.dim, cursor: 'pointer', fontSize: '16px', padding: '4px', lineHeight: 1 }}
-                    >
-                      ×
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setEndTime('21:00')}
-                    style={{ ...styles.input, color: colors.dim, cursor: 'pointer', textAlign: 'left' as const }}
-                  >
-                    + Add end time
-                  </button>
-                )}
-              </div>
             </div>
           </div>
 
-          {/* ── Arrive-by + Recurrence (after times) ── */}
-          <div style={{ marginBottom: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={startTimeRequired}
-                  onChange={(e) => setStartTimeRequired(e.target.checked)}
-                  style={{ accentColor: colors.accent }}
-                />
-                <span style={{ fontSize: '13px', color: colors.text }}>Arrive by start time</span>
-              </label>
-              {!showRecurrence ? (
+          {/* ── End Time (always visible) ── */}
+          <div style={styles.fieldGroup}>
+            <label style={styles.formLabel}>
+              End time{' '}
+              <span style={styles.optionalLabel}>(optional)</span>
+              <Tooltip id="tip-end-time" content={TOOLTIPS.endTime} />
+            </label>
+            {endTime ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <TimePicker value={endTime} onChange={setEndTime} />
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowRecurrence(true);
-                    if (recurrence === 'none') {
-                      setRecurrence('weekly');
-                      setInstanceCount(4);
-                    }
+                  onClick={() => setEndTime('')}
+                  aria-label="Remove end time"
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: colors.dim,
+                    cursor: 'pointer',
+                    fontSize: '16px',
+                    padding: '4px',
+                    lineHeight: 1,
                   }}
-                  style={expandLinkStyle}
                 >
-                  + Make recurring
+                  ×
                 </button>
-              ) : (
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setEndTime('21:00')}
+                style={{
+                  ...styles.input,
+                  color: colors.dim,
+                  cursor: 'pointer',
+                  textAlign: 'left' as const,
+                }}
+              >
+                Set end time
+              </button>
+            )}
+          </div>
+
+          {/* ── Recurrence (always visible) ── */}
+          <div style={styles.fieldGroup}>
+            <label style={styles.formLabel}>
+              Repeats
+              <Tooltip id="tip-recurrence" content={TOOLTIPS.recurrence} />
+            </label>
+            <div style={{ display: 'flex', gap: '6px', marginBottom: repeats ? '12px' : 0 }}>
+              <button
+                type="button"
+                style={{
+                  ...styles.pill,
+                  ...(repeats ? styles.pillInactive : styles.pillActive),
+                }}
+                onClick={() => { setRecurrence('none'); }}
+              >
+                One-time
+              </button>
+              <button
+                type="button"
+                style={{
+                  ...styles.pill,
+                  ...(repeats ? styles.pillActive : styles.pillInactive),
+                }}
+                onClick={() => {
+                  if (!repeats) {
+                    setRecurrence('weekly');
+                    setInstanceCount(4);
+                  }
+                }}
+              >
+                Repeats
+              </button>
+            </div>
+            {repeats && (
+              <RecurrencePicker
+                value={recurrence}
+                onChange={setRecurrence}
+                eventDate={eventDate}
+                instanceCount={instanceCount}
+                onInstanceCountChange={setInstanceCount}
+              />
+            )}
+          </div>
+
+          {/* ── Venue ── */}
+          <div style={styles.fieldGroup}>
+            <label style={styles.formLabel}>
+              Venue
+              <Tooltip id="tip-venue" content={TOOLTIPS.venue} />
+            </label>
+            {!editingVenue && venueName ? (
+              <div style={{
+                background: colors.bg,
+                border: `1px solid ${colors.border}`,
+                borderRadius: '8px',
+                padding: '12px 14px',
+              }}>
+                <div style={{ fontSize: '15px', fontWeight: 500, color: colors.text }}>
+                  {venueName}
+                </div>
+                {address && (
+                  <div style={{ fontSize: '13px', color: colors.muted, marginTop: '2px' }}>
+                    {address}
+                  </div>
+                )}
                 <button
                   type="button"
-                  onClick={() => { setShowRecurrence(false); setRecurrence('none'); }}
-                  style={collapseLinkStyle}
+                  onClick={() => setEditingVenue(true)}
+                  style={{
+                    ...styles.buttonText,
+                    padding: '2px 0',
+                    marginTop: '6px',
+                    fontSize: '12px',
+                  }}
                 >
-                  Remove recurring
+                  Change
                 </button>
-              )}
-            </div>
-            {showRecurrence && (
-              <div style={{ marginTop: '10px' }}>
-                <RecurrencePicker
-                  value={recurrence}
-                  onChange={setRecurrence}
-                  eventDate={eventDate}
-                  instanceCount={instanceCount}
-                  onInstanceCountChange={setInstanceCount}
-                />
+              </div>
+            ) : (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+                gap: '10px',
+              }}>
+                <div>
+                  <PlaceAutocomplete
+                    value={venueName}
+                    onChange={setVenueName}
+                    onSelect={handlePlaceSelect}
+                    placeholder="Venue name"
+                    searchCoords={searchCoords}
+                  />
+                </div>
+                <div>
+                  <input
+                    style={styles.input}
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    placeholder={mode === 'create' ? 'Auto-fills from venue' : 'Address'}
+                  />
+                </div>
               </div>
             )}
           </div>
 
-          {/* ── Category (dropdown) ── */}
-          <div style={{ marginBottom: '16px' }}>
-            <label style={styles.formLabel}>Category</label>
+          {/* ── Category ── */}
+          <div style={styles.fieldGroup}>
+            <label style={styles.formLabel}>
+              Category
+              <Tooltip id="tip-category" content={TOOLTIPS.category} />
+            </label>
             <select
               style={{ ...styles.select, fontFamily: 'inherit' }}
               value={category}
               onChange={(e) => handleCategoryChange(e.target.value)}
               required
+              aria-describedby="tip-category"
             >
               <option value="">Choose a category...</option>
               {PORTAL_CATEGORY_KEYS.map((key) => (
@@ -301,140 +381,56 @@ export function EventForm({
                 </option>
               ))}
             </select>
-          </div>
 
-          {/* Custom category (only when "Other" is selected) */}
-          {category === 'other' && (
-            <div style={{ marginBottom: '16px' }}>
-              <label style={styles.formLabel}>Custom category</label>
-              <input
-                style={styles.input}
-                value={customCategory}
-                onChange={(e) => setCustomCategory(e.target.value)}
-                placeholder="e.g., Book club"
-                maxLength={50}
-              />
-            </div>
-          )}
-
-          {/* ── Tags (after category) ── */}
-          {hasAvailableTags && (
-            !showTags ? (
-              <div style={{ marginBottom: '16px' }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowTags(true);
-                    // Auto-select when category has exactly one age option
-                    const allowed = getTagsForCategory(category) as string[];
-                    const ageSlugs = AGE_TAGS as string[];
-                    const ageOpts = allowed.filter((t) => ageSlugs.includes(t));
-                    const singleAge = ageOpts.length === 1 ? ageOpts[0] : undefined;
-                    if (singleAge) {
-                      setTags((prev) => prev.some((t) => ageSlugs.includes(t)) ? prev : [...prev, singleAge]);
-                    }
-                  }}
-                  style={expandLinkStyle}
-                >
-                  + Add tags
-                </button>
+            {category === 'other' && (
+              <div style={{ marginTop: '10px' }}>
+                <label style={styles.formLabel}>Custom category</label>
+                <input
+                  style={styles.input}
+                  value={customCategory}
+                  onChange={(e) => setCustomCategory(e.target.value)}
+                  placeholder="e.g., Book club"
+                  maxLength={50}
+                />
               </div>
-            ) : category ? (
-              <div style={{ marginBottom: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                  <label style={{ ...styles.formLabel, marginBottom: 0 }}>Tags</label>
-                  <button
-                    type="button"
-                    onClick={() => { setShowTags(false); setTags([]); }}
-                    style={collapseLinkStyle}
-                  >
-                    Remove
-                  </button>
-                </div>
-                <TagPicker category={category} value={tags} onChange={setTags} />
-              </div>
-            ) : null
-          )}
-
-          {/* ── Description ── */}
-          <div style={{ marginBottom: '16px' }}>
-            <label style={styles.formLabel}>Description</label>
-            <textarea
-              style={styles.textarea}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Tell people about this event..."
-            />
+            )}
           </div>
 
-          {/* ── Price + RSVP + Link ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px', marginBottom: '16px' }}>
-            <div>
-              <label style={styles.formLabel}>Price</label>
-              <input
-                style={styles.input}
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                placeholder="Free, $10, etc."
-              />
-            </div>
-            <div>
-              <label style={styles.formLabel}>RSVP limit <span style={{ color: colors.dim, fontWeight: 400 }}>(opt.)</span></label>
-              <input
-                type="number"
-                min={1}
-                style={styles.input}
-                value={rsvpLimit ?? ''}
-                onChange={(e) => setRsvpLimit(e.target.value ? parseInt(e.target.value, 10) || null : null)}
-                placeholder="No limit"
-              />
-            </div>
-            <div>
-              <label style={styles.formLabel}>Link</label>
-              <input
-                style={{
-                  ...styles.input,
-                  ...(linkError ? { borderColor: colors.error } : {}),
-                }}
-                value={ticketUrl}
-                onChange={(e) => { setTicketUrl(e.target.value); setLinkError(''); }}
-                onBlur={() => {
-                  if (!ticketUrl.trim()) { setLinkError(''); return; }
-                  const normalized = normalizeUrl(ticketUrl);
-                  if (normalized !== ticketUrl) setTicketUrl(normalized);
-                  if (!isValidUrl(normalized)) {
-                    setLinkError('Enter a URL like eventbrite.com/your-event');
-                  }
-                }}
-                placeholder="eventbrite.com/your-event"
-              />
-              {linkError && (
-                <div style={{ fontSize: '11px', color: colors.error, marginTop: '4px' }}>{linkError}</div>
-              )}
-            </div>
-          </div>
-
-          <hr style={styles.divider} />
-
-          {/* ── Wheelchair accessible ── */}
-          <div style={{ marginTop: '4px', marginBottom: '20px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={wheelchairAccessible === true}
-                onChange={(e) => setWheelchairAccessible(e.target.checked ? true : null)}
-                style={{ accentColor: colors.accent }}
-              />
-              <span style={{ fontSize: '13px', color: colors.text }}>Wheelchair accessible</span>
-              {accountWheelchairAccessible != null && initialValues.wheelchair_accessible === undefined && (
-                <span style={{ fontSize: '11px', color: colors.dim }}>&middot; from venue settings</span>
-              )}
+          {/* ── Tags (always visible when category has tags) ── */}
+          <div style={styles.fieldGroup}>
+            <label style={styles.formLabel}>
+              Tags{' '}
+              <span style={styles.optionalLabel}>(optional)</span>
+              <Tooltip id="tip-tags" content={TOOLTIPS.tags} />
             </label>
+            {hasAvailableTags ? (
+              <TagPicker category={category} value={tags} onChange={setTags} />
+            ) : (
+              <div style={{ fontSize: '13px', color: colors.dim }}>
+                {category
+                  ? 'No tags available for this category.'
+                  : 'Select a category first to see available tags.'}
+              </div>
+            )}
           </div>
 
-          {/* ── Photo ── */}
-          <div>
-            <label style={styles.formLabel}>Photo</label>
+          {/* ═══════════════════════════════════════════════════════════════
+              DIVIDER — essentials above, enrichment below
+              ═══════════════════════════════════════════════════════════════ */}
+
+          <hr style={styles.fieldDivider} />
+
+          {/* ═══════════════════════════════════════════════════════════════
+              SECTION 2: ENRICHMENT — image, description, price, link
+              ═══════════════════════════════════════════════════════════════ */}
+
+          {/* ── Image ── */}
+          <div style={styles.fieldGroup}>
+            <label style={styles.formLabel}>
+              Photo{' '}
+              <span style={styles.optionalLabel}>(optional)</span>
+              <Tooltip id="tip-image" content={TOOLTIPS.image} />
+            </label>
             {mode === 'edit' && hasExistingImage && !image && (
               <div style={{
                 background: colors.bg,
@@ -454,6 +450,7 @@ export function EventForm({
                   className="btn-text"
                   style={{ ...styles.buttonText, color: colors.error }}
                   onClick={() => setHasExistingImage(false)}
+                  aria-label="Remove current image"
                 >
                   Remove
                 </button>
@@ -461,37 +458,85 @@ export function EventForm({
             )}
             <ImageUpload value={image} onChange={setImage} />
             {image && (
-              <>
-                <ImageCropPreview
-                  imageSrc={image}
-                  focalY={imageFocalY}
-                  onFocalYChange={setImageFocalY}
-                />
-                <div style={{ marginTop: '16px' }}>
-                  <EventPreviews
-                    imageSrc={image}
-                    focalY={imageFocalY}
-                    title={title || 'Event title'}
-                    venueName={venueName || 'Venue'}
-                    eventDate={eventDate}
-                    startTime={startTime}
-                    category={category}
-                  />
-                </div>
-              </>
+              <ImageCropPreview
+                imageSrc={image}
+                focalY={imageFocalY}
+                onFocalYChange={setImageFocalY}
+              />
             )}
+          </div>
+
+          {/* ── Description ── */}
+          <div style={styles.fieldGroup}>
+            <label style={styles.formLabel}>
+              Description{' '}
+              <span style={styles.optionalLabel}>(optional)</span>
+              <Tooltip id="tip-description" content={TOOLTIPS.description} />
+            </label>
+            <textarea
+              style={{ ...styles.textarea, minHeight: '100px' }}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="What should people know about this event?"
+              aria-describedby="tip-description"
+            />
+          </div>
+
+          {/* ── Price + Link ── */}
+          <div style={styles.fieldGroup}>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+              gap: '12px',
+            }}>
+              <div>
+                <label style={styles.formLabel}>
+                  Price{' '}
+                  <span style={styles.optionalLabel}>(optional)</span>
+                  <Tooltip id="tip-price" content={TOOLTIPS.price} />
+                </label>
+                <input
+                  style={styles.input}
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  placeholder="Free, $10, $5–15..."
+                />
+              </div>
+              <div>
+                <label style={styles.formLabel}>
+                  Link{' '}
+                  <span style={styles.optionalLabel}>(optional)</span>
+                  <Tooltip id="tip-link" content={TOOLTIPS.link} />
+                </label>
+                <input
+                  style={{
+                    ...styles.input,
+                    ...(linkError ? { borderColor: colors.error } : {}),
+                  }}
+                  value={ticketUrl}
+                  onChange={(e) => { setTicketUrl(e.target.value); setLinkError(''); }}
+                  onBlur={() => {
+                    if (!ticketUrl.trim()) { setLinkError(''); return; }
+                    const normalized = normalizeUrl(ticketUrl);
+                    if (normalized !== ticketUrl) setTicketUrl(normalized);
+                    if (!isValidUrl(normalized)) {
+                      setLinkError('Enter a URL like eventbrite.com/your-event');
+                    }
+                  }}
+                  placeholder="eventbrite.com/your-event"
+                />
+                {linkError && (
+                  <div style={{ fontSize: '11px', color: colors.error, marginTop: '4px' }}>
+                    {linkError}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Submit */}
-        <div style={isMobile ? {
-          position: 'sticky',
-          bottom: 0,
-          background: colors.bg,
-          padding: '12px 0',
-          marginTop: '8px',
-          zIndex: 10,
-        } : { marginTop: '16px' }}>
+        {/* ── Submit ── */}
+        <div style={isMobile ? styles.stickySubmit : { marginTop: '16px' }}>
           <button
             type="submit"
             className="btn-primary"
@@ -505,6 +550,10 @@ export function EventForm({
     </>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function normalizeUrl(raw: string): string {
   const trimmed = raw.trim();
@@ -521,23 +570,3 @@ function isValidUrl(url: string): boolean {
     return false;
   }
 }
-
-const expandLinkStyle: React.CSSProperties = {
-  background: 'none',
-  border: 'none',
-  color: colors.dim,
-  fontSize: '13px',
-  cursor: 'pointer',
-  padding: 0,
-  fontFamily: 'inherit',
-};
-
-const collapseLinkStyle: React.CSSProperties = {
-  background: 'none',
-  border: 'none',
-  color: colors.dim,
-  fontSize: '12px',
-  cursor: 'pointer',
-  padding: 0,
-  fontFamily: 'inherit',
-};
