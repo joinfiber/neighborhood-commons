@@ -58,7 +58,7 @@ const SCHEMA: Record<string, string[]> = {
     'default_venue_name', 'default_address', 'default_place_id',
     'default_latitude', 'default_longitude', 'logo_url', 'description',
     'status', 'claimed_at', 'created_at', 'updated_at', 'last_login_at',
-    'wheelchair_accessible', 'slug',
+    'wheelchair_accessible', 'slug', 'operating_hours',
   ],
   regions: [
     'id', 'name', 'slug', 'type', 'parent_id', 'bounds', 'centroid',
@@ -80,7 +80,7 @@ const SCHEMA: Record<string, string[]> = {
   newsletter_emails: [
     'id', 'source_id', 'message_id', 'sender_email', 'subject',
     'body_html', 'body_plain', 'received_at', 'processing_status',
-    'processing_error', 'candidate_count', 'llm_response',
+    'processing_error', 'candidate_count', 'llm_response', 'created_at',
   ],
   event_candidates: [
     'id', 'email_id', 'source_id', 'title', 'description',
@@ -88,7 +88,7 @@ const SCHEMA: Record<string, string[]> = {
     'location_address', 'location_lat', 'location_lng', 'source_url',
     'confidence', 'status', 'matched_event_id', 'match_confidence',
     'review_notes', 'created_at', 'reviewed_at', 'extraction_metadata', 'candidate_image_url',
-    'feed_source_id',
+    'feed_source_id', 'price', 'category', 'tags',
   ],
   feed_sources: [
     'id', 'name', 'feed_url', 'feed_type', 'poll_interval_hours',

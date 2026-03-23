@@ -147,6 +147,7 @@ export async function updateProfile(params: {
   website?: string | null;
   phone?: string | null;
   wheelchair_accessible?: boolean | null;
+  operating_hours?: Array<{ open: boolean; ranges: Array<{ start: string; end: string }> }> | null;
 }) {
   return apiRequest<{ account: PortalAccount }>('/api/portal/account/profile', {
     method: 'PATCH',

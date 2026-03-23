@@ -18,6 +18,7 @@ export interface PortalAccount {
   phone: string | null;
   website: string | null;
   wheelchair_accessible: boolean | null;
+  operating_hours: Array<{ open: boolean; ranges: Array<{ start: string; end: string }> }> | null;
   status: string;
   created_at: string;
   event_count?: number;

@@ -23,11 +23,9 @@ export function ProfileScreen({ account, onAccountUpdated }: ProfileScreenProps)
   const [phone, setPhone] = useState(account.phone || '');
   const [accessible, setAccessible] = useState(account.wheelchair_accessible);
   const [operatingHours, setOperatingHours] = useState<WeekHours>(() => {
-    // Parse from account if stored, otherwise start empty
-    try {
-      const stored = (account as unknown as Record<string, unknown>).operating_hours;
-      if (stored && Array.isArray(stored) && stored.length === 7) return stored as WeekHours;
-    } catch { /* ignore */ }
+    if (account.operating_hours && Array.isArray(account.operating_hours) && account.operating_hours.length === 7) {
+      return account.operating_hours as WeekHours;
+    }
     return emptyWeek();
   });
   const [hoursExpanded, setHoursExpanded] = useState(() => {
@@ -67,6 +65,13 @@ export function ProfileScreen({ account, onAccountUpdated }: ProfileScreenProps)
     if (website !== (account.website || '')) params.website = website || null;
     if (phone !== (account.phone || '')) params.phone = phone || null;
     if (accessible !== account.wheelchair_accessible) params.wheelchair_accessible = accessible;
+
+    // Always include operating hours if any day is open
+    const hasHours = operatingHours.some(d => d.open);
+    const storedHours = account.operating_hours;
+    if (hasHours || storedHours) {
+      params.operating_hours = hasHours ? operatingHours : null;
+    }
 
     if (Object.keys(params).length === 0) { setSaving(false); return; }
 
