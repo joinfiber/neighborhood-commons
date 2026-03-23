@@ -370,6 +370,87 @@ export function EventForm({
   const formContent = (
     <form onSubmit={handleSubmit}>
 
+      {/* ═══ VENUE CONTEXT ════════════════════════════════════════════════
+          When pre-filled, venue sits at the top as a compact context bar.
+          Collapsible — tap to expand and edit. Saves vertical space for
+          business users who always post from the same location.
+          ═══════════════════════════════════════════════════════════════════ */}
+
+      {!editingVenue && venueName ? (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '10px 14px',
+            marginBottom: spacing.xl,
+            background: colors.bg,
+            border: `1px solid ${colors.border}`,
+            borderRadius: radii.md,
+            cursor: 'pointer',
+            transition: 'border-color 0.15s',
+          }}
+          className="interactive-row"
+          onClick={() => setEditingVenue(true)}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke={colors.muted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+              <path d="M8 1.5C5.5 1.5 3.5 3.5 3.5 6c0 3.5 4.5 8.5 4.5 8.5s4.5-5 4.5-8.5c0-2.5-2-4.5-4.5-4.5z" />
+              <circle cx="8" cy="6" r="1.5" />
+            </svg>
+            <div style={{ minWidth: 0 }}>
+              <span style={{ fontSize: '14px', fontWeight: 500, color: colors.text }}>
+                {venueName}
+              </span>
+              {address && (
+                <span style={{ fontSize: '13px', color: colors.dim, marginLeft: '6px' }}>
+                  {address}
+                </span>
+              )}
+            </div>
+          </div>
+          <span style={{ fontSize: '12px', color: colors.dim, flexShrink: 0, marginLeft: '12px' }}>
+            Edit
+          </span>
+        </div>
+      ) : (
+        /* Venue editing — shown when no pre-fill or user tapped "Edit" */
+        <div style={styles.fieldGroup}>
+          <label style={styles.formLabel}>
+            Venue
+            <Tooltip id="tip-venue" content={TIPS.venue} />
+          </label>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+            gap: '10px',
+          }}>
+            <PlaceAutocomplete
+              value={venueName}
+              onChange={setVenueName}
+              onSelect={handlePlaceSelect}
+              placeholder="Venue name"
+              searchCoords={searchCoords}
+            />
+            <input
+              style={styles.input}
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder={mode === 'create' ? 'Auto-fills from venue' : 'Address'}
+            />
+          </div>
+          {hasPrefilledVenue && (
+            <button
+              type="button"
+              onClick={() => setEditingVenue(false)}
+              style={{ ...styles.buttonText, padding: '4px 0', marginTop: '8px', fontSize: '12px' }}
+            >
+              Cancel
+            </button>
+          )}
+        </div>
+      )}
+
       {/* ═══ ESSENTIALS ═══════════════════════════════════════════════════ */}
 
       {/* Title */}
@@ -469,50 +550,6 @@ export function EventForm({
             instanceCount={instanceCount}
             onInstanceCountChange={setInstanceCount}
           />
-        )}
-      </div>
-
-      {/* Venue */}
-      <div style={styles.fieldGroup}>
-        <label style={styles.formLabel}>
-          Venue
-          <Tooltip id="tip-venue" content={TIPS.venue} />
-        </label>
-        {!editingVenue && venueName ? (
-          <div style={{
-            background: colors.bg, border: `1px solid ${colors.border}`,
-            borderRadius: radii.md, padding: '12px 14px',
-          }}>
-            <div style={{ fontSize: '15px', fontWeight: 500, color: colors.text }}>{venueName}</div>
-            {address && <div style={{ fontSize: '13px', color: colors.muted, marginTop: '2px' }}>{address}</div>}
-            <button
-              type="button"
-              onClick={() => setEditingVenue(true)}
-              style={{ ...styles.buttonText, padding: '2px 0', marginTop: '6px', fontSize: '12px' }}
-            >
-              Change venue
-            </button>
-          </div>
-        ) : (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
-            gap: '10px',
-          }}>
-            <PlaceAutocomplete
-              value={venueName}
-              onChange={setVenueName}
-              onSelect={handlePlaceSelect}
-              placeholder="Venue name"
-              searchCoords={searchCoords}
-            />
-            <input
-              style={styles.input}
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder={mode === 'create' ? 'Auto-fills from venue' : 'Address'}
-            />
-          </div>
         )}
       </div>
 
