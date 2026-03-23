@@ -4,6 +4,7 @@ import { styles, colors, radii, spacing } from '../lib/styles';
 import { updateProfile, type PortalAccount } from '../lib/api';
 import { supabase } from '../lib/supabase';
 import { PlaceAutocomplete } from '../components/PlaceAutocomplete';
+import { OperatingHours, emptyWeek, type WeekHours } from '../components/OperatingHours';
 import type { PlaceResult } from '../lib/types';
 
 interface ProfileScreenProps {
@@ -21,6 +22,17 @@ export function ProfileScreen({ account, onAccountUpdated }: ProfileScreenProps)
   const [website, setWebsite] = useState(account.website || '');
   const [phone, setPhone] = useState(account.phone || '');
   const [accessible, setAccessible] = useState(account.wheelchair_accessible);
+  const [operatingHours, setOperatingHours] = useState<WeekHours>(() => {
+    // Parse from account if stored, otherwise start empty
+    try {
+      const stored = (account as unknown as Record<string, unknown>).operating_hours;
+      if (stored && Array.isArray(stored) && stored.length === 7) return stored as WeekHours;
+    } catch { /* ignore */ }
+    return emptyWeek();
+  });
+  const [hoursExpanded, setHoursExpanded] = useState(() => {
+    return operatingHours.some(d => d.open);
+  });
 
   // Email change
   const [newEmail, setNewEmail] = useState('');
@@ -129,7 +141,35 @@ export function ProfileScreen({ account, onAccountUpdated }: ProfileScreenProps)
         </div>
       )}
 
-      <div style={{ borderTop: `1px solid ${colors.border}`, marginTop: '14px', paddingTop: '10px',
+      {/* Operating hours summary */}
+      {operatingHours.some(d => d.open) && (
+        <div style={{ marginTop: '12px', borderTop: `1px solid ${colors.border}`, paddingTop: '10px' }}>
+          <div style={{ fontSize: '11px', fontWeight: 600, color: colors.dim, marginBottom: '6px',
+            textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            Hours
+          </div>
+          {operatingHours.map((day, i) => (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px',
+              color: day.open ? colors.text : colors.dim, lineHeight: 1.8 }}>
+              <span>{['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i]}</span>
+              <span className="tnum">
+                {day.open && day.ranges.length > 0
+                  ? day.ranges.map(r => {
+                      const fmtT = (t: string) => {
+                        const [hh, mm] = t.split(':');
+                        const h = parseInt(hh!, 10);
+                        return `${h % 12 || 12}${mm === '00' ? '' : ':' + mm}${h >= 12 ? 'p' : 'a'}`;
+                      };
+                      return `${fmtT(r.start)}–${fmtT(r.end)}`;
+                    }).join(', ')
+                  : 'Closed'}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ borderTop: `1px solid ${colors.border}`, marginTop: '10px', paddingTop: '10px',
         fontSize: '11px', color: colors.dim }}>
         {account.email} · Member since {new Date(account.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
       </div>
@@ -196,6 +236,34 @@ export function ProfileScreen({ account, onAccountUpdated }: ProfileScreenProps)
             style={{ width: '16px', height: '16px' }} />
           <span style={{ fontSize: '14px', color: colors.text }}>Wheelchair accessible</span>
         </label>
+      </div>
+
+      {/* Operating Hours */}
+      <div style={{ marginBottom: spacing.lg }}>
+        <div style={{ borderTop: `1px solid ${colors.border}`, paddingTop: spacing.lg, marginTop: spacing.sm }}>
+          {hoursExpanded ? (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                <div style={{ ...styles.sectionLabel, margin: 0 }}>Operating Hours</div>
+                {!operatingHours.some(d => d.open) && (
+                  <button type="button" onClick={() => setHoursExpanded(false)}
+                    className="btn-text" style={{ ...styles.buttonText, fontSize: '12px', padding: 0 }}>
+                    Collapse
+                  </button>
+                )}
+              </div>
+              <OperatingHours value={operatingHours} onChange={setOperatingHours} />
+            </div>
+          ) : (
+            <button type="button" onClick={() => setHoursExpanded(true)}
+              className="btn-text"
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none',
+                color: colors.muted, fontSize: '13px', cursor: 'pointer', padding: '0', fontFamily: 'inherit' }}>
+              <span style={{ fontSize: '15px', lineHeight: 1, fontWeight: 300 }}>+</span>
+              Add operating hours
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Save */}
