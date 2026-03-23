@@ -327,7 +327,7 @@ export function DashboardScreen({ account, onEditEvent, onShareEvent: _onShareEv
     // Build series groups
     const seriesGroups: SeriesGroup[] = [];
     for (const [seriesId, seriesEvents] of seriesMap) {
-      seriesEvents.sort((a, b) => a.event_date.localeCompare(b.event_date));
+      seriesEvents.sort((a, b) => (a.event_date || '').localeCompare(b.event_date || ''));
       const upcomingInSeries = seriesEvents.filter((e) => e.event_date >= today);
       const nextEvent = upcomingInSeries[0] || null;
       const representative = nextEvent || seriesEvents[seriesEvents.length - 1]!;
@@ -349,13 +349,13 @@ export function DashboardScreen({ account, onEditEvent, onShareEvent: _onShareEv
       if (a.upcomingCount === 0 && b.upcomingCount > 0) return 1;
       const aDate = a.nextEvent?.event_date || 'z';
       const bDate = b.nextEvent?.event_date || 'z';
-      return aDate.localeCompare(bDate);
+      return (aDate || '').localeCompare(bDate || '');
     });
 
     // Build upcoming (all upcoming events — series instances + one-offs — grouped by date)
     const allUpcoming = [
       ...events.filter((e) => e.event_date >= today),
-    ].sort((a, b) => a.event_date.localeCompare(b.event_date) || a.start_time.localeCompare(b.start_time));
+    ].sort((a, b) => (a.event_date || '').localeCompare(b.event_date || '') || (a.start_time || '').localeCompare(b.start_time || ''));
 
     const dateGroups: DateGroup[] = [];
     for (const event of allUpcoming) {
@@ -374,7 +374,7 @@ export function DashboardScreen({ account, onEditEvent, onShareEvent: _onShareEv
     // Past events (most recent first)
     const past = singles
       .filter((e) => e.event_date < today)
-      .sort((a, b) => b.event_date.localeCompare(a.event_date));
+      .sort((a, b) => (b.event_date || '').localeCompare(a.event_date || ''));
 
     return { upcoming: dateGroups, series: seriesGroups, pastEvents: past };
   }, [events, today]);
