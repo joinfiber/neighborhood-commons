@@ -340,12 +340,12 @@ export function EventForm({
           display: 'grid',
           gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
           gap: spacing.md,
-          alignItems: 'start',
+          alignItems: 'stretch',
         }}>
           {/* Left: inline calendar */}
           <CalendarPicker value={eventDate} onChange={setEventDate} inline highlightDates={recurrenceDates} />
 
-          {/* Right: start, end, recurring — all stacked */}
+          {/* Right: start, end, recurring — stacked, stretches to match calendar height */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <div>
               <label style={styles.formLabel}>Start</label>
@@ -368,14 +368,16 @@ export function EventForm({
             )}
 
             {showRecurrence ? (
-              <div>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                 <label style={{ ...styles.formLabel, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   Repeats
                   <button type="button" onClick={() => { setRecurrence('none'); setShowRecurrence(false); }}
                     style={{ background: 'none', border: 'none', color: colors.dim, cursor: 'pointer', fontSize: '12px', padding: 0, fontFamily: 'inherit' }}>×</button>
                 </label>
-                <RecurrencePicker value={recurrence === 'none' ? 'weekly' : recurrence} onChange={setRecurrence}
-                  eventDate={eventDate} instanceCount={instanceCount} onInstanceCountChange={setInstanceCount} />
+                <div style={{ flex: 1 }}>
+                  <RecurrencePicker value={recurrence === 'none' ? 'weekly' : recurrence} onChange={setRecurrence}
+                    eventDate={eventDate} instanceCount={instanceCount} onInstanceCountChange={setInstanceCount} />
+                </div>
               </div>
             ) : (
               <AddTrigger label="Make recurring" onClick={() => { setShowRecurrence(true); if (recurrence === 'none') setRecurrence('weekly'); }} />

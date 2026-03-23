@@ -117,6 +117,8 @@ export function RecurrencePicker({ value, onChange, eventDate, instanceCount, on
       border: `1px solid ${colors.border}`,
       borderRadius: radii.md,
       padding: '12px 14px',
+      height: '100%',
+      boxSizing: 'border-box',
     }}>
       {/* ── Frequency ── */}
       <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
