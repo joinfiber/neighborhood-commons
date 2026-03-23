@@ -31,7 +31,7 @@ function CreativeEventCard({ event, onShare }: { event: PortalEvent; onShare: ()
   const cat = PORTAL_CATEGORIES[event.category as PortalCategory];
   const catColor = getCategoryColor(event.category);
   const today = new Date().toISOString().split('T')[0]!;
-  const isPast = event.event_date < today;
+  const isPast = (event.event_date || '') < today;
 
   return (
     <div
@@ -87,7 +87,7 @@ function CreativeEventCard({ event, onShare }: { event: PortalEvent; onShare: ()
           {event.title}
         </div>
         <div style={{ fontSize: '12px', color: colors.muted, marginBottom: '8px' }}>
-          {formatDate(event.event_date)} · {event.venue_name}
+          {formatDate(event.event_date || '')} · {event.venue_name}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           {cat && (
@@ -124,7 +124,7 @@ export function CreativeScreen({ onShareEvent }: CreativeScreenProps) {
   // Dedupe series: show only the next upcoming instance per series
   const deduped: PortalEvent[] = [];
   const seenSeries = new Set<string>();
-  const sorted = [...events].sort((a, b) => a.event_date.localeCompare(b.event_date));
+  const sorted = [...events].sort((a, b) => (a.event_date || '').localeCompare(b.event_date || ''));
 
   for (const e of sorted) {
     if (e.series_id) {
@@ -135,8 +135,8 @@ export function CreativeScreen({ onShareEvent }: CreativeScreenProps) {
   }
 
   // Upcoming first, then past
-  const upcoming = deduped.filter((e) => e.event_date >= today);
-  const past = deduped.filter((e) => e.event_date < today);
+  const upcoming = deduped.filter((e) => (e.event_date || '') >= today);
+  const past = deduped.filter((e) => (e.event_date || '') < today);
 
   return (
     <>

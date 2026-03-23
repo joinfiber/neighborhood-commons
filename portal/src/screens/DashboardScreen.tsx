@@ -330,7 +330,7 @@ export function DashboardScreen({ account, onEditEvent, onShareEvent: _onShareEv
     const seriesGroups: SeriesGroup[] = [];
     for (const [seriesId, seriesEvents] of seriesMap) {
       seriesEvents.sort((a, b) => (a.event_date || '').localeCompare(b.event_date || ''));
-      const upcomingInSeries = seriesEvents.filter((e) => e.event_date >= today);
+      const upcomingInSeries = seriesEvents.filter((e) => (e.event_date || '') >= today);
       const nextEvent = upcomingInSeries[0] || null;
       const representative = nextEvent || seriesEvents[seriesEvents.length - 1]!;
       seriesGroups.push({
@@ -338,7 +338,7 @@ export function DashboardScreen({ account, onEditEvent, onShareEvent: _onShareEv
         title: representative.title,
         category: representative.category,
         recurrence: representative.recurrence,
-        startTime: representative.start_time,
+        startTime: representative.start_time || '',
         endTime: representative.end_time,
         events: seriesEvents,
         nextEvent,
@@ -356,17 +356,17 @@ export function DashboardScreen({ account, onEditEvent, onShareEvent: _onShareEv
 
     // Build upcoming (all upcoming events — series instances + one-offs — grouped by date)
     const allUpcoming = [
-      ...events.filter((e) => e.event_date >= today),
+      ...events.filter((e) => (e.event_date || '') >= today),
     ].sort((a, b) => (a.event_date || '').localeCompare(b.event_date || '') || (a.start_time || '').localeCompare(b.start_time || ''));
 
     const dateGroups: DateGroup[] = [];
     for (const event of allUpcoming) {
       const last = dateGroups[dateGroups.length - 1];
-      if (last && last.date === event.event_date) {
+      if (last && last.date === (event.event_date || '')) {
         last.events.push(event);
       } else {
         dateGroups.push({
-          date: event.event_date,
+          date: event.event_date || '',
           label: fmtDate(event.event_date),
           events: [event],
         });
@@ -375,7 +375,7 @@ export function DashboardScreen({ account, onEditEvent, onShareEvent: _onShareEv
 
     // Past events (most recent first)
     const past = singles
-      .filter((e) => e.event_date < today)
+      .filter((e) => (e.event_date || '') < today)
       .sort((a, b) => (b.event_date || '').localeCompare(a.event_date || ''));
 
     return { upcoming: dateGroups, series: seriesGroups, pastEvents: past };

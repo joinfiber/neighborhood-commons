@@ -160,8 +160,8 @@ export function ShareStudioScreen({ eventId, onDone }: ShareStudioScreenProps) {
       setCaption(generateCaption({
         title: event.title,
         venue_name: event.venue_name,
-        event_date: event.event_date,
-        start_time: event.start_time,
+        event_date: event.event_date || '',
+        start_time: event.start_time || '',
         end_time: event.end_time,
         category: event.category,
         description: event.description,
@@ -181,8 +181,8 @@ export function ShareStudioScreen({ eventId, onDone }: ShareStudioScreenProps) {
     return {
       title: ev.title,
       venue_name: ev.venue_name,
-      event_date: ev.event_date,
-      start_time: ev.start_time,
+      event_date: ev.event_date || '',
+      start_time: ev.start_time || '',
       end_time: ev.end_time,
       category: ev.category,
       image_url: ev.image_url,

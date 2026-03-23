@@ -73,7 +73,7 @@ function AdminEventCard({ event, onClick, selected, onToggle, selectMode, today 
   today: string;
 }) {
   const cat = PORTAL_CATEGORIES[event.category as PortalCategory];
-  const isPast = event.event_date < today;
+  const isPast = (event.event_date || '') < today;
 
   return (
     <div
@@ -139,7 +139,7 @@ function AdminSeriesCard({ group, onClick, selectedIds, onToggle, selectMode, to
 }) {
   const { nextEvent, events } = group;
   const cat = PORTAL_CATEGORIES[nextEvent.category as PortalCategory];
-  const upcomingCount = events.filter((e) => e.event_date >= today).length;
+  const upcomingCount = events.filter((e) => (e.event_date || '') >= today).length;
   const totalCount = events.length;
   const allSelected = events.every((e) => selectedIds.has(e.id));
   const someSelected = events.some((e) => selectedIds.has(e.id));
@@ -231,8 +231,8 @@ function buildItems(events: AdminPortalEvent[], today: string): { upcoming: Dash
   const pastItems: DashboardItem[] = [];
 
   for (const [seriesId, seriesEvents] of seriesMap) {
-    seriesEvents.sort((a, b) => a.event_date.localeCompare(b.event_date));
-    const upcomingInSeries = seriesEvents.filter((e) => e.event_date >= today);
+    seriesEvents.sort((a, b) => (a.event_date || '').localeCompare(b.event_date || ''));
+    const upcomingInSeries = seriesEvents.filter((e) => (e.event_date || '') >= today);
     const nextEvent = upcomingInSeries[0] || seriesEvents[seriesEvents.length - 1]!;
     const group: SeriesGroup = { type: 'series', seriesId, events: seriesEvents, nextEvent };
     if (upcomingInSeries.length > 0) upcomingItems.push(group);
@@ -241,18 +241,18 @@ function buildItems(events: AdminPortalEvent[], today: string): { upcoming: Dash
 
   for (const e of singles) {
     const item: EventGroup = { type: 'single', event: e };
-    if (e.event_date >= today) upcomingItems.push(item);
+    if ((e.event_date || '') >= today) upcomingItems.push(item);
     else pastItems.push(item);
   }
 
   upcomingItems.sort((a, b) => {
-    const dateA = a.type === 'series' ? a.nextEvent.event_date : a.event.event_date;
-    const dateB = b.type === 'series' ? b.nextEvent.event_date : b.event.event_date;
+    const dateA = (a.type === 'series' ? a.nextEvent.event_date : a.event.event_date) || '';
+    const dateB = (b.type === 'series' ? b.nextEvent.event_date : b.event.event_date) || '';
     return dateA.localeCompare(dateB);
   });
   pastItems.sort((a, b) => {
-    const dateA = a.type === 'series' ? a.nextEvent.event_date : a.event.event_date;
-    const dateB = b.type === 'series' ? b.nextEvent.event_date : b.event.event_date;
+    const dateA = (a.type === 'series' ? a.nextEvent.event_date : a.event.event_date) || '';
+    const dateB = (b.type === 'series' ? b.nextEvent.event_date : b.event.event_date) || '';
     return dateB.localeCompare(dateA);
   });
 
@@ -291,8 +291,8 @@ export function AdminAllEventsScreen({ onBack, onViewAccount }: AdminAllEventsSc
 
   const filtered = events
     .filter((e) => {
-      if (filter === 'upcoming') return e.event_date >= today;
-      if (filter === 'past') return e.event_date < today;
+      if (filter === 'upcoming') return (e.event_date || '') >= today;
+      if (filter === 'past') return (e.event_date || '') < today;
       return true;
     })
     .filter((e) => {

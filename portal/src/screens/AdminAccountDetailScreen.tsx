@@ -91,7 +91,7 @@ function AdminEventCard({ event, onClick, onDelete, selected, onToggle, selectMo
 }) {
   const cat = PORTAL_CATEGORIES[event.category as PortalCategory];
   const today = new Date().toISOString().split('T')[0]!;
-  const isPast = event.event_date < today;
+  const isPast = (event.event_date || '') < today;
 
   return (
     <div
@@ -172,7 +172,7 @@ function AdminSeriesCard({ group, onClick, selectedIds, onToggle, selectMode }: 
   const { nextEvent, events } = group;
   const cat = PORTAL_CATEGORIES[nextEvent.category as PortalCategory];
   const today = new Date().toISOString().split('T')[0]!;
-  const upcomingCount = events.filter((e) => e.event_date >= today).length;
+  const upcomingCount = events.filter((e) => (e.event_date || '') >= today).length;
   const totalCount = events.length;
   const allSelected = events.every((e) => selectedIds.has(e.id));
   const someSelected = events.some((e) => selectedIds.has(e.id));
@@ -271,7 +271,7 @@ function buildDashboardItems(events: PortalEvent[], today: string): { upcoming: 
 
   for (const [seriesId, seriesEvents] of seriesMap) {
     seriesEvents.sort((a, b) => (a.event_date || '').localeCompare(b.event_date || ''));
-    const upcomingInSeries = seriesEvents.filter((e) => e.event_date >= today);
+    const upcomingInSeries = seriesEvents.filter((e) => (e.event_date || '') >= today);
     const nextEvent = upcomingInSeries[0] || seriesEvents[seriesEvents.length - 1]!;
     const group: SeriesGroup = { type: 'series', seriesId, events: seriesEvents, nextEvent };
     if (upcomingInSeries.length > 0) upcomingItems.push(group);
@@ -280,7 +280,7 @@ function buildDashboardItems(events: PortalEvent[], today: string): { upcoming: 
 
   for (const e of singles) {
     const item: EventGroup = { type: 'single', event: e };
-    if (e.event_date >= today) upcomingItems.push(item);
+    if ((e.event_date || '') >= today) upcomingItems.push(item);
     else pastItems.push(item);
   }
 

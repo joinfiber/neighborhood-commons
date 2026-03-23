@@ -33,8 +33,8 @@ export interface PortalEvent {
   place_id: string | null;
   latitude: number | null;
   longitude: number | null;
-  event_date: string;
-  start_time: string;
+  event_date: string | null;
+  start_time: string | null;
   end_time: string | null;
   category: string;
   custom_category: string | null;
