@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { colors } from '../lib/styles';
+import { colors, styles } from '../lib/styles';
 import { PORTAL_CATEGORIES, PORTAL_CATEGORY_KEYS } from '../lib/categories';
 import { EVENT_TAGS, getTagsForCategory, type EventTag } from '../lib/tags';
 import {
@@ -23,13 +23,14 @@ const statusColors: Record<string, { bg: string; fg: string }> = {
   pending: { bg: colors.pendingBg, fg: colors.pending },
   approved: { bg: colors.successBg, fg: colors.success },
   rejected: { bg: colors.errorBg, fg: colors.error },
-  duplicate: { bg: '#f3f2f0', fg: colors.muted },
+  duplicate: { bg: colors.bg, fg: colors.muted },
 };
 
 const inputStyle: React.CSSProperties = {
-  width: '100%', padding: '6px 10px', borderRadius: 6,
-  border: `1px solid ${colors.border}`, fontSize: 13,
-  fontFamily: 'inherit', boxSizing: 'border-box',
+  ...styles.input,
+  padding: '7px 10px',
+  fontSize: '13px',
+  minHeight: '36px',
 };
 
 function confidenceLabel(c: number | null): string {
