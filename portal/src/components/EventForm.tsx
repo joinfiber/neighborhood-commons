@@ -340,7 +340,7 @@ export function EventForm({
           {/* Left: inline calendar */}
           <CalendarPicker value={eventDate} onChange={setEventDate} inline />
 
-          {/* Right: time controls stacked */}
+          {/* Right: start, end, recurring — all stacked */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <div>
               <label style={styles.formLabel}>Start</label>
@@ -361,25 +361,22 @@ export function EventForm({
             ) : (
               <AddTrigger label="End time" onClick={() => { setShowEndTime(true); if (!endTime) setEndTime('21:00'); }} />
             )}
+
+            {showRecurrence ? (
+              <div>
+                <label style={{ ...styles.formLabel, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  Repeats
+                  <button type="button" onClick={() => { setRecurrence('none'); setShowRecurrence(false); }}
+                    style={{ background: 'none', border: 'none', color: colors.dim, cursor: 'pointer', fontSize: '12px', padding: 0, fontFamily: 'inherit' }}>×</button>
+                </label>
+                <RecurrencePicker value={recurrence === 'none' ? 'weekly' : recurrence} onChange={setRecurrence}
+                  eventDate={eventDate} instanceCount={instanceCount} onInstanceCountChange={setInstanceCount} />
+              </div>
+            ) : (
+              <AddTrigger label="Make recurring" onClick={() => { setShowRecurrence(true); if (recurrence === 'none') setRecurrence('weekly'); }} />
+            )}
           </div>
         </div>
-
-        {/* Make recurring — its own row, left-aligned */}
-        {showRecurrence ? (
-          <div style={{ marginTop: spacing.md }}>
-            <label style={{ ...styles.formLabel, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              Repeats
-              <button type="button" onClick={() => { setRecurrence('none'); setShowRecurrence(false); }}
-                style={{ background: 'none', border: 'none', color: colors.dim, cursor: 'pointer', fontSize: '12px', padding: 0, fontFamily: 'inherit' }}>×</button>
-            </label>
-            <RecurrencePicker value={recurrence === 'none' ? 'weekly' : recurrence} onChange={setRecurrence}
-              eventDate={eventDate} instanceCount={instanceCount} onInstanceCountChange={setInstanceCount} />
-          </div>
-        ) : (
-          <div style={{ marginTop: '4px' }}>
-            <AddTrigger label="Make recurring" onClick={() => { setShowRecurrence(true); if (recurrence === 'none') setRecurrence('weekly'); }} />
-          </div>
-        )}
       </div>
 
       {/* ═══ VENUE ════════════════════════════════════════════════════════ */}
