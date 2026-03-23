@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { PORTAL_CATEGORIES, type PortalCategory } from '../lib/categories';
 import { colors, categoryColors, styles, spacing, radii } from '../lib/styles';
-import { fetchEvents, extendEventSeries, type PortalEvent, type PortalAccount } from '../lib/api';
+import { fetchEvents, extendEventSeries, deleteEvent, type PortalEvent, type PortalAccount } from '../lib/api';
 import { EventRowSkeleton } from '../components/Skeleton';
 import { formatRecurrenceLabel } from '../lib/recurrence';
 
@@ -54,58 +54,150 @@ interface DateGroup {
 }
 
 // ---------------------------------------------------------------------------
-// Event Row
+// Event Row — expandable
 // ---------------------------------------------------------------------------
 
-function EventRow({ event, onClick, isPast }: {
-  event: PortalEvent; onClick: () => void; isPast: boolean;
+function EventRow({ event, onEdit, onDelete, isPast, expanded, onToggle }: {
+  event: PortalEvent; onEdit: () => void; onDelete: () => void;
+  isPast: boolean; expanded: boolean; onToggle: () => void;
 }) {
   const catColor = categoryColors[event.category];
   const catLabel = PORTAL_CATEGORIES[event.category as PortalCategory]?.label;
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="interactive-row"
-      style={{
-        display: 'flex', alignItems: 'center', gap: '12px',
-        width: '100%', padding: '10px 14px', background: colors.card,
-        border: `1px solid ${colors.border}`, borderRadius: radii.md,
-        cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
-        opacity: isPast ? 0.5 : 1, transition: 'border-color 0.15s, box-shadow 0.15s',
-      }}
-    >
-      {/* Title */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: '14px', fontWeight: 500, color: colors.heading, lineHeight: 1.3,
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {event.title}
-        </div>
-        {event.venue_name && (
-          <div style={{ fontSize: '12px', color: colors.dim, marginTop: '1px',
+    <div style={{
+      background: colors.card, border: `1px solid ${expanded ? colors.accentBorder : colors.border}`,
+      borderRadius: radii.md, opacity: isPast ? 0.5 : 1,
+      transition: 'border-color 0.15s',
+    }}>
+      {/* Collapsed row — always visible */}
+      <button
+        type="button"
+        onClick={onToggle}
+        className="interactive-row"
+        style={{
+          display: 'flex', alignItems: 'center', gap: '12px',
+          width: '100%', padding: '10px 14px', background: 'transparent',
+          border: 'none', borderRadius: radii.md,
+          cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
+        }}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: '14px', fontWeight: 500, color: colors.heading, lineHeight: 1.3,
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {event.venue_name}
+            {event.title}
           </div>
+          {!expanded && event.venue_name && (
+            <div style={{ fontSize: '12px', color: colors.dim, marginTop: '1px',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {event.venue_name}
+            </div>
+          )}
+        </div>
+
+        {catLabel && (
+          <span style={{
+            fontSize: '10px', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase',
+            padding: '2px 8px', borderRadius: radii.pill, flexShrink: 0,
+            background: catColor?.bg || colors.bg, color: catColor?.fg || colors.muted,
+          }}>
+            {catLabel}
+          </span>
         )}
-      </div>
 
-      {/* Category badge */}
-      {catLabel && (
-        <span style={{
-          fontSize: '10px', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase',
-          padding: '2px 8px', borderRadius: radii.pill, flexShrink: 0,
-          background: catColor?.bg || colors.bg, color: catColor?.fg || colors.muted,
-        }}>
-          {catLabel}
+        <span className="tnum" style={{ fontSize: '13px', color: colors.muted, flexShrink: 0, fontWeight: 500 }}>
+          {fmtTime(event.start_time)}
+          {event.end_time && <span style={{ color: colors.dim }}> – {fmtTime(event.end_time)}</span>}
         </span>
-      )}
+      </button>
 
-      {/* Time */}
-      <span className="tnum" style={{ fontSize: '13px', color: colors.muted, flexShrink: 0, fontWeight: 500 }}>
-        {fmtTime(event.start_time)}
-      </span>
-    </button>
+      {/* Expanded detail — full event info */}
+      {expanded && (
+        <div style={{ padding: '0 14px 14px', borderTop: `1px solid ${colors.border}` }}>
+          <div style={{ display: 'flex', gap: '14px', paddingTop: '12px' }}>
+
+            {/* Thumbnail */}
+            {event.image_url && (
+              <img src={event.image_url} alt="" style={{
+                width: '100px', height: '56px', objectFit: 'cover',
+                objectPosition: `center ${(event.image_focal_y ?? 0.5) * 100}%`,
+                borderRadius: radii.sm, flexShrink: 0,
+              }} />
+            )}
+
+            {/* Details */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {/* Date + Time */}
+              <div className="tnum" style={{ fontSize: '13px', fontWeight: 500, color: colors.text, marginBottom: '4px' }}>
+                {fmtDate(event.event_date)} · {fmtTime(event.start_time)}
+                {event.end_time && <> – {fmtTime(event.end_time)}</>}
+              </div>
+
+              {/* Venue */}
+              {event.venue_name && (
+                <div style={{ fontSize: '13px', color: colors.muted, marginBottom: '2px' }}>
+                  {event.venue_name}
+                </div>
+              )}
+              {event.address && (
+                <div style={{ fontSize: '12px', color: colors.dim, marginBottom: '6px' }}>
+                  {event.address}
+                </div>
+              )}
+
+              {/* Price */}
+              {event.price && (
+                <div style={{ fontSize: '13px', fontWeight: 500, color: colors.text, marginBottom: '6px' }}>
+                  {event.price}
+                </div>
+              )}
+
+              {/* Description */}
+              {event.description && (
+                <div style={{ fontSize: '13px', color: colors.text, lineHeight: 1.5, marginBottom: '6px',
+                  whiteSpace: 'pre-wrap', maxHeight: '80px', overflow: 'hidden' }}>
+                  {event.description}
+                </div>
+              )}
+
+              {/* Tags */}
+              {event.tags && event.tags.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '6px' }}>
+                  {event.tags.map((tag) => (
+                    <span key={tag} style={{
+                      fontSize: '10px', padding: '1px 6px', borderRadius: radii.pill,
+                      background: colors.bg, color: colors.dim, border: `1px solid ${colors.border}`,
+                    }}>
+                      {tag.replace(/-/g, ' ')}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Link */}
+              {event.ticket_url && (
+                <div style={{ fontSize: '12px', color: colors.dim, overflow: 'hidden',
+                  textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: '6px' }}>
+                  {event.ticket_url.replace(/^https?:\/\//, '')}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div style={{ display: 'flex', gap: '12px', marginTop: '10px', borderTop: `1px solid ${colors.border}`, paddingTop: '10px' }}>
+            <button type="button" onClick={onEdit}
+              style={{ ...styles.buttonPrimary, width: 'auto', padding: '7px 20px', fontSize: '13px' }}>
+              Edit
+            </button>
+            <button type="button" onClick={onDelete}
+              style={{ ...styles.buttonText, color: colors.error, fontSize: '12px', padding: '4px 0' }}>
+              Delete
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -195,6 +287,7 @@ export function DashboardScreen({ account, onEditEvent, onShareEvent: _onShareEv
   const [events, setEvents] = useState<PortalEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [showHistory, setShowHistory] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   const loadEvents = useCallback(async () => {
@@ -286,6 +379,18 @@ export function DashboardScreen({ account, onEditEvent, onShareEvent: _onShareEv
     return { upcoming: dateGroups, series: seriesGroups, pastEvents: past };
   }, [events, today]);
 
+  const handleDelete = async (event: PortalEvent) => {
+    if (!confirm(`Delete "${event.title}"? This cannot be undone.`)) return;
+    const res = await deleteEvent(event.id);
+    if (res.error) {
+      setToast({ text: res.error.message, type: 'error' });
+    } else {
+      setToast({ text: 'Event deleted', type: 'success' });
+      setExpandedId(null);
+      loadEvents();
+    }
+  };
+
   const handleExtend = async (seriesId: string) => {
     const res = await extendEventSeries(seriesId);
     if (res.error) {
@@ -369,8 +474,11 @@ export function DashboardScreen({ account, onEditEvent, onShareEvent: _onShareEv
                         <EventRow
                           key={event.id}
                           event={event}
-                          onClick={() => onEditEvent(event)}
+                          onEdit={() => onEditEvent(event)}
+                          onDelete={() => handleDelete(event)}
                           isPast={false}
+                          expanded={expandedId === event.id}
+                          onToggle={() => setExpandedId(expandedId === event.id ? null : event.id)}
                         />
                       ))}
                     </div>
@@ -434,8 +542,11 @@ export function DashboardScreen({ account, onEditEvent, onShareEvent: _onShareEv
                     <EventRow
                       key={event.id}
                       event={event}
-                      onClick={() => onEditEvent(event)}
+                      onEdit={() => onEditEvent(event)}
+                      onDelete={() => handleDelete(event)}
                       isPast={true}
+                      expanded={expandedId === event.id}
+                      onToggle={() => setExpandedId(expandedId === event.id ? null : event.id)}
                     />
                   ))}
                   {pastEvents.length > 20 && (
