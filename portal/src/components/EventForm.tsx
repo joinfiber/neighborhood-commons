@@ -278,41 +278,29 @@ export function EventForm({
           ) : !image ? (
             <ImageUpload value={image} onChange={(img) => { setImage(img); }} />
           ) : (
-            /* Thumbnail with hover crop tool */
-            <div
-              style={{ position: 'relative', display: 'inline-block', borderRadius: radii.md, overflow: 'hidden', cursor: 'pointer' }}
-              onMouseEnter={() => setShowCropTool(true)}
-              onMouseLeave={() => setShowCropTool(false)}
-            >
-              <img src={image} alt="" style={{
-                display: 'block', width: '160px', height: '90px', objectFit: 'cover',
-                objectPosition: `center ${imageFocalY * 100}%`, borderRadius: radii.md,
-              }} />
-              {/* Hover overlay with crop tool */}
-              {showCropTool && (
-                <div style={{
-                  position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  borderRadius: radii.md, gap: '8px',
-                }}>
-                  <button type="button" onClick={() => setShowCropTool(false)}
-                    style={{ background: 'rgba(255,255,255,0.9)', border: 'none', borderRadius: radii.sm,
-                      padding: '4px 10px', fontSize: '11px', fontWeight: 500, cursor: 'pointer', color: colors.heading }}>
-                    Adjust
+            /* Thumbnail with adjust/remove controls */
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <img src={image} alt="" style={{
+                  display: 'block', width: '160px', height: '90px', objectFit: 'cover',
+                  objectPosition: `center ${imageFocalY * 100}%`, borderRadius: radii.sm, flexShrink: 0,
+                }} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <button type="button" onClick={() => setShowCropTool(!showCropTool)}
+                    style={{ ...styles.buttonText, fontSize: '12px', padding: 0, color: showCropTool ? colors.accent : colors.muted }}>
+                    {showCropTool ? 'Done adjusting' : 'Adjust crop'}
                   </button>
                   <button type="button" onClick={() => { setImage(null); setShowImage(false); setShowCropTool(false); }}
-                    style={{ background: 'rgba(255,255,255,0.9)', border: 'none', borderRadius: radii.sm,
-                      padding: '4px 10px', fontSize: '11px', fontWeight: 500, cursor: 'pointer', color: colors.error }}>
+                    style={{ ...styles.buttonText, fontSize: '12px', padding: 0, color: colors.error }}>
                     Remove
                   </button>
                 </div>
+              </div>
+              {showCropTool && (
+                <div style={{ marginTop: '10px', maxWidth: '340px' }}>
+                  <ImageCropPreview imageSrc={image} focalY={imageFocalY} onFocalYChange={setImageFocalY} />
+                </div>
               )}
-            </div>
-          )}
-          {/* Crop tool — shown when "Adjust" is clicked or on mobile tap */}
-          {image && showCropTool && (
-            <div style={{ marginTop: '8px', maxWidth: '320px' }}>
-              <ImageCropPreview imageSrc={image} focalY={imageFocalY} onFocalYChange={setImageFocalY} />
             </div>
           )}
         </div>

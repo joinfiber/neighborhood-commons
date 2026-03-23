@@ -3,23 +3,11 @@ import { colors, radii } from '../lib/styles';
 import {
   getOrdinalWeekday,
   toOrdinalRecurrence,
-  parseWeeklyDays,
-  toWeeklyDaysRecurrence,
   durationToInstanceCount,
 } from '../lib/recurrence';
 
 type Frequency = 'weekly' | 'biweekly' | 'monthly' | 'ordinal';
 type Duration = 1 | 3 | 6 | 0;
-
-const DAY_PICKER_ORDER = [
-  { idx: 1, label: 'M' },
-  { idx: 2, label: 'T' },
-  { idx: 3, label: 'W' },
-  { idx: 4, label: 'Th' },
-  { idx: 5, label: 'F' },
-  { idx: 6, label: 'Sa' },
-  { idx: 0, label: 'Su' },
-];
 
 const DURATION_OPTIONS: { months: Duration; label: string }[] = [
   { months: 1, label: '1 mo' },
@@ -37,24 +25,12 @@ interface RecurrencePickerProps {
 }
 
 export function RecurrencePicker({ value, onChange, eventDate, instanceCount, onInstanceCountChange }: RecurrencePickerProps) {
-  const weeklyDays = parseWeeklyDays(value);
-
   const frequency: Frequency = useMemo(() => {
     if (value === 'biweekly') return 'biweekly';
     if (value.startsWith('ordinal_weekday:')) return 'ordinal';
     if (value === 'monthly') return 'monthly';
     return 'weekly';
   }, [value]);
-
-  const selectedDays: number[] = useMemo(() => {
-    if (weeklyDays) return weeklyDays;
-    if (value === 'daily') return [0, 1, 2, 3, 4, 5, 6];
-    if (frequency === 'weekly') {
-      const d = eventDate ? new Date(eventDate + 'T12:00:00') : null;
-      return d && !isNaN(d.getTime()) ? [d.getDay()] : [1];
-    }
-    return [];
-  }, [value, weeklyDays, frequency, eventDate]);
 
   const freqForDuration = frequency === 'ordinal' ? 'monthly' as const : frequency;
 
@@ -79,9 +55,7 @@ export function RecurrencePicker({ value, onChange, eventDate, instanceCount, on
     const start = new Date(eventDate + 'T12:00:00');
     if (isNaN(start.getTime())) return null;
 
-    const daysPerWeek = frequency === 'weekly' ? selectedDays.length : 1;
-    const totalEvents = frequency === 'weekly' && daysPerWeek > 1
-      ? instanceCount * daysPerWeek : instanceCount;
+    const totalEvents = instanceCount;
 
     const endDate = new Date(start);
     switch (freqForDuration) {
@@ -92,7 +66,7 @@ export function RecurrencePicker({ value, onChange, eventDate, instanceCount, on
 
     const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     return `${totalEvents} event${totalEvents !== 1 ? 's' : ''} · through ${fmt(endDate)}`;
-  }, [eventDate, instanceCount, frequency, freqForDuration, selectedDays.length]);
+  }, [eventDate, instanceCount, frequency, freqForDuration]);
 
   // --- Handlers ---
 
@@ -121,19 +95,6 @@ export function RecurrencePicker({ value, onChange, eventDate, instanceCount, on
     }
   }
 
-  function handleDayToggle(dayIdx: number) {
-    const current = new Set(selectedDays);
-    if (current.has(dayIdx)) {
-      if (current.size <= 1) return;
-      current.delete(dayIdx);
-    } else {
-      current.add(dayIdx);
-    }
-    const days = [...current];
-    onChange(days.length === 1 ? 'weekly' : toWeeklyDaysRecurrence(days));
-    onInstanceCountChange(durationToInstanceCount('weekly', duration));
-  }
-
   function handleDurationChange(months: Duration) {
     onInstanceCountChange(durationToInstanceCount(freqForDuration, months));
   }
@@ -148,16 +109,6 @@ export function RecurrencePicker({ value, onChange, eventDate, instanceCount, on
     background: active ? colors.accentDim : 'transparent',
     color: active ? colors.accent : colors.dim,
     borderColor: active ? colors.accentBorder : colors.border,
-  });
-
-  const dayCircle = (active: boolean): React.CSSProperties => ({
-    width: '30px', height: '30px', borderRadius: '50%',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontSize: '11px', fontWeight: 600, cursor: 'pointer',
-    transition: 'all 0.12s', border: '1px solid', fontFamily: 'inherit',
-    background: active ? colors.accent : 'transparent',
-    color: active ? '#ffffff' : colors.dim,
-    borderColor: active ? colors.accent : colors.border,
   });
 
   return (
@@ -184,17 +135,6 @@ export function RecurrencePicker({ value, onChange, eventDate, instanceCount, on
           </button>
         )}
       </div>
-
-      {/* ── Day picker (weekly only) ── */}
-      {frequency === 'weekly' && (
-        <div style={{ marginTop: '10px', display: 'flex', gap: '4px' }}>
-          {DAY_PICKER_ORDER.map(({ idx, label }) => (
-            <button key={idx} type="button" onClick={() => handleDayToggle(idx)} style={dayCircle(selectedDays.includes(idx))}>
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
 
       {/* ── Duration ── */}
       <div style={{ marginTop: '10px' }}>
