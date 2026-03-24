@@ -19,7 +19,7 @@ import { supabaseAdmin } from './supabase.js';
 
 const CLASSIFY_TIMEOUT_MS = 15_000; // Classification is a small prompt — 15s is plenty
 
-const SYSTEM_PROMPT = `You are a category/tag classifier for a neighborhood events platform. Given an event's title and description, pick the single best category and up to 5 relevant tags.
+const SYSTEM_PROMPT = `You are a category/tag classifier for a neighborhood events platform. Given an event's title, description, and venue, pick the single best category and up to 5 relevant tags. Classify by the PRIMARY EXPERIENCE — what the attendee is going there to DO.
 
 ## Categories (pick exactly ONE)
 ${EVENT_CATEGORY_KEYS.map(k => `- ${k}`).join('\n')}
@@ -38,27 +38,35 @@ ${ALL_TAG_SLUGS.map(t => `- ${t}`).join('\n')}
 - "registration-required" if you must sign up
 - "volunteer" for volunteer/service events
 - "beginner-friendly" for intro-level classes/activities
+- "tasting" for wine/beer/food tastings
 - Only use tags that genuinely apply based on the information given
 
-## Rules
-- If the event is clearly a concert, band, or live performance → live_music
-- If DJ, dance party, electronic music → dj_dance
-- If comedy show, standup → comedy
-- If open mic (any kind) → open_mic
-- If karaoke → karaoke
-- If art show, gallery, exhibition → art_gallery
-- If movie, film → film_screening
-- If play, musical, stage → theatre
-- If happy hour, drink specials → happy_hour
-- If food event, tasting, dinner → food_drink
-- If market, pop-up, vendor → market_popup
-- If yoga, fitness, workout → fitness_class
-- If sports, run, bike, rec league → sports_rec
-- If workshop, class, lecture, talk → workshop_class
-- If trivia, game night, board games, bingo → trivia_games
-- If spectator event (parade, fireworks, viewing party) → spectator
-- If community meeting, cleanup, general gathering, volunteer day → community
-- If nothing else fits → other
+## Category routing rules
+- Concert, band, singer-songwriter, live performance → live_music
+- DJ, dance party, electronic music, salsa, line dancing → dj_dance
+- Comedy show, standup, improv, sketch → comedy
+- Play, musical, drag show, burlesque, stage performance → theatre
+- Open mic (any kind — comedy, poetry, music) → open_mic
+- Karaoke → karaoke
+- Art show, gallery opening, exhibition → art_exhibit
+- Movie screening, film night → film
+- Book reading, author event, poetry reading, book club → literary
+- Walking tour, history tour, mural tour, brewery tour → tour
+- Happy hour, drink specials, daily food specials → happy_hour
+- Farmers market, craft fair, flea market, pop-up, plant swap → market
+- Yoga, workout class, run club, cycling class → fitness
+- Sports league, pickup game, rec sports → sports
+- Birding, gardening, nature walk, hike, clean-up, outdoor activity → outdoors
+- Workshop, class, lecture, craft night, skill-building → class
+- Trivia, bingo, game night, board games → trivia_games
+- Storytime, kids event, family event, children's programming → kids_family
+- Parade, fireworks, watch party, pro sports viewing → spectator
+- Town hall, neighborhood meeting, fundraiser, volunteer day → community
+
+## Important
+- Classify by the PRIMARY experience. A drag brunch is theatre (the show), not food. A wine tasting is class (learning). A food festival is market (browsing vendors).
+- If the venue name suggests a bar/restaurant, that alone does NOT make it happy_hour. Classify by what the event IS, not where it happens.
+- When in doubt between two categories, pick the one that better describes what the attendee will be DOING.
 
 Respond with ONLY a JSON object: {"category": "category_key", "tags": ["tag1", "tag2"]}
 No explanation, no markdown, just the JSON object.`;
@@ -80,6 +88,7 @@ export async function classifyCandidate(
   title: string,
   description: string | null,
   price: string | null,
+  venueName?: string | null,
 ): Promise<ClassificationResult | null> {
   if (!config.inference.apiKey) {
     console.warn('[CLASSIFY] No INFERENCE_API_KEY configured — skipping classification');
@@ -89,6 +98,7 @@ export async function classifyCandidate(
   try {
     const userContent = [
       `Title: ${title}`,
+      venueName ? `Venue: ${venueName}` : null,
       description ? `Description: ${description.slice(0, 500)}` : null,
       price ? `Price: ${price}` : null,
     ].filter(Boolean).join('\n');
@@ -160,7 +170,7 @@ export async function classifyCandidate(
  * Designed to be called fire-and-forget after candidate insertion.
  */
 export async function classifyCandidates(
-  candidates: Array<{ id: string; title: string; description: string | null; price: string | null }>,
+  candidates: Array<{ id: string; title: string; description: string | null; price: string | null; venue_name?: string | null }>,
 ): Promise<void> {
   if (!config.inference.apiKey) {
     console.warn(`[CLASSIFY] Skipping ${candidates.length} candidates — no INFERENCE_API_KEY`);
@@ -172,7 +182,7 @@ export async function classifyCandidates(
   let classified = 0;
 
   for (const candidate of candidates) {
-    const result = await classifyCandidate(candidate.title, candidate.description, candidate.price);
+    const result = await classifyCandidate(candidate.title, candidate.description, candidate.price, candidate.venue_name);
     if (result) {
       await supabaseAdmin
         .from('event_candidates')

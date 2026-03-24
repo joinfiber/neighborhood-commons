@@ -49,29 +49,31 @@ export const AGE_TAGS: EventTag[] = ['all-ages', '18-plus', '21-plus'];
 
 export const CATEGORY_TAGS: Record<PortalCategory, EventTag[]> = {
   // Performance
-  live_music:      ['outdoor', 'rooftop', 'all-ages', '21-plus', 'free', 'cover-charge', 'cash-only', 'seated', 'acoustic', 'chill', 'high-energy', 'late-night', 'byob', 'solo-friendly'],
-  dj_dance:        ['outdoor', 'rooftop', '18-plus', '21-plus', 'free', 'cover-charge', 'cash-only', 'late-night', 'high-energy', 'themed', 'na-friendly', 'byob'],
-  comedy:          ['all-ages', '21-plus', 'free', 'cover-charge', 'cash-only', 'seated', 'late-night', 'byob', 'themed'],
-  karaoke:         ['all-ages', '21-plus', 'free', 'late-night', 'na-friendly', 'byob', 'themed', 'drop-in', 'solo-friendly'],
-  open_mic:        ['all-ages', '21-plus', 'free', 'beginner-friendly', 'drop-in', 'registration-required', 'late-night', 'byob', 'outdoor', 'solo-friendly'],
+  live_music:    ['outdoor', 'rooftop', 'all-ages', '21-plus', 'free', 'cover-charge', 'cash-only', 'seated', 'acoustic', 'chill', 'high-energy', 'late-night', 'byob', 'solo-friendly'],
+  dj_dance:      ['outdoor', 'rooftop', '18-plus', '21-plus', 'free', 'cover-charge', 'cash-only', 'late-night', 'high-energy', 'themed', 'na-friendly', 'byob'],
+  comedy:        ['all-ages', '21-plus', 'free', 'cover-charge', 'cash-only', 'seated', 'late-night', 'byob', 'themed'],
+  theatre:       ['all-ages', '21-plus', 'free', 'cover-charge', 'seated', 'late-night', 'themed', 'limited-spots', 'cash-only'],
+  open_mic:      ['all-ages', '21-plus', 'free', 'beginner-friendly', 'drop-in', 'registration-required', 'late-night', 'byob', 'outdoor', 'solo-friendly'],
+  karaoke:       ['all-ages', '21-plus', 'free', 'late-night', 'na-friendly', 'byob', 'themed', 'drop-in', 'solo-friendly'],
   // Arts & Culture
-  art_gallery:     ['free', 'all-ages', 'family-friendly', 'outdoor', 'drop-in', 'hands-on', 'na-friendly', 'dog-friendly'],
-  film_screening:  ['outdoor', 'free', 'all-ages', 'family-friendly', 'seated', 'na-friendly', 'dog-friendly', 'limited-spots', 'themed', 'late-night'],
-  theatre:         ['all-ages', '21-plus', 'free', 'cover-charge', 'seated', 'late-night', 'themed', 'limited-spots', 'cash-only'],
+  art_exhibit:   ['free', 'all-ages', 'family-friendly', 'outdoor', 'drop-in', 'hands-on', 'na-friendly', 'dog-friendly'],
+  film:          ['outdoor', 'free', 'all-ages', 'family-friendly', 'seated', 'na-friendly', 'dog-friendly', 'limited-spots', 'themed', 'late-night'],
+  literary:      ['free', 'all-ages', 'family-friendly', 'seated', 'na-friendly', 'drop-in', 'solo-friendly', 'beginner-friendly'],
+  tour:          ['free', 'all-ages', 'family-friendly', 'outdoor', 'dog-friendly', 'registration-required', 'limited-spots', 'beginner-friendly', 'tasting'],
   // Food & Drink
-  happy_hour:      ['outdoor', 'rooftop', 'na-friendly', 'free', 'cash-only', 'dog-friendly', 'chill', 'byob'],
-  food_drink:      ['outdoor', 'na-friendly', 'free', 'cash-only', 'family-friendly', 'all-ages', 'byob', 'dog-friendly', 'chill', 'tasting'],
-  market_popup:    ['outdoor', 'free', 'cash-only', 'family-friendly', 'all-ages', 'dog-friendly'],
+  happy_hour:    ['outdoor', 'rooftop', 'na-friendly', 'free', 'cash-only', 'dog-friendly', 'chill', 'byob'],
+  market:        ['outdoor', 'free', 'cash-only', 'family-friendly', 'all-ages', 'dog-friendly'],
   // Active
-  fitness_class:   ['outdoor', 'free', 'donation-based', 'all-ages', 'beginner-friendly', 'registration-required', 'drop-in', 'limited-spots', 'bring-gear', 'solo-friendly', 'high-energy', 'chill'],
-  sports_rec:      ['outdoor', 'free', 'all-ages', 'family-friendly', 'participatory', 'beginner-friendly', 'drop-in', 'registration-required', 'dog-friendly', 'solo-friendly', 'competitive', 'bring-gear'],
+  fitness:       ['outdoor', 'free', 'donation-based', 'all-ages', 'beginner-friendly', 'registration-required', 'drop-in', 'limited-spots', 'bring-gear', 'solo-friendly', 'high-energy', 'chill'],
+  sports:        ['outdoor', 'free', 'all-ages', 'family-friendly', 'participatory', 'beginner-friendly', 'drop-in', 'registration-required', 'dog-friendly', 'solo-friendly', 'competitive', 'bring-gear'],
+  outdoors:      ['free', 'all-ages', 'family-friendly', 'outdoor', 'dog-friendly', 'beginner-friendly', 'drop-in', 'registration-required', 'bring-gear', 'volunteer', 'solo-friendly'],
   // Learning & Social
-  workshop_class:  ['free', 'donation-based', 'all-ages', 'family-friendly', 'beginner-friendly', 'registration-required', 'drop-in', 'hands-on', 'outdoor', 'limited-spots', 'solo-friendly'],
-  trivia_games:    ['all-ages', '21-plus', 'free', 'themed', 'na-friendly', 'byob', 'dog-friendly', 'outdoor', 'solo-friendly', 'competitive'],
-  // General
-  community:       ['outdoor', 'free', 'family-friendly', 'all-ages', 'dog-friendly', 'participatory', 'drop-in', 'volunteer', 'beginner-friendly', 'solo-friendly'],
-  spectator:       ['outdoor', 'all-ages', 'family-friendly', '21-plus', 'free', 'cover-charge', 'seated', 'high-energy', 'themed', 'cash-only', 'na-friendly', 'dog-friendly'],
-  other:           ALL_TAG_SLUGS as unknown as EventTag[],
+  class:         ['free', 'donation-based', 'all-ages', 'family-friendly', 'beginner-friendly', 'registration-required', 'drop-in', 'hands-on', 'outdoor', 'limited-spots', 'solo-friendly'],
+  trivia_games:  ['all-ages', '21-plus', 'free', 'themed', 'na-friendly', 'byob', 'dog-friendly', 'outdoor', 'solo-friendly', 'competitive'],
+  kids_family:   ['free', 'all-ages', 'family-friendly', 'outdoor', 'drop-in', 'registration-required', 'hands-on', 'beginner-friendly', 'dog-friendly'],
+  // Civic
+  community:     ['outdoor', 'free', 'family-friendly', 'all-ages', 'dog-friendly', 'participatory', 'drop-in', 'volunteer', 'beginner-friendly', 'solo-friendly'],
+  spectator:     ['outdoor', 'all-ages', 'family-friendly', '21-plus', 'free', 'cover-charge', 'seated', 'high-energy', 'themed', 'cash-only', 'na-friendly', 'dog-friendly'],
 };
 
 /** Get the curated tags for a category, filtering out tags not in the new list when switching */
