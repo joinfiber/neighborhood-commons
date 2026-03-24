@@ -51,6 +51,7 @@ const listSchema = z.object({
   radius_km: z.coerce.number().min(0.1).max(100).optional(),
   collapse_series: z.enum(['true', 'false']).optional(),
   series_id: z.string().uuid().optional(),
+  group_id: z.string().uuid().optional(),
   recurring: z.enum(['true', 'false']).optional(),
   limit: z.coerce.number().min(1).max(200).default(50),
   offset: z.coerce.number().min(0).default(0),
@@ -84,6 +85,11 @@ router.get('/', async (req, res, next) => {
     // Series filter: return only events from a specific series
     if (params.series_id) {
       query = query.eq('series_id', params.series_id);
+    }
+
+    // Group filter: return only events from a specific group
+    if (params.group_id) {
+      query = query.eq('group_id', params.group_id);
     }
 
     // Recurring filter: recurring=true → only series events, false → only one-offs

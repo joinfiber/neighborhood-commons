@@ -21,6 +21,7 @@ import publicRoutes from './routes/public.js';
 import portalRoutes from './routes/portal.js';
 import adminRoutes from './routes/admin.js';
 import v1Routes, { v1Limiter, icsHandler, rssHandler } from './routes/v1.js';
+import v1GroupRoutes, { groupsLimiter } from './routes/v1-groups.js';
 import webhookRoutes from './routes/webhooks.js';
 import metaRoutes from './routes/meta.js';
 import internalRoutes from './routes/internal.js';
@@ -136,6 +137,7 @@ export function createApp(): Express {
 
   // ─── Neighborhood API v1 ─────────────────────────────────────────
   app.use('/api/v1/events', v1Limiter, v1Routes);
+  app.use('/api/v1/groups', groupsLimiter, v1GroupRoutes);
 
   // iCal + RSS feeds (mounted at /api/v1/ level)
   app.get('/api/v1/events.ics', icsHandler);
