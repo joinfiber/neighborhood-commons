@@ -94,11 +94,10 @@ const BUSINESS_NAV: NavItem[] = [
 ];
 
 const ADMIN_NAV: NavItem[] = [
-  { label: 'Accounts', icon: icons.people, hash: '#/admin', screens: ['admin-home', 'admin-account'] },
-  { label: 'All Events', icon: icons.list, hash: '#/admin/events', screens: ['admin-events', 'admin-edit-event', 'admin-create-event'] },
-  { label: 'Review Queue', icon: icons.inbox, hash: '#/admin/newsletters/review', screens: ['admin-newsletter-review'], section: 'Sources' },
-  { label: 'Newsletters', icon: icons.mail, hash: '#/admin/newsletters', screens: ['admin-newsletters', 'admin-newsletter-emails', 'admin-newsletter-email'] },
-  { label: 'Feed Sources', icon: icons.rss, hash: '#/admin/feeds', screens: ['admin-feeds'] },
+  { label: 'Review', icon: icons.inbox, hash: '#/admin', screens: ['admin-home', 'admin-newsletter-review'] },
+  { label: 'Events', icon: icons.list, hash: '#/admin/events', screens: ['admin-events', 'admin-edit-event', 'admin-create-event'] },
+  { label: 'Accounts', icon: icons.people, hash: '#/admin/accounts', screens: ['admin-accounts', 'admin-account'], section: 'Manage' },
+  { label: 'Sources', icon: icons.rss, hash: '#/admin/sources', screens: ['admin-sources', 'admin-newsletters', 'admin-newsletter-emails', 'admin-newsletter-email', 'admin-feeds'] },
 ];
 
 const navItemBase: React.CSSProperties = {

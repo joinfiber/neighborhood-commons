@@ -17,6 +17,7 @@ import { AdminNewsletterSourcesScreen } from './screens/AdminNewsletterSourcesSc
 import { AdminNewsletterEmailsScreen } from './screens/AdminNewsletterEmailsScreen';
 import { AdminEventReviewScreen } from './screens/AdminEventReviewScreen';
 import { AdminFeedSourcesScreen } from './screens/AdminFeedSourcesScreen';
+import { AdminSourcesScreen } from './screens/AdminSourcesScreen';
 import { DevelopersScreen } from './screens/DevelopersScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { TermsScreen } from './screens/TermsScreen';
@@ -30,7 +31,7 @@ import type { PlaceResult } from './lib/api';
 function contentWidthForRoute(screen: string): 'normal' | 'wide' | 'full' {
   const full = ['share-event', 'create-event', 'edit-event', 'admin-create-event', 'admin-edit-event', 'profile'];
   if (full.includes(screen)) return 'full';
-  const wide = ['dashboard', 'creative', 'developers', 'admin-home', 'admin-events', 'admin-account', 'admin-newsletters', 'admin-newsletter-emails', 'admin-newsletter-email', 'admin-newsletter-review', 'admin-feeds'];
+  const wide = ['dashboard', 'creative', 'developers', 'admin-home', 'admin-events', 'admin-account', 'admin-accounts', 'admin-sources', 'admin-newsletters', 'admin-newsletter-emails', 'admin-newsletter-email', 'admin-newsletter-review', 'admin-feeds'];
   return wide.includes(screen) ? 'wide' : 'normal';
 }
 
@@ -379,6 +380,22 @@ export default function App() {
         );
       }
 
+      if (route.screen === 'admin-accounts') {
+        return (
+          <AdminDashboardScreen
+            email={user?.email || ''}
+            onViewAccount={(acct) => navigate(`#/admin/accounts/${acct.id}`)}
+            onViewAllEvents={() => navigate('#/admin/events')}
+            onCreateEvent={() => navigate('#/admin/events/new')}
+          />
+        );
+      }
+
+      if (route.screen === 'admin-sources') {
+        return <AdminSourcesScreen onNavigate={navigate} />;
+      }
+
+      // Legacy routes — keep working for bookmarks/links
       if (route.screen === 'admin-newsletters') {
         return <AdminNewsletterSourcesScreen onNavigate={navigate} />;
       }
@@ -393,23 +410,12 @@ export default function App() {
         );
       }
 
-      if (route.screen === 'admin-newsletter-review') {
-        return <AdminEventReviewScreen onNavigate={navigate} />;
-      }
-
       if (route.screen === 'admin-feeds') {
         return <AdminFeedSourcesScreen />;
       }
 
-      // Default: admin dashboard
-      return (
-        <AdminDashboardScreen
-          email={user?.email || ''}
-          onViewAccount={(acct) => navigate(`#/admin/accounts/${acct.id}`)}
-          onViewAllEvents={() => navigate('#/admin/events')}
-          onCreateEvent={() => navigate('#/admin/events/new')}
-        />
-      );
+      // Default: review screen (admin home)
+      return <AdminEventReviewScreen onNavigate={navigate} />;
     })();
 
     return (

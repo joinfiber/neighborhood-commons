@@ -9,8 +9,9 @@ import {
   adminRejectCandidate,
   adminMarkCandidateDuplicate,
   adminBatchApproveSeries,
+  adminFetchStats,
 } from '../lib/api';
-import type { EventCandidate, PlaceResult } from '../lib/types';
+import type { EventCandidate, PlaceResult, PortalStats } from '../lib/types';
 import { PlaceAutocomplete } from '../components/PlaceAutocomplete';
 
 interface Props {
@@ -93,10 +94,12 @@ function FieldConfBadge({ field, meta, onClickExcerpt }: {
   );
 }
 
-export function AdminEventReviewScreen({ onNavigate }: Props) {
+export function AdminEventReviewScreen({ onNavigate: _onNavigate }: Props) {
+  void _onNavigate;
   const [candidates, setCandidates] = useState<EventCandidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<string>('pending');
+  const [stats, setStats] = useState<PortalStats | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -126,8 +129,12 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
 
   async function load() {
     setLoading(true);
-    const res = await adminFetchEventCandidates({ status: activeTab });
-    if (res.data?.candidates) setCandidates(res.data.candidates);
+    const [candidatesRes, statsRes] = await Promise.all([
+      adminFetchEventCandidates({ status: activeTab }),
+      adminFetchStats(),
+    ]);
+    if (candidatesRes.data?.candidates) setCandidates(candidatesRes.data.candidates);
+    if (statsRes.data?.stats) setStats(statsRes.data.stats);
     setLoading(false);
   }
 
@@ -320,15 +327,33 @@ export function AdminEventReviewScreen({ onNavigate }: Props) {
         </div>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 600 }}>Event Review Queue</h2>
-        <button onClick={() => onNavigate('#/admin/newsletters')} style={{
-          padding: '8px 16px', fontSize: 13, borderRadius: 8, border: `1px solid ${colors.border}`,
-          background: colors.card, cursor: 'pointer', fontFamily: 'inherit',
-        }}>
-          &larr; Sources
-        </button>
-      </div>
+      {/* Stats bar */}
+      {stats && (
+        <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'baseline' }}>
+          <span className="tnum" style={{ fontSize: '28px', fontWeight: 700, color: colors.heading }}>
+            {stats.total_events}
+          </span>
+          <span style={{ fontSize: '13px', color: colors.dim, marginRight: '8px' }}>events</span>
+          <span className="tnum" style={{ fontSize: '16px', fontWeight: 600, color: colors.accent }}>
+            {stats.upcoming_7d}
+          </span>
+          <span style={{ fontSize: '12px', color: colors.dim, marginRight: '8px' }}>next 7 days</span>
+          {Object.entries(stats.provenance)
+            .sort(([, a], [, b]) => b - a)
+            .map(([method, count]) => (
+            <span key={method} style={{
+              fontSize: '11px', color: colors.muted, background: colors.card,
+              border: `1px solid ${colors.border}`, borderRadius: '100px',
+              padding: '2px 8px',
+            }}>
+              <span className="tnum" style={{ color: colors.heading, marginRight: '3px', fontWeight: 500 }}>{count}</span>
+              {method}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <h2 style={{ margin: '0 0 20px', fontSize: 20, fontWeight: 600 }}>Review</h2>
 
       {/* Status tabs */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 20 }}>
