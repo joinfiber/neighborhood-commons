@@ -75,23 +75,47 @@ export function AdminDashboardScreen({ email: _email, onViewAccount, onViewAllEv
 
       {/* Stats row */}
       {stats && (
-        <div style={{ display: 'flex', gap: '12px', marginBottom: spacing.lg, flexWrap: 'wrap' }}>
-          {[
-            { label: 'Accounts', value: stats.total_accounts },
-            { label: 'Claimed', value: stats.claimed_accounts },
-            { label: 'Pending', value: stats.pending_accounts },
-            { label: 'Events', value: stats.total_events },
-            { label: 'This Week', value: stats.events_this_week },
-          ].map((s) => (
-            <div key={s.label} style={{
-              flex: '1 1 100px', background: colors.card, border: `1px solid ${colors.border}`,
-              borderRadius: radii.md, padding: '12px 14px', textAlign: 'center', minWidth: '80px',
+        <>
+          <div style={{ display: 'flex', gap: '12px', marginBottom: '8px', flexWrap: 'wrap' }}>
+            {[
+              { label: 'Accounts', value: stats.total_accounts },
+              { label: 'Claimed', value: stats.claimed_accounts },
+              { label: 'Pending', value: stats.pending_accounts },
+              { label: 'Events', value: stats.total_events },
+              { label: 'Next 7 Days', value: stats.upcoming_7d },
+            ].map((s) => (
+              <div key={s.label} style={{
+                flex: '1 1 100px', background: colors.card, border: `1px solid ${colors.border}`,
+                borderRadius: radii.md, padding: '12px 14px', textAlign: 'center', minWidth: '80px',
+              }}>
+                <div className="tnum" style={{ fontSize: '22px', fontWeight: 600, color: colors.heading }}>{s.value}</div>
+                <div style={{ fontSize: '10px', color: colors.dim, marginTop: '2px', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 500 }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+          {/* Provenance breakdown */}
+          {Object.keys(stats.provenance).length > 0 && (
+            <div style={{
+              display: 'flex', gap: '8px', marginBottom: spacing.lg, flexWrap: 'wrap', alignItems: 'center',
             }}>
-              <div className="tnum" style={{ fontSize: '22px', fontWeight: 600, color: colors.heading }}>{s.value}</div>
-              <div style={{ fontSize: '10px', color: colors.dim, marginTop: '2px', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 500 }}>{s.label}</div>
+              <span style={{ fontSize: '10px', color: colors.dim, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 500 }}>
+                Sources
+              </span>
+              {Object.entries(stats.provenance)
+                .sort(([, a], [, b]) => b - a)
+                .map(([method, count]) => (
+                <span key={method} style={{
+                  fontSize: '11px', color: colors.muted, background: colors.card,
+                  border: `1px solid ${colors.border}`, borderRadius: radii.pill,
+                  padding: '3px 10px', fontWeight: 500,
+                }}>
+                  <span className="tnum" style={{ color: colors.heading, marginRight: '4px' }}>{count}</span>
+                  {method}
+                </span>
+              ))}
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
 
       {/* Pending approvals */}

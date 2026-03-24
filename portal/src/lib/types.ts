@@ -106,7 +106,8 @@ export interface PortalStats {
   managed_accounts: number;
   pending_accounts: number;
   total_events: number;
-  events_this_week: number;
+  upcoming_7d: number;
+  provenance: Record<string, number>;
 }
 
 /** Portal event with joined business info (from admin endpoints). */

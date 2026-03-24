@@ -58,17 +58,67 @@ router.get('/stats', portalLimiter, async (_req, res, next) => {
     const claimedAccounts = accounts?.filter((a) => a.claimed_at).length || 0;
     const pendingAccounts = accounts?.filter((a) => a.status === 'pending').length || 0;
 
-    const { count: totalEvents } = await supabaseAdmin
-      .from('events')
-      .select('id', { count: 'exact', head: true })
-      .in('source', [...MANAGED_SOURCES]);
-
-    const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const { count: eventsThisWeek } = await supabaseAdmin
+    // Count unique events: series count as 1 (instance_number=1), one-offs have null instance_number.
+    // This gives the real "how many distinct things are programmed" count.
+    const { count: totalOneOffs } = await supabaseAdmin
       .from('events')
       .select('id', { count: 'exact', head: true })
       .in('source', [...MANAGED_SOURCES])
-      .gte('created_at', oneWeekAgo);
+      .is('series_id', null);
+
+    const { count: totalSeries } = await supabaseAdmin
+      .from('events')
+      .select('id', { count: 'exact', head: true })
+      .in('source', [...MANAGED_SOURCES])
+      .not('series_id', 'is', null)
+      .eq('series_instance_number', 1);
+
+    const totalEvents = (totalOneOffs || 0) + (totalSeries || 0);
+
+    // Upcoming 7 days: unique events with an instance in the next week
+    const now = new Date().toISOString();
+    const oneWeekOut = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    const { count: upcomingOneOffs } = await supabaseAdmin
+      .from('events')
+      .select('id', { count: 'exact', head: true })
+      .in('source', [...MANAGED_SOURCES])
+      .is('series_id', null)
+      .gte('event_at', now)
+      .lte('event_at', oneWeekOut)
+      .eq('status', 'published');
+
+    // Count distinct series with any upcoming instance in the next 7 days
+    const { data: upcomingSeriesIds } = await supabaseAdmin
+      .from('events')
+      .select('series_id')
+      .in('source', [...MANAGED_SOURCES])
+      .not('series_id', 'is', null)
+      .gte('event_at', now)
+      .lte('event_at', oneWeekOut)
+      .eq('status', 'published');
+
+    const uniqueUpcomingSeriesCount = upcomingSeriesIds
+      ? new Set(upcomingSeriesIds.map((r: { series_id: string }) => r.series_id)).size
+      : 0;
+
+    const upcomingEvents = (upcomingOneOffs || 0) + uniqueUpcomingSeriesCount;
+
+    // Provenance breakdown by source_method
+    const { data: provenanceRows } = await supabaseAdmin
+      .from('events')
+      .select('source_method, series_id, series_instance_number')
+      .in('source', [...MANAGED_SOURCES]);
+
+    const provenance: Record<string, number> = {};
+    if (provenanceRows) {
+      for (const row of provenanceRows) {
+        // Count unique events: skip series instances beyond #1
+        if (row.series_id && row.series_instance_number !== 1) continue;
+        const method = row.source_method || 'portal';
+        provenance[method] = (provenance[method] || 0) + 1;
+      }
+    }
 
     res.json({
       stats: {
@@ -76,8 +126,9 @@ router.get('/stats', portalLimiter, async (_req, res, next) => {
         claimed_accounts: claimedAccounts,
         managed_accounts: totalAccounts - claimedAccounts,
         pending_accounts: pendingAccounts,
-        total_events: totalEvents || 0,
-        events_this_week: eventsThisWeek || 0,
+        total_events: totalEvents,
+        upcoming_7d: upcomingEvents,
+        provenance,
       },
     });
   } catch (err) {
@@ -105,18 +156,20 @@ router.get('/accounts', portalLimiter, async (_req, res, next) => {
       throw createError('Failed to fetch accounts', 500, 'SERVER_ERROR');
     }
 
-    // Count events per account
+    // Count unique events per account (series = 1, one-offs = 1)
     const accountIds = (accounts || []).map((a: { id: string }) => a.id);
     let eventCounts: Record<string, number> = {};
     if (accountIds.length > 0) {
       const { data: counts } = await supabaseAdmin
         .from('events')
-        .select('creator_account_id')
+        .select('creator_account_id, series_id, series_instance_number')
         .in('source', [...MANAGED_SOURCES])
         .in('creator_account_id', accountIds);
 
       if (counts) {
-        eventCounts = counts.reduce((acc: Record<string, number>, row: { creator_account_id: string }) => {
+        eventCounts = counts.reduce((acc: Record<string, number>, row: { creator_account_id: string; series_id: string | null; series_instance_number: number | null }) => {
+          // Skip series instances beyond #1
+          if (row.series_id && row.series_instance_number !== 1) return acc;
           acc[row.creator_account_id] = (acc[row.creator_account_id] || 0) + 1;
           return acc;
         }, {});
