@@ -58,8 +58,7 @@ export function createApp(): Express {
         },
       },
       // Event images are public data (CC BY 4.0) — allow cross-origin embedding
-      // so consumers on other domains (www.joinfiber.app, third-party apps) can
-      // render images served from commons.joinfiber.app without CORP blocking.
+      // so consumers on other domains can render images without CORP blocking.
       crossOriginResourcePolicy: { policy: 'cross-origin' },
       hsts: {
         maxAge: 31536000,

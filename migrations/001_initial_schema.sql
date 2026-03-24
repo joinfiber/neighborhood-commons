@@ -1,9 +1,8 @@
 -- ============================================================================
--- Fiber Commons: Initial Schema Migration
+-- Neighborhood Commons: Initial Schema Migration
 --
--- Creates the complete database schema for the Fiber Commons standalone
--- Supabase instance. This is a public events data service, separate from
--- the Fiber Social database.
+-- Creates the complete database schema for the Neighborhood Commons
+-- Supabase instance. This is a public events data service.
 --
 -- Tables:
 --   events               -- the canonical public event record

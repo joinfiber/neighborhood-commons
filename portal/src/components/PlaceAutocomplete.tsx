@@ -16,6 +16,7 @@ export function PlaceAutocomplete({ value, onChange, onSelect, placeholder, sear
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const controllerRef = useRef<AbortController>();
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -28,25 +29,41 @@ export function PlaceAutocomplete({ value, onChange, onSelect, placeholder, sear
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       if (debounceRef.current) clearTimeout(debounceRef.current);
+      controllerRef.current?.abort();
     };
   }, []);
 
   function handleChange(val: string) {
     onChange(val);
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    // Abort any in-flight request — prevents stale results from a slower earlier query
+    // from overwriting results from a faster later query
+    controllerRef.current?.abort();
 
     if (val.length < 3) {
       setResults([]);
       setOpen(false);
+      setLoading(false);
       return;
     }
 
     setLoading(true);
     debounceRef.current = setTimeout(async () => {
-      const places = await searchPlaces(val, searchCoords);
-      setResults(places);
-      setOpen(places.length > 0);
-      setLoading(false);
+      const controller = new AbortController();
+      controllerRef.current = controller;
+      try {
+        const places = await searchPlaces(val, searchCoords);
+        // Only update if this request wasn't aborted by a newer one
+        if (!controller.signal.aborted) {
+          setResults(places);
+          setOpen(places.length > 0);
+          setLoading(false);
+        }
+      } catch {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
     }, 300);
   }
 
@@ -69,9 +86,9 @@ export function PlaceAutocomplete({ value, onChange, onSelect, placeholder, sear
       {loading && (
         <span style={{
           position: 'absolute', right: '12px', top: '10px',
-          fontSize: '12px', color: colors.dim,
+          fontSize: '11px', color: colors.dim, letterSpacing: '0.3px',
         }}>
-          ...
+          Searching...
         </span>
       )}
       {open && results.length > 0 && (

@@ -1,4 +1,4 @@
-# Fiber Commons — Standalone Docker Build
+# Neighborhood Commons — Standalone Docker Build
 # Builds both the API (Express) and the Portal (React SPA)
 
 FROM node:20-alpine AS base
@@ -53,8 +53,8 @@ COPY --from=portal-builder /app/portal/dist ./portal
 COPY public ./public
 
 # Run as non-root user
-RUN addgroup -g 1001 -S nodejs && adduser -S fiber -u 1001
-USER fiber
+RUN addgroup -g 1001 -S nodejs && adduser -S commons -u 1001
+USER commons
 
 EXPOSE 3001
 CMD ["node", "dist/index.js"]

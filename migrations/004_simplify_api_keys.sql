@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Migration 004: Simplify api_keys — one tier, one rate limit
 -- ============================================================================
--- Fiber Commons has one product: free event data at 1000 req/hr.
+-- Neighborhood Commons has one product: free event data at 1000 req/hr.
 -- Remove the tier system. All keys are equal.
 
 -- Drop the tier CHECK constraint and default to 'free' (kept for column compat)

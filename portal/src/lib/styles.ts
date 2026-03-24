@@ -82,7 +82,7 @@ export const colors = {
 } as const;
 
 // ---------------------------------------------------------------------------
-// Category colors — subtle tints matching Fiber's palette (light mode)
+// Category colors — subtle tints (light mode)
 // ---------------------------------------------------------------------------
 
 export const categoryColors: Record<string, { fg: string; bg: string }> = {

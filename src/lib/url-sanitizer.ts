@@ -49,8 +49,6 @@ const APPROVED_DOMAINS = new Set([
   'linktr.ee', 'linkin.bio', 'beacons.ai', 'bio.link', 'lnk.bio',
   // Local Philly
   'uwishunu.com', 'visitphilly.com',
-  // Generic
-  'joinfiber.app',
 ]);
 
 /**

@@ -111,7 +111,7 @@ Subject: `Your sign-in code`
             <td style="background-color:#181715;border:1px solid #2a2825;border-radius:14px;padding:32px 28px;">
 
               <p style="margin:0 0 8px 0;font-size:20px;font-weight:300;color:#f5f0e8;letter-spacing:0.02em;">
-                Sign in to Fiber
+                Sign in to Neighborhood Commons
               </p>
               <p style="margin:0 0 28px 0;font-size:14px;color:#7a7670;line-height:1.5;">
                 Enter this code in the sign-in screen to continue.

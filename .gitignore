@@ -3,6 +3,7 @@ node_modules
 
 # Build output
 dist
+**/tsconfig.tsbuildinfo
 
 # Environment
 .env
@@ -23,17 +24,14 @@ Thumbs.db
 # Test
 coverage
 
-# Internal tools
+# Internal tools and field data
 scripts/
 field/
 
-# Internal strategy docs
-docs/strategy.md
-docs/plan-network-effects.md
-
-# Internal design docs (kept locally, not public)
+# Internal docs (kept locally, not in public repo)
 ECOSYSTEM.md
-PORTAL-DESIGN.md
 SEQUENCING.md
 merrie-design-document.md
 merrie-design-exploration.md
+docs/strategy.md
+docs/plan-network-effects.md
