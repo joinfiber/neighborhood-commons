@@ -47,7 +47,20 @@ const SCHEMA: Record<string, string[]> = {
     'start_time_required', 'tags', 'wheelchair_accessible', 'rsvp_limit',
     'source_method', 'source_publisher', 'source_feed_url', 'external_id',
     'runtime_minutes', 'content_rating', 'showtimes',
+    'group_id',
     'created_at', 'updated_at',
+  ],
+  groups: [
+    'id', 'name', 'slug', 'description', 'type',
+    'category_tags', 'neighborhood', 'city', 'address', 'latitude', 'longitude',
+    'avatar_url', 'hero_image_url', 'links', 'phone', 'website',
+    'operating_hours', 'status', 'claimed',
+    'source_publisher', 'source_method', 'portal_account_id',
+    'created_at', 'updated_at',
+  ],
+  group_venues: [
+    'id', 'group_id', 'place_id', 'venue_name', 'venue_address',
+    'latitude', 'longitude', 'is_primary', 'created_at',
   ],
   event_series: [
     'id', 'creator_account_id', 'recurrence', 'base_event_data',
