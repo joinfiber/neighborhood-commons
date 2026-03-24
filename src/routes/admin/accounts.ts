@@ -210,7 +210,7 @@ router.get('/accounts/:id', portalLimiter, async (req, res, next) => {
       .select(PORTAL_SELECT)
       .eq('creator_account_id', account.id)
       .in('source', [...MANAGED_SOURCES])
-      .order('event_at', { ascending: false });
+      .order('event_at', { ascending: true });
 
     if (eventsErr) {
       console.error('[COMMONS-ADMIN] Account events fetch error:', eventsErr.message, eventsErr.code);

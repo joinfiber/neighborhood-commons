@@ -197,13 +197,21 @@ export function createApp(): Express {
   // ─── Portal SPA (static files) ─────────────────────────────────
   // Serve the built portal frontend. Must be after API routes and pages
   // so /api/* and /events/* are handled first.
+  //
+  // Vite produces hashed filenames (index-Ab12Cd.js) — safe to cache
+  // forever since the hash changes on every build. But index.html must
+  // never be cached: it's the entry point that references the current hash.
+  // Without no-cache on index.html, browsers/CDNs serve stale HTML that
+  // points to an old JS bundle, and UI changes don't land after deploy.
   const portalDir = path.resolve(__dirname, '../portal');
-  app.use(express.static(portalDir, { maxAge: '1h' }));
+  app.use('/assets', express.static(path.join(portalDir, 'assets'), { maxAge: '365d', immutable: true }));
+  app.use(express.static(portalDir, { maxAge: 0 }));
 
   // SPA fallback: any non-API, non-page route serves index.html
   // (supports client-side hash routing)
   app.get('*', (_req, res, next) => {
     if (_req.path.startsWith('/api/') || _req.path.startsWith('/events/') || _req.path.startsWith('/venues/')) return next();
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.sendFile(path.join(portalDir, 'index.html'), (err) => {
       if (err) next(); // portal not built yet — 404 is fine
     });

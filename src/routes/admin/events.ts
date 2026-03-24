@@ -199,12 +199,15 @@ router.post('/accounts/:id/events', writeLimiter, async (req, res, next) => {
  */
 router.get('/events', portalLimiter, async (_req, res, next) => {
   try {
+    // Fetch all managed events sorted chronologically. The frontend groups
+    // series instances into single cards and needs the full set to compute
+    // "X upcoming / Y total" counts per series.
     const { data: events, error } = await supabaseAdmin
       .from('events')
       .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name, email)`)
       .in('source', [...MANAGED_SOURCES])
-      .order('event_at', { ascending: false })
-      .limit(200);
+      .order('event_at', { ascending: true })
+      .limit(5000);
 
     if (error) {
       console.error('[COMMONS-ADMIN] Events fetch error:', error.message);
