@@ -30,16 +30,16 @@ const BUSINESS_NAV: NavItem[] = [
 ];
 
 const ADMIN_NAV: NavItem[] = [
-  { id: 'accounts', label: 'Accounts', hash: '#/admin', screens: ['admin-home', 'admin-account'],
-    icon: <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="7" r="2.5" /><path d="M3 17c0-2.76 2.24-5 5-5s5 2.24 5 5" /><circle cx="14" cy="6.5" r="1.8" /><path d="M17 16.5c0-2-1.6-3.6-3.6-3.6-.66 0-1.28.18-1.8.49" /></svg> },
+  { id: 'review', label: 'Review', hash: '#/admin', screens: ['admin-home', 'admin-newsletter-review'],
+    icon: <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><path d="M3 10l3-6h8l3 6" /><path d="M3 10v6a1 1 0 001 1h12a1 1 0 001-1v-6H13l-1 2H8l-1-2H3z" /></svg> },
   { id: 'events', label: 'Events', hash: '#/admin/events', screens: ['admin-events', 'admin-edit-event', 'admin-create-event'],
     icon: <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><path d="M7 5H17M7 10H17M7 15H17M3 5h.5M3 10h.5M3 15h.5" /></svg> },
-  { id: 'review', label: 'Review', hash: '#/admin/newsletters/review', screens: ['admin-newsletter-review'],
-    icon: <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><path d="M3 10l3-6h8l3 6" /><path d="M3 10v6a1 1 0 001 1h12a1 1 0 001-1v-6H13l-1 2H8l-1-2H3z" /></svg> },
-  { id: 'newsletters', label: 'Sources', hash: '#/admin/newsletters', screens: ['admin-newsletters', 'admin-newsletter-emails', 'admin-newsletter-email'],
-    icon: <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="16" height="12" rx="2" /><path d="M2 6l8 5 8-5" /></svg> },
-  { id: 'feeds', label: 'Feeds', hash: '#/admin/feeds', screens: ['admin-feeds'],
+  { id: 'accounts', label: 'Accounts', hash: '#/admin/accounts', screens: ['admin-accounts', 'admin-account'],
+    icon: <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="7" r="2.5" /><path d="M3 17c0-2.76 2.24-5 5-5s5 2.24 5 5" /><circle cx="14" cy="6.5" r="1.8" /><path d="M17 16.5c0-2-1.6-3.6-3.6-3.6-.66 0-1.28.18-1.8.49" /></svg> },
+  { id: 'sources', label: 'Sources', hash: '#/admin/sources', screens: ['admin-sources', 'admin-newsletters', 'admin-newsletter-emails', 'admin-newsletter-email', 'admin-feeds'],
     icon: <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><path d="M3 15a2 2 0 104 0 2 2 0 00-4 0" /><path d="M3 9c5 0 9 4 9 9M3 3c8.3 0 15 6.7 15 15" /></svg> },
+  { id: 'audit', label: 'Data Quality', hash: '#/admin/audit', screens: ['admin-audit'],
+    icon: <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><path d="M7 5H17M7 10H17M7 15H17M3 5h.5M3 10h.5M3 15h.5" /></svg> },
 ];
 
 // ---------------------------------------------------------------------------
