@@ -82,7 +82,8 @@ export async function classifyCandidate(
   price: string | null,
 ): Promise<ClassificationResult | null> {
   if (!config.inference.apiKey) {
-    return null; // No LLM configured — skip silently
+    console.warn('[CLASSIFY] No INFERENCE_API_KEY configured — skipping classification');
+    return null;
   }
 
   try {
@@ -91,6 +92,8 @@ export async function classifyCandidate(
       description ? `Description: ${description.slice(0, 500)}` : null,
       price ? `Price: ${price}` : null,
     ].filter(Boolean).join('\n');
+
+    console.log(`[CLASSIFY] Requesting: model=${config.inference.model}, input="${title}"`);
 
     const response = await fetch(`${config.inference.apiUrl}/chat/completions`, {
       method: 'POST',
@@ -111,7 +114,8 @@ export async function classifyCandidate(
     });
 
     if (!response.ok) {
-      console.error(`[CLASSIFY] LLM returned ${response.status}`);
+      const body = await response.text().catch(() => '(unreadable)');
+      console.error(`[CLASSIFY] LLM returned ${response.status}: ${body.slice(0, 200)}`);
       return null;
     }
 
@@ -120,24 +124,31 @@ export async function classifyCandidate(
     };
 
     const content = data.choices?.[0]?.message?.content?.trim();
-    if (!content) return null;
+    if (!content) {
+      console.warn(`[CLASSIFY] LLM returned empty content for "${title}". Response keys: ${Object.keys(data).join(', ')}`);
+      return null;
+    }
 
     // Parse JSON — handle potential markdown wrapping
     const jsonStr = content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
     const parsed = JSON.parse(jsonStr) as { category?: string; tags?: string[] };
 
     // Validate category
-    const category = EVENT_CATEGORY_KEYS.includes(parsed.category as typeof EVENT_CATEGORY_KEYS[number])
-      ? parsed.category as string
-      : 'community';
+    const validCategory = EVENT_CATEGORY_KEYS.includes(parsed.category as typeof EVENT_CATEGORY_KEYS[number]);
+    const category = validCategory ? parsed.category as string : 'community';
+
+    if (!validCategory) {
+      console.warn(`[CLASSIFY] LLM returned invalid category "${parsed.category}" for "${title}" — falling back to community`);
+    }
 
     // Validate tags against the chosen category
     const rawTags = Array.isArray(parsed.tags) ? parsed.tags.filter(t => typeof t === 'string') : [];
     const tags = validateTags(rawTags, category);
 
+    console.log(`[CLASSIFY] Result for "${title}": ${category} [${tags.join(', ')}]`);
     return { category, tags };
   } catch (err) {
-    console.error('[CLASSIFY] Classification failed:', err instanceof Error ? err.message : err);
+    console.error('[CLASSIFY] Classification failed for "' + title + '":', err instanceof Error ? err.message : err);
     return null;
   }
 }
@@ -151,9 +162,13 @@ export async function classifyCandidate(
 export async function classifyCandidates(
   candidates: Array<{ id: string; title: string; description: string | null; price: string | null }>,
 ): Promise<void> {
-  if (!config.inference.apiKey || candidates.length === 0) return;
+  if (!config.inference.apiKey) {
+    console.warn(`[CLASSIFY] Skipping ${candidates.length} candidates — no INFERENCE_API_KEY`);
+    return;
+  }
+  if (candidates.length === 0) return;
 
-  console.log(`[CLASSIFY] Classifying ${candidates.length} candidates...`);
+  console.log(`[CLASSIFY] Classifying ${candidates.length} candidates (api=${config.inference.apiUrl}, model=${config.inference.model})`);
   let classified = 0;
 
   for (const candidate of candidates) {
