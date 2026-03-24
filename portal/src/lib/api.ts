@@ -1,7 +1,7 @@
 import { getAccessToken } from './supabase';
 import type {
   PortalAccount, PortalEvent, CreateEventParams, PlaceResult,
-  CheckEmailResult, WhoamiResponse, PortalStats, AdminPortalEvent,
+  CheckEmailResult, WhoamiResponse, PortalStats, DataAudit, AdminPortalEvent,
   SeedAccountParams, ActivityLogEntry,
   NewsletterSource, NewsletterEmail, EventCandidate, FeedSource,
 } from './types';
@@ -9,7 +9,7 @@ import type {
 // Re-export all types for backward compatibility
 export type {
   PortalAccount, PortalEvent, CreateEventParams, PlaceResult,
-  UserRole, CheckEmailResult, WhoamiResponse, PortalStats,
+  UserRole, CheckEmailResult, WhoamiResponse, PortalStats, DataAudit,
   AdminPortalEvent, SeedAccountParams, ActivityLogEntry, EventFormData,
   NewsletterSource, NewsletterEmail, EventCandidate, FeedSource,
 } from './types';
@@ -245,6 +245,10 @@ export async function fetchWhoami() {
 
 export async function adminFetchStats() {
   return apiRequest<{ stats: PortalStats }>('/api/portal/admin/stats');
+}
+
+export async function adminFetchAudit() {
+  return apiRequest<{ audit: DataAudit }>('/api/portal/admin/events/audit');
 }
 
 export async function adminFetchAccounts() {

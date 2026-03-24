@@ -98,6 +98,7 @@ const ADMIN_NAV: NavItem[] = [
   { label: 'Events', icon: icons.list, hash: '#/admin/events', screens: ['admin-events', 'admin-edit-event', 'admin-create-event'] },
   { label: 'Accounts', icon: icons.people, hash: '#/admin/accounts', screens: ['admin-accounts', 'admin-account'], section: 'Manage' },
   { label: 'Sources', icon: icons.rss, hash: '#/admin/sources', screens: ['admin-sources', 'admin-newsletters', 'admin-newsletter-emails', 'admin-newsletter-email', 'admin-feeds'] },
+  { label: 'Data Quality', icon: icons.list, hash: '#/admin/audit', screens: ['admin-audit'] },
 ];
 
 const navItemBase: React.CSSProperties = {

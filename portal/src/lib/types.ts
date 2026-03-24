@@ -110,6 +110,35 @@ export interface PortalStats {
   provenance: Record<string, number>;
 }
 
+export interface DataAudit {
+  total_rows: number;
+  unique_events: number;
+  series_count: number;
+  one_off_count: number;
+  upcoming: number;
+  past: number;
+  quality: {
+    missing_venue: number;
+    missing_date: number;
+    missing_title: number;
+    no_description: number;
+    no_account: number;
+    no_coordinates: number;
+    no_image: number;
+    no_price: number;
+  };
+  distributions: {
+    category: Record<string, number>;
+    source_method: Record<string, number>;
+    status: Record<string, number>;
+  };
+  samples: {
+    community_events: Array<{ id: string; title: string; source_method: string }>;
+    missing_venue: Array<{ id: string; title: string; source_method: string; created_at: string }>;
+    orphaned: Array<{ id: string; title: string; source_method: string; source: string; created_at: string }>;
+  };
+}
+
 /** Portal event with joined business info (from admin endpoints). */
 export interface AdminPortalEvent extends PortalEvent {
   portal_accounts?: { business_name: string; email: string };
