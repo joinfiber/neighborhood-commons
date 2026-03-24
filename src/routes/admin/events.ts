@@ -96,6 +96,135 @@ const imageUploadSchema = z.object({
 const imageBodyLimit = expressJson({ limit: '12mb' });
 
 
+// =============================================================================
+// DATA QUALITY AUDIT
+// =============================================================================
+
+/**
+ * GET /admin/events/audit
+ * Returns a data quality report across all managed events.
+ * Designed to answer: "Is the dataset a mess, or does it just look like one?"
+ */
+router.get('/events/audit', portalLimiter, async (_req, res, next) => {
+  try {
+    // Fetch all managed events with key quality fields
+    const { data: events, error } = await supabaseAdmin
+      .from('events')
+      .select('id, content, place_name, venue_address, event_at, end_time, category, description, creator_account_id, series_id, series_instance_number, recurrence, source, source_method, source_publisher, status, latitude, longitude, event_image_url, price, tags, created_at')
+      .in('source', [...MANAGED_SOURCES]);
+
+    if (error) {
+      console.error('[COMMONS-ADMIN] Audit query error:', error.message);
+      throw createError('Failed to run audit', 500, 'SERVER_ERROR');
+    }
+
+    const rows = events || [];
+    const today = new Date().toISOString().split('T')[0]!;
+
+    // Unique event counting (series = 1, one-offs = 1)
+    const uniqueEvents = rows.filter(e => !e.series_id || e.series_instance_number === 1);
+    const seriesFirstInstances = uniqueEvents.filter(e => e.series_id);
+    const oneOffs = uniqueEvents.filter(e => !e.series_id);
+
+    // Quality checks on unique events
+    const missingVenue = uniqueEvents.filter(e => !e.place_name || e.place_name.trim() === '');
+    const missingDate = uniqueEvents.filter(e => !e.event_at);
+    const missingTitle = uniqueEvents.filter(e => !e.content || e.content.trim() === '');
+    const noDescription = uniqueEvents.filter(e => !e.description || e.description.trim() === '');
+    const noAccount = uniqueEvents.filter(e => !e.creator_account_id);
+    const noCoordinates = uniqueEvents.filter(e => e.latitude == null || e.longitude == null);
+    const noImage = uniqueEvents.filter(e => !e.event_image_url);
+    const noPrice = uniqueEvents.filter(e => !e.price || e.price.trim() === '');
+
+    // Category distribution
+    const categoryDist: Record<string, number> = {};
+    for (const e of uniqueEvents) {
+      const cat = e.category || '(null)';
+      categoryDist[cat] = (categoryDist[cat] || 0) + 1;
+    }
+
+    // Source method distribution
+    const sourceDist: Record<string, number> = {};
+    for (const e of uniqueEvents) {
+      const method = e.source_method || e.source || '(unknown)';
+      sourceDist[method] = (sourceDist[method] || 0) + 1;
+    }
+
+    // Status distribution
+    const statusDist: Record<string, number> = {};
+    for (const e of uniqueEvents) {
+      statusDist[e.status] = (statusDist[e.status] || 0) + 1;
+    }
+
+    // Upcoming vs past (on unique events)
+    const upcoming = uniqueEvents.filter(e => {
+      if (!e.event_at) return false;
+      const d = new Date(e.event_at).toISOString().split('T')[0]!;
+      return d >= today;
+    });
+    const past = uniqueEvents.filter(e => {
+      if (!e.event_at) return true;
+      const d = new Date(e.event_at).toISOString().split('T')[0]!;
+      return d < today;
+    });
+
+    // Events with category 'community' that might be misclassified
+    const communityEvents = uniqueEvents
+      .filter(e => e.category === 'community')
+      .map(e => ({ id: e.id, title: e.content, source_method: e.source_method }));
+
+    // Sample of events missing venue (for inspection)
+    const missingVenueSample = missingVenue.slice(0, 10).map(e => ({
+      id: e.id, title: e.content, source_method: e.source_method, created_at: e.created_at,
+    }));
+
+    // Orphaned events (no account)
+    const orphanedSample = noAccount.slice(0, 10).map(e => ({
+      id: e.id, title: e.content, source_method: e.source_method, source: e.source, created_at: e.created_at,
+    }));
+
+    res.json({
+      audit: {
+        total_rows: rows.length,
+        unique_events: uniqueEvents.length,
+        series_count: seriesFirstInstances.length,
+        one_off_count: oneOffs.length,
+        upcoming: upcoming.length,
+        past: past.length,
+
+        quality: {
+          missing_venue: missingVenue.length,
+          missing_date: missingDate.length,
+          missing_title: missingTitle.length,
+          no_description: noDescription.length,
+          no_account: noAccount.length,
+          no_coordinates: noCoordinates.length,
+          no_image: noImage.length,
+          no_price: noPrice.length,
+        },
+
+        distributions: {
+          category: categoryDist,
+          source_method: sourceDist,
+          status: statusDist,
+        },
+
+        samples: {
+          community_events: communityEvents.slice(0, 20),
+          missing_venue: missingVenueSample,
+          orphaned: orphanedSample,
+        },
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================================================
+// EVENT CRUD
+// =============================================================================
+
 router.post('/accounts/:id/events', writeLimiter, async (req, res, next) => {
   try {
     validateUuidParam(req.params.id, 'account ID');
