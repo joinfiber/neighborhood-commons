@@ -168,19 +168,48 @@ router.get('/events/audit', portalLimiter, async (_req, res, next) => {
       return d < today;
     });
 
-    // Events with category 'community' that might be misclassified
-    const communityEvents = uniqueEvents
-      .filter(e => e.category === 'community')
-      .map(e => ({ id: e.id, title: e.content, source_method: e.source_method }));
-
-    // Sample of events missing venue (for inspection)
-    const missingVenueSample = missingVenue.slice(0, 10).map(e => ({
-      id: e.id, title: e.content, source_method: e.source_method, created_at: e.created_at,
-    }));
+    // Full event listing grouped by category — every unique event with title + venue
+    const eventsByCategory: Record<string, Array<{ id: string; title: string; description: string | null; venue: string | null; source_method: string | null; recurrence: string }>> = {};
+    for (const e of uniqueEvents) {
+      const cat = e.category || '(null)';
+      if (!eventsByCategory[cat]) eventsByCategory[cat] = [];
+      eventsByCategory[cat]!.push({
+        id: e.id,
+        title: e.content,
+        description: e.description ? (e.description as string).slice(0, 300) : null,
+        venue: e.place_name || null,
+        source_method: e.source_method,
+        recurrence: e.recurrence,
+      });
+    }
 
     // Orphaned events (no account)
     const orphanedSample = noAccount.slice(0, 10).map(e => ({
       id: e.id, title: e.content, source_method: e.source_method, source: e.source, created_at: e.created_at,
+    }));
+
+    // Missing venue sample
+    const missingVenueSample = missingVenue.slice(0, 10).map(e => ({
+      id: e.id, title: e.content, source_method: e.source_method, created_at: e.created_at,
+    }));
+
+    // Review queue: fetch all pending candidates
+    const { data: candidates } = await supabaseAdmin
+      .from('event_candidates')
+      .select('id, title, description, location_name, start_date, category, tags, status, feed_source_id, email_id')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+      .limit(200);
+
+    const reviewQueue = (candidates || []).map(c => ({
+      id: c.id,
+      title: c.title,
+      description: c.description ? (c.description as string).slice(0, 300) : null,
+      venue: c.location_name,
+      date: c.start_date,
+      current_category: c.category,
+      tags: c.tags,
+      source: c.feed_source_id ? 'feed' : c.email_id ? 'newsletter' : 'unknown',
     }));
 
     res.json({
@@ -209,8 +238,11 @@ router.get('/events/audit', portalLimiter, async (_req, res, next) => {
           status: statusDist,
         },
 
+        events_by_category: eventsByCategory,
+
+        review_queue: reviewQueue,
+
         samples: {
-          community_events: communityEvents.slice(0, 20),
           missing_venue: missingVenueSample,
           orphaned: orphanedSample,
         },
