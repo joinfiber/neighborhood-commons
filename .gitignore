@@ -11,6 +11,7 @@ dist
 # IDE
 .vscode
 .idea
+.claude
 
 # OS
 .DS_Store
@@ -29,7 +30,10 @@ field/
 # Internal strategy docs
 docs/strategy.md
 docs/plan-network-effects.md
+
+# Internal design docs (kept locally, not public)
 ECOSYSTEM.md
 PORTAL-DESIGN.md
 SEQUENCING.md
 merrie-design-document.md
+merrie-design-exploration.md
