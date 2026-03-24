@@ -157,6 +157,52 @@ router.patch('/newsletter-sources/:id', writeLimiter, async (req, res, next) => 
   }
 });
 
+router.delete('/newsletter-sources/:id', writeLimiter, async (req, res, next) => {
+  try {
+    validateUuidParam(req.params.id, 'id');
+
+    // Delete associated candidates first (via emails), then emails, then source
+    const { data: emails } = await supabaseAdmin
+      .from('newsletter_emails')
+      .select('id')
+      .eq('source_id', req.params.id);
+
+    if (emails && emails.length > 0) {
+      const emailIds = emails.map((e: { id: string }) => e.id);
+      await supabaseAdmin
+        .from('event_candidates')
+        .delete()
+        .in('email_id', emailIds);
+
+      await supabaseAdmin
+        .from('newsletter_emails')
+        .delete()
+        .eq('source_id', req.params.id);
+    }
+
+    // Also delete any candidates linked directly via source_id
+    await supabaseAdmin
+      .from('event_candidates')
+      .delete()
+      .eq('source_id', req.params.id);
+
+    const { error } = await supabaseAdmin
+      .from('newsletter_sources')
+      .delete()
+      .eq('id', req.params.id);
+
+    if (error) {
+      console.error('[COMMONS-ADMIN] Delete newsletter source error:', error.message);
+      throw createError('Failed to delete newsletter source', 500, 'SERVER_ERROR');
+    }
+
+    console.log(`[COMMONS-ADMIN] Deleted newsletter source ${req.params.id}`);
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ─── Newsletter Emails ──────────────────────────────────────────
 
 router.get('/newsletter-emails', portalLimiter, async (req, res, next) => {
@@ -315,6 +361,35 @@ router.patch('/feed-sources/:id', writeLimiter, async (req, res, next) => {
     const adminId = getAdminUserId();
     auditPortalAction('feed_source_updated', adminId, req.params.id);
     res.json({ source });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/feed-sources/:id', writeLimiter, async (req, res, next) => {
+  try {
+    validateUuidParam(req.params.id, 'id');
+
+    // Delete associated candidates first, then the source
+    await supabaseAdmin
+      .from('event_candidates')
+      .delete()
+      .eq('feed_source_id', req.params.id);
+
+    const { error } = await supabaseAdmin
+      .from('feed_sources')
+      .delete()
+      .eq('id', req.params.id);
+
+    if (error) {
+      console.error('[COMMONS-ADMIN] Delete feed source error:', error.message);
+      throw createError('Failed to delete feed source', 500, 'SERVER_ERROR');
+    }
+
+    const adminId = getAdminUserId();
+    auditPortalAction('feed_source_deleted', adminId, req.params.id);
+    console.log(`[COMMONS-ADMIN] Deleted feed source ${req.params.id}`);
+    res.json({ success: true });
   } catch (err) {
     next(err);
   }

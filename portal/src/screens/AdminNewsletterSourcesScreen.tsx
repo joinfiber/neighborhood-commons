@@ -4,6 +4,7 @@ import {
   adminFetchNewsletterSources,
   adminCreateNewsletterSource,
   adminUpdateNewsletterSource,
+  adminDeleteNewsletterSource,
 } from '../lib/api';
 import type { NewsletterSource } from '../lib/types';
 
@@ -77,6 +78,12 @@ export function AdminNewsletterSourcesScreen({ onNavigate }: Props) {
   async function toggleStatus(source: NewsletterSource) {
     const newStatus = source.status === 'active' ? 'paused' : 'active';
     await adminUpdateNewsletterSource(source.id, { status: newStatus } as Partial<NewsletterSource>);
+    load();
+  }
+
+  async function handleDelete(source: NewsletterSource) {
+    if (!confirm(`Delete "${source.name}" and all its emails/candidates?`)) return;
+    await adminDeleteNewsletterSource(source.id);
     load();
   }
 
@@ -221,6 +228,15 @@ export function AdminNewsletterSourcesScreen({ onNavigate }: Props) {
                 }}
               >
                 Edit
+              </button>
+              <button
+                onClick={() => handleDelete(source)}
+                style={{
+                  padding: '6px 12px', fontSize: 12, borderRadius: 6, border: `1px solid ${colors.border}`,
+                  background: colors.card, color: colors.error, cursor: 'pointer', fontFamily: 'inherit',
+                }}
+              >
+                Delete
               </button>
             </div>
           ))}

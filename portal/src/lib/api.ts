@@ -412,6 +412,10 @@ export async function adminUpdateNewsletterSource(id: string, params: Partial<Ne
   });
 }
 
+export async function adminDeleteNewsletterSource(id: string) {
+  return apiRequest<{ success: boolean }>(`/api/admin/newsletter-sources/${id}`, { method: 'DELETE' });
+}
+
 // Feed Sources
 export async function adminFetchFeedSources() {
   return apiRequest<{ sources: FeedSource[] }>('/api/admin/feed-sources');
@@ -429,6 +433,10 @@ export async function adminUpdateFeedSource(id: string, params: Partial<FeedSour
     method: 'PATCH',
     body: JSON.stringify(params),
   });
+}
+
+export async function adminDeleteFeedSource(id: string) {
+  return apiRequest<{ success: boolean }>(`/api/admin/feed-sources/${id}`, { method: 'DELETE' });
 }
 
 export async function adminPollFeedSource(id: string) {

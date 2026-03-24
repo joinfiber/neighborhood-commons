@@ -4,6 +4,7 @@ import {
   adminFetchFeedSources,
   adminCreateFeedSource,
   adminUpdateFeedSource,
+  adminDeleteFeedSource,
   adminPollFeedSource,
 } from '../lib/api';
 import type { FeedSource } from '../lib/types';
@@ -101,6 +102,12 @@ export function AdminFeedSourcesScreen() {
   async function toggleStatus(source: FeedSource) {
     const newStatus = source.status === 'active' ? 'paused' : 'active';
     await adminUpdateFeedSource(source.id, { status: newStatus });
+    load();
+  }
+
+  async function handleDelete(source: FeedSource) {
+    if (!confirm(`Delete "${source.name}" and all its candidates?`)) return;
+    await adminDeleteFeedSource(source.id);
     load();
   }
 
@@ -331,6 +338,15 @@ export function AdminFeedSourcesScreen() {
                     }}
                   >
                     Edit
+                  </button>
+                  <button
+                    onClick={() => handleDelete(source)}
+                    style={{
+                      padding: '6px 12px', fontSize: 12, borderRadius: 6, border: `1px solid ${colors.border}`,
+                      background: colors.card, color: colors.error, cursor: 'pointer', fontFamily: 'inherit',
+                    }}
+                  >
+                    Delete
                   </button>
                 </div>
               </div>

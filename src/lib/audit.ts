@@ -37,6 +37,7 @@ type PortalAuditAction =
   | 'feed_source_created'
   | 'feed_source_updated'
   | 'feed_source_polled'
+  | 'feed_source_deleted'
   | 'newsletter_candidates_batch_approved';
 
 /**
