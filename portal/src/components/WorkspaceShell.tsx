@@ -168,7 +168,7 @@ export function WorkspaceShell({
           marginLeft: '240px',
           paddingTop: '40px',
         }}>
-          <div style={{ width: '100%', maxWidth, position: 'relative', zIndex: 1 }}>
+          <div key={activeScreen} style={{ width: '100%', maxWidth, position: 'relative', zIndex: 1 }}>
             {children}
           </div>
         </div>
@@ -188,7 +188,7 @@ export function WorkspaceShell({
         alignItems: 'center',
         padding: '16px 16px 80px',
       }}>
-        <div style={{ width: '100%', maxWidth, position: 'relative', zIndex: 1 }}>
+        <div key={activeScreen} style={{ width: '100%', maxWidth, position: 'relative', zIndex: 1 }}>
           {children}
         </div>
       </div>
