@@ -263,7 +263,12 @@ export interface VenueScanResult {
   types: string[];
   primary_type: string | null;
   website: string | null;
-  opening_hours: unknown | null;
+  phone: string | null;
+  google_maps_url: string | null;
+  opening_hours: {
+    weekday_text: string[];
+    open_now?: boolean;
+  } | null;
 }
 
 export async function scanVenuesByZip(query: string, options?: { types?: string[]; radius_km?: number }) {

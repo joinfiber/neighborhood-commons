@@ -204,6 +204,8 @@ const FIELD_MASK_BULK = [
   'places.primaryType',
   'places.regularOpeningHours',
   'places.websiteUri',
+  'places.nationalPhoneNumber',
+  'places.googleMapsUri',
 ].join(',');
 
 const scanSchema = z.object({
@@ -284,7 +286,12 @@ router.post('/scan', requirePortalAuth, placesLimiter, async (req, res, next) =>
       types: string[];
       primary_type: string | null;
       website: string | null;
-      opening_hours: unknown | null;
+      phone: string | null;
+      google_maps_url: string | null;
+      opening_hours: {
+        weekday_text: string[];
+        open_now?: boolean;
+      } | null;
     }> = [];
 
     // Batch queries: search for each type in the restricted area
@@ -327,7 +334,16 @@ router.post('/scan', requirePortalAuth, placesLimiter, async (req, res, next) =>
           types: place.types || [],
           primary_type: (place as unknown as Record<string, unknown>).primaryType as string | null,
           website: (place as unknown as Record<string, unknown>).websiteUri as string | null,
-          opening_hours: (place as unknown as Record<string, unknown>).regularOpeningHours || null,
+          phone: (place as unknown as Record<string, unknown>).nationalPhoneNumber as string | null,
+          google_maps_url: (place as unknown as Record<string, unknown>).googleMapsUri as string | null,
+          opening_hours: (() => {
+            const hours = (place as unknown as Record<string, unknown>).regularOpeningHours as {
+              weekdayDescriptions?: string[];
+              openNow?: boolean;
+            } | undefined;
+            if (!hours?.weekdayDescriptions) return null;
+            return { weekday_text: hours.weekdayDescriptions, open_now: hours.openNow };
+          })(),
         });
       }
     }

@@ -151,7 +151,10 @@ export interface SeedAccountParams {
   phone?: string;
   website?: string;
   default_venue_name?: string;
+  default_place_id?: string;
   default_address?: string;
+  default_latitude?: number;
+  default_longitude?: number;
 }
 
 export interface ActivityLogEntry {

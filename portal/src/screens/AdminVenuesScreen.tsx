@@ -80,7 +80,12 @@ export function AdminVenuesScreen({ onNavigate }: AdminVenuesScreenProps) {
       email: `placeholder+${venue.place_id.slice(0, 8)}@neighborhood.commons`,
       business_name: venue.name,
       default_venue_name: venue.name,
+      default_place_id: venue.place_id,
       default_address: venue.address || undefined,
+      default_latitude: venue.location?.latitude,
+      default_longitude: venue.location?.longitude,
+      phone: venue.phone || undefined,
+      website: venue.website || undefined,
     };
     const res = await adminSeedAccount(params);
     setImporting(null);
@@ -298,20 +303,49 @@ export function AdminVenuesScreen({ onNavigate }: AdminVenuesScreenProps) {
                         }}
                       >
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: '14px', fontWeight: 500, color: colors.heading }}>
-                            {venue.name}
-                          </div>
-                          <div style={{ fontSize: '12px', color: colors.dim, marginTop: '2px' }}>
-                            {venue.address}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ fontSize: '14px', fontWeight: 500, color: colors.heading }}>
+                              {venue.name}
+                            </span>
                             {primaryTypeLabel(venue) && (
                               <span style={{
-                                marginLeft: '6px', fontSize: '10px', padding: '1px 6px',
+                                fontSize: '10px', padding: '1px 6px',
                                 borderRadius: '8px', background: colors.bg, color: colors.muted,
                               }}>
                                 {primaryTypeLabel(venue)}
                               </span>
                             )}
                           </div>
+                          <div style={{ fontSize: '12px', color: colors.dim, marginTop: '2px' }}>
+                            {venue.address}
+                          </div>
+                          <div style={{ fontSize: '11px', color: colors.dim, marginTop: '2px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                            {venue.phone && <span>{venue.phone}</span>}
+                            {venue.website && (
+                              <a href={venue.website} target="_blank" rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                style={{ color: colors.accent, textDecoration: 'none' }}>
+                                website
+                              </a>
+                            )}
+                            {venue.google_maps_url && (
+                              <a href={venue.google_maps_url} target="_blank" rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                style={{ color: colors.accent, textDecoration: 'none' }}>
+                                map
+                              </a>
+                            )}
+                            {venue.opening_hours && (
+                              <span style={{ color: venue.opening_hours.open_now ? colors.success : colors.muted }}>
+                                {venue.opening_hours.open_now ? 'Open now' : 'Closed'}
+                              </span>
+                            )}
+                          </div>
+                          {venue.opening_hours && (
+                            <div style={{ fontSize: '10px', color: colors.dim, marginTop: '3px', lineHeight: 1.4 }}>
+                              {venue.opening_hours.weekday_text.join(' · ')}
+                            </div>
+                          )}
                         </div>
                         <button
                           type="button"
