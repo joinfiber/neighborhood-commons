@@ -6,22 +6,24 @@ This document is the shared backdrop for development — whether you're a human 
 
 ## What This Is
 
-A digital sandwich board for the neighborhood. Businesses post events — concerts, comedy, markets, community gatherings — and every app in the city can show them. One post, every audience.
+A public data service for neighborhood events. Venues and organizers post events — concerts, comedy, markets, community gatherings — and every app in the city can show them. One post, every audience.
 
-The portal is where business owners come to manage their events. It must be instantly understandable: sign up, post your event, done. No jargon, no complexity. If a coffee shop owner can't figure it out in two minutes, we've failed.
+Three components, nothing more:
 
-The API serves structured public event data to anyone. No accounts required to read. No tracking of individuals. The data is the product.
+1. **Database** — PostgreSQL via Supabase. Events, venues, accounts, API keys. Row Level Security on every table.
+2. **API** — Express server implementing the Neighborhood API spec. Public reads (no auth), self-service API keys for higher limits, service-tier keys for full CRUD.
+3. **Portal** — React SPA where venue operators sign up, post events, done. Lightweight self-service. No admin tooling, no curation features.
 
-This is infrastructure, not an application. Treat it accordingly: correctness over features, stability over velocity, simplicity over cleverness.
+All admin tooling, data ingestion, and curation happens in external tools that connect via the Service API. The commons is thin infrastructure — it stores data and serves it. That's the job.
 
 ### Steady-State Work
 
 Week to week, the work here is:
-1. **Input fresh event data** — new events from portal users and admin entry
-2. **Edit and curate existing data** — keep listings accurate, approve pending submissions
-3. **Improve the portal for business users** — this is the primary development surface; make it clearer, faster, more useful for the people posting events
+1. **Maintain the API** — keep it spec-compliant, fast, and reliable. Downstream consumers depend on stability.
+2. **Keep the portal functional** — the portal is how venue operators manage their own data. It should be clear, fast, and bug-free.
+3. **Respond to spec changes** — when the Neighborhood API spec evolves, adopt the changes faithfully.
 
-Everything else — API changes, new spec endpoints, infrastructure — is occasional and should be done carefully, because downstream consumers depend on stability.
+Everything else — new endpoints, schema extensions, infrastructure changes — is occasional and should be done carefully.
 
 ## The Neighborhood API
 
@@ -103,13 +105,12 @@ Don't invent non-spec query parameters for the v1 public API without strong just
 
 Neighborhood Commons extends the Neighborhood API with capabilities the spec doesn't cover:
 
-- **Portal CRUD** — businesses submit and manage events (the spec is read-only)
-- **Admin curation** — platform operators approve/reject/edit events
+- **Portal CRUD** — venues and organizers submit and manage their own events (the spec is read-only)
+- **Service API** — full CRUD for trusted external tools (admin tools, import scripts, partner apps)
 - **Webhooks** — real-time push notifications for downstream consumers
-- **Internal sync** — service-to-service sync for consuming applications
 - **Image hosting** — upload, re-encode, and serve event images
 
-These extensions live under their own route prefixes (`/api/portal/*`, `/api/admin/*`, `/api/internal/*`). The spec-aligned public API (`/api/v1/*`) remains clean and spec-compliant.
+These extensions live under their own route prefixes (`/api/portal/*`, `/api/admin/*`, `/api/v1/service/*`). The spec-aligned public API (`/api/v1/*`) remains clean and spec-compliant.
 
 ### What We Don't Do
 
@@ -121,7 +122,7 @@ These extensions live under their own route prefixes (`/api/portal/*`, `/api/adm
 
 **Every line of code in this repo should be defensible.** Not "it works" defensible — "here's why this is the right approach and here's what we considered and rejected" defensible. This codebase will be read by skeptics. It should convert them.
 
-- **Fewer things, done completely.** One auth model, fully implemented. One validation approach, used everywhere. One error shape, no exceptions. Don't add a feature unless you're willing to own its security surface, its edge cases, and its maintenance burden forever.
+- **Fewer things, done completely.** One auth model per concern, fully implemented. One validation approach, used everywhere. One error shape, no exceptions. Don't add a feature unless you're willing to own its security surface, its edge cases, and its maintenance burden forever.
 - **Public data, private infrastructure.** Events are public. Everything else — IP addresses, user identities, access patterns, business email addresses — is private by default and must be justified to store, log, or transmit.
 - **No magic, no tricks.** Every behavior should be traceable from the route handler to the database query to the response. No ORMs, no middleware that silently transforms data, no "smart" defaults that surprise readers.
 - **The data enables surprising things.** This API doesn't know what downstream consumers will build. A social app might show nearby events. A civic dashboard might track neighborhood vitality. Someone might crowdsource pool attendance patterns from open swim listings. Design for data atoms that can be recombined in ways we haven't imagined.
@@ -132,7 +133,7 @@ This project serves two audiences simultaneously. Every decision must hold up fo
 
 **The API serves developers and entrepreneurs.** They're building event apps, community dashboards, civic tools, newsletters. They need structured, predictable, complete data atoms. Every event instance must be self-sufficient — carrying its full story without implicit knowledge, extra joins, or undocumented carry-forward behavior. Rigidity here is a feature: spec-correct responses, bounded recurrence rules, reliable pagination, no surprises. If a developer can't trust the data shape, they'll build around us instead of on top of us.
 
-**The portal serves busy operators.** Bar managers, yoga studio owners, coffee shop staff, community organizers. They post events between pouring drinks and teaching classes. The portal must be deeply intuitive — pull up the dashboard, see your recurring events (happy hour, trivia, karaoke) and your one-offs (shows, popups), and have a clear path to edit, delete, add, or manage both. The portal is not forgiving (it still enforces data quality), but it's friendly in how it presents structure. Operators think "every Thursday for 3 months," not "12 instances of a weekly pattern." Meet them in their language.
+**The portal serves venue operators.** Bar managers, yoga studio owners, coffee shop staff, community organizers. They post events between pouring drinks and teaching classes. The portal must be instantly understandable: sign up, post your event, done. It enforces data quality, but it's friendly in how it presents structure. Operators think "every Thursday for 3 months," not "12 instances of a weekly pattern." Meet them in their language.
 
 **The art is in nailing both.** Backend strict enough that the commons is a respected public resource. Portal intuitive enough that someone who's never used a CMS can post their open mic night in two minutes. Neither audience should feel the other's complexity. A bar owner never sees an RRULE. A developer never gets an event instance that requires a join to interpret. Same data, two perfect interfaces.
 
@@ -152,7 +153,7 @@ Don't add middleware that breaks this chain. Don't add middleware that condition
 
 ### Database Access
 
-- **`supabaseAdmin`** (service role) for system operations — cron jobs, webhook delivery, admin routes, internal sync.
+- **`supabaseAdmin`** (service role) for system operations — cron jobs, webhook delivery, admin routes, service API.
 - **`createUserClient(token)`** for user-context operations — portal CRUD where RLS policies enforce ownership.
 - Never construct raw SQL. Every query goes through PostgREST. If PostgREST can't express the query, write an RPC function in a migration.
 - Every RPC function: `SECURITY DEFINER`, `SET search_path = public, extensions`, and `REVOKE EXECUTE FROM PUBLIC, authenticated, anon` unless explicitly public.
@@ -165,7 +166,7 @@ Don't add middleware that breaks this chain. Don't add middleware that condition
 |-------|-----|----------------|
 | `events` | Policies: anon/authenticated read all; authenticated portal users write own | Portal uses `createUserClient(token)` — RLS enforces `creator_account_id` ownership |
 | `portal_accounts` | Policies: authenticated read/update own (via `auth.uid()`) | Portal uses `createUserClient(token)`; admin uses `supabaseAdmin` |
-| `event_series` | Enabled, no policies (service role only) | Only accessed via `supabaseAdmin` in cron/admin |
+| `event_series` | Enabled, no policies (service role only) | Only accessed via `supabaseAdmin` in cron/service |
 | `regions` | Policies: public read | Read-only for all roles; admin writes via `supabaseAdmin` |
 | `api_keys` | Enabled, no policies (deny all non-service) | Only accessed via `supabaseAdmin` in Express |
 | `audit_logs` | Enabled, no policies (deny all non-service) | Fire-and-forget insert via `supabaseAdmin` |
@@ -222,13 +223,47 @@ Before adding anything, answer:
 3. **Can you delete it later?** If removing it would break consumers, think harder about whether to add it. Public APIs are forever.
 4. **What's the simplest version?** Build that. Ship it. See if anyone needs more.
 
+## Service API
+
+The Service API (`/api/v1/service/*`) provides full CRUD access to accounts and events for trusted external tools. This is how admin tools, import scripts, and partner applications interact with the commons at an administrative level.
+
+### What It Is
+
+A service-tier API key grants the same power as a platform operator. The holder can create and manage accounts, create and edit any event (not just their own), and perform bulk operations. This replaces the need for built-in admin tooling — any trusted tool can build its own admin interface against these endpoints.
+
+### How Keys Are Issued
+
+Service-tier API keys are created manually by the platform operator:
+
+1. Insert a row in `api_keys` with `contributor_tier = 'service'`
+2. Store the raw key securely — it's hashed on insert and cannot be recovered
+3. The external tool sends it via `X-API-Key` header on every request
+
+There is no self-service registration for service keys. They are issued to specific tools operated by the platform team.
+
+### Endpoints
+
+The service router (`routes/service.ts`) exposes:
+
+- **Accounts**: Create, list, get, update, suspend/reactivate portal accounts
+- **Events**: Full CRUD — create (single or recurring), update, delete events on behalf of any account
+- **Images**: Upload event images via the same Sharp pipeline as the portal
+
+All requests require a valid service-tier API key. All input is validated with Zod. All mutations dispatch webhooks.
+
+### Design Principles
+
+- The Service API uses `supabaseAdmin` — it bypasses RLS by design, because service keys represent trusted operators, not end users.
+- Service endpoints share validation schemas and transform logic with the portal where possible (via `lib/event-operations.ts`), so the same data quality rules apply regardless of entry point.
+- External tools should not need to know Supabase internals. The Service API is a clean REST interface over the commons dataset.
+
 ## Security Rules
 
 ### Non-Negotiable
 
 - **All input validated with Zod before use.** No `req.body.whatever` without a schema. Use `validateRequest(schema, data)`.
 - **All route params validated.** Use `validateUuidParam(value, name)` for UUIDs. Don't trust Express params.
-- **All image uploads re-encoded through Sharp.** Magic byte check first, then Sharp re-encode. This strips metadata and kills polyglot payloads. No exceptions — not even for "trusted" admin uploads.
+- **All image uploads re-encoded through Sharp.** Magic byte check first, then Sharp re-encode. This strips metadata and kills polyglot payloads. No exceptions — not even for "trusted" service uploads.
 - **No secrets in logs.** Tokens truncated, emails masked (`abc***`), IPs hashed, user IDs hashed via `hashId()`. Grep the codebase for any `console.log` that includes `token`, `key`, `secret`, `password`, `email`, or `ip` — fix violations immediately.
 - **No secrets in error responses.** The error handler strips stack traces and replaces 5xx messages with generic text. Don't circumvent this.
 - **Webhook URLs validated for SSRF.** DNS resolution + RFC 1918 block + cloud metadata block. This runs on every webhook creation and update.
@@ -236,15 +271,16 @@ Before adding anything, answer:
 
 ### Authentication
 
-Three auth models, clearly separated:
+Four auth models, clearly separated:
 
 | Model | Middleware | Client | Use Case |
 |-------|-----------|--------|----------|
-| Portal | `requirePortalAuth` | `createUserClient(token)` | Business owners managing their own events |
-| Admin | `requireCommonsAdmin` | `supabaseAdmin` | Platform operations, account management |
-| Service | `requireServiceKey` | `supabaseAdmin` | Internal consumers, sync bridges |
+| Portal | `requirePortalAuth` | `createUserClient(token)` | Venue operators managing their own events |
+| Admin | `requireCommonsAdmin` | `supabaseAdmin` | Account management (approve/suspend) |
+| API Key | `requireApiKey` | `supabaseAdmin` | Developers reading data, managing webhooks |
+| Service | `requireServiceApiKey` | `supabaseAdmin` | Trusted tools with full CRUD (admin tools, import scripts) |
 
-Don't add a fourth auth model. If a new feature doesn't fit one of these three, reconsider the feature.
+Don't add a fifth auth model. If a new feature doesn't fit one of these four, reconsider the feature.
 
 ### Rate Limiting
 
@@ -274,7 +310,7 @@ When adding a new route, choose the appropriate limiter. If none fits, create a 
 - Constants: `UPPER_SNAKE_CASE` for true constants (`EVENT_CATEGORIES`, `PAGE_LIMIT`)
 - Types: `PascalCase` (`PortalEventRow`, `EventCategory`)
 - Route params: validated immediately, never passed through raw
-- Log prefixes: `[UPPERCASE]` matching the domain (`[PORTAL]`, `[ADMIN]`, `[WEBHOOKS]`, `[CRON]`)
+- Log prefixes: `[UPPERCASE]` matching the domain (`[PORTAL]`, `[ADMIN]`, `[WEBHOOKS]`, `[CRON]`, `[SERVICE]`)
 
 ### Comments
 
@@ -290,7 +326,7 @@ Don't write comments for:
 
 ### Dependencies
 
-This repo has 8 runtime dependencies. That's deliberate. Before adding a ninth:
+This repo has a small set of runtime dependencies. That's deliberate. Before adding another:
 
 1. Can you do it with Node.js built-ins? (`crypto`, `http`, `url`, `fs`)
 2. Can you do it in 50 lines of code in a lib file?
@@ -370,21 +406,25 @@ COMMONS_ADMIN_USER_IDS= # Comma-separated Supabase auth UUIDs for admin access
 GOOGLE_PLACES_API_KEY=  # Venue search in portal
 TURNSTILE_SECRET_KEY=   # Cloudflare Turnstile (captcha)
 CAPTCHA_ENABLED=false   # Set to true when Turnstile is configured
-MAILGUN_API_KEY=        # Portal emails
+MAILGUN_API_KEY=        # Portal OTP emails
 MAILGUN_DOMAIN=         # Mailgun sending domain
 COMMONS_R2_*=           # Cloudflare R2 credentials for image hosting
 CRON_SECRET=            # For cron endpoint auth (min 16 chars)
-COMMONS_SERVICE_KEY=    # For internal sync auth (min 32 chars)
+COMMONS_SERVICE_KEY=    # For legacy internal sync auth (min 32 chars)
 DEFAULT_REGION_ID=      # UUID of default region for new portal events
 WEBHOOK_ENCRYPTION_KEY= # AES-256-GCM key for webhook signing secrets at rest (64 hex chars / 32 bytes)
                         # Generate: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
                         # Without this, webhook signing secrets are stored in plaintext
+CORS_ORIGINS=           # Comma-separated allowed origins (defaults to production domains)
+API_BASE_URL=           # Override auto-detected API base URL
 ```
 
 ## What Not To Do
 
 - **Don't add user accounts.** This is a public data service. If you need user-specific features, that belongs in the consuming application, not here.
 - **Don't add social features.** No likes, no comments, no follows, no feeds. The social layer lives elsewhere.
+- **Don't add admin tooling.** Admin features belong in external tools that connect via the Service API. The commons is infrastructure, not an application.
+- **Don't add ingestion pipelines.** Feed polling, newsletter extraction, LLM classification — all of that belongs in external tools. The commons stores and serves data; it doesn't collect it.
 - **Don't add caching layers.** HTTP cache headers are fine. Application-level caching adds complexity we don't need at this scale.
 - **Don't add GraphQL.** The REST API is simple and sufficient. GraphQL adds parsing complexity, introspection surface, and query cost analysis that we'd need to secure.
 - **Don't over-abstract.** Three similar database queries are better than a "query builder" helper. Four similar route handlers are better than a "route factory." Abstractions are justified when they prevent bugs, not when they prevent typing.
