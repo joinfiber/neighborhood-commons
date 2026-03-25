@@ -168,11 +168,7 @@ export function WorkspaceShell({
           marginLeft: '240px',
           paddingTop: '40px',
         }}>
-          <div
-            key={activeScreen}
-            className="motion-fade-in"
-            style={{ width: '100%', maxWidth, position: 'relative', zIndex: 1 }}
-          >
+          <div style={{ width: '100%', maxWidth, position: 'relative', zIndex: 1 }}>
             {children}
           </div>
         </div>
@@ -192,11 +188,7 @@ export function WorkspaceShell({
         alignItems: 'center',
         padding: '16px 16px 80px',
       }}>
-        <div
-          key={activeScreen}
-          className="motion-fade-in"
-          style={{ width: '100%', maxWidth, position: 'relative', zIndex: 1 }}
-        >
+        <div style={{ width: '100%', maxWidth, position: 'relative', zIndex: 1 }}>
           {children}
         </div>
       </div>

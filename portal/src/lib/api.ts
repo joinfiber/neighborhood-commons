@@ -255,6 +255,24 @@ export async function adminFetchAccounts() {
   return apiRequest<{ accounts: PortalAccount[] }>('/api/portal/admin/accounts');
 }
 
+export interface VenueScanResult {
+  place_id: string;
+  name: string;
+  address: string | null;
+  location: { latitude: number; longitude: number } | null;
+  types: string[];
+  primary_type: string | null;
+  website: string | null;
+  opening_hours: unknown | null;
+}
+
+export async function scanVenuesByZip(query: string, types?: string[]) {
+  return apiRequest<{ venues: VenueScanResult[]; query: string; types_searched: number }>('/api/places/scan', {
+    method: 'POST',
+    body: JSON.stringify({ query, types }),
+  });
+}
+
 export async function adminFetchAccount(id: string) {
   return apiRequest<{ account: PortalAccount; events: PortalEvent[] }>(`/api/portal/admin/accounts/${id}`);
 }

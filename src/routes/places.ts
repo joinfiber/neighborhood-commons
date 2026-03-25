@@ -180,4 +180,115 @@ router.post('/search', requirePortalAuth, placesLimiter, async (req, res, next) 
   }
 });
 
+// =============================================================================
+// BULK VENUE DISCOVERY — Scan a zip code for event-relevant venues
+// =============================================================================
+
+/** Place types likely to host events or have regular programming */
+const VENUE_TYPES = [
+  'bar', 'restaurant', 'night_club', 'cafe',
+  'art_gallery', 'museum', 'movie_theater', 'performing_arts_theater',
+  'bowling_alley', 'gym', 'yoga_studio', 'park',
+  'library', 'community_center', 'church',
+  'book_store', 'shopping_mall', 'brewery', 'winery',
+  'spa', 'stadium', 'event_venue',
+];
+
+const FIELD_MASK_BULK = [
+  'places.id',
+  'places.displayName',
+  'places.shortFormattedAddress',
+  'places.formattedAddress',
+  'places.location',
+  'places.types',
+  'places.primaryType',
+  'places.regularOpeningHours',
+  'places.websiteUri',
+].join(',');
+
+const scanSchema = z.object({
+  query: z.string().min(3).max(100), // e.g. "19125" or "Fishtown Philadelphia"
+  types: z.array(z.string()).min(1).max(10).optional(),
+});
+
+/**
+ * POST /api/places/scan — Bulk venue discovery for admin venue import.
+ * Queries Google Places Text Search for event-relevant venue types in an area.
+ * Returns deduplicated results across multiple type queries.
+ */
+router.post('/scan', requirePortalAuth, placesLimiter, async (req, res, next) => {
+  try {
+    if (!config.google.placesApiKey) {
+      throw createError('Places API not configured', 503, 'SERVICE_UNAVAILABLE');
+    }
+
+    const { query, types } = validateRequest(scanSchema, req.body);
+    const searchTypes = types || VENUE_TYPES;
+
+    // Query Google Places for each venue type in the area
+    const seen = new Set<string>();
+    const allPlaces: Array<{
+      place_id: string;
+      name: string;
+      address: string | null;
+      location: { latitude: number; longitude: number } | null;
+      types: string[];
+      primary_type: string | null;
+      website: string | null;
+      opening_hours: unknown | null;
+    }> = [];
+
+    // Batch queries: search for each type in the specified area
+    // Google Places Text Search allows queries like "bars in 19125"
+    for (const placeType of searchTypes) {
+      const searchQuery = `${placeType.replace(/_/g, ' ')} in ${query}`;
+
+      const response = await fetch(`${PLACES_API_BASE}/places:searchText`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': config.google.placesApiKey,
+          'X-Goog-FieldMask': FIELD_MASK_BULK,
+        },
+        body: JSON.stringify({
+          textQuery: searchQuery,
+          maxResultCount: 20,
+        }),
+      });
+
+      if (!response.ok) {
+        console.warn(`[PLACES] Scan query "${searchQuery}" failed: ${response.status}`);
+        continue;
+      }
+
+      const data = await response.json() as { places?: NewApiPlace[] };
+      for (const place of data.places || []) {
+        if (seen.has(place.id)) continue;
+        seen.add(place.id);
+
+        allPlaces.push({
+          place_id: place.id,
+          name: place.displayName?.text || '',
+          address: place.shortFormattedAddress || place.formattedAddress || null,
+          location: place.location
+            ? { latitude: place.location.latitude, longitude: place.location.longitude }
+            : null,
+          types: place.types || [],
+          primary_type: (place as unknown as Record<string, unknown>).primaryType as string | null,
+          website: (place as unknown as Record<string, unknown>).websiteUri as string | null,
+          opening_hours: (place as unknown as Record<string, unknown>).regularOpeningHours || null,
+        });
+      }
+    }
+
+    // Sort by name
+    allPlaces.sort((a, b) => a.name.localeCompare(b.name));
+
+    console.log(`[PLACES] Scan "${query}": ${allPlaces.length} unique venues from ${searchTypes.length} type queries`);
+    res.json({ venues: allPlaces, query, types_searched: searchTypes.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;
