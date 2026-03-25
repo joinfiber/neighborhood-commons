@@ -272,8 +272,9 @@ export default function App() {
         <CreateEventScreen
           account={account}
           onBack={() => navigate('#/')}
-          onCreated={(eventId) => {
-            navigate(`#/events/${eventId}/share`);
+          onCreated={() => {
+            navigate('#/');
+            setToast({ message: 'Event published', type: 'success' });
           }}
         />
       );
