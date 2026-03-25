@@ -11,7 +11,6 @@ import { requireCommonsAdmin } from '../../middleware/auth.js';
 import accountRoutes from './accounts.js';
 import eventRoutes from './events.js';
 import apiKeyRoutes from './api-keys.js';
-import ingestionRoutes from './ingestion.js';
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -21,6 +20,5 @@ router.use(requireCommonsAdmin);
 router.use(accountRoutes);
 router.use(eventRoutes);
 router.use(apiKeyRoutes);
-router.use(ingestionRoutes);
 
 export default router;
