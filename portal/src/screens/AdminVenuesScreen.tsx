@@ -13,6 +13,52 @@ function formatDate(dateStr: string | null): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+/**
+ * Parse Google's weekday_text into structured operating hours.
+ * Input: ["Monday: 11:00 AM – 11:00 PM", "Tuesday: Closed", ...]
+ * Output: [{open: true, ranges: [{start: "11:00", end: "23:00"}]}, {open: false, ranges: []}, ...]
+ * Google returns days starting Monday; our format is also Mon-Sun.
+ */
+function parseGoogleHours(weekdayText: string[]): Array<{ open: boolean; ranges: Array<{ start: string; end: string }> }> {
+  return weekdayText.map((line) => {
+    // Format: "Monday: 11:00 AM – 11:00 PM" or "Monday: Closed" or "Monday: Open 24 hours"
+    const colonIdx = line.indexOf(':');
+    if (colonIdx === -1) return { open: false, ranges: [] };
+    const timesPart = line.slice(colonIdx + 1).trim();
+
+    if (timesPart.toLowerCase() === 'closed') {
+      return { open: false, ranges: [] };
+    }
+    if (timesPart.toLowerCase().includes('open 24 hours')) {
+      return { open: true, ranges: [{ start: '00:00', end: '23:59' }] };
+    }
+
+    // Parse time ranges like "11:00 AM – 11:00 PM" or "11:00 AM – 2:00 AM"
+    // Could have multiple ranges separated by commas
+    const rangeParts = timesPart.split(',').map(s => s.trim());
+    const ranges: Array<{ start: string; end: string }> = [];
+
+    for (const part of rangeParts) {
+      const match = part.match(/(\d{1,2}:\d{2})\s*(AM|PM)\s*[–-]\s*(\d{1,2}:\d{2})\s*(AM|PM)/i);
+      if (match) {
+        const start = to24h(match[1]!, match[2]!);
+        const end = to24h(match[3]!, match[4]!);
+        ranges.push({ start, end });
+      }
+    }
+
+    return { open: ranges.length > 0, ranges };
+  });
+}
+
+function to24h(time: string, ampm: string): string {
+  const [hStr, m] = time.split(':');
+  let h = parseInt(hStr!, 10);
+  if (ampm.toUpperCase() === 'PM' && h !== 12) h += 12;
+  if (ampm.toUpperCase() === 'AM' && h === 12) h = 0;
+  return `${h.toString().padStart(2, '0')}:${m}`;
+}
+
 /** Venue types that are rarely event-relevant — shown dimmed with easy dismiss */
 const LOW_RELEVANCE_TYPES = new Set([
   'laundromat', 'dry_cleaning', 'car_wash', 'car_repair', 'car_dealer',
@@ -86,6 +132,7 @@ export function AdminVenuesScreen({ onNavigate }: AdminVenuesScreenProps) {
       default_longitude: venue.location?.longitude,
       phone: venue.phone || undefined,
       website: venue.website || undefined,
+      operating_hours: venue.opening_hours ? parseGoogleHours(venue.opening_hours.weekday_text) : undefined,
     };
     const res = await adminSeedAccount(params);
     setImporting(null);

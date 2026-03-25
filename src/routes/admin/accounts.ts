@@ -16,6 +16,14 @@ import { dispatchSeriesWebhooks } from "../../lib/event-series.js";
 
 const router: ReturnType<typeof Router> = Router();
 
+const operatingHoursSchema = z.array(z.object({
+  open: z.boolean(),
+  ranges: z.array(z.object({
+    start: z.string().regex(/^\d{2}:\d{2}$/),
+    end: z.string().regex(/^\d{2}:\d{2}$/),
+  })),
+})).length(7).optional();
+
 const seedAccountSchema = z.object({
   email: z.string().email().max(254).transform((e) => e.toLowerCase().trim()),
   business_name: z.string().min(1).max(200),
@@ -26,6 +34,7 @@ const seedAccountSchema = z.object({
   default_address: z.string().max(500).optional(),
   default_latitude: z.number().min(-90).max(90).optional(),
   default_longitude: z.number().min(-180).max(180).optional(),
+  operating_hours: operatingHoursSchema,
 });
 
 const updateAccountSchema = z.object({
@@ -258,6 +267,7 @@ router.post('/accounts', writeLimiter, async (req, res, next) => {
         default_address: data.default_address || null,
         default_latitude: data.default_latitude ?? null,
         default_longitude: data.default_longitude ?? null,
+        operating_hours: data.operating_hours ?? null,
         status: 'active', // Admin-seeded accounts are active immediately
       })
       .select()

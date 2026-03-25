@@ -155,6 +155,7 @@ export interface SeedAccountParams {
   default_address?: string;
   default_latitude?: number;
   default_longitude?: number;
+  operating_hours?: Array<{ open: boolean; ranges: Array<{ start: string; end: string }> }>;
 }
 
 export interface ActivityLogEntry {
