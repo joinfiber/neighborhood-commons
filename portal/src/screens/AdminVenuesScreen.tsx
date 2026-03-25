@@ -41,6 +41,7 @@ export function AdminVenuesScreen({ onNavigate }: AdminVenuesScreenProps) {
 
   // Scan state
   const [scanQuery, setScanQuery] = useState('19125');
+  const [radiusKm, setRadiusKm] = useState(1.5);
   const [scanning, setScanning] = useState(false);
   const [scanResults, setScanResults] = useState<VenueScanResult[] | null>(null);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
@@ -61,7 +62,7 @@ export function AdminVenuesScreen({ onNavigate }: AdminVenuesScreenProps) {
     if (!scanQuery.trim()) return;
     setScanning(true);
     setScanError(null);
-    const res = await scanVenuesByZip(scanQuery.trim());
+    const res = await scanVenuesByZip(scanQuery.trim(), { radius_km: radiusKm });
     setScanning(false);
     if (res.error) {
       setScanError(res.error.message);
@@ -216,15 +217,27 @@ export function AdminVenuesScreen({ onNavigate }: AdminVenuesScreenProps) {
       {tab === 'import' && (
         <>
           {/* Scan bar */}
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
             <input
               type="text"
-              placeholder="Zip code or area (e.g. 19125, Fishtown Philadelphia)"
+              placeholder="Zip code or area (e.g. 19125)"
               value={scanQuery}
               onChange={(e) => setScanQuery(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleScan(); }}
               style={{ ...styles.input, flex: 1, padding: '9px 12px', fontSize: '14px' }}
             />
+            <select
+              value={radiusKm}
+              onChange={(e) => setRadiusKm(Number(e.target.value))}
+              style={{ ...styles.input, width: 'auto', padding: '9px 12px', fontSize: '13px' }}
+            >
+              <option value={0.5}>0.5 km</option>
+              <option value={1}>1 km</option>
+              <option value={1.5}>1.5 km</option>
+              <option value={2}>2 km</option>
+              <option value={3}>3 km</option>
+              <option value={5}>5 km</option>
+            </select>
             <button
               type="button"
               onClick={handleScan}
@@ -237,6 +250,9 @@ export function AdminVenuesScreen({ onNavigate }: AdminVenuesScreenProps) {
             >
               {scanning ? 'Scanning...' : 'Scan'}
             </button>
+          </div>
+          <div style={{ fontSize: '11px', color: colors.dim, marginBottom: '16px' }}>
+            Results restricted to venues within the selected radius of the zip code center.
           </div>
 
           {scanError && (

@@ -266,10 +266,10 @@ export interface VenueScanResult {
   opening_hours: unknown | null;
 }
 
-export async function scanVenuesByZip(query: string, types?: string[]) {
-  return apiRequest<{ venues: VenueScanResult[]; query: string; types_searched: number }>('/api/places/scan', {
+export async function scanVenuesByZip(query: string, options?: { types?: string[]; radius_km?: number }) {
+  return apiRequest<{ venues: VenueScanResult[]; query: string; types_searched: number; radius_km: number }>('/api/places/scan', {
     method: 'POST',
-    body: JSON.stringify({ query, types }),
+    body: JSON.stringify({ query, types: options?.types, radius_km: options?.radius_km }),
   });
 }
 

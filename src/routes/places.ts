@@ -209,6 +209,10 @@ const FIELD_MASK_BULK = [
 const scanSchema = z.object({
   query: z.string().min(3).max(100), // e.g. "19125" or "Fishtown Philadelphia"
   types: z.array(z.string()).min(1).max(10).optional(),
+  // Optional: provide center + radius for strict geographic restriction
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+  radius_km: z.number().min(0.5).max(10).default(1.5),
 });
 
 /**
@@ -222,8 +226,52 @@ router.post('/scan', requirePortalAuth, placesLimiter, async (req, res, next) =>
       throw createError('Places API not configured', 503, 'SERVICE_UNAVAILABLE');
     }
 
-    const { query, types } = validateRequest(scanSchema, req.body);
+    const { query, types, latitude, longitude, radius_km } = validateRequest(scanSchema, req.body);
     const searchTypes = types || VENUE_TYPES;
+
+    // Resolve center coordinates: use provided lat/lng, or geocode the query
+    let centerLat = latitude;
+    let centerLng = longitude;
+
+    if (centerLat == null || centerLng == null) {
+      // Geocode the query (zip code or area name) to get center coordinates
+      const geoResponse = await fetch(`${PLACES_API_BASE}/places:searchText`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': config.google.placesApiKey,
+          'X-Goog-FieldMask': 'places.location',
+        },
+        body: JSON.stringify({ textQuery: query, maxResultCount: 1 }),
+      });
+
+      if (geoResponse.ok) {
+        const geoData = await geoResponse.json() as { places?: Array<{ location?: { latitude: number; longitude: number } }> };
+        const loc = geoData.places?.[0]?.location;
+        if (loc) {
+          centerLat = loc.latitude;
+          centerLng = loc.longitude;
+        }
+      }
+
+      if (centerLat == null || centerLng == null) {
+        throw createError('Could not geocode the specified area', 400, 'GEOCODE_FAILED');
+      }
+    }
+
+    // Convert radius_km to a lat/lng bounding box for locationRestriction
+    // 1 degree of latitude ≈ 111km
+    const latDelta = radius_km / 111;
+    const lngDelta = radius_km / (111 * Math.cos(centerLat * Math.PI / 180));
+
+    const locationRestriction = {
+      rectangle: {
+        low: { latitude: centerLat - latDelta, longitude: centerLng - lngDelta },
+        high: { latitude: centerLat + latDelta, longitude: centerLng + lngDelta },
+      },
+    };
+
+    console.log(`[PLACES] Scan center: ${centerLat.toFixed(4)}, ${centerLng.toFixed(4)}, radius: ${radius_km}km`);
 
     // Query Google Places for each venue type in the area
     const seen = new Set<string>();
@@ -238,10 +286,9 @@ router.post('/scan', requirePortalAuth, placesLimiter, async (req, res, next) =>
       opening_hours: unknown | null;
     }> = [];
 
-    // Batch queries: search for each type in the specified area
-    // Google Places Text Search allows queries like "bars in 19125"
+    // Batch queries: search for each type in the restricted area
     for (const placeType of searchTypes) {
-      const searchQuery = `${placeType.replace(/_/g, ' ')} in ${query}`;
+      const searchQuery = placeType.replace(/_/g, ' ');
 
       const response = await fetch(`${PLACES_API_BASE}/places:searchText`, {
         method: 'POST',
@@ -252,6 +299,7 @@ router.post('/scan', requirePortalAuth, placesLimiter, async (req, res, next) =>
         },
         body: JSON.stringify({
           textQuery: searchQuery,
+          locationRestriction,
           maxResultCount: 20,
         }),
       });
@@ -281,11 +329,19 @@ router.post('/scan', requirePortalAuth, placesLimiter, async (req, res, next) =>
       }
     }
 
-    // Sort by name
-    allPlaces.sort((a, b) => a.name.localeCompare(b.name));
+    // Post-filter: reject any results outside the radius (Google sometimes includes nearby)
+    const radiusMeters = radius_km * 1000;
+    const withinRadius = allPlaces.filter(p => {
+      if (!p.location) return false;
+      const dist = calculateDistanceMeters(centerLat!, centerLng!, p.location.latitude, p.location.longitude);
+      return dist <= radiusMeters;
+    });
 
-    console.log(`[PLACES] Scan "${query}": ${allPlaces.length} unique venues from ${searchTypes.length} type queries`);
-    res.json({ venues: allPlaces, query, types_searched: searchTypes.length });
+    // Sort by name
+    withinRadius.sort((a, b) => a.name.localeCompare(b.name));
+
+    console.log(`[PLACES] Scan "${query}": ${withinRadius.length} venues within ${radius_km}km (${allPlaces.length} total before filter) from ${searchTypes.length} type queries`);
+    res.json({ venues: withinRadius, query, types_searched: searchTypes.length, radius_km });
   } catch (err) {
     next(err);
   }
