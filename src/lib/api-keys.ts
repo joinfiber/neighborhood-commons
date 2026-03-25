@@ -40,7 +40,7 @@ export function hashApiKey(rawKey: string): string {
 export async function generateAndStoreKey(
   name: string,
   contactEmail: string,
-  tier: string = 'free',
+  contributorTier: string = 'pending',
   rateLimitPerHour: number = 1000,
 ): Promise<GeneratedKey> {
   const rawKey = generateRawKey();
@@ -54,7 +54,7 @@ export async function generateAndStoreKey(
       key_prefix: keyPrefix,
       name,
       contact_email: contactEmail,
-      tier,
+      contributor_tier: contributorTier,
       rate_limit_per_hour: rateLimitPerHour,
     })
     .select('id, name, created_at')

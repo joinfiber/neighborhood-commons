@@ -141,10 +141,9 @@ export type Database = {
           key_hash: string;
           key_prefix: string;
           contact_email: string;
-          tier: string;
           rate_limit_per_hour: number;
           status: string;
-          contributor_tier: string | null;
+          contributor_tier: string;
           last_used_at: string | null;
           created_at: string;
         };
