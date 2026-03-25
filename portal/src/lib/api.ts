@@ -284,6 +284,10 @@ export async function adminFetchEvents() {
   return apiRequest<{ events: AdminPortalEvent[] }>('/api/portal/admin/events');
 }
 
+export async function adminFetchEventDirect(eventId: string) {
+  return apiRequest<{ event: PortalEvent; account: PortalAccount | null }>(`/api/portal/admin/events/${eventId}`);
+}
+
 export async function adminUpdateEvent(id: string, params: Partial<CreateEventParams>) {
   return apiRequest<{ event: PortalEvent }>(`/api/portal/admin/events/${id}`, {
     method: 'PATCH',

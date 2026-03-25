@@ -363,7 +363,7 @@ export default function App() {
         );
       }
 
-      if (route.screen === 'admin-edit-event' && route.params.id && route.params.account) {
+      if (route.screen === 'admin-edit-event' && route.params.id) {
         return (
           <AdminEditEventScreen
             eventId={route.params.id}

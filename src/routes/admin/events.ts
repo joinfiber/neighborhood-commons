@@ -776,6 +776,34 @@ router.patch('/events/series/:seriesId', writeLimiter, async (req, res, next) =>
 });
 
 /**
+ * GET /admin/events/:id
+ * Single event with account info. Allows the edit screen to load
+ * an event directly without knowing the account ID first.
+ */
+router.get('/events/:id', portalLimiter, async (req, res, next) => {
+  try {
+    validateUuidParam(req.params.id, 'event ID');
+
+    const { data: event, error } = await supabaseAdmin
+      .from('events')
+      .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(id, email, business_name, default_venue_name, default_place_id, default_address, default_latitude, default_longitude, website, phone, wheelchair_accessible, status)`)
+      .eq('id', req.params.id)
+      .maybeSingle();
+
+    if (error || !event) {
+      throw createError('Event not found', 404, 'NOT_FOUND');
+    }
+
+    res.json({
+      event: toPortalEvent(event),
+      account: event.portal_accounts || null,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * PATCH /admin/events/:id
  * Edit any event (admin override, no RLS).
  */

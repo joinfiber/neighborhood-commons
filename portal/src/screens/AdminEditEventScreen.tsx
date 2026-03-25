@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import { styles, colors } from '../lib/styles';
-import { adminFetchAccount, adminUpdateEvent, adminUpdateEventSeries, adminDeleteEvent, adminUploadEventImage } from '../lib/api';
+import { adminFetchAccount, adminFetchEventDirect, adminUpdateEvent, adminUpdateEventSeries, adminDeleteEvent, adminUploadEventImage } from '../lib/api';
 import type { PortalAccount, PortalEvent, EventFormData } from '../lib/types';
 import { EventForm } from '../components/EventForm';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 
 interface AdminEditEventScreenProps {
   eventId: string;
-  accountId: string;
+  accountId?: string; // optional — if missing, fetches event directly
   onBack: () => void;
   onUpdated: () => void;
   onDeleted: () => void;
@@ -26,17 +26,31 @@ export function AdminEditEventScreen({ eventId, accountId, onBack, onUpdated, on
 
   useEffect(() => {
     setLoading(true);
-    adminFetchAccount(accountId).then((res) => {
-      if (res.data) {
-        setAccount(res.data.account);
-        const found = res.data.events.find((e) => e.id === eventId);
-        if (found) setEvent(found);
-        else setError('Event not found');
-      } else {
-        setError(res.error?.message || 'Failed to load event');
-      }
-      setLoading(false);
-    });
+    if (accountId) {
+      // Legacy path: fetch account, find event within it
+      adminFetchAccount(accountId).then((res) => {
+        if (res.data) {
+          setAccount(res.data.account);
+          const found = res.data.events.find((e) => e.id === eventId);
+          if (found) setEvent(found);
+          else setError('Event not found');
+        } else {
+          setError(res.error?.message || 'Failed to load event');
+        }
+        setLoading(false);
+      });
+    } else {
+      // Direct path: fetch event by ID, get account from join
+      adminFetchEventDirect(eventId).then((res) => {
+        if (res.data) {
+          setEvent(res.data.event);
+          setAccount(res.data.account as PortalAccount | null);
+        } else {
+          setError(res.error?.message || 'Failed to load event');
+        }
+        setLoading(false);
+      });
+    }
   }, [eventId, accountId]);
 
   async function handleSubmit(data: EventFormData) {
