@@ -86,29 +86,9 @@ const SCHEMA: Record<string, string[]> = {
     'event_types', 'consecutive_failures', 'disabled_at', 'created_at',
     'updated_at', 'status', 'last_success_at', 'last_failure_at', 'last_failure_reason',
   ],
-  newsletter_sources: [
-    'id', 'name', 'sender_email', 'notes', 'auto_approve', 'status',
-    'created_at', 'last_received_at',
-  ],
-  newsletter_emails: [
-    'id', 'source_id', 'message_id', 'sender_email', 'subject',
-    'body_html', 'body_plain', 'received_at', 'processing_status',
-    'processing_error', 'candidate_count', 'llm_response', 'created_at',
-  ],
-  event_candidates: [
-    'id', 'email_id', 'source_id', 'title', 'description',
-    'start_date', 'start_time', 'end_time', 'location_name',
-    'location_address', 'location_lat', 'location_lng', 'source_url',
-    'confidence', 'status', 'matched_event_id', 'match_confidence',
-    'review_notes', 'created_at', 'reviewed_at', 'extraction_metadata', 'candidate_image_url',
-    'feed_source_id', 'price', 'category', 'tags',
-  ],
-  feed_sources: [
-    'id', 'name', 'feed_url', 'feed_type', 'poll_interval_hours',
-    'status', 'default_location', 'default_timezone', 'notes',
-    'created_at', 'last_polled_at', 'last_poll_result', 'last_poll_error',
-    'last_event_count',
-  ],
+  // Ingestion tables (newsletter_sources, newsletter_emails, event_candidates,
+  // feed_sources) exist in the database but are no longer referenced by code
+  // in this repo. They're managed by external admin tools via the Service API.
 };
 
 // ---------------------------------------------------------------------------
