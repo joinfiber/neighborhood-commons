@@ -92,6 +92,7 @@ export function AdminVenuesScreen({ onNavigate }: AdminVenuesScreenProps) {
   const [scanResults, setScanResults] = useState<VenueScanResult[] | null>(null);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [importing, setImporting] = useState<string | null>(null);
+  const [expandedVenue, setExpandedVenue] = useState<string | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
   const [tab, setTab] = useState<'existing' | 'import'>('existing');
 
@@ -145,8 +146,12 @@ export function AdminVenuesScreen({ onNavigate }: AdminVenuesScreenProps) {
     loadData();
   }
 
-  // Existing accounts — already have place_ids we can cross-reference
+  // Dedup: match by place_id OR by normalized venue/business name
   const existingPlaceIds = new Set(accounts.map(a => a.default_place_id).filter(Boolean));
+  const existingNames = new Set(accounts.flatMap(a => [
+    a.business_name.toLowerCase().trim(),
+    (a.default_venue_name || '').toLowerCase().trim(),
+  ]).filter(Boolean));
 
   const filtered = accounts
     .filter((a) => {
@@ -160,9 +165,13 @@ export function AdminVenuesScreen({ onNavigate }: AdminVenuesScreenProps) {
     })
     .sort((a, b) => (b.event_count || 0) - (a.event_count || 0));
 
-  // Scan results — filter out dismissed and already-imported
+  // Scan results — filter out dismissed and already-imported (by place_id or name)
   const visibleScanResults = scanResults
-    ? scanResults.filter(v => !dismissed.has(v.place_id) && !existingPlaceIds.has(v.place_id))
+    ? scanResults.filter(v =>
+        !dismissed.has(v.place_id) &&
+        !existingPlaceIds.has(v.place_id) &&
+        !existingNames.has(v.name.toLowerCase().trim())
+      )
     : null;
 
   return (
@@ -337,89 +346,134 @@ export function AdminVenuesScreen({ onNavigate }: AdminVenuesScreenProps) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
                   {visibleScanResults.map((venue) => {
                     const lowRelevance = isLowRelevance(venue.types);
+                    const expanded = expandedVenue === venue.place_id;
                     return (
                       <div
                         key={venue.place_id}
                         style={{
-                          display: 'flex', alignItems: 'center', gap: '10px',
-                          padding: '10px 12px',
                           background: colors.card,
-                          border: `1px solid ${colors.border}`,
+                          border: `1px solid ${expanded ? colors.accent : colors.border}`,
                           borderRadius: radii.sm,
                           opacity: lowRelevance ? 0.5 : 1,
                         }}
                       >
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span style={{ fontSize: '14px', fontWeight: 500, color: colors.heading }}>
-                              {venue.name}
-                            </span>
-                            {primaryTypeLabel(venue) && (
-                              <span style={{
-                                fontSize: '10px', padding: '1px 6px',
-                                borderRadius: '8px', background: colors.bg, color: colors.muted,
-                              }}>
-                                {primaryTypeLabel(venue)}
+                        {/* Collapsed row */}
+                        <div
+                          onClick={() => setExpandedVenue(expanded ? null : venue.place_id)}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: '10px',
+                            padding: '10px 12px', cursor: 'pointer',
+                          }}
+                        >
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ fontSize: '14px', fontWeight: 500, color: colors.heading }}>
+                                {venue.name}
                               </span>
+                              {primaryTypeLabel(venue) && (
+                                <span style={{
+                                  fontSize: '10px', padding: '1px 6px',
+                                  borderRadius: '8px', background: colors.bg, color: colors.muted,
+                                }}>
+                                  {primaryTypeLabel(venue)}
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: '12px', color: colors.dim, marginTop: '1px' }}>
+                              {venue.address}
+                              {venue.phone && <span style={{ marginLeft: '8px' }}>· {venue.phone}</span>}
+                              {venue.website && <span style={{ marginLeft: '8px' }}>· has website</span>}
+                              {venue.opening_hours && <span style={{ marginLeft: '8px' }}>· has hours</span>}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleImportVenue(venue); }}
+                            disabled={importing === venue.place_id}
+                            style={{
+                              padding: '5px 12px', fontSize: '12px', borderRadius: '6px',
+                              border: `1px solid ${colors.accent}`, background: colors.card,
+                              color: colors.accent, cursor: 'pointer', fontFamily: 'inherit',
+                              fontWeight: 500, opacity: importing === venue.place_id ? 0.5 : 1,
+                              flexShrink: 0,
+                            }}
+                          >
+                            {importing === venue.place_id ? '...' : 'Import'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setDismissed(prev => new Set([...prev, venue.place_id])); }}
+                            style={{
+                              padding: '5px 8px', fontSize: '12px', borderRadius: '6px',
+                              border: `1px solid ${colors.border}`, background: colors.card,
+                              color: colors.dim, cursor: 'pointer', fontFamily: 'inherit',
+                              flexShrink: 0,
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </div>
+
+                        {/* Expanded detail */}
+                        {expanded && (
+                          <div style={{
+                            padding: '0 12px 12px', fontSize: '12px', color: colors.muted,
+                            display: 'flex', flexDirection: 'column', gap: '6px',
+                            borderTop: `1px solid ${colors.border}`,
+                            paddingTop: '10px', marginTop: '0',
+                          }}>
+                            {venue.phone && (
+                              <div><strong style={{ color: colors.heading }}>Phone:</strong> {venue.phone}</div>
                             )}
-                          </div>
-                          <div style={{ fontSize: '12px', color: colors.dim, marginTop: '2px' }}>
-                            {venue.address}
-                          </div>
-                          <div style={{ fontSize: '11px', color: colors.dim, marginTop: '2px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                            {venue.phone && <span>{venue.phone}</span>}
                             {venue.website && (
-                              <a href={venue.website} target="_blank" rel="noopener noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                style={{ color: colors.accent, textDecoration: 'none' }}>
-                                website
-                              </a>
+                              <div>
+                                <strong style={{ color: colors.heading }}>Website:</strong>{' '}
+                                <a href={venue.website} target="_blank" rel="noopener noreferrer"
+                                  style={{ color: colors.accent, textDecoration: 'none', wordBreak: 'break-all' }}>
+                                  {venue.website}
+                                </a>
+                              </div>
                             )}
                             {venue.google_maps_url && (
-                              <a href={venue.google_maps_url} target="_blank" rel="noopener noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                style={{ color: colors.accent, textDecoration: 'none' }}>
-                                map
-                              </a>
+                              <div>
+                                <a href={venue.google_maps_url} target="_blank" rel="noopener noreferrer"
+                                  style={{ color: colors.accent, textDecoration: 'none' }}>
+                                  View on Google Maps
+                                </a>
+                              </div>
                             )}
-                            {venue.opening_hours && (
-                              <span style={{ color: venue.opening_hours.open_now ? colors.success : colors.muted }}>
-                                {venue.opening_hours.open_now ? 'Open now' : 'Closed'}
-                              </span>
+                            {venue.location && (
+                              <div><strong style={{ color: colors.heading }}>Coordinates:</strong> {venue.location.latitude.toFixed(5)}, {venue.location.longitude.toFixed(5)}</div>
+                            )}
+                            {venue.opening_hours ? (
+                              <div>
+                                <strong style={{ color: colors.heading }}>Hours:</strong>
+                                <div style={{ marginTop: '3px', lineHeight: 1.6 }}>
+                                  {venue.opening_hours.weekday_text.map((line, i) => (
+                                    <div key={i}>{line}</div>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : (
+                              <div style={{ color: colors.dim }}>No operating hours listed on Google</div>
+                            )}
+                            {venue.types.length > 0 && (
+                              <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '2px' }}>
+                                {venue.types.map(t => (
+                                  <span key={t} style={{
+                                    fontSize: '10px', padding: '1px 6px', borderRadius: '8px',
+                                    background: colors.bg, color: colors.dim,
+                                  }}>
+                                    {t.replace(/_/g, ' ')}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            {!venue.phone && !venue.website && !venue.opening_hours && (
+                              <div style={{ color: colors.dim }}>No additional data available from Google for this venue</div>
                             )}
                           </div>
-                          {venue.opening_hours && (
-                            <div style={{ fontSize: '10px', color: colors.dim, marginTop: '3px', lineHeight: 1.4 }}>
-                              {venue.opening_hours.weekday_text.join(' · ')}
-                            </div>
-                          )}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleImportVenue(venue)}
-                          disabled={importing === venue.place_id}
-                          style={{
-                            padding: '5px 12px', fontSize: '12px', borderRadius: '6px',
-                            border: `1px solid ${colors.accent}`, background: colors.card,
-                            color: colors.accent, cursor: 'pointer', fontFamily: 'inherit',
-                            fontWeight: 500, opacity: importing === venue.place_id ? 0.5 : 1,
-                            flexShrink: 0,
-                          }}
-                        >
-                          {importing === venue.place_id ? '...' : 'Import'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDismissed(prev => new Set([...prev, venue.place_id]))}
-                          style={{
-                            padding: '5px 8px', fontSize: '12px', borderRadius: '6px',
-                            border: `1px solid ${colors.border}`, background: colors.card,
-                            color: colors.dim, cursor: 'pointer', fontFamily: 'inherit',
-                            flexShrink: 0,
-                          }}
-                        >
-                          ✕
-                        </button>
+                        )}
                       </div>
                     );
                   })}
