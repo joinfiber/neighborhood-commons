@@ -369,7 +369,7 @@ export function AdminEventReviewScreen({ onNavigate: _onNavigate }: Props) {
     }
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeTab, expandedId, candidates, sourceFilter, actionLoading, editDate]);
+  }, [activeTab, expandedId, candidates, sourceFilter, actionLoading, editDate, editTitle, editStartTime, editEndTime, editVenue, editAddress, editPlaceId, editLat, editLng, editCategory, editTags, editDescription, editPrice]);
 
   // Compute unique source names
   const sourceNames = Array.from(new Set(

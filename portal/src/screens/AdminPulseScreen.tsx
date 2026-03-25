@@ -127,8 +127,8 @@ export function AdminPulseScreen() {
         <DistributionBar data={audit.distributions.status} total={total} />
       </div>
 
-      {/* Community events sample */}
-      {audit.samples.community_events.length > 0 && (
+      {/* Community events sample — only shown if backend returns it */}
+      {audit.samples.community_events && audit.samples.community_events.length > 0 && (
         <div style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radii.md, padding: '16px', marginBottom: spacing.lg }}>
           <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: colors.dim, marginBottom: '10px' }}>
             "Community" category (may need reclassification) — {audit.samples.community_events.length} shown

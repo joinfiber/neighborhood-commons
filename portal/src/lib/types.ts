@@ -134,7 +134,7 @@ export interface DataAudit {
     status: Record<string, number>;
   };
   samples: {
-    community_events: Array<{ id: string; title: string; source_method: string }>;
+    community_events?: Array<{ id: string; title: string; source_method: string }>;
     missing_venue: Array<{ id: string; title: string; source_method: string; created_at: string }>;
     orphaned: Array<{ id: string; title: string; source_method: string; source: string; created_at: string }>;
   };
