@@ -64,7 +64,7 @@ export async function requireApiKey(req: Request, res: Response, next: NextFunct
     const keyHash = hashApiKey(apiKey);
     const { data: keyInfo } = await supabaseAdmin
       .from('api_keys')
-      .select('id')
+      .select('id, contributor_tier')
       .eq('key_hash', keyHash)
       .eq('status', 'active')
       .maybeSingle();
@@ -74,7 +74,44 @@ export async function requireApiKey(req: Request, res: Response, next: NextFunct
       return;
     }
 
-    req.apiKeyInfo = { id: keyInfo.id };
+    req.apiKeyInfo = { id: keyInfo.id, tier: keyInfo.contributor_tier };
+    next();
+  } catch {
+    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'API key validation failed' } });
+  }
+}
+
+/**
+ * Require a service-tier API key. Full CRUD access to accounts and events.
+ * Service keys are issued manually by the platform operator.
+ */
+export async function requireServiceApiKey(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const apiKey = req.headers['x-api-key'];
+  if (!apiKey || typeof apiKey !== 'string') {
+    res.status(401).json({ error: { code: 'API_KEY_REQUIRED', message: 'X-API-Key header is required' } });
+    return;
+  }
+
+  try {
+    const keyHash = hashApiKey(apiKey);
+    const { data: keyInfo } = await supabaseAdmin
+      .from('api_keys')
+      .select('id, contributor_tier')
+      .eq('key_hash', keyHash)
+      .eq('status', 'active')
+      .maybeSingle();
+
+    if (!keyInfo) {
+      res.status(401).json({ error: { code: 'INVALID_API_KEY', message: 'Invalid or inactive API key' } });
+      return;
+    }
+
+    if (keyInfo.contributor_tier !== 'service') {
+      res.status(403).json({ error: { code: 'INSUFFICIENT_TIER', message: 'This endpoint requires a service-tier API key' } });
+      return;
+    }
+
+    req.apiKeyInfo = { id: keyInfo.id, tier: keyInfo.contributor_tier };
     next();
   } catch {
     res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'API key validation failed' } });

@@ -26,6 +26,7 @@ declare global {
       supabaseClient?: SupabaseClient<any, 'public', any>;
       apiKeyInfo?: {
         id: string;
+        tier?: string;
       };
     }
   }

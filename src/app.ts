@@ -29,6 +29,7 @@ import cronRoutes from './routes/cron.js';
 import placesRoutes from './routes/places.js';
 import developerRoutes from './routes/developers.js';
 import contributeRoutes from './routes/contribute.js';
+import serviceRoutes from './routes/service.js';
 import pageRoutes from './routes/pages.js';
 import ingestRoutes from './routes/ingest.js';
 
@@ -161,6 +162,7 @@ export function createApp(): Express {
 
   // ─── Contribute API (external app writes) ─────────────────────
   app.use('/api/v1/contribute', contributeRoutes);
+  app.use('/api/v1/service', serviceRoutes);
 
   // ─── Places (venue search for portal) ──────────────────────────
   app.use('/api/places', placesRoutes);
