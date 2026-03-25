@@ -1,12 +1,12 @@
 import { useState, useMemo } from 'react';
 import { useBreakpoint } from '../hooks/useBreakpoint';
 import { styles, colors, categoryColors, spacing, radii } from '../lib/styles';
-import type { EventFormData, PlaceResult } from '../lib/types';
+import type { EventFormData } from '../lib/types';
 import { PORTAL_CATEGORIES, PORTAL_CATEGORY_KEYS, type PortalCategory } from '../lib/categories';
 import { CalendarPicker } from './CalendarPicker';
 import { TimePicker } from './TimePicker';
 import { RecurrencePicker } from './RecurrencePicker';
-import { PlaceAutocomplete } from './PlaceAutocomplete';
+// PlaceAutocomplete removed — venue search is handled by the Fiber admin tool
 import { ImageUpload } from './ImageUpload';
 import { ImageCropPreview } from './ImageCropPreview';
 import { TagPicker } from './TagPicker';
@@ -146,7 +146,7 @@ function EventPreview({ title, eventDate, startTime, endTime, venueName, address
 
 export function EventForm({
   mode, initialValues = {}, hasExistingImage: initialHasExistingImage = false, existingImageUrl,
-  onSubmit, searchCoords, submitting = false, submitLabel, accountWheelchairAccessible,
+  onSubmit, searchCoords: _searchCoords, submitting = false, submitLabel, accountWheelchairAccessible,
 }: EventFormProps) {
 
   // ── State ──────────────────────────────────────────────────────────────
@@ -154,9 +154,9 @@ export function EventForm({
   const [title, setTitle] = useState(initialValues.title || '');
   const [venueName, setVenueName] = useState(initialValues.venue_name || '');
   const [address, setAddress] = useState(initialValues.address || '');
-  const [placeId, setPlaceId] = useState(initialValues.place_id || '');
-  const [latitude, setLatitude] = useState<number | undefined>(initialValues.latitude);
-  const [longitude, setLongitude] = useState<number | undefined>(initialValues.longitude);
+  const [placeId] = useState(initialValues.place_id || '');
+  const [latitude] = useState<number | undefined>(initialValues.latitude);
+  const [longitude] = useState<number | undefined>(initialValues.longitude);
   const [eventDate, setEventDate] = useState(initialValues.event_date || '');
   const [startTime, setStartTime] = useState(initialValues.start_time || '19:00');
   const [endTime, setEndTime] = useState(initialValues.end_time || '');
@@ -203,13 +203,7 @@ export function EventForm({
     });
   }
 
-  function handlePlaceSelect(place: PlaceResult) {
-    setVenueName(place.name);
-    setAddress(place.address || '');
-    setPlaceId(place.place_id);
-    setLatitude(place.location?.latitude);
-    setLongitude(place.location?.longitude);
-  }
+  void _searchCoords; // retained in interface for backward compat
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -409,8 +403,8 @@ export function EventForm({
           <div>
             <label style={styles.formLabel}>Venue</label>
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '10px' }}>
-              <PlaceAutocomplete value={venueName} onChange={setVenueName} onSelect={handlePlaceSelect}
-                placeholder="Venue name" searchCoords={searchCoords} />
+              <input style={styles.input} value={venueName} onChange={(e) => setVenueName(e.target.value)}
+                placeholder="Venue name" />
               <input style={styles.input} value={address} onChange={(e) => setAddress(e.target.value)}
                 placeholder={mode === 'create' ? 'Auto-fills from venue' : 'Address'} />
             </div>

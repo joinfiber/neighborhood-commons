@@ -21,25 +21,10 @@ const BUSINESS_NAV: NavItem[] = [
     icon: <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="14" height="13" rx="2" /><path d="M6 2v3M14 2v3M3 9h14" /></svg> },
   { id: 'new', label: 'New', hash: '#/events/new', screens: [],
     icon: <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M10 4v12M4 10h12" /></svg> },
-  { id: 'creative', label: 'Creative', hash: '#/creative', screens: ['creative', 'share-event'],
-    icon: <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 15V17H15V15" /><path d="M10 13V4M7 6.5L10 3.5L13 6.5" /></svg> },
   { id: 'developers', label: 'API', hash: '#/developers', screens: ['developers'],
     icon: <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><path d="M6 5L2 10l4 5M14 5l4 5-4 5" /></svg> },
   { id: 'profile', label: 'Profile', hash: '#/profile', screens: ['profile'],
     icon: <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="10" cy="7" r="3" /><path d="M4 18c0-3.31 2.69-6 6-6s6 2.69 6 6" /></svg> },
-];
-
-const ADMIN_NAV: NavItem[] = [
-  { id: 'review', label: 'Review', hash: '#/admin', screens: ['admin-home', 'admin-newsletter-review'],
-    icon: <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><path d="M3 10l3-6h8l3 6" /><path d="M3 10v6a1 1 0 001 1h12a1 1 0 001-1v-6H13l-1 2H8l-1-2H3z" /></svg> },
-  { id: 'events', label: 'Events', hash: '#/admin/events', screens: ['admin-events', 'admin-edit-event', 'admin-create-event'],
-    icon: <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="14" height="13" rx="2" /><path d="M6 2v3M14 2v3M3 9h14" /></svg> },
-  { id: 'sources', label: 'Sources', hash: '#/admin/sources', screens: ['admin-sources', 'admin-newsletters', 'admin-newsletter-emails', 'admin-newsletter-email', 'admin-feeds'],
-    icon: <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><path d="M3 15a2 2 0 104 0 2 2 0 00-4 0" /><path d="M3 9c5 0 9 4 9 9M3 3c8.3 0 15 6.7 15 15" /></svg> },
-  { id: 'venues', label: 'Venues', hash: '#/admin/venues', screens: ['admin-venues'],
-    icon: <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="7" r="2.5" /><path d="M3 17c0-2.76 2.24-5 5-5s5 2.24 5 5" /><circle cx="14" cy="6.5" r="1.8" /><path d="M17 16.5c0-2-1.6-3.6-3.6-3.6-.66 0-1.28.18-1.8.49" /></svg> },
-  { id: 'pulse', label: 'Pulse', hash: '#/admin/pulse', screens: ['admin-pulse', 'admin-audit'],
-    icon: <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><path d="M7 5H17M7 10H17M7 15H17M3 5h.5M3 10h.5M3 15h.5" /></svg> },
 ];
 
 // ---------------------------------------------------------------------------
@@ -50,7 +35,6 @@ interface WorkspaceShellProps {
   children: React.ReactNode;
   activeScreen: string;
   contentWidth?: 'normal' | 'wide' | 'full';
-  role: 'business' | 'admin';
   account?: PortalAccount | null;
   onNavigate: (hash: string) => void;
   onSignOut: () => void;
@@ -65,7 +49,6 @@ export function WorkspaceShell({
   children,
   activeScreen,
   contentWidth = 'normal',
-  role,
   account,
   onNavigate,
   onSignOut,
@@ -73,7 +56,7 @@ export function WorkspaceShell({
 }: WorkspaceShellProps) {
   void _onSignOutEverywhere; // retained for future use
   const { isDesktop } = useBreakpoint();
-  const navItems = role === 'admin' ? ADMIN_NAV : BUSINESS_NAV;
+  const navItems = BUSINESS_NAV;
 
   function isActive(item: NavItem) {
     return item.screens.includes(activeScreen);
@@ -94,7 +77,7 @@ export function WorkspaceShell({
               fontSize: '11px', fontWeight: 500, textTransform: 'uppercase',
               letterSpacing: '0.1em', color: colors.dim, marginBottom: '6px',
             }}>
-              {role === 'admin' ? 'Admin' : 'neighborhood commons'}
+              neighborhood commons
             </div>
             {account?.business_name && (
               <div style={{ fontSize: '14px', fontWeight: 500, color: colors.heading, lineHeight: 1.3 }}>
@@ -108,12 +91,12 @@ export function WorkspaceShell({
             <button
               type="button"
               className="btn-primary"
-              onClick={() => onNavigate(role === 'admin' ? '#/admin/events/new' : '#/events/new')}
+              onClick={() => onNavigate('#/events/new')}
               style={{
                 ...styles.buttonPrimary, padding: '9px 16px', fontSize: '13px',
               }}
             >
-              + {role === 'admin' ? 'Post Event' : 'New Event'}
+              + New Event
             </button>
           </div>
 

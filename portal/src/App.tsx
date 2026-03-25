@@ -1,39 +1,23 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useHashRoute } from './hooks/useHashRoute';
-import { claimAccount, fetchAccount, fetchWhoami, updateProfile, setImpersonation, type PortalAccount, type UserRole } from './lib/api';
+import { claimAccount, fetchAccount, fetchWhoami, updateProfile, type PortalAccount, type UserRole } from './lib/api';
 import { colors, styles, spacing, radii } from './lib/styles';
 import { LoginScreen } from './screens/LoginScreen';
 import { DashboardScreen } from './screens/DashboardScreen';
 import { CreateEventScreen } from './screens/CreateEventScreen';
 import { EditEventScreen } from './screens/EditEventScreen';
 import { ImportEventsScreen } from './screens/ImportEventsScreen';
-import { AdminDashboardScreen } from './screens/AdminDashboardScreen';
-import { AdminAccountDetailScreen } from './screens/AdminAccountDetailScreen';
-import { AdminCreateEventScreen } from './screens/AdminCreateEventScreen';
-import { AdminEditEventScreen } from './screens/AdminEditEventScreen';
-import { AdminAllEventsScreen } from './screens/AdminAllEventsScreen';
-import { AdminNewsletterSourcesScreen } from './screens/AdminNewsletterSourcesScreen';
-import { AdminNewsletterEmailsScreen } from './screens/AdminNewsletterEmailsScreen';
-import { AdminEventReviewScreen } from './screens/AdminEventReviewScreen';
-import { AdminFeedSourcesScreen } from './screens/AdminFeedSourcesScreen';
-import { AdminSourcesScreen } from './screens/AdminSourcesScreen';
-import { AdminPulseScreen } from './screens/AdminPulseScreen';
-import { AdminVenuesScreen } from './screens/AdminVenuesScreen';
 import { DevelopersScreen } from './screens/DevelopersScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { TermsScreen } from './screens/TermsScreen';
-import { ShareStudioScreen } from './screens/ShareStudioScreen';
-import { CreativeScreen } from './screens/CreativeScreen';
 import { Toast } from './components/Toast';
 import { WorkspaceShell } from './components/WorkspaceShell';
-import { PlaceAutocomplete } from './components/PlaceAutocomplete';
-import type { PlaceResult } from './lib/api';
 
 function contentWidthForRoute(screen: string): 'normal' | 'wide' | 'full' {
-  const full = ['share-event', 'create-event', 'edit-event', 'admin-create-event', 'admin-edit-event', 'profile'];
+  const full = ['create-event', 'edit-event', 'profile'];
   if (full.includes(screen)) return 'full';
-  const wide = ['dashboard', 'creative', 'developers', 'admin-home', 'admin-events', 'admin-account', 'admin-accounts', 'admin-sources', 'admin-audit', 'admin-pulse', 'admin-venues', 'admin-newsletters', 'admin-newsletter-emails', 'admin-newsletter-email', 'admin-newsletter-review', 'admin-feeds'];
+  const wide = ['dashboard', 'developers'];
   return wide.includes(screen) ? 'wide' : 'normal';
 }
 
@@ -54,27 +38,16 @@ export default function App() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
 
-  // Admin impersonation state
-  const [actAsAccount, setActAsAccount] = useState<PortalAccount | null>(null);
-
   // Detect role after authentication via /whoami
   const detectRole = useCallback(async () => {
     setRoleLoading(true);
     const res = await fetchWhoami();
     if (res.data) {
-      // Admin impersonation restored from sessionStorage: /whoami returns
-      // role='business' + impersonating=true. Set the real role to admin
-      // and populate the impersonation state instead of the business state.
-      if (res.data.impersonating && res.data.account) {
-        setRole('admin');
-        setActAsAccount(res.data.account);
-      } else {
-        setRole(res.data.role);
-        if (res.data.role === 'business' && res.data.account) {
-          setAccount(res.data.account);
-          if (res.data.account.status === 'pending' && !res.data.account.default_address) {
-            setShowOnboarding(true);
-          }
+      setRole(res.data.role);
+      if (res.data.role === 'business' && res.data.account) {
+        setAccount(res.data.account);
+        if (res.data.account.status === 'pending' && !res.data.account.default_address) {
+          setShowOnboarding(true);
         }
       }
     } else {
@@ -126,14 +99,8 @@ export default function App() {
       setAccount(null);
       setClaimError(null);
       setShowOnboarding(false);
-      setActAsAccount(null);
-      setImpersonation(null);
     }
   }, [isAuthenticated, role, roleLoading, account, claiming, claimError, detectRole, loadAccount]);
-
-  // Note: impersonation restore on page refresh is handled by detectRole() —
-  // /whoami returns impersonating:true when X-Act-As-Account header is present,
-  // so detectRole sets role='admin' + actAsAccount in one pass.
 
   // =========================================================================
   // LOADING / INITIALIZING
@@ -182,269 +149,36 @@ export default function App() {
   }
 
   // =========================================================================
-  // ADMIN ROUTES
+  // ADMIN — redirect to external admin app
   // =========================================================================
 
-  function startActAs(acct: PortalAccount) {
-    setImpersonation(acct.id);
-    setActAsAccount(acct);
-    navigate('#/');
-  }
-
-  function stopActAs() {
-    setImpersonation(null);
-    setActAsAccount(null);
-    navigate('#/admin');
-  }
-
   if (role === 'admin') {
-    // Admin impersonation mode: show regular business screens as the target account
-    if (actAsAccount) {
-      const businessContent = (() => {
-        if (route.screen === 'profile') {
-          return (
-            <ProfileScreen
-              account={actAsAccount}
-              onAccountUpdated={(updated) => setActAsAccount(updated)}
-            />
-          );
-        }
-
-        if (route.screen === 'creative') {
-          return (
-            <CreativeScreen
-              onShareEvent={(event) => navigate(`#/events/${event.id}/share`)}
-            />
-          );
-        }
-
-        if (route.screen === 'share-event' && route.params.id) {
-          return (
-            <ShareStudioScreen
-              eventId={route.params.id}
-              onDone={() => navigate('#/creative')}
-            />
-          );
-        }
-
-        if (route.screen === 'developers') {
-          return <DevelopersScreen />;
-        }
-
-        if (route.screen === 'import-events') {
-          return (
-            <ImportEventsScreen
-              account={actAsAccount}
-              onDone={(count) => {
-                navigate('#/');
-                setToast({ message: `Imported ${count} event${count !== 1 ? 's' : ''}`, type: 'success' });
-              }}
-            />
-          );
-        }
-
-        if (route.screen === 'create-event') {
-          return (
-            <CreateEventScreen
-              account={actAsAccount}
-              onBack={() => navigate('#/')}
-              onCreated={(eventId) => {
-                navigate(`#/events/${eventId}/share`);
-              }}
-            />
-          );
-        }
-
-        if (route.screen === 'edit-event' && route.params.id) {
-          return (
-            <EditEventScreen
-              id={route.params.id}
-              accountWheelchairAccessible={actAsAccount?.wheelchair_accessible ?? null}
-              onBack={back}
-              onUpdated={() => {
-                navigate('#/');
-                setToast({ message: 'Event updated', type: 'success' });
-              }}
-              onDeleted={() => {
-                navigate('#/');
-                setToast({ message: 'Event deleted', type: 'success' });
-              }}
-              onShare={() => navigate(`#/events/${route.params.id}/share`)}
-            />
-          );
-        }
-
-        return (
-          <DashboardScreen
-            account={actAsAccount}
-            onEditEvent={(event) => navigate(`#/events/${event.id}/edit`)}
-            onShareEvent={(event) => navigate(`#/events/${event.id}/share`)}
-          />
-        );
-      })();
-
-      return (
-        <>
-          <div style={{
-            background: '#2563eb',
-            color: '#fff',
-            padding: '6px 16px',
-            fontSize: '13px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            position: 'sticky',
-            top: 0,
-            zIndex: 9999,
-          }}>
-            <span>Acting as <strong>{actAsAccount.business_name}</strong></span>
-            <button
-              onClick={stopActAs}
-              style={{
-                background: 'rgba(255,255,255,0.2)',
-                border: 'none',
-                color: '#fff',
-                padding: '4px 12px',
-                borderRadius: '4px',
-                fontSize: '12px',
-                cursor: 'pointer',
-              }}
-            >
-              Exit
-            </button>
-          </div>
-          {toast && <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />}
-          <WorkspaceShell
-            activeScreen={route.screen}
-            contentWidth={contentWidthForRoute(route.screen)}
-            role="business"
-            account={actAsAccount}
-            onNavigate={navigate}
-            onSignOut={() => signOut()}
-            onSignOutEverywhere={() => signOut('global')}
-          >
-            {businessContent}
-          </WorkspaceShell>
-        </>
-      );
-    }
-
-    const adminContent = (() => {
-      if (route.screen === 'admin-account' && route.params.id) {
-        return (
-          <AdminAccountDetailScreen
-            accountId={route.params.id}
-            onBack={() => navigate('#/admin')}
-            onCreateEvent={(acct) => navigate(`#/admin/events/new?account=${acct.id}`)}
-            onEditEvent={(event, acct) => navigate(`#/admin/events/${event.id}/edit?account=${acct.id}`)}
-            onActAs={startActAs}
-          />
-        );
-      }
-
-      if (route.screen === 'admin-create-event') {
-        return (
-          <AdminCreateEventScreen
-            preSelectedAccountId={route.params.account}
-            onBack={back}
-            onCreated={(title, venue, date) => {
-              back();
-              setToast({ message: `${title} at ${venue} on ${date}`, type: 'success' });
-            }}
-          />
-        );
-      }
-
-      if (route.screen === 'admin-events') {
-        return (
-          <AdminAllEventsScreen
-            onNavigate={navigate}
-          />
-        );
-      }
-
-      if (route.screen === 'admin-edit-event' && route.params.id) {
-        return (
-          <AdminEditEventScreen
-            eventId={route.params.id}
-            accountId={route.params.account}
-            onBack={back}
-            onUpdated={() => {
-              back();
-              setToast({ message: 'Event updated', type: 'success' });
-            }}
-            onDeleted={() => {
-              navigate('#/admin');
-              setToast({ message: 'Event deleted', type: 'success' });
-            }}
-          />
-        );
-      }
-
-      if (route.screen === 'admin-accounts') {
-        return (
-          <AdminDashboardScreen
-            email={user?.email || ''}
-            onViewAccount={(acct) => navigate(`#/admin/accounts/${acct.id}`)}
-            onViewAllEvents={() => navigate('#/admin/events')}
-            onCreateEvent={() => navigate('#/admin/events/new')}
-          />
-        );
-      }
-
-      if (route.screen === 'admin-sources') {
-        return <AdminSourcesScreen onNavigate={navigate} />;
-      }
-
-      if (route.screen === 'admin-pulse') {
-        return <AdminPulseScreen />;
-      }
-
-      if (route.screen === 'admin-audit') {
-        return <AdminPulseScreen />;
-      }
-
-      if (route.screen === 'admin-venues') {
-        return <AdminVenuesScreen onNavigate={navigate} />;
-      }
-
-      // Legacy routes — keep working for bookmarks/links
-      if (route.screen === 'admin-newsletters') {
-        return <AdminNewsletterSourcesScreen onNavigate={navigate} />;
-      }
-
-      if (route.screen === 'admin-newsletter-emails' || route.screen === 'admin-newsletter-email') {
-        return (
-          <AdminNewsletterEmailsScreen
-            emailId={route.params.id}
-            onNavigate={navigate}
-            onBack={back}
-          />
-        );
-      }
-
-      if (route.screen === 'admin-feeds') {
-        return <AdminFeedSourcesScreen />;
-      }
-
-      // Default: review screen (admin home)
-      return <AdminEventReviewScreen onNavigate={navigate} />;
-    })();
-
     return (
-      <>
-        {toast && <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />}
-        <WorkspaceShell
-          activeScreen={route.screen}
-          contentWidth={contentWidthForRoute(route.screen)}
-          role="admin"
-          onNavigate={navigate}
-          onSignOut={() => signOut()}
-          onSignOutEverywhere={() => signOut('global')}
-        >
-          {adminContent}
-        </WorkspaceShell>
-      </>
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+        <div style={{
+          background: colors.card,
+          border: `1px solid ${colors.border}`,
+          borderRadius: '14px',
+          padding: '32px',
+          maxWidth: '400px',
+          width: '100%',
+          textAlign: 'center',
+        }}>
+          <div style={{ fontSize: '15px', color: colors.cream, marginBottom: '8px' }}>
+            Admin tools have moved
+          </div>
+          <div style={{ fontSize: '13px', color: colors.muted, marginBottom: '20px', lineHeight: 1.5 }}>
+            Use the Fiber Admin app to manage the commons.
+          </div>
+          <button
+            className="btn-secondary"
+            style={{ ...styles.buttonSecondary, width: 'auto', padding: '10px 24px' }}
+            onClick={() => signOut()}
+          >
+            Sign Out
+          </button>
+        </div>
+      </div>
     );
   }
 
@@ -517,23 +251,6 @@ export default function App() {
       );
     }
 
-    if (route.screen === 'creative') {
-      return (
-        <CreativeScreen
-          onShareEvent={(event) => navigate(`#/events/${event.id}/share`)}
-        />
-      );
-    }
-
-    if (route.screen === 'share-event' && route.params.id) {
-      return (
-        <ShareStudioScreen
-          eventId={route.params.id}
-          onDone={() => navigate('#/creative')}
-        />
-      );
-    }
-
     if (route.screen === 'developers') {
       return <DevelopersScreen />;
     }
@@ -597,7 +314,6 @@ export default function App() {
       <WorkspaceShell
         activeScreen={route.screen}
         contentWidth={contentWidthForRoute(route.screen)}
-        role="business"
         account={account}
         onNavigate={navigate}
         onSignOut={() => signOut()}
@@ -619,7 +335,7 @@ function OnboardingScreen({ account, onComplete, onSkip }: {
   onSkip: () => void;
 }) {
   const [venueName, setVenueName] = useState(account.default_venue_name || account.business_name);
-  const [selectedPlace, setSelectedPlace] = useState<PlaceResult | null>(null);
+  const [address, setAddress] = useState(account.default_address || '');
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -630,12 +346,7 @@ function OnboardingScreen({ account, onComplete, onSkip }: {
 
     const params: Record<string, unknown> = {};
     if (venueName) params.default_venue_name = venueName;
-    if (selectedPlace) {
-      params.default_place_id = selectedPlace.place_id;
-      params.default_address = selectedPlace.address;
-      params.default_latitude = selectedPlace.location?.latitude ?? null;
-      params.default_longitude = selectedPlace.location?.longitude ?? null;
-    }
+    if (address) params.default_address = address;
 
     if (Object.keys(params).length === 0) { onSkip(); return; }
 
@@ -663,18 +374,13 @@ function OnboardingScreen({ account, onComplete, onSkip }: {
           )}
 
           <form onSubmit={handleSave}>
+            <div style={{ marginBottom: spacing.md }}>
+              <input type="text" value={venueName || ''} onChange={(e) => setVenueName(e.target.value)}
+                placeholder="Your venue name" style={styles.input} />
+            </div>
             <div style={{ marginBottom: spacing.lg }}>
-              <PlaceAutocomplete
-                value={venueName || ''}
-                onChange={setVenueName}
-                onSelect={(place) => { setSelectedPlace(place); setVenueName(place.name); }}
-                placeholder="Search for your business..."
-              />
-              {selectedPlace?.address && (
-                <div style={{ fontSize: '12px', color: colors.muted, marginTop: '6px' }}>
-                  {selectedPlace.address}
-                </div>
-              )}
+              <input type="text" value={address} onChange={(e) => setAddress(e.target.value)}
+                placeholder="Address" style={styles.input} />
             </div>
 
             <button type="submit" className="btn-primary" style={styles.buttonPrimary} disabled={saving}>

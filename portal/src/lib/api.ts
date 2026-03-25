@@ -1,41 +1,17 @@
 import { getAccessToken } from './supabase';
 import type {
   PortalAccount, PortalEvent, CreateEventParams, PlaceResult,
-  CheckEmailResult, WhoamiResponse, PortalStats, DataAudit, AdminPortalEvent,
-  SeedAccountParams, ActivityLogEntry,
-  NewsletterSource, NewsletterEmail, EventCandidate, FeedSource,
+  CheckEmailResult, WhoamiResponse,
 } from './types';
 
 // Re-export all types for backward compatibility
 export type {
   PortalAccount, PortalEvent, CreateEventParams, PlaceResult,
-  UserRole, CheckEmailResult, WhoamiResponse, PortalStats, DataAudit,
-  AdminPortalEvent, SeedAccountParams, ActivityLogEntry, EventFormData,
-  NewsletterSource, NewsletterEmail, EventCandidate, FeedSource,
+  UserRole, CheckEmailResult, WhoamiResponse, EventFormData,
 } from './types';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 const TIMEOUT_MS = 30000;
-
-// Admin impersonation: module-level state injected into every API call
-let _actAsAccountId: string | null = null;
-
-export function setImpersonation(accountId: string | null) {
-  _actAsAccountId = accountId;
-  if (accountId) {
-    sessionStorage.setItem('actAsAccountId', accountId);
-  } else {
-    sessionStorage.removeItem('actAsAccountId');
-  }
-}
-
-export function getImpersonation(): string | null {
-  if (_actAsAccountId) return _actAsAccountId;
-  // Restore from sessionStorage on page refresh
-  const stored = sessionStorage.getItem('actAsAccountId');
-  if (stored) _actAsAccountId = stored;
-  return _actAsAccountId;
-}
 
 interface ApiError { code: string; message: string }
 interface ApiResponse<T> { data?: T; error?: ApiError }
@@ -52,11 +28,6 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
     Authorization: `Bearer ${token}`,
     ...(options.headers as Record<string, string>),
   };
-
-  const actAs = getImpersonation();
-  if (actAs) {
-    headers['X-Act-As-Account'] = actAs;
-  }
 
   try {
     const res = await fetch(`${API_URL}${endpoint}`, {
@@ -224,145 +195,12 @@ export async function uploadEventImage(id: string, base64: string) {
   });
 }
 
-export async function adminUploadEventImage(id: string, base64: string) {
-  return apiRequest<{ image_url: string }>(`/api/portal/admin/events/${id}/image`, {
-    method: 'POST',
-    body: JSON.stringify({ image: base64 }),
-  });
-}
-
 // =============================================================================
 // WHOAMI (role detection after auth)
 // =============================================================================
 
 export async function fetchWhoami() {
   return apiRequest<WhoamiResponse>('/api/portal/whoami');
-}
-
-// =============================================================================
-// ADMIN API
-// =============================================================================
-
-export async function adminFetchStats() {
-  return apiRequest<{ stats: PortalStats }>('/api/portal/admin/stats');
-}
-
-export async function adminFetchAudit() {
-  return apiRequest<{ audit: DataAudit }>('/api/portal/admin/events/audit');
-}
-
-export async function adminFetchAccounts() {
-  return apiRequest<{ accounts: PortalAccount[] }>('/api/portal/admin/accounts');
-}
-
-export interface VenueScanResult {
-  place_id: string;
-  name: string;
-  address: string | null;
-  location: { latitude: number; longitude: number } | null;
-  types: string[];
-  primary_type: string | null;
-  website: string | null;
-  phone: string | null;
-  google_maps_url: string | null;
-  opening_hours: {
-    weekday_text: string[];
-    open_now?: boolean;
-  } | null;
-}
-
-export async function scanVenuesByZip(query: string, options?: { types?: string[]; radius_km?: number }) {
-  return apiRequest<{ venues: VenueScanResult[]; query: string; types_searched: number; radius_km: number }>('/api/places/scan', {
-    method: 'POST',
-    body: JSON.stringify({ query, types: options?.types, radius_km: options?.radius_km }),
-  });
-}
-
-export async function adminFetchAccount(id: string) {
-  return apiRequest<{ account: PortalAccount; events: PortalEvent[] }>(`/api/portal/admin/accounts/${id}`);
-}
-
-export async function adminSeedAccount(params: SeedAccountParams) {
-  return apiRequest<{ account: PortalAccount }>('/api/portal/admin/accounts', {
-    method: 'POST',
-    body: JSON.stringify(params),
-  });
-}
-
-export async function adminUpdateAccount(id: string, params: Partial<SeedAccountParams & { status: string }>) {
-  return apiRequest<{ account: PortalAccount }>(`/api/portal/admin/accounts/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify(params),
-  });
-}
-
-export async function adminCreateEvent(accountId: string, params: CreateEventParams) {
-  return apiRequest<{ event: PortalEvent }>(`/api/portal/admin/accounts/${accountId}/events`, {
-    method: 'POST',
-    body: JSON.stringify(params),
-  });
-}
-
-export async function adminFetchEvents() {
-  return apiRequest<{ events: AdminPortalEvent[] }>('/api/portal/admin/events');
-}
-
-export async function adminFetchEventDirect(eventId: string) {
-  return apiRequest<{ event: PortalEvent; account: PortalAccount | null }>(`/api/portal/admin/events/${eventId}`);
-}
-
-export async function adminUpdateEvent(id: string, params: Partial<CreateEventParams>) {
-  return apiRequest<{ event: PortalEvent }>(`/api/portal/admin/events/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify(params),
-  });
-}
-
-export async function adminBatchUpdateEvents(ids: string[], updates: Partial<CreateEventParams>) {
-  return apiRequest<{ updated: number; ids: string[] }>('/api/portal/admin/events/batch', {
-    method: 'PATCH',
-    body: JSON.stringify({ ids, updates }),
-  });
-}
-
-export async function adminBatchDeleteEvents(ids: string[]) {
-  const results: string[] = [];
-  for (const id of ids) {
-    const res = await apiRequest<{ success: boolean }>(`/api/portal/admin/events/${id}`, { method: 'DELETE' });
-    if (res.data?.success) results.push(id);
-  }
-  return { deleted: results.length, ids: results };
-}
-
-export async function adminUpdateEventSeries(seriesId: string, params: Partial<CreateEventParams> & { force?: boolean }) {
-  return apiRequest<{ updated: number; total: number; added: number; removed: number }>(`/api/portal/admin/events/series/${seriesId}`, {
-    method: 'PATCH',
-    body: JSON.stringify(params),
-  });
-}
-
-export async function adminDeleteEvent(id: string) {
-  return apiRequest<{ success: boolean }>(`/api/portal/admin/events/${id}`, { method: 'DELETE' });
-}
-
-export async function adminApproveAccount(id: string) {
-  return apiRequest<{ account: PortalAccount; events_published: number }>(`/api/portal/admin/accounts/${id}/approve`, { method: 'POST' });
-}
-
-export async function adminRejectAccount(id: string) {
-  return apiRequest<{ success: boolean; events_deleted: number }>(`/api/portal/admin/accounts/${id}/reject`, { method: 'POST' });
-}
-
-export async function adminSuspendAccount(id: string) {
-  return apiRequest<{ success: boolean; events_suspended: number }>(`/api/portal/admin/accounts/${id}/suspend`, { method: 'POST' });
-}
-
-export async function adminReactivateAccount(id: string) {
-  return apiRequest<{ success: boolean; events_reactivated: number }>(`/api/portal/admin/accounts/${id}/reactivate`, { method: 'POST' });
-}
-
-export async function adminFetchAccountActivity(id: string) {
-  return apiRequest<{ activity: ActivityLogEntry[] }>(`/api/portal/admin/accounts/${id}/activity`);
 }
 
 // =============================================================================
@@ -416,114 +254,6 @@ export async function importConfirm(params: {
   overrides?: Record<string, { venue_name?: string; category?: string; description?: string; image_focal_y?: number }>;
 }) {
   return apiRequest<ImportConfirmResponse>('/api/portal/import/confirm', {
-    method: 'POST',
-    body: JSON.stringify(params),
-  });
-}
-
-// =============================================================================
-// NEWSLETTER ADMIN
-// =============================================================================
-
-export async function adminFetchNewsletterSources() {
-  return apiRequest<{ sources: NewsletterSource[] }>('/api/admin/newsletter-sources');
-}
-
-export async function adminCreateNewsletterSource(params: { name: string; sender_email?: string; notes?: string; auto_approve?: boolean }) {
-  return apiRequest<{ source: NewsletterSource }>('/api/admin/newsletter-sources', {
-    method: 'POST',
-    body: JSON.stringify(params),
-  });
-}
-
-export async function adminUpdateNewsletterSource(id: string, params: Partial<NewsletterSource>) {
-  return apiRequest<{ source: NewsletterSource }>(`/api/admin/newsletter-sources/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify(params),
-  });
-}
-
-export async function adminDeleteNewsletterSource(id: string) {
-  return apiRequest<{ success: boolean }>(`/api/admin/newsletter-sources/${id}`, { method: 'DELETE' });
-}
-
-// Feed Sources
-export async function adminFetchFeedSources() {
-  return apiRequest<{ sources: FeedSource[] }>('/api/admin/feed-sources');
-}
-
-export async function adminCreateFeedSource(params: { name: string; feed_url: string; feed_type?: string; poll_interval_hours?: number; default_location?: string; default_timezone?: string; notes?: string }) {
-  return apiRequest<{ source: FeedSource }>('/api/admin/feed-sources', {
-    method: 'POST',
-    body: JSON.stringify(params),
-  });
-}
-
-export async function adminUpdateFeedSource(id: string, params: Partial<FeedSource>) {
-  return apiRequest<{ source: FeedSource }>(`/api/admin/feed-sources/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify(params),
-  });
-}
-
-export async function adminDeleteFeedSource(id: string) {
-  return apiRequest<{ success: boolean }>(`/api/admin/feed-sources/${id}`, { method: 'DELETE' });
-}
-
-export async function adminPollFeedSource(id: string) {
-  return apiRequest<{ result: { sourceId: string; sourceName: string; candidateCount: number; skippedDuplicates: number; error: string | null } }>(`/api/admin/feed-sources/${id}/poll`, {
-    method: 'POST',
-  });
-}
-
-export async function adminFetchNewsletterEmails(filters?: { source_id?: string; status?: string; limit?: number }) {
-  const params = new URLSearchParams();
-  if (filters?.source_id) params.set('source_id', filters.source_id);
-  if (filters?.status) params.set('status', filters.status);
-  if (filters?.limit) params.set('limit', String(filters.limit));
-  const qs = params.toString();
-  return apiRequest<{ emails: NewsletterEmail[] }>(`/api/admin/newsletter-emails${qs ? `?${qs}` : ''}`);
-}
-
-export async function adminFetchNewsletterEmail(id: string) {
-  return apiRequest<{ email: NewsletterEmail; candidates: EventCandidate[] }>(`/api/admin/newsletter-emails/${id}`);
-}
-
-export async function adminFetchEventCandidates(filters?: { status?: string; limit?: number }) {
-  const params = new URLSearchParams();
-  if (filters?.status) params.set('status', filters.status);
-  if (filters?.limit) params.set('limit', String(filters.limit));
-  const qs = params.toString();
-  return apiRequest<{ candidates: EventCandidate[] }>(`/api/admin/event-candidates${qs ? `?${qs}` : ''}`);
-}
-
-export async function adminFetchCandidateDetail(id: string) {
-  return apiRequest<{ candidate: EventCandidate & { newsletter_emails?: { subject: string; body_plain: string | null; body_html: string | null; sender_email: string; received_at: string } } }>(`/api/admin/event-candidates/${id}`);
-}
-
-export async function adminApproveCandidate(id: string, overrides?: Record<string, unknown>) {
-  return apiRequest<{ event_id: string; candidate_id: string }>(`/api/admin/event-candidates/${id}/approve`, {
-    method: 'POST',
-    body: JSON.stringify(overrides || {}),
-  });
-}
-
-export async function adminRejectCandidate(id: string, reviewNotes?: string) {
-  return apiRequest<{ success: boolean }>(`/api/admin/event-candidates/${id}/reject`, {
-    method: 'POST',
-    body: JSON.stringify({ review_notes: reviewNotes }),
-  });
-}
-
-export async function adminMarkCandidateDuplicate(id: string, matchedEventId?: string) {
-  return apiRequest<{ success: boolean }>(`/api/admin/event-candidates/${id}/duplicate`, {
-    method: 'POST',
-    body: JSON.stringify({ matched_event_id: matchedEventId }),
-  });
-}
-
-export async function adminBatchApproveSeries(params: Record<string, unknown>) {
-  return apiRequest<{ series_id: string; event_count: number; events: Array<{ id: string; event_at: string }> }>('/api/admin/event-candidates/batch-approve', {
     method: 'POST',
     body: JSON.stringify(params),
   });

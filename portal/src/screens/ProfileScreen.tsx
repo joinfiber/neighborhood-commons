@@ -3,9 +3,7 @@ import { useBreakpoint } from '../hooks/useBreakpoint';
 import { styles, colors, radii, spacing } from '../lib/styles';
 import { updateProfile, type PortalAccount } from '../lib/api';
 import { supabase } from '../lib/supabase';
-import { PlaceAutocomplete } from '../components/PlaceAutocomplete';
 import { OperatingHours, emptyWeek, type WeekHours } from '../components/OperatingHours';
-import type { PlaceResult } from '../lib/types';
 
 interface ProfileScreenProps {
   account: PortalAccount;
@@ -18,7 +16,6 @@ export function ProfileScreen({ account, onAccountUpdated }: ProfileScreenProps)
   // Editable fields
   const [businessName, setBusinessName] = useState(account.business_name);
   const [venueName, setVenueName] = useState(account.default_venue_name || '');
-  const [selectedPlace, setSelectedPlace] = useState<PlaceResult | null>(null);
   const [website, setWebsite] = useState(account.website || '');
   const [phone, setPhone] = useState(account.phone || '');
   const [accessible, setAccessible] = useState(account.wheelchair_accessible);
@@ -41,12 +38,9 @@ export function ProfileScreen({ account, onAccountUpdated }: ProfileScreenProps)
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
-  const currentAddress = selectedPlace?.address || account.default_address || '';
-
   const isDirty =
     businessName !== account.business_name ||
     venueName !== (account.default_venue_name || '') ||
-    selectedPlace !== null ||
     website !== (account.website || '') ||
     phone !== (account.phone || '') ||
     accessible !== account.wheelchair_accessible;
@@ -56,12 +50,6 @@ export function ProfileScreen({ account, onAccountUpdated }: ProfileScreenProps)
     const params: Record<string, unknown> = {};
     if (businessName !== account.business_name) params.business_name = businessName;
     if (venueName !== (account.default_venue_name || '')) params.default_venue_name = venueName;
-    if (selectedPlace) {
-      params.default_place_id = selectedPlace.place_id;
-      params.default_address = selectedPlace.address;
-      params.default_latitude = selectedPlace.location?.latitude ?? null;
-      params.default_longitude = selectedPlace.location?.longitude ?? null;
-    }
     if (website !== (account.website || '')) params.website = website || null;
     if (phone !== (account.phone || '')) params.phone = phone || null;
     if (accessible !== account.wheelchair_accessible) params.wheelchair_accessible = accessible;
@@ -79,7 +67,6 @@ export function ProfileScreen({ account, onAccountUpdated }: ProfileScreenProps)
     setSaving(false);
     if (res.data?.account) {
       onAccountUpdated(res.data.account);
-      setSelectedPlace(null);
       setToast({ text: 'Profile updated', type: 'success' });
       setTimeout(() => setToast(null), 3000);
     } else {
@@ -114,13 +101,13 @@ export function ProfileScreen({ account, onAccountUpdated }: ProfileScreenProps)
         {businessName || <span style={{ color: colors.dim }}>Business name</span>}
       </div>
 
-      {(venueName || currentAddress) && (
+      {(venueName || account.default_address) && (
         <div style={{ marginBottom: '8px' }}>
           {venueName && (
             <div style={{ fontSize: '14px', color: colors.muted }}>{venueName}</div>
           )}
-          {currentAddress && (
-            <div style={{ fontSize: '13px', color: colors.dim }}>{currentAddress}</div>
+          {account.default_address && (
+            <div style={{ fontSize: '13px', color: colors.dim }}>{account.default_address}</div>
           )}
         </div>
       )}
@@ -206,15 +193,11 @@ export function ProfileScreen({ account, onAccountUpdated }: ProfileScreenProps)
       {/* Venue */}
       <div style={{ marginBottom: spacing.lg }}>
         <label style={styles.formLabel}>Default venue</label>
-        <PlaceAutocomplete
-          value={venueName}
-          onChange={setVenueName}
-          onSelect={(place) => { setSelectedPlace(place); setVenueName(place.name); }}
-          placeholder="Search for your venue..."
-        />
-        {currentAddress && (
+        <input type="text" value={venueName} onChange={(e) => setVenueName(e.target.value)}
+          placeholder="Venue name" style={styles.input} />
+        {account.default_address && (
           <div style={{ fontSize: '12px', color: colors.muted, marginTop: '4px' }}>
-            {currentAddress}
+            {account.default_address}
           </div>
         )}
       </div>
