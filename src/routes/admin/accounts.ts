@@ -120,6 +120,21 @@ router.get('/stats', portalLimiter, async (_req, res, next) => {
       }
     }
 
+    // Category distribution: count unique events grouped by category
+    const { data: categoryRows } = await supabaseAdmin
+      .from('events')
+      .select('category, series_id, series_instance_number')
+      .in('source', [...MANAGED_SOURCES]);
+
+    const category_distribution: Record<string, number> = {};
+    if (categoryRows) {
+      for (const row of categoryRows) {
+        if (row.series_id && row.series_instance_number !== 1) continue;
+        const cat = row.category || 'uncategorized';
+        category_distribution[cat] = (category_distribution[cat] || 0) + 1;
+      }
+    }
+
     res.json({
       stats: {
         total_accounts: totalAccounts,
@@ -129,6 +144,7 @@ router.get('/stats', portalLimiter, async (_req, res, next) => {
         total_events: totalEvents,
         upcoming_7d: upcomingEvents,
         provenance,
+        category_distribution,
       },
     });
   } catch (err) {

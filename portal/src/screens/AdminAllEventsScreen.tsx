@@ -7,8 +7,7 @@ import { BulkEditBar } from '../components/BulkEditBar';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 
 interface AdminAllEventsScreenProps {
-  onBack: () => void;
-  onViewAccount: (accountId: string) => void;
+  onNavigate: (hash: string) => void;
 }
 
 function formatDate(dateStr: string | null): string {
@@ -265,11 +264,15 @@ function buildItems(events: AdminPortalEvent[], today: string): { upcoming: Dash
 
 type Filter = 'upcoming' | 'past' | 'all';
 
-export function AdminAllEventsScreen({ onBack, onViewAccount }: AdminAllEventsScreenProps) {
+type ViewMode = 'table' | 'cards';
+
+export function AdminAllEventsScreen({ onNavigate }: AdminAllEventsScreenProps) {
   const [events, setEvents] = useState<AdminPortalEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>('upcoming');
   const [search, setSearch] = useState('');
+  const [catFilter, setCatFilter] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('table');
 
   // Multi-select
   const [selectMode, setSelectMode] = useState(false);
@@ -289,10 +292,22 @@ export function AdminAllEventsScreen({ onBack, onViewAccount }: AdminAllEventsSc
 
   const today = new Date().toISOString().split('T')[0] ?? '';
 
+  // Category counts for filter pills
+  const categoryCounts: Record<string, number> = {};
+  for (const e of events) {
+    const cat = e.category || 'uncategorized';
+    categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+  }
+  const categoryKeys = Object.keys(categoryCounts).sort((a, b) => (categoryCounts[b] || 0) - (categoryCounts[a] || 0));
+
   const filtered = events
     .filter((e) => {
       if (filter === 'upcoming') return (e.event_date || '') >= today;
       if (filter === 'past') return (e.event_date || '') < today;
+      return true;
+    })
+    .filter((e) => {
+      if (catFilter && e.category !== catFilter) return false;
       return true;
     })
     .filter((e) => {
@@ -362,7 +377,7 @@ export function AdminAllEventsScreen({ onBack, onViewAccount }: AdminAllEventsSc
             <AdminSeriesCard
               key={item.seriesId}
               group={item}
-              onClick={(e) => e.portal_account_id && onViewAccount(e.portal_account_id)}
+              onClick={(e) => onNavigate(`#/admin/events/${e.id}/edit`)}
               selectedIds={selectedIds}
               onToggle={toggleSelect}
               selectMode={selectMode}
@@ -374,7 +389,7 @@ export function AdminAllEventsScreen({ onBack, onViewAccount }: AdminAllEventsSc
           <AdminEventCard
             key={item.event.id}
             event={item.event}
-            onClick={() => item.event.portal_account_id && onViewAccount(item.event.portal_account_id)}
+            onClick={() => onNavigate(`#/admin/events/${item.event.id}/edit`)}
             selected={selectedIds.has(item.event.id)}
             onToggle={toggleSelect}
             selectMode={selectMode}
@@ -385,14 +400,97 @@ export function AdminAllEventsScreen({ onBack, onViewAccount }: AdminAllEventsSc
     </div>
   );
 
+  const renderTable = (items: DashboardItem[]) => {
+    // Flatten items to individual events for table view
+    const flatEvents: AdminPortalEvent[] = [];
+    for (const item of items) {
+      if (item.type === 'series') {
+        flatEvents.push(item.nextEvent);
+      } else {
+        flatEvents.push(item.event);
+      }
+    }
+    return (
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+          <thead>
+            <tr style={{ borderBottom: `1px solid ${colors.border}` }}>
+              <th style={{ textAlign: 'left', padding: '8px 10px', fontSize: '11px', fontWeight: 600, color: colors.dim, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Title</th>
+              <th style={{ textAlign: 'left', padding: '8px 10px', fontSize: '11px', fontWeight: 600, color: colors.dim, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Venue</th>
+              <th style={{ textAlign: 'left', padding: '8px 10px', fontSize: '11px', fontWeight: 600, color: colors.dim, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Date</th>
+              <th style={{ textAlign: 'left', padding: '8px 10px', fontSize: '11px', fontWeight: 600, color: colors.dim, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Category</th>
+              <th style={{ textAlign: 'left', padding: '8px 10px', fontSize: '11px', fontWeight: 600, color: colors.dim, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {flatEvents.map((e) => {
+              const cat = PORTAL_CATEGORIES[e.category as PortalCategory];
+              const isPast = (e.event_date || '') < today;
+              return (
+                <tr
+                  key={e.id}
+                  className="interactive-row"
+                  onClick={() => onNavigate(`#/admin/events/${e.id}/edit`)}
+                  style={{ borderBottom: `1px solid ${colors.border}`, cursor: 'pointer', opacity: isPast ? 0.5 : 1 }}
+                >
+                  <td style={{ padding: '10px 10px', color: colors.cream, fontWeight: 500 }}>{e.title}</td>
+                  <td style={{ padding: '10px 10px', color: colors.muted }}>{e.venue_name || '—'}</td>
+                  <td style={{ padding: '10px 10px', color: colors.muted, whiteSpace: 'nowrap' }}>{formatDate(e.event_date)} {formatTime(e.start_time)}</td>
+                  <td style={{ padding: '10px 10px', color: colors.dim }}>{cat?.label || e.category}</td>
+                  <td style={{ padding: '10px 10px' }}>
+                    <span style={{
+                      fontSize: '11px', padding: '2px 8px', borderRadius: '10px',
+                      background: e.status === 'published' ? colors.successBg : colors.pendingBg,
+                      color: e.status === 'published' ? colors.success : colors.pending,
+                    }}>
+                      {e.status}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
   return (
     <>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-        <button type="button" style={styles.buttonText} onClick={onBack}>← Back</button>
           <h1 style={styles.pageTitle}>All Events</h1>
           <span style={{ fontSize: '14px', color: colors.muted }}>({displayItems.length} groups)</span>
           <div style={{ flex: 1 }} />
+          {/* View toggle */}
+          <div style={{ display: 'flex', gap: '2px', background: colors.bg, borderRadius: '6px', padding: '2px' }}>
+            <button
+              type="button"
+              onClick={() => setViewMode('table')}
+              style={{
+                padding: '4px 10px', fontSize: '11px', borderRadius: '4px', cursor: 'pointer',
+                border: 'none', fontFamily: 'inherit',
+                background: viewMode === 'table' ? colors.card : 'transparent',
+                color: viewMode === 'table' ? colors.heading : colors.dim,
+                fontWeight: viewMode === 'table' ? 600 : 400,
+              }}
+            >
+              Table
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('cards')}
+              style={{
+                padding: '4px 10px', fontSize: '11px', borderRadius: '4px', cursor: 'pointer',
+                border: 'none', fontFamily: 'inherit',
+                background: viewMode === 'cards' ? colors.card : 'transparent',
+                color: viewMode === 'cards' ? colors.heading : colors.dim,
+                fontWeight: viewMode === 'cards' ? 600 : 400,
+              }}
+            >
+              Cards
+            </button>
+          </div>
           {events.length > 0 && (
             selectMode ? (
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -435,7 +533,39 @@ export function AdminAllEventsScreen({ onBack, onViewAccount }: AdminAllEventsSc
           )}
         </div>
 
-        {/* Filters */}
+        {/* Category filter pills */}
+        {categoryKeys.length > 1 && (
+          <div style={{ display: 'flex', gap: '6px', marginBottom: '10px', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => setCatFilter(null)}
+              style={{
+                ...styles.pill,
+                ...(!catFilter ? styles.pillActive : styles.pillInactive),
+              }}
+            >
+              All
+            </button>
+            {categoryKeys.map((key) => {
+              const cat = PORTAL_CATEGORIES[key as PortalCategory];
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setCatFilter(catFilter === key ? null : key)}
+                  style={{
+                    ...styles.pill,
+                    ...(catFilter === key ? styles.pillActive : styles.pillInactive),
+                  }}
+                >
+                  {cat?.label || key} ({categoryCounts[key]})
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Time filters */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
           {(['upcoming', 'past', 'all'] as Filter[]).map((f) => (
             <button
@@ -481,7 +611,7 @@ export function AdminAllEventsScreen({ onBack, onViewAccount }: AdminAllEventsSc
           />
         )}
 
-        {/* Event grid */}
+        {/* Event list */}
         {loading ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <EventRowSkeleton />
@@ -499,7 +629,7 @@ export function AdminAllEventsScreen({ onBack, onViewAccount }: AdminAllEventsSc
                 <div style={{ fontSize: '12px', fontWeight: 500, color: colors.dim, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '10px' }}>
                   Upcoming ({upcoming.length})
                 </div>
-                {renderGrid(upcoming)}
+                {viewMode === 'table' ? renderTable(upcoming) : renderGrid(upcoming)}
               </div>
             )}
             {past.length > 0 && (
@@ -507,12 +637,12 @@ export function AdminAllEventsScreen({ onBack, onViewAccount }: AdminAllEventsSc
                 <div style={{ fontSize: '12px', fontWeight: 500, color: colors.dim, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '10px' }}>
                   Past ({past.length})
                 </div>
-                {renderGrid(past)}
+                {viewMode === 'table' ? renderTable(past) : renderGrid(past)}
               </div>
             )}
           </>
         ) : (
-          renderGrid(displayItems)
+          viewMode === 'table' ? renderTable(displayItems) : renderGrid(displayItems)
         )}
 
         {/* Delete confirmation */}

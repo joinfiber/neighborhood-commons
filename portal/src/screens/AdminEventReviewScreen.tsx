@@ -13,6 +13,7 @@ import {
 } from '../lib/api';
 import type { EventCandidate, PlaceResult, PortalStats } from '../lib/types';
 import { PlaceAutocomplete } from '../components/PlaceAutocomplete';
+import { CategoryDistribution } from '../components/CategoryDistribution';
 
 interface Props {
   onNavigate: (hash: string) => void;
@@ -102,6 +103,9 @@ export function AdminEventReviewScreen({ onNavigate: _onNavigate }: Props) {
   const [stats, setStats] = useState<PortalStats | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+
+  // Source filter
+  const [sourceFilter, setSourceFilter] = useState<string | null>(null);
 
   // Multi-select for series approve
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -308,6 +312,77 @@ export function AdminEventReviewScreen({ onNavigate: _onNavigate }: Props) {
     }
   }, [toast]);
 
+  // Keyboard shortcuts: j/k navigate, a approve, r reject, d duplicate, Escape collapse
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      // Guard: only in pending tab, no input focused, not loading
+      if (activeTab !== 'pending') return;
+      if (actionLoading) return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      const visibleCandidates = sourceFilter
+        ? candidates.filter(c => (c.newsletter_sources?.name || c.feed_sources?.name) === sourceFilter)
+        : candidates;
+
+      if (e.key === 'Escape') {
+        setExpandedId(null);
+        setSourceEmail(null);
+        return;
+      }
+
+      if (!expandedId && (e.key === 'j' || e.key === 'k')) {
+        // Expand first/last candidate
+        if (visibleCandidates.length > 0) {
+          const target = e.key === 'j' ? visibleCandidates[0] : visibleCandidates[visibleCandidates.length - 1];
+          if (target) expand(target);
+        }
+        return;
+      }
+
+      if (expandedId) {
+        const idx = visibleCandidates.findIndex(c => c.id === expandedId);
+        if (e.key === 'j' && idx < visibleCandidates.length - 1) {
+          const next = visibleCandidates[idx + 1];
+          if (next) expand(next);
+          return;
+        }
+        if (e.key === 'k' && idx > 0) {
+          const prev = visibleCandidates[idx - 1];
+          if (prev) expand(prev);
+          return;
+        }
+        if (e.key === 'a') {
+          if (editDate) handleApprove(expandedId);
+          return;
+        }
+        if (e.key === 'r') {
+          handleReject(expandedId);
+          return;
+        }
+        if (e.key === 'd') {
+          const current = visibleCandidates.find(c => c.id === expandedId);
+          if (current?.matched_event_id) handleDuplicate(expandedId, current.matched_event_id);
+          return;
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeTab, expandedId, candidates, sourceFilter, actionLoading, editDate]);
+
+  // Compute unique source names
+  const sourceNames = Array.from(new Set(
+    candidates
+      .map(c => c.newsletter_sources?.name || c.feed_sources?.name)
+      .filter(Boolean) as string[]
+  )).sort();
+
+  // Filter candidates by source
+  const filteredCandidates = sourceFilter
+    ? candidates.filter(c => (c.newsletter_sources?.name || c.feed_sources?.name) === sourceFilter)
+    : candidates;
+
   const selectedCandidates = candidates.filter(c => selectedIds.has(c.id));
   const selectedDates = selectedCandidates
     .map(c => c.start_date)
@@ -353,10 +428,17 @@ export function AdminEventReviewScreen({ onNavigate: _onNavigate }: Props) {
         </div>
       )}
 
+      {/* Category distribution */}
+      {stats?.category_distribution && (
+        <div style={{ marginBottom: '16px' }}>
+          <CategoryDistribution data={stats.category_distribution} total={stats.total_events} compact />
+        </div>
+      )}
+
       <h2 style={{ margin: '0 0 20px', fontSize: 20, fontWeight: 600 }}>Review</h2>
 
-      {/* Status tabs */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 20 }}>
+      {/* Status tabs + source filter */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
         {STATUS_TABS.map((tab) => {
           const sc = statusColors[tab] || { bg: '#f5f5f5', fg: '#666' };
           const active = activeTab === tab;
@@ -373,6 +455,47 @@ export function AdminEventReviewScreen({ onNavigate: _onNavigate }: Props) {
             </button>
           );
         })}
+        {sourceNames.length > 1 && (
+          <>
+            <span style={{ width: '1px', height: '20px', background: colors.border, margin: '0 4px' }} />
+            <button
+              onClick={() => setSourceFilter(null)}
+              style={{
+                padding: '4px 12px', fontSize: 12, borderRadius: 16,
+                border: `1px solid ${!sourceFilter ? colors.accent : colors.border}`,
+                background: !sourceFilter ? colors.accentDim : 'transparent',
+                color: !sourceFilter ? colors.accent : colors.dim,
+                cursor: 'pointer', fontFamily: 'inherit', fontWeight: !sourceFilter ? 600 : 400,
+              }}
+            >
+              All sources
+            </button>
+            {sourceNames.map(name => (
+              <button
+                key={name}
+                onClick={() => setSourceFilter(sourceFilter === name ? null : name)}
+                style={{
+                  padding: '4px 12px', fontSize: 12, borderRadius: 16,
+                  border: `1px solid ${sourceFilter === name ? colors.accent : colors.border}`,
+                  background: sourceFilter === name ? colors.accentDim : 'transparent',
+                  color: sourceFilter === name ? colors.accent : colors.dim,
+                  cursor: 'pointer', fontFamily: 'inherit', fontWeight: sourceFilter === name ? 600 : 400,
+                }}
+              >
+                {name}
+              </button>
+            ))}
+          </>
+        )}
+      </div>
+
+      {/* Keyboard shortcut hint */}
+      <div style={{ fontSize: 11, color: colors.dim, marginBottom: 16 }}>
+        <kbd style={{ padding: '1px 4px', borderRadius: 3, border: `1px solid ${colors.border}`, fontSize: 10 }}>j</kbd>/<kbd style={{ padding: '1px 4px', borderRadius: 3, border: `1px solid ${colors.border}`, fontSize: 10 }}>k</kbd> navigate
+        {' '}<kbd style={{ padding: '1px 4px', borderRadius: 3, border: `1px solid ${colors.border}`, fontSize: 10 }}>a</kbd> approve
+        {' '}<kbd style={{ padding: '1px 4px', borderRadius: 3, border: `1px solid ${colors.border}`, fontSize: 10 }}>r</kbd> reject
+        {' '}<kbd style={{ padding: '1px 4px', borderRadius: 3, border: `1px solid ${colors.border}`, fontSize: 10 }}>d</kbd> duplicate
+        {' '}<kbd style={{ padding: '1px 4px', borderRadius: 3, border: `1px solid ${colors.border}`, fontSize: 10 }}>esc</kbd> collapse
       </div>
 
       {/* Multi-select toolbar */}
@@ -546,13 +669,13 @@ export function AdminEventReviewScreen({ onNavigate: _onNavigate }: Props) {
 
       {loading ? (
         <p style={{ color: colors.muted, fontSize: 14 }}>Loading candidates...</p>
-      ) : candidates.length === 0 ? (
+      ) : filteredCandidates.length === 0 ? (
         <p style={{ color: colors.muted, fontSize: 14 }}>
-          No {activeTab} candidates.
+          No {activeTab} candidates{sourceFilter ? ` from ${sourceFilter}` : ''}.
         </p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {candidates.map((c) => {
+          {filteredCandidates.map((c) => {
             const isExpanded = expandedId === c.id;
             const isSelected = selectedIds.has(c.id);
             return (

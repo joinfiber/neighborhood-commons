@@ -108,6 +108,7 @@ export interface PortalStats {
   total_events: number;
   upcoming_7d: number;
   provenance: Record<string, number>;
+  category_distribution?: Record<string, number>;
 }
 
 export interface DataAudit {

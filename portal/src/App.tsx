@@ -18,7 +18,8 @@ import { AdminNewsletterEmailsScreen } from './screens/AdminNewsletterEmailsScre
 import { AdminEventReviewScreen } from './screens/AdminEventReviewScreen';
 import { AdminFeedSourcesScreen } from './screens/AdminFeedSourcesScreen';
 import { AdminSourcesScreen } from './screens/AdminSourcesScreen';
-import { AdminAuditScreen } from './screens/AdminAuditScreen';
+import { AdminPulseScreen } from './screens/AdminPulseScreen';
+import { AdminVenuesScreen } from './screens/AdminVenuesScreen';
 import { DevelopersScreen } from './screens/DevelopersScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { TermsScreen } from './screens/TermsScreen';
@@ -32,7 +33,7 @@ import type { PlaceResult } from './lib/api';
 function contentWidthForRoute(screen: string): 'normal' | 'wide' | 'full' {
   const full = ['share-event', 'create-event', 'edit-event', 'admin-create-event', 'admin-edit-event', 'profile'];
   if (full.includes(screen)) return 'full';
-  const wide = ['dashboard', 'creative', 'developers', 'admin-home', 'admin-events', 'admin-account', 'admin-accounts', 'admin-sources', 'admin-audit', 'admin-newsletters', 'admin-newsletter-emails', 'admin-newsletter-email', 'admin-newsletter-review', 'admin-feeds'];
+  const wide = ['dashboard', 'creative', 'developers', 'admin-home', 'admin-events', 'admin-account', 'admin-accounts', 'admin-sources', 'admin-audit', 'admin-pulse', 'admin-venues', 'admin-newsletters', 'admin-newsletter-emails', 'admin-newsletter-email', 'admin-newsletter-review', 'admin-feeds'];
   return wide.includes(screen) ? 'wide' : 'normal';
 }
 
@@ -357,8 +358,7 @@ export default function App() {
       if (route.screen === 'admin-events') {
         return (
           <AdminAllEventsScreen
-            onBack={() => navigate('#/admin')}
-            onViewAccount={(accountId) => navigate(`#/admin/accounts/${accountId}`)}
+            onNavigate={navigate}
           />
         );
       }
@@ -396,8 +396,16 @@ export default function App() {
         return <AdminSourcesScreen onNavigate={navigate} />;
       }
 
+      if (route.screen === 'admin-pulse') {
+        return <AdminPulseScreen />;
+      }
+
       if (route.screen === 'admin-audit') {
-        return <AdminAuditScreen />;
+        return <AdminPulseScreen />;
+      }
+
+      if (route.screen === 'admin-venues') {
+        return <AdminVenuesScreen onNavigate={navigate} />;
       }
 
       // Legacy routes — keep working for bookmarks/links
