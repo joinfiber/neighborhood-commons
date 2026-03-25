@@ -91,6 +91,8 @@ export function AdminVenuesScreen({ onNavigate }: AdminVenuesScreenProps) {
   const [scanning, setScanning] = useState(false);
   const [scanResults, setScanResults] = useState<VenueScanResult[] | null>(null);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [dismissedVenues, setDismissedVenues] = useState<VenueScanResult[]>([]);
+  const [showDeclined, setShowDeclined] = useState(false);
   const [importing, setImporting] = useState<string | null>(null);
   const [expandedVenue, setExpandedVenue] = useState<string | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -402,7 +404,11 @@ export function AdminVenuesScreen({ onNavigate }: AdminVenuesScreenProps) {
                           </button>
                           <button
                             type="button"
-                            onClick={(e) => { e.stopPropagation(); setDismissed(prev => new Set([...prev, venue.place_id])); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDismissed(prev => new Set([...prev, venue.place_id]));
+                              setDismissedVenues(prev => [...prev, venue]);
+                            }}
                             style={{
                               padding: '5px 8px', fontSize: '12px', borderRadius: '6px',
                               border: `1px solid ${colors.border}`, background: colors.card,
@@ -480,6 +486,60 @@ export function AdminVenuesScreen({ onNavigate }: AdminVenuesScreenProps) {
                 </div>
               )}
             </>
+          )}
+
+          {/* Declined list */}
+          {dismissedVenues.length > 0 && (
+            <div style={{ marginTop: '20px' }}>
+              <button
+                type="button"
+                onClick={() => setShowDeclined(!showDeclined)}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  fontSize: '12px', color: colors.dim, fontFamily: 'inherit',
+                  padding: '4px 0',
+                }}
+              >
+                {showDeclined ? '▾' : '▸'} Declined ({dismissedVenues.length})
+              </button>
+              {showDeclined && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '6px' }}>
+                  {dismissedVenues.map((venue) => (
+                    <div
+                      key={venue.place_id}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '10px',
+                        padding: '6px 12px', fontSize: '13px', color: colors.dim,
+                        background: colors.card, border: `1px solid ${colors.border}`,
+                        borderRadius: radii.sm,
+                      }}
+                    >
+                      <span style={{ flex: 1 }}>
+                        {venue.name}
+                        <span style={{ marginLeft: '6px', fontSize: '11px', color: colors.dim }}>
+                          {venue.address}
+                        </span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDismissed(prev => { const next = new Set(prev); next.delete(venue.place_id); return next; });
+                          setDismissedVenues(prev => prev.filter(v => v.place_id !== venue.place_id));
+                        }}
+                        style={{
+                          background: 'none', border: `1px solid ${colors.border}`,
+                          borderRadius: '6px', padding: '3px 8px', fontSize: '11px',
+                          color: colors.muted, cursor: 'pointer', fontFamily: 'inherit',
+                          flexShrink: 0,
+                        }}
+                      >
+                        Restore
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </>
       )}
