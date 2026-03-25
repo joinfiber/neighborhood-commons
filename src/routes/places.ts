@@ -279,6 +279,7 @@ router.post('/scan', requirePortalAuth, placesLimiter, async (req, res, next) =>
       place_id: string;
       name: string;
       address: string | null;
+      full_address: string | null;
       location: { latitude: number; longitude: number } | null;
       types: string[];
       primary_type: string | null;
@@ -314,10 +315,12 @@ router.post('/scan', requirePortalAuth, placesLimiter, async (req, res, next) =>
         if (seen.has(place.id)) continue;
         seen.add(place.id);
 
+        const fullAddr = place.formattedAddress || null;
         allPlaces.push({
           place_id: place.id,
           name: place.displayName?.text || '',
-          address: place.shortFormattedAddress || place.formattedAddress || null,
+          address: place.shortFormattedAddress || fullAddr || null,
+          full_address: fullAddr,
           location: place.location
             ? { latitude: place.location.latitude, longitude: place.location.longitude }
             : null,
@@ -329,19 +332,33 @@ router.post('/scan', requirePortalAuth, placesLimiter, async (req, res, next) =>
       }
     }
 
-    // Post-filter: reject any results outside the radius (Google sometimes includes nearby)
-    const radiusMeters = radius_km * 1000;
-    const withinRadius = allPlaces.filter(p => {
-      if (!p.location) return false;
-      const dist = calculateDistanceMeters(centerLat!, centerLng!, p.location.latitude, p.location.longitude);
-      return dist <= radiusMeters;
-    });
+    // Post-filter: if query looks like a zip code, filter by address containing it.
+    // This is more accurate than radius — every Google address includes the zip.
+    const isZipCode = /^\d{5}$/.test(query.trim());
+    let withinArea: typeof allPlaces;
+
+    if (isZipCode) {
+      const zip = query.trim();
+      withinArea = allPlaces.filter(p => {
+        const addr = p.full_address || p.address || '';
+        return addr.includes(zip);
+      });
+      console.log(`[PLACES] Zip filter "${zip}": ${withinArea.length} of ${allPlaces.length} matched`);
+    } else {
+      // Fallback to radius filter for non-zip queries
+      const radiusMeters = radius_km * 1000;
+      withinArea = allPlaces.filter(p => {
+        if (!p.location) return false;
+        const dist = calculateDistanceMeters(centerLat!, centerLng!, p.location.latitude, p.location.longitude);
+        return dist <= radiusMeters;
+      });
+    }
 
     // Sort by name
-    withinRadius.sort((a, b) => a.name.localeCompare(b.name));
+    withinArea.sort((a, b) => a.name.localeCompare(b.name));
 
-    console.log(`[PLACES] Scan "${query}": ${withinRadius.length} venues within ${radius_km}km (${allPlaces.length} total before filter) from ${searchTypes.length} type queries`);
-    res.json({ venues: withinRadius, query, types_searched: searchTypes.length, radius_km });
+    console.log(`[PLACES] Scan "${query}": ${withinArea.length} venues within ${radius_km}km (${allPlaces.length} total before filter) from ${searchTypes.length} type queries`);
+    res.json({ venues: withinArea, query, types_searched: searchTypes.length, radius_km });
   } catch (err) {
     next(err);
   }
