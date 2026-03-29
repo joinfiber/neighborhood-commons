@@ -56,6 +56,16 @@ export const enumerationLimiter = isTest ? passthrough : rateLimit({
   legacyHeaders: false,
 });
 
+/** Service API — trusted tools with valid service-tier keys get generous limits */
+export const serviceLimiter = isTest ? passthrough : rateLimit({
+  windowMs: 60 * 1000,
+  max: 300,
+  keyGenerator: (req: Request) => req.ip || 'unknown',
+  message: { error: { code: 'RATE_LIMIT', message: 'Too many requests' } },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 /** Image upload — stricter limit to prevent storage exhaustion (12MB × 3/min = 36MB/min max) */
 export const imageUploadLimiter = isTest ? passthrough : rateLimit({
   windowMs: 60 * 1000,

@@ -20,7 +20,7 @@ import { validateRequest, validateUuidParam, resolveEventImageUrl } from '../lib
 import { requireServiceApiKey } from '../middleware/api-key.js';
 import { dispatchWebhooks } from '../lib/webhook-delivery.js';
 import { toNeighborhoodEvent, type PortalEventRow } from '../lib/event-transform.js';
-import { writeLimiter, portalLimiter } from '../middleware/rate-limit.js';
+import { serviceLimiter } from '../middleware/rate-limit.js';
 import {
   PORTAL_SELECT, MANAGED_SOURCES, toPortalEvent, portalInputToInsert,
   toTimestamptz, getAdminUserId,
@@ -77,7 +77,7 @@ const updateAccountSchema = z.object({
 });
 
 /** GET /service/accounts — List all accounts with event counts */
-router.get('/accounts', portalLimiter, async (_req, res, next) => {
+router.get('/accounts', serviceLimiter, async (_req, res, next) => {
   try {
     const { data: accounts, error } = await supabaseAdmin
       .from('portal_accounts')
@@ -117,7 +117,7 @@ router.get('/accounts', portalLimiter, async (_req, res, next) => {
 });
 
 /** GET /service/accounts/:id — Single account with events */
-router.get('/accounts/:id', portalLimiter, async (req, res, next) => {
+router.get('/accounts/:id', serviceLimiter, async (req, res, next) => {
   try {
     validateUuidParam(req.params.id, 'account ID');
 
@@ -143,7 +143,7 @@ router.get('/accounts/:id', portalLimiter, async (req, res, next) => {
 });
 
 /** POST /service/accounts — Create account */
-router.post('/accounts', writeLimiter, async (req, res, next) => {
+router.post('/accounts', serviceLimiter, async (req, res, next) => {
   try {
     const data = validateRequest(createAccountSchema, req.body);
 
@@ -179,7 +179,7 @@ router.post('/accounts', writeLimiter, async (req, res, next) => {
 });
 
 /** PATCH /service/accounts/:id — Update account */
-router.patch('/accounts/:id', writeLimiter, async (req, res, next) => {
+router.patch('/accounts/:id', serviceLimiter, async (req, res, next) => {
   try {
     validateUuidParam(req.params.id, 'account ID');
     const data = validateRequest(updateAccountSchema, req.body);
@@ -267,7 +267,7 @@ const updateEventSchema = z.object({
 });
 
 /** GET /service/events — All events (unique: one-offs + first instance of series) */
-router.get('/events', portalLimiter, async (_req, res, next) => {
+router.get('/events', serviceLimiter, async (_req, res, next) => {
   try {
     const { data: events, error } = await supabaseAdmin
       .from('events')
@@ -291,7 +291,7 @@ router.get('/events', portalLimiter, async (_req, res, next) => {
 });
 
 /** GET /service/events/:id — Single event with account */
-router.get('/events/:id', portalLimiter, async (req, res, next) => {
+router.get('/events/:id', serviceLimiter, async (req, res, next) => {
   try {
     validateUuidParam(req.params.id, 'event ID');
 
@@ -309,7 +309,7 @@ router.get('/events/:id', portalLimiter, async (req, res, next) => {
 });
 
 /** POST /service/events — Create event (with optional recurrence) */
-router.post('/events', writeLimiter, async (req, res, next) => {
+router.post('/events', serviceLimiter, async (req, res, next) => {
   try {
     const data = validateRequest(createEventSchema, req.body);
 
@@ -385,7 +385,7 @@ router.post('/events', writeLimiter, async (req, res, next) => {
 });
 
 /** PATCH /service/events/:id — Update single event */
-router.patch('/events/:id', writeLimiter, async (req, res, next) => {
+router.patch('/events/:id', serviceLimiter, async (req, res, next) => {
   try {
     validateUuidParam(req.params.id, 'event ID');
     const data = validateRequest(updateEventSchema, req.body);
@@ -452,7 +452,7 @@ router.patch('/events/:id', writeLimiter, async (req, res, next) => {
 });
 
 /** DELETE /service/events/:id — Delete event */
-router.delete('/events/:id', writeLimiter, async (req, res, next) => {
+router.delete('/events/:id', serviceLimiter, async (req, res, next) => {
   try {
     validateUuidParam(req.params.id, 'event ID');
 
@@ -469,7 +469,7 @@ router.delete('/events/:id', writeLimiter, async (req, res, next) => {
 });
 
 /** PATCH /service/events/batch — Bulk update events */
-router.patch('/events/batch', writeLimiter, async (req, res, next) => {
+router.patch('/events/batch', serviceLimiter, async (req, res, next) => {
   try {
     const schema = z.object({
       ids: z.array(z.string().uuid()).min(1).max(200),
@@ -507,7 +507,7 @@ router.patch('/events/batch', writeLimiter, async (req, res, next) => {
 });
 
 /** POST /service/events/:id/image — Upload event image */
-router.post('/events/:id/image', writeLimiter, async (req, res, next) => {
+router.post('/events/:id/image', serviceLimiter, async (req, res, next) => {
   try {
     validateUuidParam(req.params.id, 'event ID');
 
@@ -532,7 +532,7 @@ router.post('/events/:id/image', writeLimiter, async (req, res, next) => {
 // =============================================================================
 
 /** GET /service/stats — Platform statistics + category distribution */
-router.get('/stats', portalLimiter, async (_req, res, next) => {
+router.get('/stats', serviceLimiter, async (_req, res, next) => {
   try {
     const { data: accounts } = await supabaseAdmin
       .from('portal_accounts')
