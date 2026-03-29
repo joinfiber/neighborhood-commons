@@ -125,27 +125,45 @@ router.get('/:idOrSlug', async (req, res, next) => {
       throw createError('Account not found', 404, 'NOT_FOUND');
     }
 
-    // Get upcoming events for this account
-    const { data: upcomingEvents } = await supabaseAdmin
+    // Get all future events for this account (with recurrence/series info)
+    const { data: futureEvents } = await supabaseAdmin
       .from('events')
-      .select('id, content, event_at, end_time, place_name, category')
+      .select('id, content, event_at, end_time, place_name, category, recurrence, series_id')
       .eq('creator_account_id', account.id)
       .eq('status', 'published')
       .gte('event_at', new Date().toISOString())
       .order('event_at', { ascending: true })
-      .limit(10);
+      .limit(50);
+
+    const allEvents = (futureEvents || []).map(e => ({
+      id: e.id,
+      name: e.content,
+      start: e.event_at,
+      end: e.end_time,
+      location: { name: e.place_name },
+      category: e.category ? [e.category] : [],
+      recurrence: e.recurrence || null,
+      series_id: e.series_id || null,
+    }));
+
+    // Split into regular programming (recurring) vs upcoming (one-off)
+    const regularProgramming = allEvents.filter(e => e.recurrence || e.series_id);
+    const upcoming = allEvents.filter(e => !e.recurrence && !e.series_id);
+
+    // Deduplicate regular programming by series — show only the next instance
+    const seenSeries = new Set<string>();
+    const dedupedProgramming = regularProgramming.filter(e => {
+      const key = e.series_id || e.name;
+      if (seenSeries.has(key)) return false;
+      seenSeries.add(key);
+      return true;
+    });
 
     res.json({
       account: {
         ...formatAccount(account),
-        upcoming_events: (upcomingEvents || []).map(e => ({
-          id: e.id,
-          name: e.content,
-          start: e.event_at,
-          end: e.end_time,
-          location: { name: e.place_name },
-          category: e.category ? [e.category] : [],
-        })),
+        regular_programming: dedupedProgramming,
+        upcoming_events: upcoming,
       },
     });
   } catch (err) {
