@@ -28,27 +28,37 @@ const TRACKING_PARAMS = new Set([
   'hsa_cam', 'hsa_grp', 'hsa_mt', 'hsa_src', 'hsa_ad', 'hsa_acc', 'hsa_net', 'hsa_ver', 'hsa_la', 'hsa_ol', 'hsa_kw',
 ]);
 
-/** Approved domains for event links. Log-only for now. */
+/** Approved domains for event links. Log-only for portal, enforced for contribute API. */
 const APPROVED_DOMAINS = new Set([
   // Ticketing
   'eventbrite.com', 'dice.fm', 'ra.com', 'ticketmaster.com', 'axs.com',
   'seetickets.com', 'showclix.com', 'ticketweb.com', 'etix.com',
   'shotgun.live', 'skiddle.com', 'resident-advisor.net',
+  'eventcreate.com', 'humanitix.com', 'tickettailor.com', 'universe.com',
+  'brownpapertickets.com', 'ticketleap.com', 'zeffy.com',
   // Social
   'instagram.com', 'facebook.com', 'twitter.com', 'x.com', 'tiktok.com',
-  'youtube.com', 'threads.net',
+  'youtube.com', 'threads.net', 'bsky.app', 'mastodon.social',
   // Event platforms
   'meetup.com', 'lu.ma', 'partiful.com', 'splash.com', 'posh.vip',
+  'eventbrite.co.uk', 'allevents.in', 'do512.com', 'splashthat.com',
+  // Community / civic
+  'nextdoor.com', 'patch.com', 'eventful.com',
   // Payment
-  'venmo.com', 'paypal.com', 'paypal.me', 'cash.app',
+  'venmo.com', 'paypal.com', 'paypal.me', 'cash.app', 'gofundme.com',
   // Business / listings
-  'yelp.com', 'google.com', 'maps.google.com',
-  // Website builders
+  'yelp.com', 'google.com', 'maps.google.com', 'tripadvisor.com',
+  // Website builders (venue and org sites)
   'squarespace.com', 'wix.com', 'wordpress.com', 'carrd.co', 'webflow.io',
+  'weebly.com', 'godaddy.com', 'shopify.com', 'notion.site',
+  'sites.google.com', 'blogger.com', 'ghost.io', 'substack.com',
   // Link aggregators
   'linktr.ee', 'linkin.bio', 'beacons.ai', 'bio.link', 'lnk.bio',
   // Local Philly
-  'uwishunu.com', 'visitphilly.com',
+  'uwishunu.com', 'visitphilly.com', 'phillymag.com', 'billypenn.com',
+  'thephiladelphiacitizen.org', 'whyy.org',
+  // Neighborhood Commons ecosystem
+  'merrie.co', 'joinfiber.app', 'commons.joinfiber.app',
 ]);
 
 /**
@@ -75,12 +85,12 @@ export function sanitizeUrl(url: string): string {
 /**
  * Check if a URL's domain is on the approved list.
  * Returns true if approved. Logs non-approved domains (does not reject).
+ * Used by portal routes.
  */
 export function checkApprovedDomain(url: string): boolean {
   if (!url) return true;
   try {
     const hostname = new URL(url).hostname.toLowerCase();
-    // Check exact match or subdomain match (e.g., www.eventbrite.com -> eventbrite.com)
     for (const domain of APPROVED_DOMAINS) {
       if (hostname === domain || hostname.endsWith(`.${domain}`)) {
         return true;
@@ -90,5 +100,25 @@ export function checkApprovedDomain(url: string): boolean {
     return false;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Check if a URL's domain is on the approved list.
+ * Returns { approved, domain } — used by contribute API to reject with a clear error.
+ */
+export function checkContributeUrlDomain(url: string): { approved: boolean; domain: string } {
+  if (!url) return { approved: true, domain: '' };
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    for (const domain of APPROVED_DOMAINS) {
+      if (hostname === domain || hostname.endsWith(`.${domain}`)) {
+        return { approved: true, domain: hostname };
+      }
+    }
+    console.log(`[CONTRIBUTE] Non-approved URL domain: ${hostname}`);
+    return { approved: false, domain: hostname };
+  } catch {
+    return { approved: false, domain: 'invalid' };
   }
 }

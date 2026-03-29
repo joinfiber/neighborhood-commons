@@ -20,6 +20,9 @@ import { writeLimiter } from '../middleware/rate-limit.js';
 import { dispatchWebhooks } from '../lib/webhook-delivery.js';
 import type { NeighborhoodEvent } from '../lib/event-transform.js';
 import { config } from '../config.js';
+import { downloadAndAttachImage } from '../lib/image-processing.js';
+import { nominatimGeocode } from '../lib/geocoding.js';
+import { sanitizeUrl, checkContributeUrlDomain } from '../lib/url-sanitizer.js';
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -56,7 +59,7 @@ const contributeEventSchema = z.object({
   description: z.string().max(2000).optional(),
   cost: z.string().max(100).optional(),
   url: z.string().url().max(2000).optional(),
-  image_url: z.string().url().max(2000).optional(), // External URL reference only — not fetched or re-encoded server-side
+  image_url: z.string().url().max(2000).optional(), // Fetched, re-encoded through Sharp, and stored in R2
   tags: z.array(z.string().max(50)).max(15).optional(),
   wheelchair_accessible: z.boolean().optional(),
   custom_category: z.string().max(50).optional(),
@@ -135,12 +138,57 @@ function stripHtml(text: string): string {
   return text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * Resolve coordinates for a contributed event:
+ * 1. Use provided lat/lng if present
+ * 2. Geocode the address via Nominatim if not
+ *
+ * Then look up the containing region via PostGIS.
+ * Returns resolved coords + region_id (falls back to default region).
+ */
+async function resolveLocationAndRegion(
+  event: z.infer<typeof contributeEventSchema>,
+): Promise<{ lat: number | null; lng: number | null; regionId: string | null }> {
+  let lat = event.location.lat ?? null;
+  let lng = event.location.lng ?? null;
+
+  // Geocode address if no coordinates provided
+  if (lat == null || lng == null) {
+    if (event.location.address) {
+      const coords = await nominatimGeocode(event.location.address);
+      if (coords) {
+        lat = coords.lat;
+        lng = coords.lng;
+        console.log(`[CONTRIBUTE] Geocoded "${event.location.address}" → ${lat}, ${lng}`);
+      }
+    }
+  }
+
+  // Look up containing region via PostGIS
+  let regionId = config.defaultRegionId;
+  if (lat != null && lng != null) {
+    const { data } = await supabaseAdmin.rpc('find_user_region', {
+      p_longitude: lng,
+      p_latitude: lat,
+    });
+    if (data && data.length > 0) {
+      regionId = data[0].region_id;
+      console.log(`[CONTRIBUTE] Region resolved: ${data[0].region_name} (${data[0].region_type})`);
+    } else {
+      console.log(`[CONTRIBUTE] Coordinates ${lat},${lng} outside all active regions — using default`);
+    }
+  }
+
+  return { lat, lng, regionId };
+}
+
 /** Transform a contribute API event into a DB insert row */
 function contributeEventToInsert(
   event: z.infer<typeof contributeEventSchema>,
   apiKeyId: string,
   keyName: string,
   tier: string,
+  resolved: { lat: number | null; lng: number | null; regionId: string | null },
 ): Record<string, unknown> {
   const startDate = new Date(event.start);
   const endDate = event.end ? new Date(event.end) : null;
@@ -154,11 +202,11 @@ function contributeEventToInsert(
     venue_address: event.location.address?.slice(0, 500) || null,
     place_id: event.location.place_id || null,
     approximate_location:
-      event.location.lat != null && event.location.lng != null
-        ? `POINT(${event.location.lng} ${event.location.lat})`
+      resolved.lat != null && resolved.lng != null
+        ? `POINT(${resolved.lng} ${resolved.lat})`
         : null,
-    latitude: event.location.lat ?? null,
-    longitude: event.location.lng ?? null,
+    latitude: resolved.lat,
+    longitude: resolved.lng,
     event_at: startDate.toISOString(),
     end_time: endDate ? endDate.toISOString() : null,
     event_timezone: event.timezone,
@@ -166,8 +214,8 @@ function contributeEventToInsert(
     custom_category: event.category === 'other' ? event.custom_category || null : null,
     recurrence: 'none',
     price: event.cost ? stripHtml(event.cost) : null,
-    link_url: event.url || null,
-    event_image_url: event.image_url || null,
+    link_url: event.url ? sanitizeUrl(event.url) : null,
+    event_image_url: null, // Set async by downloadAndAttachImage if image_url provided
     start_time_required: true,
     tags: event.tags || [],
     wheelchair_accessible: event.wheelchair_accessible ?? null,
@@ -183,7 +231,7 @@ function contributeEventToInsert(
     visibility: 'public',
     status,
     is_business: false,
-    region_id: config.defaultRegionId,
+    region_id: resolved.regionId,
   };
 }
 
@@ -204,7 +252,22 @@ router.post('/', writeLimiter, async (req, res, next) => {
     await checkContributeRateLimit(apiKeyId, tier);
 
     const event = validateRequest(contributeEventSchema, req.body);
-    const insertData = contributeEventToInsert(event, apiKeyId, keyName, tier);
+
+    // Validate event URL domain if provided
+    if (event.url) {
+      const domainCheck = checkContributeUrlDomain(event.url);
+      if (!domainCheck.approved) {
+        throw createError(
+          `URL domain "${domainCheck.domain}" is not on the approved list. Contact hello@joinfiber.app to request approval.`,
+          400,
+          'DOMAIN_NOT_APPROVED',
+        );
+      }
+    }
+
+    // Resolve coordinates (geocode if needed) and find containing region
+    const resolved = await resolveLocationAndRegion(event);
+    const insertData = contributeEventToInsert(event, apiKeyId, keyName, tier, resolved);
 
     const { data: row, error } = await supabaseAdmin
       .from('events')
@@ -221,6 +284,11 @@ router.post('/', writeLimiter, async (req, res, next) => {
     }
 
     console.log(`[CONTRIBUTE] Event created: "${event.name}" (${row.id}) by ${keyName} [${row.status}]`);
+
+    // Re-encode external image through Sharp and upload to R2 (fire-and-forget)
+    if (event.image_url) {
+      void downloadAndAttachImage(row.id, event.image_url);
+    }
 
     // Dispatch webhook for published events
     if (row.status === 'published') {
@@ -260,7 +328,19 @@ router.post('/batch', writeLimiter, async (req, res, next) => {
 
     for (let i = 0; i < events.length; i++) {
       const event = events[i];
-      const insertData = contributeEventToInsert(event, apiKeyId, keyName, tier);
+
+      // Validate event URL domain if provided
+      if (event.url) {
+        const domainCheck = checkContributeUrlDomain(event.url);
+        if (!domainCheck.approved) {
+          results.push({ index: i, error: `URL domain "${domainCheck.domain}" not approved` });
+          continue;
+        }
+      }
+
+      // Resolve coordinates and region (geocode if needed)
+      const resolved = await resolveLocationAndRegion(event);
+      const insertData = contributeEventToInsert(event, apiKeyId, keyName, tier, resolved);
 
       const { data: row, error } = await supabaseAdmin
         .from('events')
@@ -278,6 +358,11 @@ router.post('/batch', writeLimiter, async (req, res, next) => {
       }
 
       results.push({ index: i, id: row.id, status: row.status });
+
+      // Re-encode external image through Sharp and upload to R2 (fire-and-forget)
+      if (event.image_url) {
+        void downloadAndAttachImage(row.id, event.image_url);
+      }
 
       // Dispatch webhook for published events
       if (row.status === 'published') {
