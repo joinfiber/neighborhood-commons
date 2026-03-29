@@ -88,18 +88,40 @@ router.get('/', async (req, res, next) => {
 // GET /api/v1/accounts/:id — single account by ID
 // ---------------------------------------------------------------------------
 
-router.get('/:id', async (req, res, next) => {
+router.get('/:idOrSlug', async (req, res, next) => {
   try {
-    const id = req.params.id;
+    const param = req.params.idOrSlug;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(param);
 
-    const { data: account, error } = await supabaseAdmin
-      .from('portal_accounts')
-      .select(ACCOUNT_SELECT)
-      .eq('id', id)
-      .eq('status', 'active')
-      .single();
+    let account: Record<string, unknown> | null = null;
 
-    if (error || !account) {
+    if (isUuid) {
+      const { data } = await supabaseAdmin
+        .from('portal_accounts')
+        .select(ACCOUNT_SELECT)
+        .eq('id', param)
+        .eq('status', 'active')
+        .single();
+      account = data;
+    } else {
+      // Slug lookup: search by business_name and match generated slug
+      const slug = param.toLowerCase();
+      const { data: candidates } = await supabaseAdmin
+        .from('portal_accounts')
+        .select(ACCOUNT_SELECT)
+        .eq('status', 'active')
+        .order('business_name');
+
+      if (candidates) {
+        account = candidates.find((a: Record<string, unknown>) => {
+          const name = (a.business_name as string) || '';
+          const generated = name.toLowerCase().replace(/['']/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+          return generated === slug;
+        }) || null;
+      }
+    }
+
+    if (!account) {
       throw createError('Account not found', 404, 'NOT_FOUND');
     }
 
