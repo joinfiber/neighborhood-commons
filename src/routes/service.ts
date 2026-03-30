@@ -77,13 +77,25 @@ const updateAccountSchema = z.object({
   status: z.enum(['active', 'suspended', 'pending', 'rejected']).optional(),
 });
 
-/** GET /service/accounts — List all accounts with event counts */
-router.get('/accounts', serviceLimiter, async (_req, res, next) => {
+/** GET /service/accounts — List accounts with event counts, optional search + pagination */
+router.get('/accounts', serviceLimiter, async (req, res, next) => {
   try {
-    const { data: accounts, error } = await supabaseAdmin
+    const search = req.query.search as string | undefined;
+    const limit = Math.min(parseInt(req.query.limit as string) || 500, 500);
+    const offset = parseInt(req.query.offset as string) || 0;
+
+    let query = supabaseAdmin
       .from('portal_accounts')
-      .select('id, email, business_name, auth_user_id, status, default_venue_name, default_place_id, default_address, default_latitude, default_longitude, website, phone, operating_hours, last_login_at, created_at, updated_at')
+      .select('id, email, business_name, auth_user_id, status, default_venue_name, default_place_id, default_address, default_latitude, default_longitude, website, phone, operating_hours, last_login_at, created_at, updated_at', { count: 'exact' })
       .order('created_at', { ascending: false });
+
+    if (search) {
+      query = query.or(`business_name.ilike.%${search}%,default_address.ilike.%${search}%`);
+    }
+
+    query = query.range(offset, offset + limit - 1);
+
+    const { data: accounts, error, count } = await query;
 
     if (error) throw createError('Failed to fetch accounts', 500, 'SERVER_ERROR');
 
@@ -111,7 +123,7 @@ router.get('/accounts', serviceLimiter, async (_req, res, next) => {
       event_count: eventCounts[a.id] || 0,
     }));
 
-    res.json({ accounts: result });
+    res.json({ accounts: result, total: count ?? result.length });
   } catch (err) {
     next(err);
   }
@@ -268,15 +280,23 @@ const updateEventSchema = z.object({
   status: z.enum(['published', 'pending_review', 'suspended', 'unpublished']).optional(),
 });
 
-/** GET /service/events — All events (unique: one-offs + first instance of series) */
+/** GET /service/events — Events with pagination, search, and filters */
 router.get('/events', serviceLimiter, async (req, res, next) => {
   try {
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+    const offset = parseInt(req.query.offset as string) || 0;
+    const search = req.query.search as string | undefined;
+    const time = req.query.time as string | undefined; // 'upcoming' | 'past' | 'all'
+
     let query = supabaseAdmin
       .from('events')
-      .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name, email)`)
+      .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name, email)`, { count: 'exact' })
       .in('source', [...MANAGED_SOURCES]);
 
-    // Optional status filter
+    // Series dedup: only show one-offs + first instance of series
+    query = query.or('series_id.is.null,series_instance_number.eq.1');
+
+    // Status filter
     const status = req.query.status as string | undefined;
     if (status) {
       const allowed = ['published', 'pending_review', 'suspended', 'draft'];
@@ -284,15 +304,40 @@ router.get('/events', serviceLimiter, async (req, res, next) => {
       query = query.eq('status', status);
     }
 
-    // Optional source_method filter (e.g. 'api' for contributed events)
+    // Source method filter (e.g. 'api' for contributed events)
     const sourceMethod = req.query.source_method as string | undefined;
     if (sourceMethod) {
       query = query.eq('source_method', sourceMethod);
     }
 
-    const { data: events, error } = await query
-      .order('created_at', { ascending: false })
-      .limit(5000);
+    // Category filter
+    const category = req.query.category as string | undefined;
+    if (category) {
+      query = query.eq('category', category);
+    }
+
+    // Text search on title, venue name, and address (covers zip code searches)
+    if (search) {
+      query = query.or(`content.ilike.%${search}%,place_name.ilike.%${search}%,venue_address.ilike.%${search}%`);
+    }
+
+    // Time filter
+    const now = new Date().toISOString();
+    if (time === 'upcoming' || !time) {
+      query = query.gte('event_at', now);
+      query = query.order('event_at', { ascending: true });
+    } else if (time === 'past') {
+      query = query.lt('event_at', now);
+      query = query.order('event_at', { ascending: false });
+    } else {
+      // 'all' — order by creation date
+      query = query.order('created_at', { ascending: false });
+    }
+
+    // Pagination
+    query = query.range(offset, offset + limit - 1);
+
+    const { data: events, error, count } = await query;
 
     if (error) throw createError('Failed to fetch events', 500, 'SERVER_ERROR');
 
@@ -302,7 +347,7 @@ router.get('/events', serviceLimiter, async (req, res, next) => {
       return pe;
     });
 
-    res.json({ events: result });
+    res.json({ events: result, total: count ?? result.length });
   } catch (err) {
     next(err);
   }
