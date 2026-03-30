@@ -75,6 +75,8 @@ const updateAccountSchema = z.object({
     })),
   })).length(7).optional(),
   status: z.enum(['active', 'suspended', 'pending', 'rejected']).optional(),
+  logo_url: z.string().url().max(2000).optional().or(z.literal('')).or(z.null()),
+  description: z.string().max(2000).optional().or(z.literal('')).or(z.null()),
 });
 
 /** GET /service/accounts — List accounts with event counts, optional search + pagination */
@@ -86,7 +88,7 @@ router.get('/accounts', serviceLimiter, async (req, res, next) => {
 
     let query = supabaseAdmin
       .from('portal_accounts')
-      .select('id, email, business_name, auth_user_id, status, default_venue_name, default_place_id, default_address, default_latitude, default_longitude, website, phone, operating_hours, last_login_at, created_at, updated_at', { count: 'exact' })
+      .select('id, email, business_name, auth_user_id, status, default_venue_name, default_place_id, default_address, default_latitude, default_longitude, website, phone, operating_hours, logo_url, description, last_login_at, created_at, updated_at', { count: 'exact' })
       .order('created_at', { ascending: false });
 
     if (search) {
