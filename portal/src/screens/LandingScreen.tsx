@@ -138,7 +138,8 @@ export function LandingScreen({ onShowLogin, onShowDevelopers }: LandingScreenPr
             ['When', 'Start time, end time, timezone'],
             ['How much', 'Free, $10, $5–15'],
             ['Category', 'One of 20 structured types'],
-            ['Photo', 'Cover image, re-encoded and hosted'],
+            ['Link', 'Event page, tickets, or listing URL'],
+            ['Image', 'Cover photo per event, logo per venue'],
             ['Recurrence', 'Weekly, monthly, custom patterns'],
             ['Tags', 'Access, vibe, format descriptors'],
           ].map(([label, desc]) => (
