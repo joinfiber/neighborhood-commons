@@ -98,7 +98,7 @@ export function LandingScreen({ onShowLogin, onShowDevelopers }: LandingScreenPr
           margin: '24px 0 0',
           fontStyle: 'italic',
         }}>
-          Together is how we rise.
+          Common ground for neighborhood data.
         </p>
 
         {/* Scroll hint */}
