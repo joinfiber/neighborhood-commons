@@ -346,7 +346,7 @@ router.post('/events', serviceLimiter, async (req, res, next) => {
       ...data,
       title: data.title,
       tags: validatedTags,
-    }, adminUserId, data.account_id, config.defaultRegionId || undefined);
+    }, data.account_id, adminUserId);
 
     if (data.recurrence !== 'none') {
       // Recurring: create series
