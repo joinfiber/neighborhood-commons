@@ -128,7 +128,7 @@ router.get('/:idOrSlug', async (req, res, next) => {
     // Get all future events for this account (with recurrence/series info)
     const { data: futureEvents } = await supabaseAdmin
       .from('events')
-      .select('id, content, event_at, end_time, place_name, category, recurrence, series_id')
+      .select('id, content, event_at, end_time, place_name, category, recurrence, series_id, description, event_image_url, price, link_url')
       .eq('creator_account_id', account.id)
       .eq('status', 'published')
       .gte('event_at', new Date().toISOString())
@@ -144,6 +144,10 @@ router.get('/:idOrSlug', async (req, res, next) => {
       category: e.category ? [e.category] : [],
       recurrence: e.recurrence || null,
       series_id: e.series_id || null,
+      description: e.description || null,
+      image_url: e.event_image_url || null,
+      price: e.price || null,
+      link_url: e.link_url || null,
     }));
 
     // Split into regular programming (recurring) vs upcoming (one-off)
