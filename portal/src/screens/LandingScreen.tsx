@@ -7,13 +7,12 @@ interface LandingScreenProps {
 }
 
 // ---------------------------------------------------------------------------
-// Palette (extends loginColors for the dark landing experience)
+// Palette
 // ---------------------------------------------------------------------------
 
 const lc = {
   ...loginColors,
   link: '#d4c9b4',
-  linkHover: '#f5f0e8',
 };
 
 // ---------------------------------------------------------------------------
@@ -29,6 +28,8 @@ export function LandingScreen({ onShowLogin, onShowDevelopers }: LandingScreenPr
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
+  const mobile = isMobile;
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -43,13 +44,13 @@ export function LandingScreen({ onShowLogin, onShowDevelopers }: LandingScreenPr
       {/* Ambient glow */}
       <div style={{
         position: 'fixed',
-        top: '-200px',
+        top: '-300px',
         left: '50%',
         transform: 'translateX(-50%)',
-        width: '700px',
-        height: '700px',
+        width: '900px',
+        height: '900px',
         borderRadius: '50%',
-        background: `radial-gradient(circle, ${lc.accent}0D 0%, transparent 70%)`,
+        background: `radial-gradient(circle, ${lc.accent}0A 0%, transparent 70%)`,
         pointerEvents: 'none',
         zIndex: 0,
         animation: 'drift 22s ease-in-out infinite',
@@ -60,55 +61,55 @@ export function LandingScreen({ onShowLogin, onShowDevelopers }: LandingScreenPr
         position: 'relative',
         zIndex: 1,
         width: '100%',
-        maxWidth: '720px',
-        padding: isMobile ? '48px 24px 64px' : '80px 32px 96px',
+        maxWidth: '680px',
+        padding: mobile ? '64px 28px 80px' : '120px 32px 120px',
       }}>
 
-        {/* ── Header ──────────────────────────────────────────────────── */}
-        <header style={{ marginBottom: isMobile ? '56px' : '72px' }}>
+        {/* ── Hero ────────────────────────────────────────────────────── */}
+        <header style={{ marginBottom: mobile ? '80px' : '120px' }}>
           <div style={{
-            fontSize: '12px',
+            fontSize: '11px',
             fontWeight: 400,
-            letterSpacing: '0.14em',
+            letterSpacing: '0.18em',
             textTransform: 'uppercase' as const,
             color: lc.accent,
-            marginBottom: '24px',
+            marginBottom: '32px',
           }}>
             neighborhood commons
           </div>
 
           <h1 style={{
-            fontSize: isMobile ? '28px' : '38px',
+            fontSize: mobile ? '32px' : '46px',
             fontWeight: 300,
-            lineHeight: 1.2,
+            lineHeight: 1.15,
             color: lc.cream,
-            margin: '0 0 28px 0',
-            letterSpacing: '-0.015em',
+            margin: '0 0 40px 0',
+            letterSpacing: '-0.02em',
           }}>
             A public database of<br />neighborhood events.
           </h1>
 
           <p style={{
-            fontSize: '16px',
-            lineHeight: 1.65,
+            fontSize: mobile ? '16px' : '18px',
+            lineHeight: 1.7,
             color: lc.text,
-            maxWidth: '580px',
+            maxWidth: '540px',
             margin: 0,
           }}>
             This is the Neighborhood Commons. It's open infrastructure maintained by <a href="https://joinfiber.app" style={linkStyle}>Fiber</a> and available for use by all. The data is ungated and you may consume it as you wish. To contribute, create an API key and get in touch. Together is how we rise.
           </p>
         </header>
 
-        {/* ── What's in an event ──────────────────────────────────────── */}
-        <Section title="What's in the data">
+        {/* ── The data ────────────────────────────────────────────────── */}
+        <Section title="What's in the data" mobile={mobile}>
           <p style={prose}>
             An event is a public fact. Something happens, somewhere, at some time. The Commons stores the essentials and serves them to anyone who asks.
           </p>
           <div style={{
             display: 'grid',
-            gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
-            gap: '10px 32px',
-            marginTop: '20px',
+            gridTemplateColumns: mobile ? '1fr' : '1fr 1fr',
+            gap: '14px 40px',
+            marginTop: '28px',
           }}>
             {[
               ['What', 'Name and description'],
@@ -120,48 +121,48 @@ export function LandingScreen({ onShowLogin, onShowDevelopers }: LandingScreenPr
               ['Recurrence', 'Weekly, monthly, custom patterns'],
               ['Tags', 'Access, vibe, format descriptors'],
             ].map(([label, desc]) => (
-              <div key={label} style={{ display: 'flex', gap: '10px', padding: '6px 0' }}>
-                <span style={{ color: lc.accent, fontSize: '14px', lineHeight: '22px', flexShrink: 0, width: '90px', fontWeight: 500 }}>{label}</span>
+              <div key={label} style={{ display: 'flex', gap: '12px', padding: '4px 0' }}>
+                <span style={{ color: lc.accent, fontSize: '14px', lineHeight: '22px', flexShrink: 0, width: '96px', fontWeight: 500 }}>{label}</span>
                 <span style={{ color: lc.muted, fontSize: '14px', lineHeight: '22px' }}>{desc}</span>
               </div>
             ))}
           </div>
-          <p style={{ ...prose, marginTop: '20px', color: lc.dim, fontSize: '14px' }}>
+          <p style={{ ...prose, marginTop: '28px', color: lc.dim, fontSize: '14px' }}>
             Every event response is self-contained. No joins, no implicit knowledge, no extra calls. One request, the full picture.
           </p>
         </Section>
 
-        {/* ── What you can build ─────────────────────────────────────── */}
-        <Section title="What people build with it">
+        {/* ── Expressions ─────────────────────────────────────────────── */}
+        <Section title="Expressions of the Commons" mobile={mobile}>
           <p style={prose}>
-            The data is open and the use cases are unlimited. There is no predefined scope on what you can do with public event data. Here are some of the things already built — and some that are waiting for someone like you.
+            The data is open and the use cases are unlimited. These are some of the ways it's already being put to work — each a different vision for what neighborhood event data can become.
           </p>
           <div style={{
             display: 'flex',
             flexDirection: 'column',
-            gap: '16px',
-            marginTop: '20px',
+            gap: '20px',
+            marginTop: '28px',
           }}>
             <AppExample
               name="merrie.co"
               href="https://merrie.co"
-              desc="The best way for non-developers to interact with the Commons. Curators discover and organize events. Venue pages are built automatically as data flows in. And soon, lightweight tools for groups and their organizers. Built for and by Philadelphia, the place."
+              desc="One vision for what to do with Commons data — and the easiest way for non-developers to interact with it. Curators discover and organize events. Venue pages are built automatically as data flows in. And soon, lightweight tools for groups and their organizers. Built for and by Philadelphia, the place."
             />
             <AppExample
               name="Fiber"
               href="https://joinfiber.app"
-              desc="A mobile app and website for social event discovery. Browse feeds, share plans with friends, find what's on tonight."
+              desc="A different expression entirely. A mobile app and website for social event discovery — browse feeds, share plans with friends, find what's on tonight. Same underlying data, different experience."
             />
             <AppExample
-              name="Your app"
-              desc="A nightlife guide. A community calendar. A civic dashboard. A newsletter tool. A digital signage display. Whatever your audience, the data is here. Clone the repo and build your own tools — or use our infrastructure directly. Both are welcome."
+              name="Yours"
+              desc="A nightlife guide. A community calendar. A civic dashboard. A newsletter. A digital sign in a coffee shop window. Whatever your audience, the data is here. Clone the repo and build your own commons — or build on ours. Both are welcome."
               placeholder
             />
           </div>
         </Section>
 
-        {/* ── How to use it ──────────────────────────────────────────── */}
-        <Section title="Read the data">
+        {/* ── Read ────────────────────────────────────────────────────── */}
+        <Section title="Read the data" mobile={mobile}>
           <p style={prose}>
             No account needed. No API key needed. Hit the endpoint and go.
           </p>
@@ -175,10 +176,10 @@ GET /api/v1/events?near=39.97,-75.14&radius_km=2
 
 # Full-text search
 GET /api/v1/events?q=karaoke`}</CodeBlock>
-          <p style={{ ...prose, marginTop: '16px' }}>
+          <p style={{ ...prose, marginTop: '20px' }}>
             Also available as <InlineCode>events.ics</InlineCode> (iCal) and <InlineCode>events.rss</InlineCode> (RSS). Rate limit is 1,000 requests per hour — generous for any app, and free forever.
           </p>
-          <div style={{ marginTop: '16px' }}>
+          <div style={{ marginTop: '20px' }}>
             <button
               type="button"
               onClick={onShowDevelopers}
@@ -189,8 +190,8 @@ GET /api/v1/events?q=karaoke`}</CodeBlock>
           </div>
         </Section>
 
-        {/* ── Contribute ─────────────────────────────────────────────── */}
-        <Section title="Contribute data">
+        {/* ── Contribute ──────────────────────────────────────────────── */}
+        <Section title="Contribute data" mobile={mobile}>
           <p style={prose}>
             If you produce event data — you're a venue, a promoter, a community organizer, a scraper of public listings, a builder of tools — you can push events into the Commons. The data becomes part of the public record, available to every app in the ecosystem.
           </p>
@@ -200,8 +201,8 @@ GET /api/v1/events?q=karaoke`}</CodeBlock>
           <div style={{
             display: 'flex',
             flexDirection: 'column',
-            gap: '12px',
-            marginTop: '20px',
+            gap: '16px',
+            marginTop: '28px',
           }}>
             {[
               ['Apply for a key', 'Describe your use case. We review within a few days.'],
@@ -210,29 +211,29 @@ GET /api/v1/events?q=karaoke`}</CodeBlock>
             ].map(([step, desc], i) => (
               <div key={i} style={{
                 display: 'flex',
-                gap: '14px',
+                gap: '16px',
                 alignItems: 'flex-start',
               }}>
                 <span style={{
                   color: lc.accent,
                   fontSize: '13px',
                   fontWeight: 600,
-                  lineHeight: '22px',
+                  lineHeight: '24px',
                   flexShrink: 0,
                   width: '20px',
                   textAlign: 'center',
                 }}>{i + 1}</span>
                 <div>
-                  <span style={{ color: lc.cream, fontSize: '14px', fontWeight: 500 }}>{step}</span>
-                  <span style={{ color: lc.muted, fontSize: '14px' }}> — {desc}</span>
+                  <span style={{ color: lc.cream, fontSize: '15px', fontWeight: 500 }}>{step}</span>
+                  <span style={{ color: lc.muted, fontSize: '15px' }}> — {desc}</span>
                 </div>
               </div>
             ))}
           </div>
         </Section>
 
-        {/* ── The idea ───────────────────────────────────────────────── */}
-        <Section title="Why this exists">
+        {/* ── Why ─────────────────────────────────────────────────────── */}
+        <Section title="Why this exists" mobile={mobile}>
           <p style={prose}>
             Events are public facts. A band plays at a bar on Thursday. A yoga class meets in the park on Saturday mornings. A market opens on the first Sunday of every month. These are not opinions. They are not proprietary. They are things that happen in the world, and anyone should be able to know about them.
           </p>
@@ -244,10 +245,10 @@ GET /api/v1/events?q=karaoke`}</CodeBlock>
           </p>
         </Section>
 
-        {/* ── Footer ─────────────────────────────────────────────────── */}
+        {/* ── Footer ──────────────────────────────────────────────────── */}
         <footer style={{
-          marginTop: '64px',
-          paddingTop: '32px',
+          marginTop: mobile ? '40px' : '64px',
+          paddingTop: '40px',
           borderTop: `1px solid ${lc.border}`,
           display: 'flex',
           flexWrap: 'wrap',
@@ -281,37 +282,37 @@ GET /api/v1/events?q=karaoke`}</CodeBlock>
 }
 
 // ---------------------------------------------------------------------------
-// Shared styles
+// Styles
 // ---------------------------------------------------------------------------
 
 const prose: React.CSSProperties = {
   fontSize: '15px',
-  lineHeight: 1.7,
-  color: lc.text,
-  margin: '0 0 12px 0',
+  lineHeight: 1.75,
+  color: loginColors.text,
+  margin: '0 0 14px 0',
 };
 
 const linkStyle: React.CSSProperties = {
-  color: lc.link,
+  color: loginColors.cream,
   textDecoration: 'underline',
-  textDecorationColor: `${lc.link}40`,
+  textDecorationColor: `${loginColors.cream}30`,
   textUnderlineOffset: '3px',
 };
 
 const footerLink: React.CSSProperties = {
-  color: lc.muted,
+  color: loginColors.muted,
   fontSize: '13px',
   textDecoration: 'none',
 };
 
 const ctaSecondary: React.CSSProperties = {
   background: 'transparent',
-  border: `1px solid ${lc.border}`,
+  border: `1px solid ${loginColors.border}`,
   borderRadius: '8px',
-  color: lc.cream,
+  color: loginColors.cream,
   fontSize: '14px',
   fontWeight: 400,
-  padding: '10px 20px',
+  padding: '11px 22px',
   cursor: 'pointer',
   transition: 'border-color 0.15s',
 };
@@ -320,16 +321,16 @@ const ctaSecondary: React.CSSProperties = {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children, mobile }: { title: string; children: React.ReactNode; mobile: boolean }) {
   return (
-    <section style={{ marginBottom: '56px' }}>
+    <section style={{ marginBottom: mobile ? '72px' : '96px' }}>
       <h2 style={{
-        fontSize: '12px',
+        fontSize: '11px',
         fontWeight: 400,
-        letterSpacing: '0.12em',
+        letterSpacing: '0.16em',
         textTransform: 'uppercase',
-        color: lc.accent,
-        marginBottom: '20px',
+        color: loginColors.accent,
+        marginBottom: '28px',
       }}>
         {title}
       </h2>
@@ -341,24 +342,24 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function AppExample({ name, href, desc, placeholder }: { name: string; href?: string; desc: string; placeholder?: boolean }) {
   return (
     <div style={{
-      background: lc.card,
-      border: `1px solid ${placeholder ? `${lc.border}80` : lc.border}`,
-      borderRadius: '10px',
-      padding: '16px 20px',
+      background: loginColors.card,
+      border: `1px solid ${placeholder ? `${loginColors.border}80` : loginColors.border}`,
+      borderRadius: '12px',
+      padding: '20px 24px',
       borderStyle: placeholder ? 'dashed' : 'solid',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+      <div style={{ marginBottom: '8px' }}>
         {href ? (
-          <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: lc.cream, fontSize: '15px', fontWeight: 500, textDecoration: 'none' }}>
-            {name} <span style={{ color: lc.dim, fontSize: '12px' }}>&#8599;</span>
+          <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: loginColors.cream, fontSize: '16px', fontWeight: 500, textDecoration: 'none', letterSpacing: '-0.01em' }}>
+            {name} <span style={{ color: loginColors.dim, fontSize: '12px', verticalAlign: '1px' }}>&#8599;</span>
           </a>
         ) : (
-          <span style={{ color: placeholder ? lc.muted : lc.cream, fontSize: '15px', fontWeight: 500, fontStyle: placeholder ? 'italic' : 'normal' }}>
+          <span style={{ color: placeholder ? loginColors.muted : loginColors.cream, fontSize: '16px', fontWeight: 500, fontStyle: placeholder ? 'italic' : 'normal', letterSpacing: '-0.01em' }}>
             {name}
           </span>
         )}
       </div>
-      <p style={{ color: lc.muted, fontSize: '14px', lineHeight: 1.55, margin: 0 }}>{desc}</p>
+      <p style={{ color: loginColors.muted, fontSize: '14px', lineHeight: 1.65, margin: 0 }}>{desc}</p>
     </div>
   );
 }
@@ -367,14 +368,14 @@ function CodeBlock({ children }: { children: string }) {
   return (
     <pre style={{
       background: '#0a0a09',
-      border: `1px solid ${lc.border}`,
-      borderRadius: '8px',
-      padding: '16px 20px',
+      border: `1px solid ${loginColors.border}`,
+      borderRadius: '10px',
+      padding: '20px 24px',
       fontSize: '13px',
-      lineHeight: 1.6,
-      color: lc.muted,
+      lineHeight: 1.7,
+      color: loginColors.muted,
       overflow: 'auto',
-      margin: '12px 0 0 0',
+      margin: '16px 0 0 0',
       fontFamily: 'ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace',
     }}>
       {children}
@@ -386,12 +387,12 @@ function InlineCode({ children }: { children: string }) {
   return (
     <code style={{
       background: '#0a0a09',
-      border: `1px solid ${lc.border}`,
+      border: `1px solid ${loginColors.border}`,
       borderRadius: '4px',
-      padding: '2px 6px',
+      padding: '2px 7px',
       fontSize: '13px',
       fontFamily: 'ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace',
-      color: lc.muted,
+      color: loginColors.muted,
     }}>
       {children}
     </code>
