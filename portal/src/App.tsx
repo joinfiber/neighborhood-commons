@@ -3,6 +3,7 @@ import { useAuth } from './hooks/useAuth';
 import { useHashRoute } from './hooks/useHashRoute';
 import { claimAccount, fetchAccount, fetchWhoami, updateProfile, type PortalAccount, type UserRole } from './lib/api';
 import { colors, styles, spacing, radii } from './lib/styles';
+import { LandingScreen } from './screens/LandingScreen';
 import { LoginScreen } from './screens/LoginScreen';
 import { DashboardScreen } from './screens/DashboardScreen';
 import { CreateEventScreen } from './screens/CreateEventScreen';
@@ -123,8 +124,8 @@ export default function App() {
     return <DevelopersScreen />;
   }
 
-  // Login
-  if (!isAuthenticated) {
+  // Unauthenticated: login screen (accessed via #/login or "Business sign in" link)
+  if (!isAuthenticated && route.screen === 'login') {
     return (
       <LoginScreen
         onSignIn={signIn}
@@ -134,6 +135,16 @@ export default function App() {
         loading={loading}
         error={error}
         canSignUp={canSignUp}
+        onShowDevelopers={() => navigate('#/developers')}
+      />
+    );
+  }
+
+  // Unauthenticated: landing page (default)
+  if (!isAuthenticated) {
+    return (
+      <LandingScreen
+        onShowLogin={() => navigate('#/login')}
         onShowDevelopers={() => navigate('#/developers')}
       />
     );
