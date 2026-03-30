@@ -27,7 +27,7 @@ import {
 } from '../lib/event-operations.js';
 import { createEventSeries } from '../lib/event-series.js';
 import { processAndUploadImage } from '../lib/image-processing.js';
-import { geocodeEventIfNeeded, nominatimGeocode } from '../lib/geocoding.js';
+import { nominatimGeocode } from '../lib/geocoding.js';
 import { config } from '../config.js';
 
 const router: ReturnType<typeof Router> = Router();
