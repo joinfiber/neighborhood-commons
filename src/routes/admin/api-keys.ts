@@ -22,6 +22,8 @@ const createApiKeySchema = z.object({
 const updateApiKeySchema = z.object({
   name: z.string().min(1).max(100).optional(),
   status: z.enum(['active', 'revoked']).optional(),
+  contributor_tier: z.enum(['pending', 'verified', 'trusted']).optional(),
+  contact_email: z.string().email().max(200).optional(),
 });
 
 // =============================================================================
@@ -63,7 +65,7 @@ router.get('/api-keys', portalLimiter, async (_req, res, next) => {
   try {
     const { data: keys, error } = await supabaseAdmin
       .from('api_keys')
-      .select('id, key_prefix, name, contact_email, rate_limit_per_hour, status, last_used_at, created_at')
+      .select('id, key_prefix, name, contact_email, rate_limit_per_hour, status, contributor_tier, last_used_at, created_at')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -71,7 +73,38 @@ router.get('/api-keys', portalLimiter, async (_req, res, next) => {
       throw createError('Failed to list API keys', 500, 'SERVER_ERROR');
     }
 
-    res.json({ api_keys: keys || [] });
+    // Fetch event counts and last submission per API key
+    const keyIds = (keys || []).map((k) => k.id);
+    let eventStats: Record<string, { event_count: number; last_submitted_at: string | null }> = {};
+
+    if (keyIds.length > 0) {
+      const sourceFeedUrls = keyIds.map((id) => `api-key:${id}`);
+      const { data: stats } = await supabaseAdmin
+        .from('events')
+        .select('source_feed_url, created_at')
+        .in('source_feed_url', sourceFeedUrls)
+        .eq('source_method', 'api');
+
+      if (stats) {
+        for (const row of stats) {
+          const keyId = row.source_feed_url?.replace('api-key:', '');
+          if (!keyId) continue;
+          if (!eventStats[keyId]) eventStats[keyId] = { event_count: 0, last_submitted_at: null };
+          eventStats[keyId].event_count++;
+          if (!eventStats[keyId].last_submitted_at || row.created_at > eventStats[keyId].last_submitted_at!) {
+            eventStats[keyId].last_submitted_at = row.created_at;
+          }
+        }
+      }
+    }
+
+    const enrichedKeys = (keys || []).map((k) => ({
+      ...k,
+      event_count: eventStats[k.id]?.event_count ?? 0,
+      last_submitted_at: eventStats[k.id]?.last_submitted_at ?? null,
+    }));
+
+    res.json({ api_keys: enrichedKeys });
   } catch (err) {
     next(err);
   }
@@ -95,7 +128,7 @@ router.patch('/api-keys/:id', writeLimiter, async (req, res, next) => {
       .from('api_keys')
       .update(updates)
       .eq('id', id)
-      .select('id, key_prefix, name, contact_email, rate_limit_per_hour, status, last_used_at, created_at')
+      .select('id, key_prefix, name, contact_email, rate_limit_per_hour, status, contributor_tier, last_used_at, created_at')
       .single();
 
     if (error) {
@@ -103,6 +136,7 @@ router.patch('/api-keys/:id', writeLimiter, async (req, res, next) => {
       throw createError('Failed to update API key', 500, 'SERVER_ERROR');
     }
 
+    console.log(`[COMMONS-ADMIN] API key ${id} updated:`, Object.keys(updates).join(', '));
     res.json({ api_key: apiKey });
   } catch (err) {
     next(err);

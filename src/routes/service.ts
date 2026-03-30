@@ -264,16 +264,33 @@ const updateEventSchema = z.object({
   rsvp_limit: z.number().int().min(1).max(10000).nullable().optional(),
   start_time_required: z.boolean().optional(),
   image_focal_y: z.number().min(0).max(1).optional(),
+  status: z.enum(['published', 'pending_review', 'suspended', 'unpublished']).optional(),
 });
 
 /** GET /service/events — All events (unique: one-offs + first instance of series) */
-router.get('/events', serviceLimiter, async (_req, res, next) => {
+router.get('/events', serviceLimiter, async (req, res, next) => {
   try {
-    const { data: events, error } = await supabaseAdmin
+    let query = supabaseAdmin
       .from('events')
       .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name, email)`)
-      .in('source', [...MANAGED_SOURCES])
-      .order('event_at', { ascending: true })
+      .in('source', [...MANAGED_SOURCES]);
+
+    // Optional status filter
+    const status = req.query.status as string | undefined;
+    if (status) {
+      const allowed = ['published', 'pending_review', 'suspended', 'draft'];
+      if (!allowed.includes(status)) throw createError(`Invalid status filter: ${status}`, 400, 'VALIDATION_ERROR');
+      query = query.eq('status', status);
+    }
+
+    // Optional source_method filter (e.g. 'api' for contributed events)
+    const sourceMethod = req.query.source_method as string | undefined;
+    if (sourceMethod) {
+      query = query.eq('source_method', sourceMethod);
+    }
+
+    const { data: events, error } = await query
+      .order('created_at', { ascending: false })
       .limit(5000);
 
     if (error) throw createError('Failed to fetch events', 500, 'SERVER_ERROR');
@@ -393,15 +410,17 @@ router.patch('/events/:id', serviceLimiter, async (req, res, next) => {
     // Fetch existing event
     const { data: existing } = await supabaseAdmin
       .from('events')
-      .select('id, event_timezone, creator_account_id')
+      .select('id, status, event_timezone, creator_account_id')
       .eq('id', req.params.id)
       .maybeSingle();
 
     if (!existing) throw createError('Event not found', 404, 'NOT_FOUND');
 
     const tz = data.event_timezone || existing.event_timezone || 'America/New_York';
+    const wasPublished = existing.status === 'published';
     const dbUpdate: Record<string, unknown> = {};
 
+    if (data.status !== undefined) dbUpdate.status = data.status;
     if (data.title !== undefined) dbUpdate.content = data.title;
     if (data.venue_name !== undefined) dbUpdate.place_name = data.venue_name;
     if (data.address !== undefined) dbUpdate.venue_address = data.address;
@@ -445,6 +464,23 @@ router.patch('/events/:id', serviceLimiter, async (req, res, next) => {
       .single();
 
     if (error) throw createError('Failed to update event', 500, 'SERVER_ERROR');
+
+    // Dispatch webhook when event transitions to published (e.g. approved from pending_review)
+    if (data.status === 'published' && !wasPublished) {
+      (async () => {
+        try {
+          const { data: row } = await supabaseAdmin
+            .from('events')
+            .select(`*, portal_accounts!events_creator_account_id_fkey(business_name)`)
+            .eq('id', updated.id)
+            .maybeSingle();
+          if (row) void dispatchWebhooks('event.created', updated.id, toNeighborhoodEvent(row as unknown as PortalEventRow));
+        } catch (err) {
+          console.error('[SERVICE] Webhook dispatch error:', err instanceof Error ? err.message : err);
+        }
+      })();
+    }
+
     res.json({ event: toPortalEvent(updated) });
   } catch (err) {
     next(err);
@@ -582,6 +618,89 @@ router.get('/stats', serviceLimiter, async (_req, res, next) => {
         category_distribution,
       },
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================================================
+// API KEYS
+// =============================================================================
+
+/** GET /service/api-keys — List all API keys with event stats */
+router.get('/api-keys', serviceLimiter, async (_req, res, next) => {
+  try {
+    const { data: keys, error } = await supabaseAdmin
+      .from('api_keys')
+      .select('id, key_prefix, name, contact_email, rate_limit_per_hour, status, contributor_tier, last_used_at, created_at')
+      .order('created_at', { ascending: false });
+
+    if (error) throw createError('Failed to list API keys', 500, 'SERVER_ERROR');
+
+    // Fetch event counts and last submission per API key
+    const keyIds = (keys || []).map((k) => k.id);
+    let eventStats: Record<string, { event_count: number; last_submitted_at: string | null; pending_count: number }> = {};
+
+    if (keyIds.length > 0) {
+      const sourceFeedUrls = keyIds.map((id) => `api-key:${id}`);
+      const { data: stats } = await supabaseAdmin
+        .from('events')
+        .select('source_feed_url, status, created_at')
+        .in('source_feed_url', sourceFeedUrls)
+        .eq('source_method', 'api');
+
+      if (stats) {
+        for (const row of stats) {
+          const keyId = row.source_feed_url?.replace('api-key:', '');
+          if (!keyId) continue;
+          if (!eventStats[keyId]) eventStats[keyId] = { event_count: 0, last_submitted_at: null, pending_count: 0 };
+          eventStats[keyId].event_count++;
+          if (row.status === 'pending_review') eventStats[keyId].pending_count++;
+          if (!eventStats[keyId].last_submitted_at || row.created_at > eventStats[keyId].last_submitted_at!) {
+            eventStats[keyId].last_submitted_at = row.created_at;
+          }
+        }
+      }
+    }
+
+    const enrichedKeys = (keys || []).map((k) => ({
+      ...k,
+      event_count: eventStats[k.id]?.event_count ?? 0,
+      pending_count: eventStats[k.id]?.pending_count ?? 0,
+      last_submitted_at: eventStats[k.id]?.last_submitted_at ?? null,
+    }));
+
+    res.json({ api_keys: enrichedKeys });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** PATCH /service/api-keys/:id — Update API key tier, name, status, or contact email */
+router.patch('/api-keys/:id', serviceLimiter, async (req, res, next) => {
+  try {
+    validateUuidParam(req.params.id, 'API key ID');
+    const schema = z.object({
+      name: z.string().min(1).max(100).optional(),
+      status: z.enum(['active', 'revoked']).optional(),
+      contributor_tier: z.enum(['pending', 'verified', 'trusted']).optional(),
+      contact_email: z.string().email().max(200).optional(),
+    });
+    const updates = validateRequest(schema, req.body);
+
+    if (Object.keys(updates).length === 0) throw createError('No fields to update', 400, 'VALIDATION_ERROR');
+
+    const { data: apiKey, error } = await supabaseAdmin
+      .from('api_keys')
+      .update(updates)
+      .eq('id', req.params.id)
+      .select('id, key_prefix, name, contact_email, rate_limit_per_hour, status, contributor_tier, last_used_at, created_at')
+      .single();
+
+    if (error) throw createError('Failed to update API key', 500, 'SERVER_ERROR');
+
+    console.log(`[SERVICE] API key ${req.params.id} updated: ${Object.keys(updates).join(', ')}`);
+    res.json({ api_key: apiKey });
   } catch (err) {
     next(err);
   }
