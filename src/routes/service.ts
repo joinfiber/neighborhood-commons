@@ -27,6 +27,7 @@ import {
 } from '../lib/event-operations.js';
 import { createEventSeries } from '../lib/event-series.js';
 import { processAndUploadImage } from '../lib/image-processing.js';
+import { geocodeEventIfNeeded, nominatimGeocode } from '../lib/geocoding.js';
 import { config } from '../config.js';
 
 const router: ReturnType<typeof Router> = Router();
@@ -347,6 +348,44 @@ router.post('/events', serviceLimiter, async (req, res, next) => {
       title: data.title,
       tags: validatedTags,
     }, data.account_id, adminUserId);
+
+    // Resolve coordinates + region (matching Contribute API behavior)
+    let lat = data.latitude ?? null;
+    let lng = data.longitude ?? null;
+
+    // If no coordinates but has address, geocode it
+    if (lat == null && lng == null && data.address) {
+      try {
+        const coords = await nominatimGeocode(data.address);
+        if (coords) {
+          lat = coords.lat;
+          lng = coords.lng;
+          insert.latitude = lat;
+          insert.longitude = lng;
+          insert.approximate_location = `POINT(${lng} ${lat})`;
+          console.log(`[SERVICE] Geocoded "${data.address}" → ${lat}, ${lng}`);
+        }
+      } catch (err) {
+        console.error('[SERVICE] Geocode failed:', err instanceof Error ? err.message : err);
+      }
+    }
+
+    // Resolve region from coordinates
+    if (lat != null && lng != null) {
+      const { data: regionData } = await supabaseAdmin.rpc('find_user_region', {
+        p_longitude: lng,
+        p_latitude: lat,
+      });
+      if (regionData && regionData.length > 0) {
+        insert.region_id = regionData[0].region_id;
+        console.log(`[SERVICE] Region resolved: ${regionData[0].region_name}`);
+      }
+    }
+
+    // Ensure region_id is never null — fall back to default
+    if (!insert.region_id && config.defaultRegionId) {
+      insert.region_id = config.defaultRegionId;
+    }
 
     if (data.recurrence !== 'none') {
       // Recurring: create series
