@@ -637,7 +637,7 @@ router.post('/events/:id/image', serviceLimiter, async (req, res, next) => {
     const schema = z.object({ image: z.string().min(1).max(14_000_000) });
     const { image } = validateRequest(schema, req.body);
 
-    const imageUrl = await processAndUploadImage(image, req.params.id);
+    const imageUrl = await processAndUploadImage(req.params.id, image);
 
     await supabaseAdmin
       .from('events')

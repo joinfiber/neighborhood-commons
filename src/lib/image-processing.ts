@@ -25,7 +25,9 @@ export const SUPPORTED_MAGIC_BYTES: Record<string, string> = {
  * upload to R2, and return the public serving URL.
  */
 export async function processAndUploadImage(eventId: string, base64: string): Promise<string> {
-  const buffer = Buffer.from(base64, 'base64');
+  // Strip data URI prefix if present (e.g. "data:image/jpeg;base64,...")
+  const rawBase64 = base64.includes(',') ? base64.split(',')[1]! : base64;
+  const buffer = Buffer.from(rawBase64, 'base64');
   if (buffer.length < 8) {
     throw createError('Invalid image data — upload a JPEG, PNG, or WebP file', 400, 'VALIDATION_ERROR');
   }
