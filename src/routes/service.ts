@@ -368,6 +368,7 @@ router.post('/events', serviceLimiter, async (req, res, next) => {
       });
     } else {
       // One-off event
+      console.log('[SERVICE] Insert payload:', JSON.stringify(insert).slice(0, 1000));
       const { data: event, error } = await supabaseAdmin
         .from('events')
         .insert(insert)
