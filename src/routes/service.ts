@@ -324,9 +324,6 @@ router.get('/events', serviceLimiter, async (req, res, next) => {
       .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name, email)`, { count: 'exact' })
       .in('source', [...MANAGED_SOURCES]);
 
-    // Series dedup: only show one-offs + first instance of series
-    query = query.or('series_id.is.null,series_instance_number.eq.1');
-
     // Status filter
     const status = req.query.status as string | undefined;
     if (status) {
@@ -365,20 +362,38 @@ router.get('/events', serviceLimiter, async (req, res, next) => {
       query = query.order('created_at', { ascending: false });
     }
 
-    // Pagination
-    query = query.range(offset, offset + limit - 1);
+    // Over-fetch for series dedup (we'll collapse in JS)
+    query = query.range(0, (offset + limit) * 3);
 
-    const { data: events, error, count } = await query;
+    const { data: rawEvents, error, count } = await query;
 
     if (error) throw createError('Failed to fetch events', 500, 'SERVER_ERROR');
 
-    const result = (events || []).map((e) => {
+    // Series dedup: keep only the nearest instance per series (by event_at).
+    // One-off events (no series_id) always pass through.
+    const seenSeries = new Set<string>();
+    const deduped = (rawEvents || []).filter((e: { series_id?: string | null }) => {
+      if (!e.series_id) return true; // one-off
+      if (seenSeries.has(e.series_id)) return false; // already have a nearer instance
+      seenSeries.add(e.series_id);
+      return true;
+    });
+
+    // Apply pagination to the deduped list
+    const paged = deduped.slice(offset, offset + limit);
+
+    const result = paged.map((e) => {
       const pe = toPortalEvent(e);
       pe.portal_accounts = e.portal_accounts;
       return pe;
     });
 
-    res.json({ events: result, total: count ?? result.length });
+    // Count unique events (one-offs + unique series) for pagination
+    const uniqueTotal = count != null
+      ? Math.min(count, deduped.length + (count - (rawEvents || []).length))
+      : deduped.length;
+
+    res.json({ events: result, total: uniqueTotal });
   } catch (err) {
     next(err);
   }
