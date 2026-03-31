@@ -23,6 +23,9 @@ import { config } from '../config.js';
 import { downloadAndAttachImage } from '../lib/image-processing.js';
 import { nominatimGeocode } from '../lib/geocoding.js';
 import { sanitizeUrl, checkContributeUrlDomain } from '../lib/url-sanitizer.js';
+import { fromRRule } from '../lib/rrule.js';
+import { fromTimestamptz } from '../lib/event-operations.js';
+import { createEventSeries } from '../lib/event-series.js';
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -63,6 +66,13 @@ const contributeEventSchema = z.object({
   tags: z.array(z.string().max(50)).max(15).optional(),
   wheelchair_accessible: z.boolean().optional(),
   custom_category: z.string().max(50).optional(),
+
+  // Recurrence (RRULE format — e.g. "FREQ=WEEKLY", "FREQ=MONTHLY;BYDAY=2FR;COUNT=12")
+  recurrence: z.string().max(200).optional(),
+  instance_count: z.number().int().min(0).max(52).optional(),
+
+  // Venue linkage
+  venue_id: z.string().uuid().optional(),
 
   // External tracking (for dedup)
   external_id: z.string().max(500).optional(),
@@ -189,6 +199,7 @@ function contributeEventToInsert(
   keyName: string,
   tier: string,
   resolved: { lat: number | null; lng: number | null; regionId: string | null },
+  opts?: { internalRecurrence?: string; venueId?: string },
 ): Record<string, unknown> {
   const startDate = new Date(event.start);
   const endDate = event.end ? new Date(event.end) : null;
@@ -212,7 +223,7 @@ function contributeEventToInsert(
     event_timezone: event.timezone,
     category: event.category,
     custom_category: event.category === 'other' ? event.custom_category || null : null,
-    recurrence: 'none',
+    recurrence: opts?.internalRecurrence || 'none',
     price: event.cost ? stripHtml(event.cost) : null,
     link_url: event.url ? sanitizeUrl(event.url) : null,
     event_image_url: null, // Set async by downloadAndAttachImage if image_url provided
@@ -221,7 +232,7 @@ function contributeEventToInsert(
     wheelchair_accessible: event.wheelchair_accessible ?? null,
     rsvp_limit: null,
     event_image_focal_y: 0.5,
-    creator_account_id: null,
+    creator_account_id: opts?.venueId || null,
     user_id: null,
     source: 'api',
     source_method: 'api',
@@ -233,6 +244,15 @@ function contributeEventToInsert(
     is_business: false,
     region_id: resolved.regionId,
   };
+}
+
+/** Derive a URL-safe slug from a venue name */
+function toSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/['']/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
 }
 
 // =============================================================================
@@ -249,9 +269,26 @@ router.post('/', writeLimiter, async (req, res, next) => {
     if (!apiKeyId) throw createError('API key required', 401, 'UNAUTHORIZED');
 
     const { tier, name: keyName } = await getKeyInfo(apiKeyId);
-    await checkContributeRateLimit(apiKeyId, tier);
-
     const event = validateRequest(contributeEventSchema, req.body);
+
+    // Parse RRULE if provided (before rate limit so we know the instance count)
+    let internalRecurrence: string | undefined;
+    let resolvedInstanceCount: number | undefined;
+    if (event.recurrence) {
+      try {
+        const parsed = fromRRule(event.recurrence);
+        internalRecurrence = parsed.recurrence;
+        resolvedInstanceCount = event.instance_count ?? parsed.instanceCount;
+      } catch (err) {
+        throw createError((err as Error).message, 400, 'VALIDATION_ERROR');
+      }
+    }
+
+    // Rate-limit: count by expected instances for recurring events
+    const rateLimitCount = (internalRecurrence && internalRecurrence !== 'none')
+      ? (resolvedInstanceCount || 12)
+      : 1;
+    await checkContributeRateLimit(apiKeyId, tier, rateLimitCount);
 
     // Validate event URL domain if provided
     if (event.url) {
@@ -267,8 +304,71 @@ router.post('/', writeLimiter, async (req, res, next) => {
 
     // Resolve coordinates (geocode if needed) and find containing region
     const resolved = await resolveLocationAndRegion(event);
-    const insertData = contributeEventToInsert(event, apiKeyId, keyName, tier, resolved);
 
+    // Verify venue_id if provided
+    let venueId: string | undefined;
+    if (event.venue_id) {
+      const { data: venue } = await supabaseAdmin
+        .from('portal_accounts')
+        .select('id')
+        .eq('id', event.venue_id)
+        .eq('status', 'active')
+        .maybeSingle();
+      if (!venue) throw createError('Venue not found or inactive', 400, 'VALIDATION_ERROR');
+      venueId = venue.id;
+    }
+
+    const insertData = contributeEventToInsert(event, apiKeyId, keyName, tier, resolved, {
+      internalRecurrence,
+      venueId,
+    });
+
+    // Recurring event: create a series
+    if (internalRecurrence && internalRecurrence !== 'none') {
+      const { date: eventDate, time: startTime } = fromTimestamptz(event.start, event.timezone);
+      const endTime = event.end ? fromTimestamptz(event.end, event.timezone).time : null;
+
+      const instances = await createEventSeries(
+        insertData,
+        internalRecurrence,
+        eventDate,
+        startTime,
+        endTime,
+        event.timezone,
+        resolvedInstanceCount,
+      );
+
+      // Get series_id from the first created instance
+      let seriesId: string | null = null;
+      if (instances.length > 0 && instances[0]?.id) {
+        const { data: firstEvent } = await supabaseAdmin
+          .from('events')
+          .select('series_id')
+          .eq('id', instances[0].id)
+          .maybeSingle();
+        seriesId = firstEvent?.series_id || null;
+      }
+
+      // Fire-and-forget image download for first instance
+      if (event.image_url && instances.length > 0 && instances[0]?.id) {
+        void downloadAndAttachImage(instances[0].id, event.image_url);
+      }
+
+      console.log(`[CONTRIBUTE] Series created: ${instances.length} instances of "${event.name}" by ${keyName}`);
+
+      res.status(201).json({
+        event: {
+          series_id: seriesId,
+          instance_count: instances.length,
+          instance_ids: instances.map(i => i.id),
+          status: insertData.status,
+          source: { publisher: keyName, method: 'api' },
+        },
+      });
+      return;
+    }
+
+    // Single event
     const { data: row, error } = await supabaseAdmin
       .from('events')
       .insert(insertData)
@@ -481,6 +581,306 @@ router.delete('/:id', writeLimiter, async (req, res, next) => {
     void dispatchWebhooks('event.deleted', req.params.id, { id: req.params.id } as unknown as NeighborhoodEvent);
 
     res.json({ deleted: true, id: req.params.id });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================================================
+// PATCH — Edit own event
+// =============================================================================
+
+const updateContributeEventSchema = z.object({
+  name: z.string().min(1).max(200).trim().optional(),
+  start: z.string().datetime({ offset: true }).optional(),
+  end: z.string().datetime({ offset: true }).optional().nullable(),
+  timezone: z.string().max(50).refine(
+    (tz) => VALID_TIMEZONES.has(tz),
+    { message: 'Invalid timezone. Use IANA format (e.g., America/New_York)' },
+  ).optional(),
+  category: z.enum(EVENT_CATEGORY_KEYS as [string, ...string[]]).optional(),
+  location: locationSchema.partial().optional(),
+  description: z.string().max(2000).optional().nullable(),
+  cost: z.string().max(100).optional().nullable(),
+  url: z.string().url().max(2000).optional().nullable(),
+  image_url: z.string().url().max(2000).optional(),
+  tags: z.array(z.string().max(50)).max(15).optional(),
+  wheelchair_accessible: z.boolean().optional().nullable(),
+  custom_category: z.string().max(50).optional(),
+  venue_id: z.string().uuid().optional(),
+});
+
+/**
+ * PATCH /api/v1/contribute/:id
+ * Edit an event submitted by this API key.
+ */
+router.patch('/:id', writeLimiter, async (req, res, next) => {
+  try {
+    const apiKeyId = req.apiKeyInfo?.id;
+    if (!apiKeyId) throw createError('API key required', 401, 'UNAUTHORIZED');
+    validateUuidParam(req.params.id, 'event ID');
+
+    const data = validateRequest(updateContributeEventSchema, req.body);
+    if (Object.keys(data).length === 0) throw createError('No fields to update', 400, 'VALIDATION_ERROR');
+
+    // Verify ownership
+    const { data: existing, error: fetchError } = await supabaseAdmin
+      .from('events')
+      .select('id, event_at, end_time, event_timezone, status')
+      .eq('id', req.params.id)
+      .eq('source_method', 'api')
+      .eq('source_feed_url', `api-key:${apiKeyId}`)
+      .maybeSingle();
+
+    if (fetchError || !existing) {
+      throw createError('Event not found or not owned by this API key', 404, 'NOT_FOUND');
+    }
+
+    const update: Record<string, unknown> = {};
+
+    if (data.name !== undefined) update.content = stripHtml(data.name);
+    if (data.description !== undefined) update.description = data.description ? stripHtml(data.description) : null;
+    if (data.category !== undefined) update.category = data.category;
+    if (data.custom_category !== undefined) update.custom_category = data.custom_category;
+    if (data.cost !== undefined) update.price = data.cost ? stripHtml(data.cost) : null;
+    if (data.tags !== undefined) update.tags = data.tags;
+    if (data.wheelchair_accessible !== undefined) update.wheelchair_accessible = data.wheelchair_accessible;
+
+    // URL validation
+    if (data.url !== undefined) {
+      if (data.url) {
+        const domainCheck = checkContributeUrlDomain(data.url);
+        if (!domainCheck.approved) {
+          throw createError(`URL domain "${domainCheck.domain}" is not approved`, 400, 'DOMAIN_NOT_APPROVED');
+        }
+        update.link_url = sanitizeUrl(data.url);
+      } else {
+        update.link_url = null;
+      }
+    }
+
+    // Location fields
+    if (data.location) {
+      if (data.location.name !== undefined) update.place_name = stripHtml(data.location.name);
+      if (data.location.address !== undefined) update.venue_address = data.location.address?.slice(0, 500) || null;
+      if (data.location.place_id !== undefined) update.place_id = data.location.place_id || null;
+      if (data.location.lat !== undefined && data.location.lng !== undefined) {
+        update.latitude = data.location.lat;
+        update.longitude = data.location.lng;
+        if (data.location.lat != null && data.location.lng != null) {
+          update.approximate_location = `POINT(${data.location.lng} ${data.location.lat})`;
+        }
+      }
+    }
+
+    // Timestamp recomposition
+    if (data.start !== undefined || data.timezone !== undefined) {
+      const tz = data.timezone || (existing.event_timezone as string) || 'America/New_York';
+      const startIso = data.start || (existing.event_at as string);
+      update.event_at = new Date(startIso).toISOString();
+      update.event_timezone = tz;
+    }
+    if (data.end !== undefined) {
+      update.end_time = data.end ? new Date(data.end).toISOString() : null;
+    }
+
+    // Venue linkage
+    if (data.venue_id !== undefined) {
+      const { data: venue } = await supabaseAdmin
+        .from('portal_accounts')
+        .select('id')
+        .eq('id', data.venue_id)
+        .eq('status', 'active')
+        .maybeSingle();
+      if (!venue) throw createError('Venue not found or inactive', 400, 'VALIDATION_ERROR');
+      update.creator_account_id = venue.id;
+    }
+
+    // Execute update with ownership constraints
+    const { error: updateError } = await supabaseAdmin
+      .from('events')
+      .update(update)
+      .eq('id', req.params.id)
+      .eq('source_method', 'api')
+      .eq('source_feed_url', `api-key:${apiKeyId}`);
+
+    if (updateError) {
+      console.error('[CONTRIBUTE] Update error:', updateError.message);
+      throw createError('Failed to update event', 500, 'SERVER_ERROR');
+    }
+
+    // Fire-and-forget image download
+    if (data.image_url) {
+      void downloadAndAttachImage(req.params.id, data.image_url);
+    }
+
+    // Dispatch webhook if published
+    if (existing.status === 'published') {
+      void dispatchWebhooks('event.updated', req.params.id, { id: req.params.id } as unknown as NeighborhoodEvent);
+    }
+
+    console.log(`[CONTRIBUTE] Event updated: ${req.params.id}`);
+    res.json({ updated: true, id: req.params.id });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================================================
+// VENUES
+// =============================================================================
+
+const createVenueSchema = z.object({
+  name: z.string().min(1).max(200).trim(),
+  address: z.string().min(1).max(500).trim(),
+  lat: z.number().min(-90).max(90).optional(),
+  lng: z.number().min(-180).max(180).optional(),
+  place_id: z.string().max(500).optional(),
+  phone: z.string().max(50).optional(),
+  website: z.string().url().max(2000).optional(),
+});
+
+const venueSearchSchema = z.object({
+  q: z.string().max(200).optional(),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  offset: z.coerce.number().min(0).default(0),
+});
+
+/**
+ * POST /api/v1/contribute/venues
+ * Create a venue (or return existing if slug matches).
+ * Minimum: name + address. Venues are shared resources — not owned by the creator.
+ */
+router.post('/venues', writeLimiter, async (req, res, next) => {
+  try {
+    const apiKeyId = req.apiKeyInfo?.id;
+    if (!apiKeyId) throw createError('API key required', 401, 'UNAUTHORIZED');
+
+    const data = validateRequest(createVenueSchema, req.body);
+    const slug = toSlug(data.name);
+    if (!slug) throw createError('Venue name produces an empty slug', 400, 'VALIDATION_ERROR');
+
+    // Dedup: check if a venue with the same slug already exists
+    // Narrow by ilike on the first word to avoid full table scan, then slug-match in JS
+    const firstWord = data.name.split(/\s+/)[0] || data.name;
+    const { data: candidates } = await supabaseAdmin
+      .from('portal_accounts')
+      .select('id, business_name, default_address, status')
+      .eq('status', 'active')
+      .ilike('business_name', `${firstWord}%`);
+
+    const existing = (candidates || []).find(c =>
+      toSlug(c.business_name as string) === slug
+    );
+
+    if (existing) {
+      res.status(200).json({
+        venue: {
+          id: existing.id,
+          name: existing.business_name,
+          slug,
+          address: existing.default_address,
+        },
+        created: false,
+      });
+      return;
+    }
+
+    // Geocode address if no coordinates
+    let lat = data.lat ?? null;
+    let lng = data.lng ?? null;
+    if (lat == null || lng == null) {
+      const coords = await nominatimGeocode(data.address);
+      if (coords) {
+        lat = coords.lat;
+        lng = coords.lng;
+      }
+    }
+
+    const { data: venue, error } = await supabaseAdmin
+      .from('portal_accounts')
+      .insert({
+        business_name: data.name,
+        default_venue_name: data.name,
+        default_address: data.address,
+        default_latitude: lat,
+        default_longitude: lng,
+        default_place_id: data.place_id || null,
+        phone: data.phone || null,
+        website: data.website ? sanitizeUrl(data.website) : null,
+        email: `contribute-${slug}@placeholder.internal`,
+        status: 'active',
+      })
+      .select('id, business_name, default_address')
+      .single();
+
+    if (error) {
+      // Email uniqueness collision (unlikely but handle gracefully)
+      if (error.code === '23505') {
+        throw createError('A venue with a similar name already exists', 409, 'DUPLICATE');
+      }
+      console.error('[CONTRIBUTE] Venue create error:', error.message);
+      throw createError('Failed to create venue', 500, 'SERVER_ERROR');
+    }
+
+    console.log(`[CONTRIBUTE] Venue created: "${data.name}" (${venue.id})`);
+    res.status(201).json({
+      venue: {
+        id: venue.id,
+        name: venue.business_name,
+        slug,
+        address: venue.default_address,
+      },
+      created: true,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/v1/contribute/venues
+ * Search venues.
+ */
+router.get('/venues', async (req, res, next) => {
+  try {
+    const apiKeyId = req.apiKeyInfo?.id;
+    if (!apiKeyId) throw createError('API key required', 401, 'UNAUTHORIZED');
+
+    const params = validateRequest(venueSearchSchema, req.query);
+
+    let query = supabaseAdmin
+      .from('portal_accounts')
+      .select('id, business_name, default_address, default_latitude, default_longitude', { count: 'exact' })
+      .eq('status', 'active')
+      .order('business_name', { ascending: true })
+      .range(params.offset, params.offset + params.limit - 1);
+
+    if (params.q) {
+      const q = params.q.replace(/[,.()"\\%_;:'`*]/g, ' ').trim();
+      if (q.length > 0) {
+        query = query.or(`business_name.ilike.%${q}%,default_address.ilike.%${q}%`);
+      }
+    }
+
+    const { data: venues, count, error } = await query;
+
+    if (error) {
+      console.error('[CONTRIBUTE] Venue search error:', error.message);
+      throw createError('Failed to search venues', 500, 'SERVER_ERROR');
+    }
+
+    res.json({
+      meta: { total: count || 0, limit: params.limit, offset: params.offset },
+      venues: (venues || []).map(v => ({
+        id: v.id,
+        name: v.business_name,
+        slug: toSlug(v.business_name as string),
+        address: v.default_address,
+        lat: v.default_latitude,
+        lng: v.default_longitude,
+      })),
+    });
   } catch (err) {
     next(err);
   }

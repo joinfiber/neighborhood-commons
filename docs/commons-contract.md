@@ -221,11 +221,45 @@ The Contribute API is how external applications push events into the Commons. Yo
 
 New keys start at `pending`. Tier upgrades are manual.
 
-### `POST /contribute`
+### Venues
 
-Submit a single event.
+Venues are shared resources in the Commons. Any contributor can create a venue; no one owns it. The venue exists so that events can be attached to a business identity. If the real operator wants control later, they claim the venue (future feature).
 
-**Request body** — uses the event fields from the table above. `name`, `start`, `timezone`, `category`, and `location.name` are required. Everything else is optional.
+#### `POST /contribute/venues`
+
+Create a venue. If a venue with the same derived slug already exists, the existing venue is returned.
+
+**Request body:**
+```json
+{
+  "name": "Tattooed Moms",
+  "address": "530 South Street, Philadelphia PA 19147",
+  "lat": 39.9428,
+  "lng": -75.1534,
+  "phone": "215-238-9880",
+  "website": "https://tattooedmomphilly.com"
+}
+```
+
+`name` and `address` are required. Everything else is optional. Address is geocoded via Nominatim if no coordinates provided.
+
+**Response:** `201` (created) or `200` (existing venue returned).
+```json
+{
+  "venue": { "id": "uuid", "name": "Tattooed Moms", "slug": "tattooed-moms", "address": "530 South Street..." },
+  "created": true
+}
+```
+
+#### `GET /contribute/venues`
+
+Search venues. Query params: `q` (text search), `limit` (max 100, default 20), `offset`.
+
+### Events
+
+#### `POST /contribute`
+
+Submit a single event. `name`, `start`, `timezone`, `category`, and `location.name` are required.
 
 ```json
 {
@@ -242,15 +276,39 @@ Submit a single event.
   "cost": "Free",
   "url": "https://example.com/event",
   "tags": ["all-ages", "free"],
+  "recurrence": "FREQ=WEEKLY",
+  "instance_count": 12,
+  "venue_id": "uuid",
   "external_id": "my-system-12345"
 }
 ```
 
-**Response (201):**
+**Additional fields (beyond the core event fields):**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `recurrence` | RRULE string | Recurrence pattern (see Recurrence section) |
+| `instance_count` | 0–52 | Override instance count. Takes precedence over `COUNT` in the RRULE. |
+| `venue_id` | UUID | Attach event to a venue created via `POST /contribute/venues` |
+
+**Response (201) — single event:**
 ```json
 {
   "event": {
     "id": "uuid",
+    "status": "published",
+    "source": { "publisher": "Your Key Name", "method": "api" }
+  }
+}
+```
+
+**Response (201) — recurring event:**
+```json
+{
+  "event": {
+    "series_id": "uuid",
+    "instance_count": 12,
+    "instance_ids": ["uuid", "uuid", "..."],
     "status": "published",
     "source": { "publisher": "Your Key Name", "method": "api" }
   }
@@ -262,12 +320,13 @@ Submit a single event.
 - Region resolved from coordinates. If outside all regions, assigned to the default region.
 - `image_url` downloaded, re-encoded through Sharp, uploaded to R2 (async — does not block response).
 - Tags validated against the category's allowed set. Invalid tags silently removed.
-- `external_id` enforces uniqueness per API key. Duplicate → `409 CONFLICT`.
+- `external_id` enforces uniqueness per API key. Duplicate → `409 DUPLICATE`.
 - `url` validated against an approved domain list (ticketing platforms, social media, venue sites, etc.). Unapproved domains → `400`. Tracking parameters (`utm_*`, `fbclid`, etc.) are stripped automatically.
+- Recurring events are expanded at creation time into individual event rows sharing a `series_id`. Each instance counts against rate limits.
 
-### `POST /contribute/batch`
+#### `POST /contribute/batch`
 
-Submit up to 50 events in one request. Body: `{ "events": [ ... ] }`.
+Submit up to 50 events in one request. Body: `{ "events": [ ... ] }`. Each event in the array supports the same fields as single submission, including `recurrence`.
 
 Batch size counts against your hourly/daily limits.
 
@@ -276,13 +335,29 @@ Batch size counts against your hourly/daily limits.
 - `207` — partial success (per-item results with `index`, `id` or `error`)
 - `400` — all failed
 
-### `GET /contribute/mine`
+#### `PATCH /contribute/:id`
+
+Edit an event you submitted. Ownership enforced — you can only edit your own events. All fields are optional.
+
+```json
+{
+  "name": "Updated Karaoke Night",
+  "cost": "$5",
+  "tags": ["21-plus", "late-night"]
+}
+```
+
+Cannot change recurrence pattern. To change recurrence, delete and recreate.
+
+Returns `{ "updated": true, "id": "uuid" }`.
+
+#### `GET /contribute/mine`
 
 List events you submitted. Filter by `status` (`published`, `pending_review`, `unpublished`). Paginated with `limit` (max 200) and `offset`.
 
 Returns a simplified shape: `id`, `name`, `start`, `end`, `timezone`, `venue`, `category`, `status`, `external_id`, `created_at`.
 
-### `DELETE /contribute/:id`
+#### `DELETE /contribute/:id`
 
 Delete an event you submitted. Ownership enforced — you can only delete your own.
 
@@ -357,23 +432,46 @@ This is different from the Contribute API, which uses a single ISO 8601 `start` 
 
 Recurring events are expanded at creation time into N individual event rows sharing a `series_id`. Each instance is self-contained — consumers never expand a series.
 
-### Patterns
+### RRULE (Contribute API input)
 
-| Pattern | Format | Example | RRULE output |
-|---------|--------|---------|-------------|
-| None | `none` | One-off event | — |
-| Daily | `daily` | Every day | `FREQ=DAILY` |
-| Weekly | `weekly` | Same day each week | `FREQ=WEEKLY` |
-| Biweekly | `biweekly` | Every 2 weeks | `FREQ=WEEKLY;INTERVAL=2` |
-| Monthly | `monthly` | Same date each month | `FREQ=MONTHLY` |
-| Ordinal weekday | `ordinal_weekday:N:day` | `ordinal_weekday:2:friday` | `FREQ=MONTHLY;BYDAY=2FR` |
-| Multiple days | `weekly_days:day,day` | `weekly_days:mon,wed,fri` | `FREQ=WEEKLY;BYDAY=MO,WE,FR` |
+The Contribute API accepts standard iCal RRULE strings (RFC 5545) for recurrence. The Commons supports this subset:
+
+| RRULE | What it means |
+|-------|--------------|
+| `FREQ=DAILY` | Every day |
+| `FREQ=WEEKLY` | Same day each week |
+| `FREQ=WEEKLY;INTERVAL=2` | Every two weeks |
+| `FREQ=MONTHLY` | Same date each month |
+| `FREQ=MONTHLY;BYDAY=2FR` | 2nd Friday of each month |
+| `FREQ=WEEKLY;BYDAY=MO,WE,FR` | Every Monday, Wednesday, and Friday |
+
+Append `;COUNT=N` to any pattern to set the instance count (e.g. `FREQ=WEEKLY;COUNT=12` for 12 weeks).
+
+Anything outside this subset returns `400`. The error message lists the supported patterns.
+
+### Internal format (Service API)
+
+The Service API uses a simpler internal format for recurrence:
+
+| Internal | RRULE equivalent |
+|----------|-----------------|
+| `none` | One-off event |
+| `daily` | `FREQ=DAILY` |
+| `weekly` | `FREQ=WEEKLY` |
+| `biweekly` | `FREQ=WEEKLY;INTERVAL=2` |
+| `monthly` | `FREQ=MONTHLY` |
+| `ordinal_weekday:N:day` | `FREQ=MONTHLY;BYDAY=NXX` |
+| `weekly_days:day,day` | `FREQ=WEEKLY;BYDAY=XX,XX` |
+
+Both formats map to the same set of patterns. API responses always use RRULE format in the `recurrence.rrule` field.
 
 ### Instance Count
 
 `instance_count` controls how many future instances are generated (0–52). When omitted, defaults vary by pattern (e.g. daily→180, weekly→26, monthly→6). When set to 0, uses "ongoing" defaults.
 
-Bounded rules include `;COUNT=N` in the RRULE.
+If both `instance_count` in the request body and `COUNT` in the RRULE are present, the body field takes precedence.
+
+Bounded rules include `;COUNT=N` in the RRULE output.
 
 ---
 
@@ -533,14 +631,16 @@ All data is published under **CC BY 4.0**. Consumers must attribute the source. 
 Practical guidance for anyone writing code against the Commons.
 
 1. **Start with the Read API.** No auth needed. `GET /events` and go.
-2. **Always provide a timezone.** `America/New_York` is the default but must be explicit on write.
-3. **Always provide a location name.** Address enables geocoding. Coordinates enable region resolution. Without a region, your events won't appear in location-filtered feeds (which is most feeds).
-4. **Use `external_id` for dedup.** If your system has its own event IDs, pass them. The Commons will 409 on duplicates per API key.
-5. **Categories are kebab-case in responses, underscore in storage.** Both accepted on input. Use the slug from the table above.
-6. **Recurrence creates instances at write time.** You submit the pattern and count; the Commons generates N individual rows. You never expand a series.
-7. **Images are re-encoded.** Pass a URL; the Commons downloads, strips metadata, re-encodes to JPEG via Sharp, uploads to R2. The response contains the final URL.
-8. **Tags are validated per category.** Invalid tags for the category are silently removed. Check the mapping if you're getting fewer tags back than you sent.
-9. **The venue slug is derived, not stored.** Compute it from `business_name` using the algorithm above if you need it.
-10. **URLs are sanitized.** Tracking parameters are stripped. The Contribute API enforces a domain allowlist on `url` fields.
-11. **Webhooks use `X-NC-Signature`, not `X-Webhook-Signature`.** The signing secret is shown once on creation.
-12. **The Service API uses different input fields than the Contribute API.** Service: `event_date` + `start_time` (separate). Contribute: `start` (combined ISO 8601). Don't mix them up.
+2. **To write, use the Contribute API.** Create venues, post events (including recurring), edit your submissions. The Service API is for platform operators only.
+3. **Always provide a timezone.** `America/New_York` is the default but must be explicit on write.
+4. **Always provide a location name.** Address enables geocoding. Coordinates enable region resolution. Without a region, your events won't appear in location-filtered feeds (which is most feeds).
+5. **Create venues before events.** `POST /contribute/venues` with name + address. Use the returned `venue_id` when creating events to link them to a business identity.
+6. **Use `external_id` for dedup.** If your system has its own event IDs, pass them. The Commons will 409 on duplicates per API key.
+7. **Recurrence uses RRULE on the Contribute API.** `"recurrence": "FREQ=WEEKLY;COUNT=12"`. The Service API uses an internal format. Both produce the same result.
+8. **Recurrence creates instances at write time.** You submit the pattern and count; the Commons generates N individual rows. You never expand a series.
+9. **Images are re-encoded.** Pass a URL; the Commons downloads, strips metadata, re-encodes to JPEG via Sharp, uploads to R2. The response contains the final URL.
+10. **Tags are validated per category.** Invalid tags for the category are silently removed. Check the mapping if you're getting fewer tags back than you sent.
+11. **The venue slug is derived, not stored.** Compute it from `business_name` using the algorithm above if you need it.
+12. **URLs are sanitized.** Tracking parameters are stripped. The Contribute API enforces a domain allowlist on `url` fields.
+13. **Webhooks use `X-NC-Signature`, not `X-Webhook-Signature`.** The signing secret is shown once on creation.
+14. **The Service API uses different input fields than the Contribute API.** Service: `event_date` + `start_time` (separate). Contribute: `start` (combined ISO 8601). Don't mix them up.
