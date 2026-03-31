@@ -207,12 +207,12 @@ export function portalInputToInsert(
 const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
 
 const DEFAULT_LIMITS: Record<string, number> = {
-  daily: 180, weekly: 26, biweekly: 12, monthly: 6,
+  daily: 180, weekly: 26, biweekly: 13, monthly: 6,
 };
 const DEFAULT_ORDINAL_LIMIT = 6;
 const DEFAULT_WEEKLY_DAYS_LIMIT = 26; // ~6 months of specific-day events
 const ONGOING_LIMITS: Record<string, number> = {
-  daily: 180, weekly: 26, biweekly: 12, monthly: 12,
+  daily: 180, weekly: 26, biweekly: 13, monthly: 12,
 };
 const ONGOING_ORDINAL_LIMIT = 12;
 const ONGOING_WEEKLY_DAYS_LIMIT = 26; // ~6 months of specific-day events

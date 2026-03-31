@@ -269,7 +269,7 @@ const createEventSchema = z.object({
   recurrence: z.string()
     .regex(/^(none|daily|weekly|biweekly|monthly|ordinal_weekday:[1-5]:(monday|tuesday|wednesday|thursday|friday|saturday|sunday)|weekly_days:(mon|tue|wed|thu|fri|sat|sun)(,(mon|tue|wed|thu|fri|sat|sun))*)$/)
     .default('none'),
-  instance_count: z.number().int().min(0).max(52).optional(),
+  instance_count: z.number().int().min(0).max(260).optional(),
   event_timezone: z.string().max(50).default('America/New_York'),
   description: z.string().max(2000).optional(),
   price: z.string().max(100).optional(),
