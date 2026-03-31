@@ -70,6 +70,7 @@ export interface NeighborhoodEvent {
   };
   url: string | null;
   images: string[];
+  event_image_focal_y: number;
   organizer: {
     name: string;
     phone: null;
@@ -204,6 +205,7 @@ export function toNeighborhoodEvent(row: PortalEventRow): NeighborhoodEvent {
     },
     url: row.link_url || null,
     images: row.event_image_url ? [resolveEventImageUrl(row.event_image_url, config.apiBaseUrl) as string] : [],
+    event_image_focal_y: (row as unknown as { event_image_focal_y?: number }).event_image_focal_y ?? 0.5,
     organizer: {
       name: row.portal_accounts?.business_name || row.place_name,
       phone: null,
