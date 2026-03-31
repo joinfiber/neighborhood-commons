@@ -223,6 +223,32 @@ router.patch('/accounts/:id', serviceLimiter, async (req, res, next) => {
   }
 });
 
+/** DELETE /service/accounts/:id — Delete account and all its events */
+router.delete('/accounts/:id', serviceLimiter, async (req, res, next) => {
+  try {
+    validateUuidParam(req.params.id, 'account ID');
+
+    // Delete all events owned by this account first
+    await supabaseAdmin
+      .from('events')
+      .delete()
+      .eq('creator_account_id', req.params.id);
+
+    // Delete the account
+    const { error } = await supabaseAdmin
+      .from('portal_accounts')
+      .delete()
+      .eq('id', req.params.id);
+
+    if (error) throw createError('Failed to delete account', 500, 'SERVER_ERROR');
+
+    console.log(`[SERVICE] Account deleted: ${req.params.id}`);
+    res.json({ deleted: true, id: req.params.id });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // =============================================================================
 // EVENTS
 // =============================================================================
