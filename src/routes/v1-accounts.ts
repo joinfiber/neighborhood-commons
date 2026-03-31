@@ -27,7 +27,7 @@ export const accountsLimiter = rateLimit({
 });
 
 const ACCOUNT_SELECT = `
-  id, business_name, phone, website, logo_url, description,
+  id, business_name, phone, website, logo_url, cover_image_url, description,
   default_venue_name, default_place_id, default_address,
   default_latitude, default_longitude,
   operating_hours, status, created_at, updated_at
@@ -196,6 +196,7 @@ function formatAccount(row: Record<string, unknown>) {
     phone: row.phone || null,
     website: row.website || null,
     logo_url: row.logo_url || null,
+    cover_image_url: row.cover_image_url || null,
     venue: {
       name: row.default_venue_name || name,
       address: row.default_address || null,

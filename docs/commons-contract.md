@@ -182,7 +182,9 @@ Search venue/business accounts.
 
 ### `GET /accounts/:idOrSlug`
 
-Single account by UUID or slug. Returns the account with `regular_programming` (recurring series, deduplicated) and `upcoming_events` (one-off future events).
+Single account by UUID or slug. Returns the account with `logo_url`, `cover_image_url`, `regular_programming` (recurring series, deduplicated) and `upcoming_events` (one-off future events).
+
+**Venue images:** Accounts have two image fields. `logo_url` is the venue's branding mark. `cover_image_url` is a photo of the venue — its facade, interior, stage. Both are self-representation by the venue, not editorial. Both are available to every consumer.
 
 **Slug algorithm** (deterministic, derived from `business_name`, never stored):
 ```
@@ -378,6 +380,7 @@ The Service API is for trusted tools — admin dashboards, import pipelines, par
 | `GET` | `/accounts/:id` | Single account with events |
 | `POST` | `/accounts` | Create account |
 | `PATCH` | `/accounts/:id` | Update account fields |
+| `POST` | `/accounts/:id/cover-image` | Upload cover image (base64 or URL) |
 
 ### Events
 

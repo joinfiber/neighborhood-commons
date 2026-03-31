@@ -79,6 +79,7 @@ const updateAccountSchema = z.object({
   })).length(7).optional(),
   status: z.enum(['active', 'suspended', 'pending', 'rejected']).optional(),
   logo_url: z.string().url().max(2000).optional().or(z.literal('')).or(z.null()),
+  cover_image_url: z.string().url().max(2000).optional().or(z.literal('')).or(z.null()),
   description: z.string().max(2000).optional().or(z.literal('')).or(z.null()),
 });
 
@@ -91,7 +92,7 @@ router.get('/accounts', serviceLimiter, async (req, res, next) => {
 
     let query = supabaseAdmin
       .from('portal_accounts')
-      .select('id, email, business_name, auth_user_id, status, default_venue_name, default_place_id, default_address, default_latitude, default_longitude, website, phone, operating_hours, logo_url, description, last_login_at, created_at, updated_at', { count: 'exact' })
+      .select('id, email, business_name, auth_user_id, status, default_venue_name, default_place_id, default_address, default_latitude, default_longitude, website, phone, operating_hours, logo_url, cover_image_url, description, last_login_at, created_at, updated_at', { count: 'exact' })
       .order('created_at', { ascending: false });
 
     if (search) {
@@ -756,6 +757,53 @@ router.post('/events/:id/image', imageBodyLimit, serviceLimiter, async (req, res
 
     } else {
       throw createError('Provide "image" (base64), "image_url" (URL), or a multipart file upload', 400, 'VALIDATION_ERROR');
+    }
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /service/accounts/:id/cover-image — Upload account cover image
+ * Accepts { "image": "<base64>" } or { "image_url": "https://..." }
+ */
+router.post('/accounts/:id/cover-image', imageBodyLimit, serviceLimiter, async (req, res, next) => {
+  try {
+    validateUuidParam(req.params.id, 'account ID');
+    const accountId = req.params.id;
+
+    if (req.body?.image_url) {
+      const { image_url } = req.body;
+      if (typeof image_url !== 'string' || !image_url.startsWith('http')) {
+        throw createError('image_url must be a valid HTTP URL', 400, 'VALIDATION_ERROR');
+      }
+
+      // Download, re-encode, upload — reuse event image pipeline with account-specific key
+      const response = await fetch(image_url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NeighborhoodCommons/1.0)' },
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!response.ok) throw createError('Failed to download image', 400, 'VALIDATION_ERROR');
+
+      const buffer = Buffer.from(await response.arrayBuffer());
+      const base64 = buffer.toString('base64');
+      const imageUrl = await processAndUploadImage(`account-${accountId}/cover`, base64);
+
+      await supabaseAdmin.from('portal_accounts').update({ cover_image_url: imageUrl }).eq('id', accountId);
+      res.json({ cover_image_url: resolveEventImageUrl(imageUrl, config.apiBaseUrl) });
+
+    } else if (req.body?.image) {
+      const image = req.body.image as string;
+      if (typeof image !== 'string' || image.length < 1) {
+        throw createError('image must be a non-empty base64 string', 400, 'VALIDATION_ERROR');
+      }
+
+      const imageUrl = await processAndUploadImage(`account-${accountId}/cover`, image);
+      await supabaseAdmin.from('portal_accounts').update({ cover_image_url: imageUrl }).eq('id', accountId);
+      res.json({ cover_image_url: resolveEventImageUrl(imageUrl, config.apiBaseUrl) });
+
+    } else {
+      throw createError('Provide "image" (base64) or "image_url" (URL)', 400, 'VALIDATION_ERROR');
     }
   } catch (err) {
     next(err);

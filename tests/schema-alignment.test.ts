@@ -69,7 +69,7 @@ const SCHEMA: Record<string, string[]> = {
   portal_accounts: [
     'id', 'auth_user_id', 'email', 'business_name', 'phone', 'website',
     'default_venue_name', 'default_address', 'default_place_id',
-    'default_latitude', 'default_longitude', 'logo_url', 'description',
+    'default_latitude', 'default_longitude', 'logo_url', 'cover_image_url', 'description',
     'status', 'claimed_at', 'created_at', 'updated_at', 'last_login_at',
     'wheelchair_accessible', 'slug', 'operating_hours',
   ],

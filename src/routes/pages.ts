@@ -434,7 +434,7 @@ router.get('/venues/:slug',async (req, res, next) => {
 
     const { data: account, error: acctErr } = await supabaseAdmin
       .from('portal_accounts')
-      .select('id, business_name, slug, description, website, logo_url, default_address, default_latitude, default_longitude')
+      .select('id, business_name, slug, description, website, logo_url, cover_image_url, default_address, default_latitude, default_longitude')
       .eq('slug', slug)
       .eq('status', 'active')
       .maybeSingle();
