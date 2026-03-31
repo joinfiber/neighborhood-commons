@@ -266,6 +266,7 @@ router.post('/:id/test', writeLimiter, async (req, res, next) => {
       location: { name: 'Test Venue', address: null, lat: null, lng: null },
       url: null,
       images: [],
+      event_image_focal_y: 0.5,
       organizer: { name: 'Neighborhood Commons', phone: null as null },
       cost: null,
       series_id: null,
