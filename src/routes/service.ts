@@ -810,6 +810,49 @@ router.post('/accounts/:id/cover-image', imageBodyLimit, serviceLimiter, async (
   }
 });
 
+/**
+ * POST /service/accounts/:id/logo — Upload account logo
+ * Same pipeline as cover-image: accepts { "image": "<base64>" } or { "image_url": "https://..." }
+ */
+router.post('/accounts/:id/logo', imageBodyLimit, serviceLimiter, async (req, res, next) => {
+  try {
+    validateUuidParam(req.params.id, 'account ID');
+    const accountId = req.params.id;
+
+    if (req.body?.image_url) {
+      const { image_url } = req.body;
+      if (typeof image_url !== 'string' || !image_url.startsWith('http')) {
+        throw createError('image_url must be a valid HTTP URL', 400, 'VALIDATION_ERROR');
+      }
+
+      const response = await fetch(image_url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NeighborhoodCommons/1.0)' },
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!response.ok) throw createError('Failed to download image', 400, 'VALIDATION_ERROR');
+
+      const buffer = Buffer.from(await response.arrayBuffer());
+      const base64 = buffer.toString('base64');
+      const imageUrl = await processAndUploadImage(`account-${accountId}/logo`, base64);
+
+      await supabaseAdmin.from('portal_accounts').update({ logo_url: imageUrl }).eq('id', accountId);
+      res.json({ logo_url: resolveEventImageUrl(imageUrl, config.apiBaseUrl) });
+
+    } else if (req.body?.image) {
+      const image = req.body.image as string;
+      const imageUrl = await processAndUploadImage(`account-${accountId}/logo`, image);
+
+      await supabaseAdmin.from('portal_accounts').update({ logo_url: imageUrl }).eq('id', accountId);
+      res.json({ logo_url: resolveEventImageUrl(imageUrl, config.apiBaseUrl) });
+
+    } else {
+      throw createError('Provide "image" (base64) or "image_url" (URL)', 400, 'VALIDATION_ERROR');
+    }
+  } catch (err) {
+    next(err);
+  }
+});
+
 // =============================================================================
 // STATS
 // =============================================================================
