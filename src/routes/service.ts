@@ -363,25 +363,15 @@ router.get('/events', serviceLimiter, async (req, res, next) => {
       query = query.order('created_at', { ascending: false });
     }
 
-    // Over-fetch for series dedup (we'll collapse in JS)
-    query = query.range(0, (offset + limit) * 3);
+    // Filter to unique events: one-offs + first instance of each series
+    query = query.or('series_id.is.null,series_instance_number.eq.1');
+    query = query.range(offset, offset + limit - 1);
 
     const { data: rawEvents, error, count } = await query;
 
     if (error) throw createError('Failed to fetch events', 500, 'SERVER_ERROR');
 
-    // Series dedup: keep only the nearest instance per series (by event_at).
-    // One-off events (no series_id) always pass through.
-    const seenSeries = new Set<string>();
-    const deduped = (rawEvents || []).filter((e: { series_id?: string | null }) => {
-      if (!e.series_id) return true; // one-off
-      if (seenSeries.has(e.series_id)) return false; // already have a nearer instance
-      seenSeries.add(e.series_id);
-      return true;
-    });
-
-    // Apply pagination to the deduped list
-    const paged = deduped.slice(offset, offset + limit);
+    const paged = rawEvents || [];
 
     const result = paged.map((e) => {
       const pe = toPortalEvent(e);
@@ -389,12 +379,7 @@ router.get('/events', serviceLimiter, async (req, res, next) => {
       return pe;
     });
 
-    // Count unique events (one-offs + unique series) for pagination
-    const uniqueTotal = count != null
-      ? Math.min(count, deduped.length + (count - (rawEvents || []).length))
-      : deduped.length;
-
-    res.json({ events: result, total: uniqueTotal });
+    res.json({ events: result, total: count || 0 });
   } catch (err) {
     next(err);
   }
@@ -864,41 +849,47 @@ router.post('/accounts/:id/logo', imageBodyLimit, serviceLimiter, async (req, re
 /** GET /service/stats — Platform statistics + category distribution */
 router.get('/stats', serviceLimiter, async (_req, res, next) => {
   try {
-    const { data: accounts } = await supabaseAdmin
+    // Run account and event counts in parallel
+    const [accountCounts, oneOffCount, seriesCount, categoryRows] = await Promise.all([
+      // Account counts: use head:true to avoid fetching rows
+      supabaseAdmin.from('portal_accounts').select('id', { count: 'exact', head: true }),
+
+      // One-off events
+      supabaseAdmin.from('events')
+        .select('id', { count: 'exact', head: true })
+        .in('source', [...MANAGED_SOURCES])
+        .is('series_id', null),
+
+      // Series (first instance only)
+      supabaseAdmin.from('events')
+        .select('id', { count: 'exact', head: true })
+        .in('source', [...MANAGED_SOURCES])
+        .not('series_id', 'is', null)
+        .eq('series_instance_number', 1),
+
+      // Category distribution — only fetch unique events (one-offs + first instances)
+      // Use minimal select to reduce payload
+      supabaseAdmin.from('events')
+        .select('category')
+        .in('source', [...MANAGED_SOURCES])
+        .or('series_id.is.null,series_instance_number.eq.1'),
+    ]);
+
+    // Account breakdowns need status/claimed_at — separate lightweight query
+    const { data: accountStatuses } = await supabaseAdmin
       .from('portal_accounts')
-      .select('id, claimed_at, status');
+      .select('status, claimed_at');
 
-    const totalAccounts = accounts?.length || 0;
-    const claimedAccounts = accounts?.filter((a) => a.claimed_at).length || 0;
-    const pendingAccounts = accounts?.filter((a) => a.status === 'pending').length || 0;
+    const totalAccounts = accountCounts.count || 0;
+    const claimedAccounts = accountStatuses?.filter((a) => a.claimed_at).length || 0;
+    const pendingAccounts = accountStatuses?.filter((a) => a.status === 'pending').length || 0;
 
-    // Unique event counts
-    const { count: totalOneOffs } = await supabaseAdmin
-      .from('events')
-      .select('id', { count: 'exact', head: true })
-      .in('source', [...MANAGED_SOURCES])
-      .is('series_id', null);
-
-    const { count: totalSeries } = await supabaseAdmin
-      .from('events')
-      .select('id', { count: 'exact', head: true })
-      .in('source', [...MANAGED_SOURCES])
-      .not('series_id', 'is', null)
-      .eq('series_instance_number', 1);
-
-    const totalEvents = (totalOneOffs || 0) + (totalSeries || 0);
-
-    // Category distribution
-    const { data: categoryRows } = await supabaseAdmin
-      .from('events')
-      .select('category, series_id, series_instance_number')
-      .in('source', [...MANAGED_SOURCES]);
+    const totalEvents = (oneOffCount.count || 0) + (seriesCount.count || 0);
 
     const category_distribution: Record<string, number> = {};
-    if (categoryRows) {
-      for (const row of categoryRows) {
-        if (row.series_id && row.series_instance_number !== 1) continue;
-        const cat = row.category || 'uncategorized';
+    if (categoryRows.data) {
+      for (const row of categoryRows.data) {
+        const cat = (row as Record<string, unknown>).category as string || 'uncategorized';
         category_distribution[cat] = (category_distribution[cat] || 0) + 1;
       }
     }

@@ -104,21 +104,14 @@ router.get('/:idOrSlug', async (req, res, next) => {
         .single();
       account = data;
     } else {
-      // Slug lookup: search by business_name and match generated slug
-      const slug = param.toLowerCase();
-      const { data: candidates } = await supabaseAdmin
+      // Slug lookup: query the indexed slug column directly
+      const { data } = await supabaseAdmin
         .from('portal_accounts')
         .select(ACCOUNT_SELECT)
+        .eq('slug', param.toLowerCase())
         .eq('status', 'active')
-        .order('business_name');
-
-      if (candidates) {
-        account = candidates.find((a: Record<string, unknown>) => {
-          const name = (a.business_name as string) || '';
-          const generated = name.toLowerCase().replace(/['']/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-          return generated === slug;
-        }) || null;
-      }
+        .maybeSingle();
+      account = data;
     }
 
     if (!account) {
