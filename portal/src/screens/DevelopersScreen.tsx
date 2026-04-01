@@ -104,9 +104,13 @@ const PARAMS = [
   { name: 'start_after', type: 'date', desc: 'Events on or after this date (YYYY-MM-DD)' },
   { name: 'start_before', type: 'date', desc: 'Events before this date (YYYY-MM-DD)' },
   { name: 'category', type: 'string', desc: 'Filter by category slug (e.g., live-music, comedy)' },
+  { name: 'tag', type: 'string', desc: 'Filter by tag (repeatable, AND logic)' },
   { name: 'q', type: 'string', desc: 'Text search in title and description' },
   { name: 'near', type: 'string', desc: 'Geo filter center point: "lat,lng" (e.g., 39.95,-75.16)' },
   { name: 'radius_km', type: 'number', desc: 'Radius from near point in km (0.1-100, default 10)' },
+  { name: 'collapse_series', type: 'boolean', desc: 'Deduplicate recurring series (default false)' },
+  { name: 'group_id', type: 'UUID', desc: 'Filter events by group' },
+  { name: 'recurring', type: 'boolean', desc: 'Filter recurring (true) vs one-off (false)' },
   { name: 'limit', type: 'number', desc: 'Results per page (1-200, default 50)' },
   { name: 'offset', type: 'number', desc: 'Pagination offset (default 0)' },
 ];
@@ -354,14 +358,17 @@ export function DevelopersScreen() {
         {/* Quick Start */}
         <Section title="Quick Start" id="quick-start">
           <div style={codeStyle}>
-            {`# No API key needed — just fetch events
+            {`# Read events (no auth needed)
 curl "${API_BASE}/api/v1/events?limit=5"
 
 # Filter by category and location
 curl "${API_BASE}/api/v1/events?category=live-music&near=39.95,-75.16&radius_km=5"
 
 # Subscribe in your calendar
-${API_BASE}/api/v1/events.ics`}
+${API_BASE}/api/v1/events.ics
+
+# Want to contribute events? Get an API key below,
+# then push events via the Contribute API.`}
           </div>
         </Section>
 
@@ -432,15 +439,67 @@ curl -H "X-API-Key: nc_a1b2c3d4e5f6..." \\
           </div>
         </Section>
 
-        {/* Event Endpoints */}
-        <Section title="Event Endpoints" id="events">
+        {/* Read Endpoints */}
+        <Section title="Read Endpoints (No Auth)" id="events">
           <Endpoint method="GET" path="/api/v1/events" desc="List upcoming published events with pagination and filtering." />
           <Endpoint method="GET" path="/api/v1/events/:id" desc="Get a single event by ID." />
           <Endpoint method="GET" path="/api/v1/events.ics" desc="iCalendar feed — subscribe from any calendar app." />
           <Endpoint method="GET" path="/api/v1/events.rss" desc="RSS 2.0 feed for newsletters and aggregators." />
-          <Endpoint method="GET" path="/api/v1/events/terms" desc="Usage terms and rate limit info." />
+          <Endpoint method="GET" path="/api/v1/accounts" desc="Search venues/businesses by name or address." />
+          <Endpoint method="GET" path="/api/v1/accounts/:idOrSlug" desc="Single venue with regular programming and upcoming events." />
+          <Endpoint method="GET" path="/api/v1/groups" desc="List groups — filter by type, neighborhood, category, location." />
+          <Endpoint method="GET" path="/api/v1/groups/:id" desc="Single group with venues and upcoming events." />
           <Endpoint method="GET" path="/api/v1/meta" desc="Feed metadata: stewards, data sources, supported resources." />
-          <Endpoint method="GET" path="/.well-known/neighborhood" desc="API discovery endpoint (Neighborhood API v0.2 spec)." />
+          <Endpoint method="GET" path="/api/v1/meta/regions" desc="Active geographic regions with timezones." />
+          <Endpoint method="GET" path="/api/v1/meta/categories" desc="Categories with current event counts." />
+        </Section>
+
+        {/* Contribute API */}
+        <Section title="Contribute API (Write)" id="contribute">
+          <div style={styles.card}>
+            <p style={{ margin: '0 0 12px 0', fontSize: '14px', color: colors.text, lineHeight: 1.7 }}>
+              Push events, create venues, and manage groups with your API key. All write endpoints require the <code style={{ color: colors.cream, fontSize: '14px' }}>X-API-Key</code> header.
+              New keys start at <strong style={{ color: colors.cream }}>pending</strong> (events enter review). Upgrades to <strong style={{ color: colors.cream }}>verified</strong> (auto-publish) are manual.
+            </p>
+          </div>
+          <Endpoint method="POST" path="/api/v1/contribute" desc="Submit a single event. Supports recurrence via RRULE." auth="API Key" />
+          <Endpoint method="POST" path="/api/v1/contribute/batch" desc="Submit up to 50 events at once." auth="API Key" />
+          <Endpoint method="PATCH" path="/api/v1/contribute/:id" desc="Edit your own event." auth="API Key" />
+          <Endpoint method="DELETE" path="/api/v1/contribute/:id" desc="Delete your own event." auth="API Key" />
+          <Endpoint method="GET" path="/api/v1/contribute/mine" desc="List events you submitted." auth="API Key" />
+          <Endpoint method="PATCH" path="/api/v1/contribute/events/:id/group" desc="Link/unlink your event to a group." auth="API Key" />
+          <Endpoint method="POST" path="/api/v1/contribute/venues" desc="Create a venue (name + address). Dedup by slug." auth="API Key" />
+          <Endpoint method="GET" path="/api/v1/contribute/venues" desc="Search venues." auth="API Key" />
+          <Endpoint method="POST" path="/api/v1/contribute/groups" desc="Create a group. Dedup by slug." auth="API Key" />
+          <Endpoint method="GET" path="/api/v1/contribute/groups" desc="Search groups." auth="API Key" />
+          <Endpoint method="PATCH" path="/api/v1/contribute/groups/:id" desc="Update a group." auth="API Key" />
+          <Endpoint method="POST" path="/api/v1/contribute/groups/:id/venues" desc="Add a venue to a group." auth="API Key" />
+          <Endpoint method="DELETE" path="/api/v1/contribute/groups/:gid/venues/:vid" desc="Remove a venue from a group." auth="API Key" />
+        </Section>
+
+        {/* Contribute Example */}
+        <Section title="Contribute an Event" id="contribute-example">
+          <div style={codeStyle}>
+            {`curl -X POST ${API_BASE}/api/v1/contribute \\
+  -H "X-API-Key: nc_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "name": "Tuesday Night Ride",
+    "start": "2026-04-01T18:30:00-04:00",
+    "timezone": "America/New_York",
+    "category": "fitness",
+    "location": {
+      "name": "Frankford Hall",
+      "address": "1210 Frankford Ave, Philadelphia PA 19125"
+    },
+    "recurrence": "FREQ=WEEKLY;COUNT=12",
+    "tags": ["outdoor", "free", "beginner-friendly"]
+  }'`}
+          </div>
+          <div style={{ marginTop: '12px', fontSize: '14px', color: colors.muted, lineHeight: 1.7 }}>
+            Recurrence uses RRULE format: <code style={{ color: colors.cream }}>FREQ=WEEKLY</code>, <code style={{ color: colors.cream }}>FREQ=MONTHLY;BYDAY=2FR</code>, <code style={{ color: colors.cream }}>FREQ=WEEKLY;BYDAY=MO,WE,FR</code>.
+            Append <code style={{ color: colors.cream }}>;COUNT=N</code> for bounded series. The Commons expands recurrence into individual event instances at creation time.
+          </div>
         </Section>
 
         {/* Webhook Endpoints */}
