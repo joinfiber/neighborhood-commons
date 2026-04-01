@@ -86,6 +86,9 @@ const SCHEMA: Record<string, string[]> = {
     'event_types', 'consecutive_failures', 'disabled_at', 'created_at',
     'updated_at', 'status', 'last_success_at', 'last_failure_at', 'last_failure_reason',
   ],
+  developer_otps: [
+    'id', 'email', 'code', 'expires_at', 'created_at',
+  ],
   // Ingestion tables (newsletter_sources, newsletter_emails, event_candidates,
   // feed_sources) exist in the database but are no longer referenced by code
   // in this repo. They're managed by external admin tools via the Service API.

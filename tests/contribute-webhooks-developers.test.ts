@@ -695,8 +695,7 @@ describe('Developers — registration', () => {
 
     const body = await res.json();
     expect(body.success).toBe(true);
-    // Response must not confirm email existence (anti-enumeration)
-    expect(body.message).toContain('If eligible');
+    expect(body.message).toContain('verification code');
   });
 
   it('verify-otp rejects missing fields', async () => {

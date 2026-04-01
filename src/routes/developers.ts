@@ -4,9 +4,13 @@
  * Self-service API key registration for developers.
  * Email + OTP verification → free API key (1000 req/hr).
  * No admin approval required.
+ *
+ * OTP is handled via a dedicated developer_otps table + Mailgun,
+ * NOT via Supabase Auth (which is reserved for Merrie user sessions).
  */
 
 import { Router } from 'express';
+import { randomInt } from 'crypto';
 import { z } from 'zod';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { validateRequest } from '../lib/helpers.js';
@@ -14,8 +18,11 @@ import { createError } from '../middleware/error-handler.js';
 import { enumerationLimiter, writeLimiter, verifyOtpLimiter } from '../middleware/rate-limit.js';
 import { requireApiKey } from '../middleware/api-key.js';
 import { generateAndStoreKey } from '../lib/api-keys.js';
+import { sendEmail } from '../lib/mailgun.js';
 
 const router: ReturnType<typeof Router> = Router();
+
+const OTP_TTL_MINUTES = 10;
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -37,6 +44,83 @@ const rotateKeySchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
+// OTP helpers
+// ---------------------------------------------------------------------------
+
+/** Generate an 8-digit numeric code */
+function generateOtpCode(): string {
+  return String(randomInt(10_000_000, 99_999_999));
+}
+
+/** Store an OTP code for the given email. Cleans up any prior codes for that email. */
+async function storeOtp(email: string): Promise<string> {
+  const code = generateOtpCode();
+  const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000).toISOString();
+
+  // Delete any existing codes for this email
+  await supabaseAdmin
+    .from('developer_otps')
+    .delete()
+    .eq('email', email.toLowerCase());
+
+  const { error } = await supabaseAdmin
+    .from('developer_otps')
+    .insert({ email: email.toLowerCase(), code, expires_at: expiresAt });
+
+  if (error) {
+    console.error('[DEVELOPERS] OTP store failed:', error.message);
+    throw new Error('Failed to store OTP');
+  }
+
+  return code;
+}
+
+/** Verify an OTP code. Returns true if valid, false otherwise. Deletes the code on success. */
+async function verifyOtp(email: string, token: string): Promise<boolean> {
+  const { data: otp } = await supabaseAdmin
+    .from('developer_otps')
+    .select('id, code, expires_at')
+    .eq('email', email.toLowerCase())
+    .maybeSingle();
+
+  if (!otp) return false;
+  if (new Date(otp.expires_at) < new Date()) {
+    // Expired — clean up
+    await supabaseAdmin.from('developer_otps').delete().eq('id', otp.id);
+    return false;
+  }
+  if (otp.code !== token) return false;
+
+  // Valid — delete the code
+  await supabaseAdmin.from('developer_otps').delete().eq('id', otp.id);
+  return true;
+}
+
+/** Send the OTP email via Mailgun */
+async function sendOtpEmail(email: string, code: string): Promise<void> {
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+      <div style="font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: #7a7670; margin-bottom: 24px;">
+        Neighborhood Commons
+      </div>
+      <div style="font-size: 16px; color: #37352f; line-height: 1.6; margin-bottom: 24px;">
+        Your verification code is:
+      </div>
+      <div style="font-size: 32px; font-weight: 600; letter-spacing: 6px; color: #1a1917; font-family: monospace; margin-bottom: 24px;">
+        ${code}
+      </div>
+      <div style="font-size: 14px; color: #6b6660; line-height: 1.6;">
+        Enter this code to complete your API key registration. It expires in ${OTP_TTL_MINUTES} minutes.
+      </div>
+      <div style="font-size: 13px; color: #9c9791; margin-top: 32px;">
+        If you didn't request this, you can ignore this email.
+      </div>
+    </div>
+  `;
+  await sendEmail(email, 'Your Neighborhood Commons verification code', html);
+}
+
+// ---------------------------------------------------------------------------
 // POST /developers/register/send-otp
 // Send a verification code to register for an API key.
 // ---------------------------------------------------------------------------
@@ -45,16 +129,11 @@ router.post('/register/send-otp', enumerationLimiter, async (req, res, next) => 
   try {
     const { email } = validateRequest(sendOtpSchema, req.body);
 
-    // Always send OTP regardless of whether a key exists — prevents email enumeration.
-    // The verify-otp endpoint checks for duplicates before issuing a key.
-    const { error: otpErr } = await supabaseAdmin.auth.signInWithOtp({ email });
-    if (otpErr) {
-      console.error('[DEVELOPERS] OTP send failed:', otpErr.message);
-      throw createError('Failed to send verification code', 500, 'SERVER_ERROR');
-    }
+    const code = await storeOtp(email);
+    await sendOtpEmail(email, code);
 
     console.log(`[DEVELOPERS] OTP sent to ${email.substring(0, 3)}***`);
-    res.json({ success: true, message: 'If eligible, a verification code was sent to your email.' });
+    res.json({ success: true, message: 'A verification code was sent to your email.' });
   } catch (err) {
     next(err);
   }
@@ -73,7 +152,7 @@ router.post('/register/verify-otp', enumerationLimiter, verifyOtpLimiter, async 
     const { data: existing } = await supabaseAdmin
       .from('api_keys')
       .select('id')
-      .eq('contact_email', email)
+      .eq('contact_email', email.toLowerCase())
       .eq('status', 'active')
       .maybeSingle();
 
@@ -81,22 +160,16 @@ router.post('/register/verify-otp', enumerationLimiter, verifyOtpLimiter, async 
       throw createError('An API key already exists for this email', 409, 'ALREADY_EXISTS');
     }
 
-    // Verify OTP via Supabase auth
-    const { error: verifyErr } = await supabaseAdmin.auth.verifyOtp({
-      email,
-      token,
-      type: 'email',
-    });
-
-    if (verifyErr) {
-      console.error('[DEVELOPERS] OTP verify failed:', verifyErr.message);
+    // Verify OTP against developer_otps table
+    const valid = await verifyOtp(email, token);
+    if (!valid) {
       throw createError('Invalid or expired verification code', 401, 'INVALID_OTP');
     }
 
     // Generate and store the API key
     let key;
     try {
-      key = await generateAndStoreKey(name.trim(), email);
+      key = await generateAndStoreKey(name.trim(), email.toLowerCase());
     } catch (err: unknown) {
       console.error('[DEVELOPERS] Key insert failed:', JSON.stringify(err, null, 2));
       throw createError('Failed to create API key', 500, 'SERVER_ERROR');
@@ -180,18 +253,13 @@ router.post('/keys/rotate', writeLimiter, verifyOtpLimiter, requireApiKey, async
       .eq('id', keyId)
       .single();
 
-    if (!keyInfo || keyInfo.contact_email !== email) {
+    if (!keyInfo || keyInfo.contact_email !== email.toLowerCase()) {
       throw createError('Email does not match this API key', 403, 'FORBIDDEN');
     }
 
-    // Verify OTP
-    const { error: verifyErr } = await supabaseAdmin.auth.verifyOtp({
-      email,
-      token,
-      type: 'email',
-    });
-
-    if (verifyErr) {
+    // Verify OTP against developer_otps table
+    const valid = await verifyOtp(email, token);
+    if (!valid) {
       throw createError('Invalid or expired verification code', 401, 'INVALID_OTP');
     }
 
