@@ -886,4 +886,300 @@ router.get('/venues', async (req, res, next) => {
   }
 });
 
+// =============================================================================
+// GROUPS
+// =============================================================================
+
+const createGroupSchema = z.object({
+  name: z.string().min(1).max(200).trim(),
+  slug: z.string().min(1).max(200).regex(/^[a-z0-9-]+$/, 'Slug must be lowercase alphanumeric with hyphens'),
+  description: z.string().max(2000).optional(),
+  type: z.enum(['business', 'community_group', 'nonprofit', 'collective', 'curator']).default('community_group'),
+  category_tags: z.array(z.string().max(50)).max(20).optional(),
+  neighborhood: z.string().max(200).optional(),
+  city: z.string().max(200).default('Philadelphia'),
+  address: z.string().max(500).optional(),
+  lat: z.number().min(-90).max(90).optional(),
+  lng: z.number().min(-180).max(180).optional(),
+  website: z.string().url().max(2000).optional(),
+  phone: z.string().max(50).optional(),
+  links: z.record(z.string()).optional(),
+});
+
+const updateGroupSchema = createGroupSchema.partial().omit({ slug: true });
+
+const groupSearchSchema = z.object({
+  q: z.string().max(200).optional(),
+  type: z.enum(['business', 'community_group', 'nonprofit', 'collective', 'curator']).optional(),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  offset: z.coerce.number().min(0).default(0),
+});
+
+const groupVenueSchema = z.object({
+  venue_name: z.string().min(1).max(200).trim(),
+  venue_address: z.string().max(500).optional(),
+  place_id: z.string().max(500).optional(),
+  lat: z.number().min(-90).max(90).optional(),
+  lng: z.number().min(-180).max(180).optional(),
+  is_primary: z.boolean().default(false),
+});
+
+/**
+ * POST /api/v1/contribute/groups
+ * Create a group. Dedup by slug — returns existing if match found.
+ */
+router.post('/groups', writeLimiter, async (req, res, next) => {
+  try {
+    const apiKeyId = req.apiKeyInfo?.id;
+    if (!apiKeyId) throw createError('API key required', 401, 'UNAUTHORIZED');
+
+    const data = validateRequest(createGroupSchema, req.body);
+
+    // Dedup by slug
+    const { data: existing } = await supabaseAdmin
+      .from('groups')
+      .select('id, name, slug, status')
+      .eq('slug', data.slug)
+      .maybeSingle();
+
+    if (existing) {
+      res.status(200).json({ group: existing, created: false });
+      return;
+    }
+
+    const { data: group, error } = await supabaseAdmin
+      .from('groups')
+      .insert({
+        name: data.name,
+        slug: data.slug,
+        description: data.description || null,
+        type: data.type,
+        category_tags: data.category_tags || [],
+        neighborhood: data.neighborhood || null,
+        city: data.city,
+        address: data.address || null,
+        latitude: data.lat ?? null,
+        longitude: data.lng ?? null,
+        website: data.website ? sanitizeUrl(data.website) : null,
+        phone: data.phone || null,
+        links: data.links || {},
+        source_method: 'api',
+        source_publisher: (await getKeyInfo(apiKeyId)).name,
+        status: 'active',
+      })
+      .select('id, name, slug, type, status')
+      .single();
+
+    if (error) {
+      if (error.code === '23505') throw createError('Group with this slug already exists', 409, 'DUPLICATE');
+      console.error('[CONTRIBUTE] Group create error:', error.message);
+      throw createError('Failed to create group', 500, 'SERVER_ERROR');
+    }
+
+    console.log(`[CONTRIBUTE] Group created: "${data.name}" (${group.id})`);
+    res.status(201).json({ group, created: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/v1/contribute/groups
+ * Search groups.
+ */
+router.get('/groups', async (req, res, next) => {
+  try {
+    const apiKeyId = req.apiKeyInfo?.id;
+    if (!apiKeyId) throw createError('API key required', 401, 'UNAUTHORIZED');
+
+    const params = validateRequest(groupSearchSchema, req.query);
+
+    let query = supabaseAdmin
+      .from('groups')
+      .select('id, name, slug, type, neighborhood, status', { count: 'exact' })
+      .in('status', ['active', 'dormant'])
+      .order('name', { ascending: true })
+      .range(params.offset, params.offset + params.limit - 1);
+
+    if (params.q) {
+      const q = params.q.replace(/[,.()"\\%_;:'`*]/g, ' ').trim();
+      if (q.length > 0) {
+        query = query.or(`name.ilike.%${q}%,neighborhood.ilike.%${q}%`);
+      }
+    }
+    if (params.type) {
+      query = query.eq('type', params.type);
+    }
+
+    const { data: groups, count, error } = await query;
+
+    if (error) {
+      console.error('[CONTRIBUTE] Group search error:', error.message);
+      throw createError('Failed to search groups', 500, 'SERVER_ERROR');
+    }
+
+    res.json({
+      meta: { total: count || 0, limit: params.limit, offset: params.offset },
+      groups: groups || [],
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * PATCH /api/v1/contribute/groups/:id
+ * Update a group.
+ */
+router.patch('/groups/:id', writeLimiter, async (req, res, next) => {
+  try {
+    const apiKeyId = req.apiKeyInfo?.id;
+    if (!apiKeyId) throw createError('API key required', 401, 'UNAUTHORIZED');
+    validateUuidParam(req.params.id, 'group ID');
+
+    const data = validateRequest(updateGroupSchema, req.body);
+
+    const update: Record<string, unknown> = {};
+    if (data.name !== undefined) update.name = data.name;
+    if (data.description !== undefined) update.description = data.description || null;
+    if (data.type !== undefined) update.type = data.type;
+    if (data.category_tags !== undefined) update.category_tags = data.category_tags;
+    if (data.neighborhood !== undefined) update.neighborhood = data.neighborhood || null;
+    if (data.city !== undefined) update.city = data.city;
+    if (data.address !== undefined) update.address = data.address || null;
+    if (data.lat !== undefined) update.latitude = data.lat;
+    if (data.lng !== undefined) update.longitude = data.lng;
+    if (data.website !== undefined) update.website = data.website ? sanitizeUrl(data.website) : null;
+    if (data.phone !== undefined) update.phone = data.phone || null;
+    if (data.links !== undefined) update.links = data.links;
+
+    if (Object.keys(update).length === 0) throw createError('No fields to update', 400, 'VALIDATION_ERROR');
+
+    const { data: group, error } = await supabaseAdmin
+      .from('groups')
+      .update(update)
+      .eq('id', req.params.id)
+      .select('id, name, slug, type, status')
+      .single();
+
+    if (error) throw createError('Failed to update group', 500, 'SERVER_ERROR');
+
+    res.json({ group });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/v1/contribute/groups/:id/venues
+ * Add a venue to a group.
+ */
+router.post('/groups/:id/venues', writeLimiter, async (req, res, next) => {
+  try {
+    const apiKeyId = req.apiKeyInfo?.id;
+    if (!apiKeyId) throw createError('API key required', 401, 'UNAUTHORIZED');
+    validateUuidParam(req.params.id, 'group ID');
+
+    const data = validateRequest(groupVenueSchema, req.body);
+
+    const { data: venue, error } = await supabaseAdmin
+      .from('group_venues')
+      .insert({
+        group_id: req.params.id,
+        venue_name: data.venue_name,
+        venue_address: data.venue_address || null,
+        place_id: data.place_id || null,
+        latitude: data.lat ?? null,
+        longitude: data.lng ?? null,
+        is_primary: data.is_primary,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === '23505') throw createError('Venue already linked to this group', 409, 'CONFLICT');
+      throw createError('Failed to add venue', 500, 'SERVER_ERROR');
+    }
+
+    res.status(201).json({ venue });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * DELETE /api/v1/contribute/groups/:groupId/venues/:venueId
+ * Remove a venue from a group.
+ */
+router.delete('/groups/:groupId/venues/:venueId', writeLimiter, async (req, res, next) => {
+  try {
+    const apiKeyId = req.apiKeyInfo?.id;
+    if (!apiKeyId) throw createError('API key required', 401, 'UNAUTHORIZED');
+    validateUuidParam(req.params.groupId, 'group ID');
+    validateUuidParam(req.params.venueId, 'venue ID');
+
+    const { error } = await supabaseAdmin
+      .from('group_venues')
+      .delete()
+      .eq('id', req.params.venueId)
+      .eq('group_id', req.params.groupId);
+
+    if (error) throw createError('Failed to remove venue', 500, 'SERVER_ERROR');
+
+    res.json({ deleted: true, id: req.params.venueId });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * PATCH /api/v1/contribute/events/:id/group
+ * Link or unlink an event to a group. Ownership enforced.
+ */
+router.patch('/events/:id/group', writeLimiter, async (req, res, next) => {
+  try {
+    const apiKeyId = req.apiKeyInfo?.id;
+    if (!apiKeyId) throw createError('API key required', 401, 'UNAUTHORIZED');
+    validateUuidParam(req.params.id, 'event ID');
+
+    const schema = z.object({ group_id: z.string().uuid().nullable() });
+    const { group_id } = validateRequest(schema, req.body);
+
+    // Verify ownership
+    const { data: event } = await supabaseAdmin
+      .from('events')
+      .select('id')
+      .eq('id', req.params.id)
+      .eq('source_method', 'api')
+      .eq('source_feed_url', `api-key:${apiKeyId}`)
+      .maybeSingle();
+
+    if (!event) throw createError('Event not found or not owned by this API key', 404, 'NOT_FOUND');
+
+    // Verify group exists if linking
+    if (group_id) {
+      const { data: group } = await supabaseAdmin
+        .from('groups')
+        .select('id')
+        .eq('id', group_id)
+        .in('status', ['active', 'dormant'])
+        .maybeSingle();
+      if (!group) throw createError('Group not found', 404, 'NOT_FOUND');
+    }
+
+    const { error } = await supabaseAdmin
+      .from('events')
+      .update({ group_id })
+      .eq('id', req.params.id)
+      .eq('source_method', 'api')
+      .eq('source_feed_url', `api-key:${apiKeyId}`);
+
+    if (error) throw createError('Failed to update event group', 500, 'SERVER_ERROR');
+
+    res.json({ updated: true, event_id: req.params.id, group_id });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

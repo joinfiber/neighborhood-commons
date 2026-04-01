@@ -373,6 +373,64 @@ Returns a simplified shape: `id`, `name`, `start`, `end`, `timezone`, `venue`, `
 
 Delete an event you submitted. Ownership enforced — you can only delete your own.
 
+### Groups
+
+Groups are organizations that do things in a neighborhood. The Contribute API lets you create groups, add venues to them, and link your events to them.
+
+#### `POST /contribute/groups`
+
+Create a group. Dedup by slug — returns existing if a group with that slug already exists.
+
+```json
+{
+  "name": "Philly Bike Train",
+  "slug": "philly-bike-train",
+  "description": "Group rides through Philadelphia neighborhoods",
+  "type": "community_group",
+  "category_tags": ["fitness", "outdoors"],
+  "neighborhood": "Fishtown",
+  "city": "Philadelphia"
+}
+```
+
+**Group types:** `business`, `community_group`, `nonprofit`, `collective`, `curator`
+
+Response: `201` (created) or `200` (existing group returned).
+
+#### `GET /contribute/groups`
+
+Search groups. Query params: `q` (text search), `type`, `limit` (max 100), `offset`.
+
+#### `PATCH /contribute/groups/:id`
+
+Update a group. All fields optional except slug (cannot be changed).
+
+#### `POST /contribute/groups/:id/venues`
+
+Add a venue to a group.
+
+```json
+{
+  "venue_name": "Frankford Hall",
+  "venue_address": "1210 Frankford Ave, Philadelphia PA 19125",
+  "is_primary": true
+}
+```
+
+#### `DELETE /contribute/groups/:groupId/venues/:venueId`
+
+Remove a venue from a group.
+
+#### `PATCH /contribute/events/:id/group`
+
+Link or unlink one of your events to a group. Ownership enforced — you can only link events you submitted.
+
+```json
+{ "group_id": "uuid" }
+```
+
+Pass `{ "group_id": null }` to unlink.
+
 ---
 
 ## Service API
