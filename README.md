@@ -6,7 +6,7 @@ Neighborhood Commons is a thin data service: a database, an API, and a lightweig
 
 This is infrastructure designed to be cloned and run by any city. The data is the product.
 
-**Live instance: [commons.joinfiber.app](https://commons.joinfiber.app)**
+**Live instance: [api.neighborhood-commons.org](https://api.neighborhood-commons.org)**
 
 ## What's here
 
@@ -45,28 +45,28 @@ No API key required for public reads:
 
 ```bash
 # List upcoming events
-curl https://commons.joinfiber.app/api/v1/events
+curl https://api.neighborhood-commons.org/api/v1/events
 
 # Filter by category
-curl https://commons.joinfiber.app/api/v1/events?category=live-music
+curl https://api.neighborhood-commons.org/api/v1/events?category=live-music
 
 # Search by text
-curl https://commons.joinfiber.app/api/v1/events?q=happy+hour
+curl https://api.neighborhood-commons.org/api/v1/events?q=happy+hour
 
 # Nearby events
-curl https://commons.joinfiber.app/api/v1/events?near=39.97,-75.14&radius_km=2
+curl https://api.neighborhood-commons.org/api/v1/events?near=39.97,-75.14&radius_km=2
 
 # Single event
-curl https://commons.joinfiber.app/api/v1/events/{id}
+curl https://api.neighborhood-commons.org/api/v1/events/{id}
 
 # Calendar feed
-curl https://commons.joinfiber.app/api/v1/events.ics
+curl https://api.neighborhood-commons.org/api/v1/events.ics
 
 # RSS feed
-curl https://commons.joinfiber.app/api/v1/events.rss
+curl https://api.neighborhood-commons.org/api/v1/events.rss
 
 # API discovery
-curl https://commons.joinfiber.app/.well-known/neighborhood
+curl https://api.neighborhood-commons.org/.well-known/neighborhood
 ```
 
 Every event response includes provenance (`source.publisher`, `source.license`) and conforms to the Neighborhood API event schema. Data is licensed CC BY 4.0.
@@ -217,4 +217,4 @@ Code: MIT
 - [Neighborhood API spec](https://github.com/The-Relational-Technology-Project/neighborhood-api)
 - [The Relational Technology Project](https://relationaltechproject.org)
 - [API consumer guide](docs/consumer-guide.md)
-- [AI-readable docs](https://commons.joinfiber.app/llms.txt)
+- [AI-readable docs](https://api.neighborhood-commons.org/llms.txt)

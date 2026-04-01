@@ -5,7 +5,7 @@ This guide is for developers (or Claude Code instances) building apps that pull 
 ## Base URL
 
 ```
-https://commons.joinfiber.app
+https://api.neighborhood-commons.org
 ```
 
 ## No Authentication Required
@@ -44,7 +44,7 @@ Returns upcoming published events in Neighborhood API v0.2 format.
 **Example Request:**
 
 ```bash
-curl "https://commons.joinfiber.app/api/v1/events?limit=10&category=live-music"
+curl "https://api.neighborhood-commons.org/api/v1/events?limit=10&category=live-music"
 ```
 
 **Example Response:**
@@ -75,7 +75,7 @@ curl "https://commons.joinfiber.app/api/v1/events?limit=10&category=live-music"
         "lng": -75.1527
       },
       "url": "https://example.com/jazz-night",
-      "images": ["https://commons.joinfiber.app/api/portal/images/abc123.webp"],
+      "images": ["https://api.neighborhood-commons.org/api/portal/images/abc123.webp"],
       "organizer": {
         "name": "South Restaurant",
         "phone": null
@@ -102,7 +102,7 @@ GET /api/v1/events/:id
 Returns one event by UUID.
 
 ```bash
-curl "https://commons.joinfiber.app/api/v1/events/abc-123-uuid"
+curl "https://api.neighborhood-commons.org/api/v1/events/abc-123-uuid"
 ```
 
 ### Incremental Sync (Changes Feed)
@@ -190,7 +190,7 @@ Subscribe to real-time event notifications. Requires an API key (free, self-serv
 
 ```bash
 # Create a subscription
-curl -X POST "https://commons.joinfiber.app/api/v1/webhooks" \
+curl -X POST "https://api.neighborhood-commons.org/api/v1/webhooks" \
   -H "X-API-Key: nc_yourkey" \
   -H "Content-Type: application/json" \
   -d '{"url": "https://yourapp.com/webhooks", "event_types": ["event.created", "event.updated"]}'
@@ -223,7 +223,7 @@ Push events into the commons programmatically. Requires an API key (free, self-s
 ### Submit a Single Event
 
 ```bash
-curl -X POST "https://commons.joinfiber.app/api/v1/contribute" \
+curl -X POST "https://api.neighborhood-commons.org/api/v1/contribute" \
   -H "X-API-Key: nc_yourkey" \
   -H "Content-Type: application/json" \
   -d '{

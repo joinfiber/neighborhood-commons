@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { styles, colors } from '../lib/styles';
 
-const API_BASE = 'https://commons.joinfiber.app';
+const API_BASE = 'https://api.neighborhood-commons.org';
 const API_URL = import.meta.env.VITE_API_URL || '';
 
 const EXAMPLE_RESPONSE = `{

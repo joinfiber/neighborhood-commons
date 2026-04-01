@@ -46,7 +46,7 @@ const envSchema = z.object({
   COMMONS_SERVICE_KEY: z.string().min(32).optional(),
 
   // CORS
-  CORS_ORIGINS: z.string().default('https://commons.joinfiber.app,https://post.joinfiber.app'),
+  CORS_ORIGINS: z.string().default('https://neighborhood-commons.org,https://api.neighborhood-commons.org,https://commons.joinfiber.app,https://post.joinfiber.app'),
 
   // API base URL
   API_BASE_URL: z.string().url().optional(),

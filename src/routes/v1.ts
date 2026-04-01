@@ -475,7 +475,7 @@ export async function icsHandler(_req: import('express').Request, res: import('e
       const dtEnd = row.end_time ? toICalDate(row.end_time as string, tz) : null;
 
       lines.push('BEGIN:VEVENT');
-      lines.push(`UID:${row.id}@commons.joinfiber.app`);
+      lines.push(`UID:${row.id}@neighborhood-commons.org`);
       lines.push(`DTSTART;TZID=${tz}:${dtStart}`);
       if (dtEnd) lines.push(`DTEND;TZID=${tz}:${dtEnd}`);
       lines.push(`SUMMARY:${escapeICalText(row.content as string)}`);
@@ -525,7 +525,7 @@ export async function rssHandler(_req: import('express').Request, res: import('e
       return !acct || acct.status !== 'suspended';
     });
     const deduped = deduplicateSeries(activeEvents);
-    const baseUrl = 'https://commons.joinfiber.app';
+    const baseUrl = 'https://api.neighborhood-commons.org';
 
     const items = deduped.map((row) => {
       const ev = toNeighborhoodEvent(row as unknown as PortalEventRow);

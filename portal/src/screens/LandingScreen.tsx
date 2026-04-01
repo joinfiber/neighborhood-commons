@@ -233,7 +233,7 @@ export function LandingScreen({ onShowLogin, onShowDevelopers }: LandingScreenPr
               overflow: 'auto',
               margin: '0 0 16px 0',
               fontFamily: 'ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace',
-            }}>{`curl commons.joinfiber.app/api/v1/events
+            }}>{`curl api.neighborhood-commons.org/api/v1/events
 
 # By category
 ?category=live-music
@@ -281,7 +281,7 @@ export function LandingScreen({ onShowLogin, onShowDevelopers }: LandingScreenPr
   "location": { "name": "The Spot" }
 }`}</pre>
             <p style={{ color: lc.dim, fontSize: '13px', lineHeight: 1.6, margin: 0 }}>
-              With AI assistance, you can build an app that reads and writes Commons data in under 30 minutes. Point your LLM to <code style={inlineCode}>commons.joinfiber.app/llms.txt</code> and go.
+              With AI assistance, you can build an app that reads and writes Commons data in under 30 minutes. Point your LLM to <code style={inlineCode}>api.neighborhood-commons.org/llms.txt</code> and go.
             </p>
           </div>
         </div>

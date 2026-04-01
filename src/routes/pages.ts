@@ -27,7 +27,7 @@ const router: ReturnType<typeof Router> = Router();
 // =============================================================================
 
 const SITE_NAME = 'Neighborhood Commons';
-const SITE_DOMAIN = config.apiBaseUrl || 'https://commons.joinfiber.app';
+const SITE_DOMAIN = config.apiBaseUrl || 'https://api.neighborhood-commons.org';
 
 const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, source_method, source_publisher, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible)';
 
@@ -143,7 +143,7 @@ function singleEventIcs(event: Record<string, unknown>): string {
     'PRODID:-//Neighborhood Commons//Events//EN',
     'METHOD:PUBLISH',
     'BEGIN:VEVENT',
-    `UID:${event.id}@commons.joinfiber.app`,
+    `UID:${event.id}@neighborhood-commons.org`,
     `DTSTART:${fmtDt(event.event_at as string)}`,
   ];
   if (event.end_time) lines.push(`DTEND:${fmtDt(event.end_time as string)}`);
@@ -590,7 +590,7 @@ router.get('/venues/:slug/events.ics',async (req, res, next) => {
 
     for (const row of rows) {
       lines.push('BEGIN:VEVENT');
-      lines.push(`UID:${row.id}@commons.joinfiber.app`);
+      lines.push(`UID:${row.id}@neighborhood-commons.org`);
       lines.push(`DTSTART:${fmtDt(row.event_at as string)}`);
       if (row.end_time) lines.push(`DTEND:${fmtDt(row.end_time as string)}`);
       lines.push(`SUMMARY:${esc(row.content as string)}`);

@@ -59,6 +59,7 @@ const APPROVED_DOMAINS = new Set([
   'thephiladelphiacitizen.org', 'whyy.org',
   // Neighborhood Commons ecosystem
   'merrie.co', 'joinfiber.app', 'commons.joinfiber.app',
+  'neighborhood-commons.org', 'api.neighborhood-commons.org',
 ]);
 
 /**

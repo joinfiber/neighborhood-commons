@@ -76,7 +76,7 @@ When you read an event from the Commons, this is the shape. Every field is prese
     "lng": -75.1534
   },
   "url": "https://example.com/event",
-  "images": ["https://r2.commons.joinfiber.app/..."],
+  "images": ["https://r2.api.neighborhood-commons.org/..."],
   "organizer": {
     "name": "Tattooed Moms",
     "phone": null
@@ -117,7 +117,7 @@ When you read an event from the Commons, this is the shape. Every field is prese
 
 ## Reading Events
 
-**Base URL:** `https://commons.joinfiber.app/api/v1`
+**Base URL:** `https://api.neighborhood-commons.org/api/v1`
 **Authentication:** None required. Optional API key (`X-API-Key` header) for a dedicated rate limit bucket.
 **Rate limit:** 1000 requests/hour per IP (or per API key if provided).
 
@@ -218,7 +218,7 @@ Events can be filtered by group via `GET /events?group_id={uuid}`.
 
 ## Contributing Events
 
-**Base URL:** `https://commons.joinfiber.app/api/v1/contribute`
+**Base URL:** `https://api.neighborhood-commons.org/api/v1/contribute`
 **Authentication:** `X-API-Key` header (required).
 
 The Contribute API is how external applications push events into the Commons. You get an API key, you submit events, they go through validation and (depending on your tier) either publish immediately or enter a review queue.
@@ -435,7 +435,7 @@ Pass `{ "group_id": null }` to unlink.
 
 ## Service API
 
-**Base URL:** `https://commons.joinfiber.app/api/v1/service`
+**Base URL:** `https://api.neighborhood-commons.org/api/v1/service`
 **Authentication:** `X-API-Key` header (service tier only).
 
 The Service API is for trusted tools — admin dashboards, import pipelines, partner applications. A service key grants platform-operator-level access. Keys are issued manually.
@@ -643,7 +643,7 @@ API responses use kebab-case (`live-music`). Internal storage uses underscore ke
 
 ## Webhooks
 
-**Base URL:** `https://commons.joinfiber.app/api/v1/webhooks`
+**Base URL:** `https://api.neighborhood-commons.org/api/v1/webhooks`
 **Authentication:** `X-API-Key` header (required).
 
 Subscribe to event changes. The Commons sends HTTPS POST requests to your endpoint.

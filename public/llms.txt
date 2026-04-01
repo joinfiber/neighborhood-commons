@@ -2,27 +2,27 @@
 
 > Open neighborhood event data. Free to read. Contribute with an API key. CC BY 4.0.
 
-Base URL: https://commons.joinfiber.app
+Base URL: https://api.neighborhood-commons.org
 Spec: Neighborhood API v0.2 (https://github.com/The-Relational-Technology-Project/neighborhood-api)
 
 ## Quick Start
 
 ```bash
 # Read events (no auth needed)
-curl "https://commons.joinfiber.app/api/v1/events?limit=5"
+curl "https://api.neighborhood-commons.org/api/v1/events?limit=5"
 
 # Get an API key (verify email, get key instantly)
-curl -X POST https://commons.joinfiber.app/api/v1/developers/register/send-otp \
+curl -X POST https://api.neighborhood-commons.org/api/v1/developers/register/send-otp \
   -H "Content-Type: application/json" \
   -d '{ "email": "you@example.com" }'
 
 # Then verify and receive key
-curl -X POST https://commons.joinfiber.app/api/v1/developers/register/verify-otp \
+curl -X POST https://api.neighborhood-commons.org/api/v1/developers/register/verify-otp \
   -H "Content-Type: application/json" \
   -d '{ "email": "you@example.com", "token": "12345678", "name": "My App" }'
 
 # Contribute an event
-curl -X POST https://commons.joinfiber.app/api/v1/contribute \
+curl -X POST https://api.neighborhood-commons.org/api/v1/contribute \
   -H "X-API-Key: nc_yourkey..." \
   -H "Content-Type: application/json" \
   -d '{
@@ -126,7 +126,7 @@ Categories with event counts.
 
 ## Contribute API (Write — API Key Required)
 
-Base: https://commons.joinfiber.app/api/v1/contribute
+Base: https://api.neighborhood-commons.org/api/v1/contribute
 Auth: `X-API-Key` header
 
 ### Events

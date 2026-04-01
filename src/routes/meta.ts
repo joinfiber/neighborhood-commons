@@ -29,7 +29,7 @@ router.get('/', (_req, res) => {
     stewards: [
       {
         name: 'Neighborhood Commons',
-        url: 'https://commons.joinfiber.app',
+        url: 'https://neighborhood-commons.org',
         contact: 'hello@joinfiber.app',
         role: 'maintainer',
       },
@@ -57,7 +57,7 @@ router.get('/', (_req, res) => {
       spdx: 'CC-BY-4.0',
       url: 'https://creativecommons.org/licenses/by/4.0/',
     },
-    terms_url: 'https://commons.joinfiber.app/api/v1/events/terms',
+    terms_url: 'https://api.neighborhood-commons.org/api/v1/events/terms',
   });
 });
 
