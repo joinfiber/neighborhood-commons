@@ -98,8 +98,7 @@ router.post('/register/verify-otp', enumerationLimiter, verifyOtpLimiter, async 
     try {
       key = await generateAndStoreKey(name.trim(), email);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error('[DEVELOPERS] Key insert failed:', msg);
+      console.error('[DEVELOPERS] Key insert failed:', JSON.stringify(err, null, 2));
       throw createError('Failed to create API key', 500, 'SERVER_ERROR');
     }
 
