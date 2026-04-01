@@ -204,6 +204,16 @@ Active geographic regions with timezone and center coordinates.
 
 Categories with current event counts. Sorted by count descending.
 
+### `GET /groups`
+
+List groups. Query params: `type`, `category`, `neighborhood`, `near` + `radius_km`, `q`, `limit` (max 100), `offset`. Returns groups with their venues and event counts.
+
+### `GET /groups/:id`
+
+Single group with venues and next 5 upcoming events.
+
+Events can be filtered by group via `GET /events?group_id={uuid}`.
+
 ---
 
 ## Contributing Events
@@ -417,6 +427,38 @@ The Service API is for trusted tools — admin dashboards, import pipelines, par
 ```
 
 This is different from the Contribute API, which uses a single ISO 8601 `start` field. The Service API combines `event_date` + `start_time` + `event_timezone` internally.
+
+### Groups
+
+Groups are organizations that do things in a neighborhood — a bike club, a yoga collective, a curator, a business. They're the *who* behind the events. A group can operate at multiple venues.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/groups` | List all groups (search, filter by type) |
+| `GET` | `/groups/:id` | Single group with venues |
+| `POST` | `/groups` | Create a group |
+| `PATCH` | `/groups/:id` | Update group fields |
+| `DELETE` | `/groups/:id` | Delete a group (unlinks events) |
+| `POST` | `/groups/:id/venues` | Add a venue to a group |
+| `DELETE` | `/groups/:groupId/venues/:venueId` | Remove a venue from a group |
+| `PATCH` | `/events/:id/group` | Link or unlink an event to a group |
+
+**Create group request:**
+```json
+{
+  "name": "Philly Bike Train",
+  "slug": "philly-bike-train",
+  "description": "Group rides through Philadelphia neighborhoods",
+  "type": "community_group",
+  "category_tags": ["fitness", "outdoors"],
+  "neighborhood": "Fishtown",
+  "city": "Philadelphia"
+}
+```
+
+**Group types:** `business`, `community_group`, `nonprofit`, `collective`, `curator`
+
+**Linking events:** Use `PATCH /events/:id/group` with `{ "group_id": "uuid" }` to associate an event with a group. Pass `{ "group_id": null }` to unlink.
 
 ### Stats
 
