@@ -24,7 +24,7 @@ export const SUPPORTED_MAGIC_BYTES: Record<string, string> = {
  * Validate magic bytes, re-encode through Sharp (strips metadata, kills polyglots),
  * upload to R2, and return the public serving URL.
  */
-export async function processAndUploadImage(eventId: string, base64: string): Promise<string> {
+export async function processAndUploadImage(entityId: string, base64: string, servingPath?: string): Promise<string> {
   // Strip data URI prefix if present (e.g. "data:image/jpeg;base64,...")
   const rawBase64 = base64.includes(',') ? base64.split(',')[1]! : base64;
   const buffer = Buffer.from(rawBase64, 'base64');
@@ -49,13 +49,17 @@ export async function processAndUploadImage(eventId: string, base64: string): Pr
     .jpeg({ quality: 90 })
     .toBuffer();
 
-  const r2Key = `portal-events/${eventId}/image`;
+  const r2Key = `portal-events/${entityId}/image`;
   const result = await uploadToR2(r2Key, new Uint8Array(processed), 'image/jpeg');
   if (!result.success) {
     throw createError('Failed to upload image', 500, 'SERVER_ERROR');
   }
 
-  return `${config.apiBaseUrl}/api/portal/events/${eventId}/image`;
+  // Return the serving URL. Account images use a different route than event images.
+  if (servingPath) {
+    return `${config.apiBaseUrl}${servingPath}`;
+  }
+  return `${config.apiBaseUrl}/api/portal/events/${entityId}/image`;
 }
 
 /**

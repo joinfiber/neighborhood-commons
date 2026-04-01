@@ -787,10 +787,11 @@ router.post('/accounts/:id/cover-image', imageBodyLimit, serviceLimiter, async (
 
       const buffer = Buffer.from(await response.arrayBuffer());
       const base64 = buffer.toString('base64');
-      const imageUrl = await processAndUploadImage(`account-${accountId}/cover`, base64);
+      const servingPath = `/api/portal/accounts/${accountId}/cover`;
+      const imageUrl = await processAndUploadImage(`accounts/${accountId}/cover`, base64, servingPath);
 
       await supabaseAdmin.from('portal_accounts').update({ cover_image_url: imageUrl }).eq('id', accountId);
-      res.json({ cover_image_url: resolveEventImageUrl(imageUrl, config.apiBaseUrl) });
+      res.json({ cover_image_url: imageUrl });
 
     } else if (req.body?.image) {
       const image = req.body.image as string;
@@ -798,9 +799,10 @@ router.post('/accounts/:id/cover-image', imageBodyLimit, serviceLimiter, async (
         throw createError('image must be a non-empty base64 string', 400, 'VALIDATION_ERROR');
       }
 
-      const imageUrl = await processAndUploadImage(`account-${accountId}/cover`, image);
+      const servingPath = `/api/portal/accounts/${accountId}/cover`;
+      const imageUrl = await processAndUploadImage(`accounts/${accountId}/cover`, image, servingPath);
       await supabaseAdmin.from('portal_accounts').update({ cover_image_url: imageUrl }).eq('id', accountId);
-      res.json({ cover_image_url: resolveEventImageUrl(imageUrl, config.apiBaseUrl) });
+      res.json({ cover_image_url: imageUrl });
 
     } else {
       throw createError('Provide "image" (base64) or "image_url" (URL)', 400, 'VALIDATION_ERROR');
@@ -833,17 +835,19 @@ router.post('/accounts/:id/logo', imageBodyLimit, serviceLimiter, async (req, re
 
       const buffer = Buffer.from(await response.arrayBuffer());
       const base64 = buffer.toString('base64');
-      const imageUrl = await processAndUploadImage(`account-${accountId}/logo`, base64);
+      const servingPath = `/api/portal/accounts/${accountId}/logo`;
+      const imageUrl = await processAndUploadImage(`accounts/${accountId}/logo`, base64, servingPath);
 
       await supabaseAdmin.from('portal_accounts').update({ logo_url: imageUrl }).eq('id', accountId);
-      res.json({ logo_url: resolveEventImageUrl(imageUrl, config.apiBaseUrl) });
+      res.json({ logo_url: imageUrl });
 
     } else if (req.body?.image) {
       const image = req.body.image as string;
-      const imageUrl = await processAndUploadImage(`account-${accountId}/logo`, image);
+      const servingPath = `/api/portal/accounts/${accountId}/logo`;
+      const imageUrl = await processAndUploadImage(`accounts/${accountId}/logo`, image, servingPath);
 
       await supabaseAdmin.from('portal_accounts').update({ logo_url: imageUrl }).eq('id', accountId);
-      res.json({ logo_url: resolveEventImageUrl(imageUrl, config.apiBaseUrl) });
+      res.json({ logo_url: imageUrl });
 
     } else {
       throw createError('Provide "image" (base64) or "image_url" (URL)', 400, 'VALIDATION_ERROR');

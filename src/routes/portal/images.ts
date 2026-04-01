@@ -16,7 +16,7 @@ import { getUserClient, getPortalAccountId } from "../../lib/portal-helpers.js";
 
 const router: ReturnType<typeof Router> = Router();
 
-// PUBLIC: Image serving (no auth — business events are public)
+// PUBLIC: Image serving (no auth — business events and venues are public)
 // =============================================================================
 
 /**
@@ -27,6 +27,52 @@ router.get('/events/:id/image', async (req, res, next) => {
   try {
     validateUuidParam(req.params.id, 'event ID');
     const r2Key = `portal-events/${req.params.id}/image`;
+    const { data, contentType, error } = await getFromR2(r2Key);
+
+    if (error || !data) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Image not found' } });
+      return;
+    }
+
+    res.set('Content-Type', contentType || 'image/jpeg');
+    res.set('Cache-Control', 'public, max-age=31536000, immutable');
+    res.send(Buffer.from(data));
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/portal/accounts/:id/logo
+ * Serve an account logo image from R2. No auth required.
+ */
+router.get('/accounts/:id/logo', async (req, res, next) => {
+  try {
+    validateUuidParam(req.params.id, 'account ID');
+    const r2Key = `portal-events/accounts/${req.params.id}/logo/image`;
+    const { data, contentType, error } = await getFromR2(r2Key);
+
+    if (error || !data) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Image not found' } });
+      return;
+    }
+
+    res.set('Content-Type', contentType || 'image/jpeg');
+    res.set('Cache-Control', 'public, max-age=31536000, immutable');
+    res.send(Buffer.from(data));
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/portal/accounts/:id/cover
+ * Serve an account cover image from R2. No auth required.
+ */
+router.get('/accounts/:id/cover', async (req, res, next) => {
+  try {
+    validateUuidParam(req.params.id, 'account ID');
+    const r2Key = `portal-events/accounts/${req.params.id}/cover/image`;
     const { data, contentType, error } = await getFromR2(r2Key);
 
     if (error || !data) {
