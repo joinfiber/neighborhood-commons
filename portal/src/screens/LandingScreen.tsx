@@ -184,82 +184,126 @@ export function LandingScreen({ onShowLogin, onShowDevelopers }: LandingScreenPr
         </div>
       </Panel>
 
-      {/* Read the data */}
+      {/* Get Started */}
       <Panel mobile={m}>
-        <SectionLabel>Read the data</SectionLabel>
-        <p style={prose}>
-          No account needed. No API key needed. Hit the endpoint and go.
-        </p>
-        <pre style={{
-          background: '#070706',
-          border: `1px solid ${lc.border}`,
-          borderRadius: '12px',
-          padding: '24px 28px',
-          fontSize: '13px',
-          lineHeight: 1.8,
-          color: lc.muted,
-          overflow: 'auto',
-          margin: '24px 0 0 0',
-          fontFamily: 'ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace',
-        }}>{`GET https://commons.joinfiber.app/api/v1/events
-
-# Filter by category
-GET /api/v1/events?category=live-music
-
-# Search near a location
-GET /api/v1/events?near=39.97,-75.14&radius_km=2
-
-# Full-text search
-GET /api/v1/events?q=karaoke`}</pre>
-        <p style={{ ...prose, marginTop: '24px' }}>
-          Also available as{' '}
-          <code style={inlineCode}>events.ics</code> (iCal) and{' '}
-          <code style={inlineCode}>events.rss</code> (RSS).
-          Rate limit is 1,000 requests per hour — generous for any app, and free forever.
-        </p>
-        <div style={{ marginTop: '24px' }}>
-          <button type="button" onClick={onShowDevelopers} style={cta}>
-            Full API documentation
-          </button>
+        <div style={{ textAlign: 'center', marginBottom: '48px' }}>
+          <h2 style={{
+            fontSize: m ? '28px' : '36px',
+            fontWeight: 300,
+            color: lc.cream,
+            letterSpacing: '-0.02em',
+            margin: '0 0 16px',
+          }}>
+            Get started
+          </h2>
+          <p style={{ ...prose, maxWidth: '480px', margin: '0 auto', textAlign: 'center' }}>
+            Two ways to participate. Both are free.
+          </p>
         </div>
-      </Panel>
 
-      {/* Contribute */}
-      <Panel mobile={m} subtle>
-        <SectionLabel>Contribute data</SectionLabel>
-        <p style={prose}>
-          If you produce event data — you're a venue, a promoter, a community organizer, a scraper of public listings, a builder of tools — you can push events into the Commons. The data becomes part of the public record, available to every app in the ecosystem.
-        </p>
-        <p style={prose}>
-          Write access requires an API key, and keys are issued after a human review. We do this because the Commons is a shared resource: every event published here flows to every downstream consumer. Data quality matters.
-        </p>
         <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '20px',
-          marginTop: '36px',
+          display: 'grid',
+          gridTemplateColumns: m ? '1fr' : '1fr 1fr',
+          gap: '24px',
         }}>
-          {[
-            ['Apply for a key', 'Describe your use case. We review within a few days.'],
-            ['Start at pending', 'Your events enter a review queue until we verify you.'],
-            ['Get verified', 'Events auto-publish. Higher rate limits. Full access.'],
-          ].map(([step, desc], i) => (
-            <div key={i} style={{ display: 'flex', gap: '18px', alignItems: 'flex-start' }}>
-              <span style={{
-                color: lc.accent,
-                fontSize: '14px',
-                fontWeight: 600,
-                lineHeight: '26px',
-                flexShrink: 0,
-                width: '22px',
-                textAlign: 'center',
-              }}>{i + 1}</span>
-              <div>
-                <span style={{ color: lc.cream, fontSize: '15px', fontWeight: 500 }}>{step}</span>
-                <span style={{ color: lc.muted, fontSize: '15px' }}> — {desc}</span>
-              </div>
+          {/* Read */}
+          <div style={{
+            background: lc.card,
+            border: `1px solid ${lc.border}`,
+            borderRadius: '14px',
+            padding: '28px',
+          }}>
+            <div style={{ fontSize: '11px', fontWeight: 400, letterSpacing: '0.16em', textTransform: 'uppercase' as const, color: lc.accent, marginBottom: '16px' }}>
+              Read
             </div>
-          ))}
+            <p style={{ color: lc.cream, fontSize: '17px', fontWeight: 500, margin: '0 0 12px', lineHeight: 1.4 }}>
+              Pull event data into your app
+            </p>
+            <p style={{ ...prose, fontSize: '14px', marginBottom: '20px' }}>
+              No account. No API key. No signup. Hit the endpoint and you have structured event data — name, place, time, category, image, recurrence. One request, the full picture.
+            </p>
+            <pre style={{
+              background: '#070706',
+              border: `1px solid ${lc.border}`,
+              borderRadius: '10px',
+              padding: '16px 20px',
+              fontSize: '12px',
+              lineHeight: 1.7,
+              color: lc.muted,
+              overflow: 'auto',
+              margin: '0 0 16px 0',
+              fontFamily: 'ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace',
+            }}>{`curl commons.joinfiber.app/api/v1/events
+
+# By category
+?category=live-music
+
+# Near a location
+?near=39.97,-75.14&radius_km=2`}</pre>
+            <p style={{ color: lc.dim, fontSize: '13px', lineHeight: 1.6, margin: 0 }}>
+              Also as <code style={inlineCode}>events.ics</code> and <code style={inlineCode}>events.rss</code>. 1,000 requests/hour. Free forever.
+            </p>
+          </div>
+
+          {/* Write */}
+          <div style={{
+            background: lc.card,
+            border: `1px solid ${lc.border}`,
+            borderRadius: '14px',
+            padding: '28px',
+          }}>
+            <div style={{ fontSize: '11px', fontWeight: 400, letterSpacing: '0.16em', textTransform: 'uppercase' as const, color: lc.accent, marginBottom: '16px' }}>
+              Contribute
+            </div>
+            <p style={{ color: lc.cream, fontSize: '17px', fontWeight: 500, margin: '0 0 12px', lineHeight: 1.4 }}>
+              Push event data into the Commons
+            </p>
+            <p style={{ ...prose, fontSize: '14px', marginBottom: '20px' }}>
+              Register with your email — no approval, no waiting. You get an API key instantly. Create venues, post events (one-off or recurring), organize them into groups. Your data flows to every app in the ecosystem.
+            </p>
+            <pre style={{
+              background: '#070706',
+              border: `1px solid ${lc.border}`,
+              borderRadius: '10px',
+              padding: '16px 20px',
+              fontSize: '12px',
+              lineHeight: 1.7,
+              color: lc.muted,
+              overflow: 'auto',
+              margin: '0 0 16px 0',
+              fontFamily: 'ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace',
+            }}>{`POST /api/v1/contribute
+{
+  "name": "Open Mic Night",
+  "start": "2026-04-15T19:00:00-04:00",
+  "timezone": "America/New_York",
+  "category": "open-mic",
+  "location": { "name": "The Spot" }
+}`}</pre>
+            <p style={{ color: lc.dim, fontSize: '13px', lineHeight: 1.6, margin: 0 }}>
+              With AI assistance, you can build an app that reads and writes Commons data in under 30 minutes. Point your LLM to <code style={inlineCode}>commons.joinfiber.app/llms.txt</code> and go.
+            </p>
+          </div>
+        </div>
+
+        <div style={{ textAlign: 'center', marginTop: '40px' }}>
+          <button
+            type="button"
+            onClick={onShowDevelopers}
+            style={{
+              background: lc.accent,
+              color: '#0f0f0e',
+              border: 'none',
+              borderRadius: '10px',
+              padding: '14px 36px',
+              fontSize: '16px',
+              fontWeight: 500,
+              cursor: 'pointer',
+              transition: 'opacity 0.15s',
+            }}
+          >
+            Get started — it's free
+          </button>
         </div>
       </Panel>
 
@@ -332,18 +376,6 @@ const footerLink: React.CSSProperties = {
   color: loginColors.muted,
   fontSize: '13px',
   textDecoration: 'none',
-};
-
-const cta: React.CSSProperties = {
-  background: 'transparent',
-  border: `1px solid ${loginColors.border}`,
-  borderRadius: '8px',
-  color: loginColors.cream,
-  fontSize: '14px',
-  fontWeight: 400,
-  padding: '11px 24px',
-  cursor: 'pointer',
-  transition: 'border-color 0.15s',
 };
 
 const inlineCode: React.CSSProperties = {
