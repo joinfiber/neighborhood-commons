@@ -148,12 +148,16 @@ router.get('/accounts/:id', serviceLimiter, async (req, res, next) => {
 
     if (error || !account) throw createError('Account not found', 404, 'NOT_FOUND');
 
+    // Fetch unique events only (one-offs + first instance of each series)
+    // and limit to a reasonable page size. Past events are rarely needed in this view.
     const { data: events } = await supabaseAdmin
       .from('events')
       .select(PORTAL_SELECT)
       .eq('creator_account_id', account.id)
       .in('source', [...MANAGED_SOURCES])
-      .order('event_at', { ascending: true });
+      .or('series_id.is.null,series_instance_number.eq.1')
+      .order('event_at', { ascending: false })
+      .limit(200);
 
     res.json({ account, events: (events || []).map(toPortalEvent) });
   } catch (err) {
