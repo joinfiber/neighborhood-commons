@@ -71,6 +71,7 @@ router.get('/', async (req, res, next) => {
 
     const response = (accounts || []).map(formatAccount);
 
+    res.set('Cache-Control', 'public, max-age=60');
     res.json({
       accounts: response,
       pagination: {
@@ -156,6 +157,7 @@ router.get('/:idOrSlug', async (req, res, next) => {
       return true;
     });
 
+    res.set('Cache-Control', 'public, max-age=60');
     res.json({
       account: {
         ...formatAccount(account),

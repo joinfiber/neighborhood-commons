@@ -927,12 +927,14 @@ router.get('/api-keys', serviceLimiter, async (_req, res, next) => {
     let eventStats: Record<string, { event_count: number; last_submitted_at: string | null; pending_count: number }> = {};
 
     if (keyIds.length > 0) {
+      // Fetch counts per key — use minimal select, the new compound index handles this efficiently
       const sourceFeedUrls = keyIds.map((id) => `api-key:${id}`);
       const { data: stats } = await supabaseAdmin
         .from('events')
         .select('source_feed_url, status, created_at')
         .in('source_feed_url', sourceFeedUrls)
-        .eq('source_method', 'api');
+        .eq('source_method', 'api')
+        .order('created_at', { ascending: false });
 
       if (stats) {
         for (const row of stats) {
@@ -941,7 +943,7 @@ router.get('/api-keys', serviceLimiter, async (_req, res, next) => {
           if (!eventStats[keyId]) eventStats[keyId] = { event_count: 0, last_submitted_at: null, pending_count: 0 };
           eventStats[keyId].event_count++;
           if (row.status === 'pending_review') eventStats[keyId].pending_count++;
-          if (!eventStats[keyId].last_submitted_at || row.created_at > eventStats[keyId].last_submitted_at!) {
+          if (!eventStats[keyId].last_submitted_at) {
             eventStats[keyId].last_submitted_at = row.created_at;
           }
         }

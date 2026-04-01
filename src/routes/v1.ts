@@ -190,6 +190,7 @@ router.get('/', async (req, res, next) => {
     const results = collapseSeries ? deduplicateSeries(visible) : visible;
     const page = results.slice(0, params.limit);
 
+    res.set('Cache-Control', 'public, max-age=30');
     res.json({
       meta: {
         // When collapsing series, total is approximate (dedup reduces it unpredictably)
@@ -268,6 +269,7 @@ router.get('/:id', async (req, res, next) => {
       }
     }
 
+    res.set('Cache-Control', 'public, max-age=60');
     res.json({ event: transformed });
   } catch (err) {
     next(err);
