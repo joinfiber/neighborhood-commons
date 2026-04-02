@@ -522,6 +522,44 @@ router.post('/events', serviceLimiter, async (req, res, next) => {
   }
 });
 
+/** PATCH /service/events/batch — Bulk update events */
+router.patch('/events/batch', serviceLimiter, async (req, res, next) => {
+  try {
+    const schema = z.object({
+      ids: z.array(z.string().uuid()).min(1).max(200),
+      updates: z.object({
+        category: z.enum(EVENT_CATEGORY_KEYS as [string, ...string[]]).optional(),
+        tags: z.array(z.string().max(100)).max(15).optional(),
+        description: z.string().max(2000).optional().nullable(),
+        price: z.string().max(100).optional().nullable(),
+        wheelchair_accessible: z.boolean().nullable().optional(),
+        start_time_required: z.boolean().optional(),
+      }).refine((u) => Object.keys(u).length > 0, { message: 'No fields to update' }),
+    });
+
+    const data = validateRequest(schema, req.body);
+    const dbUpdate: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(data.updates)) {
+      if (key === 'tags') {
+        dbUpdate.tags = validateTags(value as string[], data.updates.category || '');
+      } else {
+        dbUpdate[key] = value;
+      }
+    }
+
+    const { data: updated, error } = await supabaseAdmin
+      .from('events')
+      .update(dbUpdate)
+      .in('id', data.ids)
+      .select('id');
+
+    if (error) throw createError('Failed to batch update', 500, 'SERVER_ERROR');
+    res.json({ updated: updated?.length || 0, ids: (updated || []).map((r) => r.id) });
+  } catch (err) {
+    next(err);
+  }
+});
+
 /** PATCH /service/events/:id — Update single event */
 router.patch('/events/:id', serviceLimiter, async (req, res, next) => {
   try {
@@ -620,44 +658,6 @@ router.delete('/events/:id', serviceLimiter, async (req, res, next) => {
 
     if (error) throw createError('Failed to delete event', 500, 'SERVER_ERROR');
     res.json({ deleted: true, id: req.params.id });
-  } catch (err) {
-    next(err);
-  }
-});
-
-/** PATCH /service/events/batch — Bulk update events */
-router.patch('/events/batch', serviceLimiter, async (req, res, next) => {
-  try {
-    const schema = z.object({
-      ids: z.array(z.string().uuid()).min(1).max(200),
-      updates: z.object({
-        category: z.enum(EVENT_CATEGORY_KEYS as [string, ...string[]]).optional(),
-        tags: z.array(z.string().max(50)).max(15).optional(),
-        description: z.string().max(2000).optional().nullable(),
-        price: z.string().max(100).optional().nullable(),
-        wheelchair_accessible: z.boolean().nullable().optional(),
-        start_time_required: z.boolean().optional(),
-      }).refine((u) => Object.keys(u).length > 0, { message: 'No fields to update' }),
-    });
-
-    const data = validateRequest(schema, req.body);
-    const dbUpdate: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(data.updates)) {
-      if (key === 'tags' && data.updates.category) {
-        dbUpdate.tags = validateTags(value as string[], data.updates.category);
-      } else {
-        dbUpdate[key] = value;
-      }
-    }
-
-    const { data: updated, error } = await supabaseAdmin
-      .from('events')
-      .update(dbUpdate)
-      .in('id', data.ids)
-      .select('id');
-
-    if (error) throw createError('Failed to batch update', 500, 'SERVER_ERROR');
-    res.json({ updated: updated?.length || 0, ids: (updated || []).map((r) => r.id) });
   } catch (err) {
     next(err);
   }
