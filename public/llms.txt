@@ -1,28 +1,314 @@
-# Neighborhood Commons API
+# Neighborhood Commons — The Complete Guide
 
-> Open neighborhood event data. Free to read. Contribute with an API key. CC BY 4.0.
+> A shared, open database of neighborhood events. Not an app — plumbing.
+> Read for free. Contribute with a free API key. All data is CC BY 4.0.
 
-Base URL: https://api.neighborhood-commons.org
-Spec: Neighborhood API v0.2 (https://github.com/The-Relational-Technology-Project/neighborhood-api)
+This document is everything you need to pull event data from the Neighborhood Commons, understand what you got, and contribute your own events back. It is designed to be read top-to-bottom by a developer, an LLM agent, or anyone who understands that a database is basically a giant spreadsheet. No prior knowledge assumed. No other documents required.
 
-## Quick Start
+Base URL: `https://api.neighborhood-commons.org`
+
+---
+
+## Part 1: Reading Events (No Setup Required)
+
+You can read every event in the Commons right now. No account. No API key. No authentication. Just make an HTTP request.
+
+### Your First Request
 
 ```bash
-# Read events (no auth needed)
 curl "https://api.neighborhood-commons.org/api/v1/events?limit=5"
+```
 
-# Get an API key (verify email, get key instantly)
-curl -X POST https://api.neighborhood-commons.org/api/v1/developers/register/send-otp \
+That's it. You just pulled 5 events from the Commons. Here's what comes back:
+
+```json
+{
+  "meta": {
+    "total": 142,
+    "limit": 5,
+    "offset": 0,
+    "spec": "neighborhood-api-v0.2",
+    "license": "CC-BY-4.0"
+  },
+  "events": [
+    {
+      "id": "a1b2c3d4-...",
+      "name": "Punk Rock Karaoke",
+      "start": "2026-04-15T20:00:00-04:00",
+      "end": "2026-04-15T22:00:00-04:00",
+      "timezone": "America/New_York",
+      "description": "Weekly karaoke with a punk twist.",
+      "category": ["karaoke"],
+      "place_id": null,
+      "location": {
+        "name": "Tattooed Moms",
+        "address": "530 South Street, Philadelphia PA 19147",
+        "lat": 39.9428,
+        "lng": -75.1534
+      },
+      "url": "https://example.com/event",
+      "images": ["https://r2.commons.joinfiber.app/events/abc123.jpg"],
+      "organizer": {
+        "name": "Tattooed Moms",
+        "phone": null
+      },
+      "cost": "Free",
+      "tags": ["all-ages", "free", "themed"],
+      "series_id": "x9y8z7-...",
+      "series_instance_number": 3,
+      "series_instance_count": 12,
+      "start_time_required": true,
+      "wheelchair_accessible": null,
+      "runtime_minutes": null,
+      "content_rating": null,
+      "showtimes": null,
+      "recurrence": { "rrule": "FREQ=WEEKLY;COUNT=12" },
+      "source": {
+        "publisher": "Tattooed Moms",
+        "collected_at": "2026-03-30T17:00:00Z",
+        "method": "portal",
+        "license": "CC BY 4.0"
+      }
+    }
+  ]
+}
+```
+
+### Filtering Events
+
+Add query parameters to narrow your results. All are optional. Combine freely.
+
+| Parameter | Example | What it does |
+|-----------|---------|-------------|
+| `limit` | `?limit=20` | How many events to return (1-200, default 50) |
+| `offset` | `?offset=50` | Skip this many results (for pagination) |
+| `start_after` | `?start_after=2026-04-01` | Only events starting after this date |
+| `start_before` | `?start_before=2026-05-01` | Only events starting before this date |
+| `category` | `?category=live-music` | Only events in this category (see category list below) |
+| `tag` | `?tag=free&tag=outdoor` | Only events with ALL of these tags |
+| `q` | `?q=karaoke` | Text search across event names and descriptions |
+| `near` | `?near=39.97,-75.13` | Events near these coordinates (latitude,longitude) |
+| `radius_km` | `?radius_km=5` | Search radius in km (default 10, max 100, requires `near`) |
+| `collapse_series` | `?collapse_series=true` | For recurring events, show only the next upcoming instance |
+| `series_id` | `?series_id=uuid` | All instances of one recurring series |
+| `group_id` | `?group_id=uuid` | Events from a specific group |
+| `recurring` | `?recurring=true` | Only recurring events (or `false` for one-offs only) |
+
+**Pagination example:** To get page 2 of 20-event pages:
+```bash
+curl "https://api.neighborhood-commons.org/api/v1/events?limit=20&offset=20"
+```
+The `meta.total` field tells you how many total events match your filters.
+
+### Other Read Endpoints
+
+| What | URL | Notes |
+|------|-----|-------|
+| Single event | `GET /api/v1/events/:id` | Returns `{ "event": { ... } }` |
+| iCal feed | `GET /api/v1/events.ics` | Subscribe in Google/Apple Calendar |
+| RSS feed | `GET /api/v1/events.rss` | For feed readers |
+| Search venues | `GET /api/v1/accounts?q=coffee` | Returns matching venue/business accounts |
+| Single venue | `GET /api/v1/accounts/:idOrSlug` | By UUID or slug (e.g., `johnny-brendas`) |
+| List groups | `GET /api/v1/groups` | Filter by `type`, `category`, `near`, `q` |
+| Single group | `GET /api/v1/groups/:id` | Group with venues and upcoming events |
+| Feed metadata | `GET /api/v1/meta` | License, stewards, spec version |
+| Regions | `GET /api/v1/meta/regions` | Geographic regions with timezones |
+| Categories | `GET /api/v1/meta/categories` | Categories with current event counts |
+
+**Venue slug algorithm:** Slugs are derived from the business name — lowercase, remove apostrophes, replace non-alphanumeric characters with hyphens. Example: `"Johnny Brenda's"` becomes `johnny-brendas`.
+
+### Rate Limits
+
+Without an API key: 1000 requests per hour, per IP address. That's plenty for most apps. If you need more, or share an IP with other consumers, get a free API key (see Part 3) and pass it as `X-API-Key` header for a dedicated rate limit bucket.
+
+Every response includes `RateLimit-*` headers so you can see where you stand.
+
+---
+
+## Part 2: Understanding the Data
+
+Think of the Commons as a spreadsheet where every row is an event. Here's what each column means.
+
+### Every Event Has These Fields
+
+Every event response includes every field listed below. If a value doesn't apply, it's `null` (for single values) or `[]` (for lists) — never missing. You can always trust the shape.
+
+**The basics — what, when, where:**
+
+| Field | Type | Example | What it is |
+|-------|------|---------|-----------|
+| `id` | text | `"a1b2c3d4-..."` | Unique identifier (UUID). Use this to reference a specific event. |
+| `name` | text | `"Jazz Night"` | The event title. 1-200 characters. |
+| `start` | timestamp | `"2026-04-15T19:00:00-04:00"` | When it starts. ISO 8601 format with timezone offset. |
+| `end` | timestamp or null | `"2026-04-15T22:00:00-04:00"` | When it ends. Same format. Null if unknown. |
+| `timezone` | text | `"America/New_York"` | IANA timezone name. Use this for DST-correct local time display. |
+| `location` | object | `{ "name": "...", "address": "...", "lat": 39.97, "lng": -75.13 }` | Where it happens. `name` is always present. Others may be null. |
+| `category` | list | `["live-music"]` | Always a one-element list. Kebab-case slug. See category list below. |
+
+**Details — description, cost, links:**
+
+| Field | Type | Example | What it is |
+|-------|------|---------|-----------|
+| `description` | text or null | `"Live jazz quartet..."` | Event description. Max 2000 characters. |
+| `cost` | text or null | `"Free"`, `"$10"`, `"$5-15"` | Price as free-text. No structured pricing — just a human-readable string. |
+| `url` | text or null | `"https://example.com/event"` | Link to event page or tickets. |
+| `images` | list | `["https://r2.commons..."]` | Event cover image. Zero or one URL. All images are JPEG, max 1200px wide, metadata stripped. |
+| `tags` | list | `["outdoor", "free", "all-ages"]` | Experience/access descriptors. May be empty. See tag list below. |
+| `wheelchair_accessible` | boolean or null | `true` | Accessibility flag. Null means not specified. |
+
+**The organizer:**
+
+| Field | Type | Example | What it is |
+|-------|------|---------|-----------|
+| `organizer` | object | `{ "name": "The Coffee Shop", "phone": null }` | Who's hosting. `phone` is always null (reserved for future use). |
+| `place_id` | text or null | `"ChIJ..."` | External place identifier (e.g., Google Places ID). |
+
+**Recurring events:**
+
+| Field | Type | Example | What it is |
+|-------|------|---------|-----------|
+| `series_id` | text or null | `"x9y8z7-..."` | If this event recurs, all instances share a series_id. Null for one-offs. |
+| `series_instance_number` | number or null | `3` | This is the 3rd occurrence in the series. |
+| `series_instance_count` | number or null | `12` | The series has 12 total instances. |
+| `recurrence` | object or null | `{ "rrule": "FREQ=WEEKLY;COUNT=12" }` | Recurrence rule in iCal RRULE format. Null for one-offs. |
+
+**Display behavior:**
+
+| Field | Type | What it is |
+|-------|------|-----------|
+| `start_time_required` | boolean | When `true` (default): the event disappears from feeds at its start time. When `false`: the event stays visible until `end` (or start + 3 hours if no end). Use `false` for all-day events, markets, exhibits — things people can still show up to. |
+| `runtime_minutes` | number or null | Film-specific. Duration in minutes. |
+| `content_rating` | text or null | Film-specific. E.g., "PG-13". |
+| `showtimes` | list or null | Film-specific. Multiple screening times for one film. |
+
+**Where it came from:**
+
+| Field | Type | Example | What it is |
+|-------|------|---------|-----------|
+| `source` | object | `{ "publisher": "Tattooed Moms", "collected_at": "2026-03-30T17:00:00Z", "method": "portal", "license": "CC BY 4.0" }` | Who published this event and how. |
+
+`source.method` is one of: `portal` (venue submitted via web portal), `import` (bulk imported by admin), `api` (submitted via the Contribute API).
+
+### Understanding Timestamps and Timezones
+
+This is the trickiest part. Here's what you need to know:
+
+**The `start` and `end` fields include a timezone offset.** The `-04:00` in `"2026-04-15T19:00:00-04:00"` means "4 hours behind UTC." This is Eastern Daylight Time (EDT). In winter, the same venue would show `-05:00` (Eastern Standard Time).
+
+**The offset is already correct for that specific event date.** You don't need to compute DST yourself. If you're just displaying the time, parse the ISO 8601 string as-is.
+
+**The `timezone` field is the IANA timezone name** (like `America/New_York`). Use this if you need to do date math, convert to other timezones, or determine the event's local time independently. It's the authoritative source for DST rules.
+
+**Same venue, different seasons:**
+```
+March event: "start": "2026-03-14T19:00:00-04:00"  (EDT, offset -04:00)
+January event: "start": "2026-01-15T19:00:00-05:00" (EST, offset -05:00)
+```
+Both are 7:00 PM local time in Philadelphia. The offset changes because of Daylight Saving Time.
+
+### Understanding Recurring Events
+
+When someone creates a recurring event (e.g., "Trivia Night, every Tuesday for 12 weeks"), the Commons generates 12 individual event rows — one for each occurrence. Each row is self-contained with its own `id`, `start`, `end`, and all other fields.
+
+**You never need to "expand" a series.** Every instance is already a complete event. You can display it, filter it, and link to it independently.
+
+The `series_id` groups them. The `series_instance_number` tells you which one it is (1, 2, 3...). The `recurrence.rrule` tells you the pattern in iCal format.
+
+**Tip:** Use `?collapse_series=true` if you want to show "Trivia Night (every Tuesday)" as a single item instead of 12 separate listings. The API returns only the nearest upcoming instance per series.
+
+### Merging Commons Data with Your Own
+
+If you're building an app that has its own events AND wants to include Commons events, here's the practical approach:
+
+**Step 1: Pull events from the Commons.**
+```bash
+curl "https://api.neighborhood-commons.org/api/v1/events?limit=200"
+```
+
+**Step 2: Map Commons fields to your own fields.** Here's a typical mapping:
+
+| Your field | Commons field | Notes |
+|-----------|--------------|-------|
+| title | `name` | Direct copy |
+| date/time | `start` | Parse as ISO 8601 datetime |
+| end date/time | `end` | May be null |
+| venue | `location.name` | Always present |
+| address | `location.address` | May be null |
+| lat/lng | `location.lat`, `location.lng` | May be null |
+| description | `description` | May be null |
+| price | `cost` | Free-text string, may be null |
+| link | `url` | May be null |
+| image | `images[0]` | First element of array, or null if array is empty |
+| type/category | `category[0]` | First element of array. Kebab-case slug like `live-music` |
+
+**Step 3: Store the Commons `id` alongside your own data.** This lets you deduplicate — if the same event exists in both your system and the Commons, you can match on `id` and avoid showing it twice.
+
+**Step 4: Refresh periodically.** Events get updated (times change, descriptions are edited, events are cancelled). Pull fresh data every few hours, or use webhooks for real-time updates (see Part 4).
+
+**Step 5: Attribution.** The data is CC BY 4.0. Credit "Neighborhood Commons" somewhere in your app — a footer link, an about page, a data source label. That's the only requirement.
+
+### Keeping in Sync
+
+For apps that cache events locally (mobile apps, databases, static sites), use the changes feed:
+
+```bash
+# First sync — get everything
+curl "https://api.neighborhood-commons.org/api/events/changes?since=2020-01-01T00:00:00Z&limit=50"
+```
+
+Response:
+```json
+{
+  "events": [ ...updated or new events... ],
+  "deleted_ids": ["uuid-1", "uuid-2"],
+  "sync_cursor": "2026-03-11T15:30:00Z",
+  "has_more": false
+}
+```
+
+1. On first sync, use a very old `since` date to get everything.
+2. Save the `sync_cursor` from the response.
+3. Next time, pass `since=<your saved cursor>`.
+4. If `has_more` is `true`, keep requesting with the new cursor until it's `false`.
+5. `deleted_ids` tells you which events to remove from your cache.
+
+Rate limit: 10 requests/minute on this endpoint.
+
+---
+
+## Part 3: Becoming a Contributor
+
+Contributing means pushing events INTO the Commons so that every app connected to it can show them. You need a free API key.
+
+### Step 1: Get Your API Key (2 minutes)
+
+Send your email:
+```bash
+curl -X POST "https://api.neighborhood-commons.org/api/v1/developers/register/send-otp" \
   -H "Content-Type: application/json" \
   -d '{ "email": "you@example.com" }'
+```
 
-# Then verify and receive key
-curl -X POST https://api.neighborhood-commons.org/api/v1/developers/register/verify-otp \
+Check your email for a one-time code. Then verify and get your key:
+```bash
+curl -X POST "https://api.neighborhood-commons.org/api/v1/developers/register/verify-otp" \
   -H "Content-Type: application/json" \
-  -d '{ "email": "you@example.com", "token": "12345678", "name": "My App" }'
+  -d '{ "email": "you@example.com", "token": "12345678", "name": "My Event App" }'
+```
 
-# Contribute an event
-curl -X POST https://api.neighborhood-commons.org/api/v1/contribute \
+The response includes your `raw_key` — it looks like `nc_a1b2c3d4e5f6...`. **Save it immediately.** It is shown exactly once and cannot be recovered.
+
+From now on, include it in every write request:
+```
+X-API-Key: nc_a1b2c3d4e5f6...
+```
+
+### Step 2: Submit Your First Event
+
+The minimum viable event needs 5 things: a name, a start time, a timezone, a category, and a location name.
+
+```bash
+curl -X POST "https://api.neighborhood-commons.org/api/v1/contribute" \
   -H "X-API-Key: nc_yourkey..." \
   -H "Content-Type: application/json" \
   -d '{
@@ -30,281 +316,384 @@ curl -X POST https://api.neighborhood-commons.org/api/v1/contribute \
     "start": "2026-04-15T19:00:00-04:00",
     "timezone": "America/New_York",
     "category": "open-mic",
-    "location": { "name": "The Coffee Shop", "address": "123 Main St, Philadelphia PA" }
+    "location": {
+      "name": "The Coffee Shop",
+      "address": "123 Main St, Philadelphia PA 19125"
+    }
   }'
 ```
 
-## Authentication
-
-No auth required for reading. Pass `X-API-Key` header for writing and for a dedicated rate limit bucket.
-
-Get a free API key: POST to `/api/v1/developers/register/send-otp` with your email, verify with the OTP code, receive your key immediately. No approval required.
-
-New keys start at `pending` tier (events enter review queue). Tier upgrades (verified = auto-publish) are manual.
-
-## Rate Limits
-
-- Read: 1000 requests/hour per IP (or per API key)
-- Contribute (pending tier): 20/hour, 100/day
-- Contribute (verified tier): 100/hour, 500/day
-- Contribute (trusted tier): 500/hour, 2000/day
-- Standard `RateLimit-*` headers on every response
-
-## Error Format
-
-All errors: `{ "error": { "code": "ERROR_CODE", "message": "Human-readable explanation" } }`
-
-Status codes: 400, 401, 403, 404, 409, 429, 500.
-
----
-
-## Read API (No Auth)
-
-### GET /api/v1/events — List Events
-
-Query parameters:
-- `start_after` (YYYY-MM-DD) — events starting after this date
-- `start_before` (YYYY-MM-DD) — events starting before this date
-- `category` (string) — filter by slug (e.g., live-music, comedy)
-- `tag` (string, repeatable) — filter by tag, AND logic
-- `q` (string) — text search on name + description
-- `near` (lat,lng) — geographic center point
-- `radius_km` (number) — 0.1-100, default 10
-- `collapse_series` (true/false) — deduplicate recurring series
-- `series_id` (UUID) — events from a specific series
-- `group_id` (UUID) — events from a specific group
-- `recurring` (true/false) — filter recurring vs one-off
-- `limit` (1-200, default 50), `offset` (default 0)
-
-Response: `{ "meta": { "total", "limit", "offset", "spec", "license" }, "events": [...] }`
-
-### GET /api/v1/events/:id — Single Event
-
-Response: `{ "event": { ...full event object... } }`
-
-### GET /api/v1/events.ics — iCalendar Feed
-
-RFC 5545. Up to 200 events. DST-aware VTIMEZONE blocks. RRULE on series.
-
-### GET /api/v1/events.rss — RSS Feed
-
-RSS 2.0. Up to 50 events.
-
-### GET /api/v1/accounts — Search Venues
-
-Query: `q` (text search), `limit` (max 100, default 20), `offset`.
-
-### GET /api/v1/accounts/:idOrSlug — Single Venue
-
-Returns account with `logo_url`, `cover_image_url`, `regular_programming`, `upcoming_events`.
-
-Slug is derived from business_name: lowercase, strip apostrophes, non-alphanumeric to hyphens.
-
-### GET /api/v1/groups — List Groups
-
-Query: `type`, `category`, `neighborhood`, `near` + `radius_km`, `q`, `limit` (max 100), `offset`.
-
-Group types: business, community_group, nonprofit, collective, curator.
-
-### GET /api/v1/groups/:id — Single Group
-
-Returns group with venues and next 5 upcoming events.
-
-### GET /api/v1/meta — Feed Metadata
-
-Stewards, data sources, license.
-
-### GET /api/v1/meta/regions — List Regions
-
-Active regions with timezone and center coordinates.
-
-### GET /api/v1/meta/categories — List Categories
-
-Categories with event counts.
-
----
-
-## Contribute API (Write — API Key Required)
-
-Base: https://api.neighborhood-commons.org/api/v1/contribute
-Auth: `X-API-Key` header
-
-### Events
-
-#### POST /contribute — Submit Event
-
-Required: `name`, `start` (ISO 8601 with offset), `timezone` (IANA), `category` (slug), `location.name`.
-
-Optional: `end`, `description`, `cost`, `url`, `image_url`, `tags` (max 15), `wheelchair_accessible`, `external_id`, `venue_id` (UUID), `recurrence` (RRULE), `instance_count` (0-52).
-
+Response:
 ```json
 {
-  "name": "Tuesday Night Ride",
-  "start": "2026-04-01T18:30:00-04:00",
+  "event": {
+    "id": "new-uuid-here",
+    "status": "pending_review",
+    "source": {
+      "publisher": "My Event App",
+      "method": "api"
+    }
+  }
+}
+```
+
+That's it. Your event is in the Commons.
+
+### Step 3: Understand What Happens After Submission
+
+**New API keys start at `pending` tier.** Your events go into a review queue and someone approves them before they're published. Once you've demonstrated quality submissions, your key gets upgraded:
+
+| Tier | What happens to your events | Rate limit |
+|------|---------------------------|-----------|
+| `pending` (new keys) | Enter review queue, published after approval | 20/hour, 100/day |
+| `verified` | Auto-published immediately | 100/hour, 500/day |
+| `trusted` | Auto-published immediately | 500/hour, 2000/day |
+
+Tier upgrades are manual. Submit good data consistently and it happens.
+
+### The Full Contribute Event Schema
+
+**Required fields:**
+
+| Field | Type | Rules | Example |
+|-------|------|-------|---------|
+| `name` | text | 1-200 characters | `"Jazz Night"` |
+| `start` | timestamp | ISO 8601 with timezone offset | `"2026-04-15T19:00:00-04:00"` |
+| `timezone` | text | IANA timezone name | `"America/New_York"` |
+| `category` | text | One of the 20 category slugs (see below) | `"live-music"` |
+| `location.name` | text | 1-200 characters | `"South Restaurant"` |
+
+**Optional fields:**
+
+| Field | Type | Rules | Example |
+|-------|------|-------|---------|
+| `end` | timestamp | ISO 8601 with offset | `"2026-04-15T22:00:00-04:00"` |
+| `description` | text | Max 2000 characters | `"Weekly jazz quartet."` |
+| `cost` | text | Max 100 characters | `"Free"`, `"$10"`, `"$5-15"` |
+| `url` | URL | Must be from an approved domain (see below) | `"https://example.com/event"` |
+| `image_url` | URL | The Commons downloads, re-encodes, and hosts it | `"https://example.com/photo.jpg"` |
+| `location.address` | text | Max 500 chars. Providing this enables geocoding. | `"600 N Broad St, Philadelphia PA"` |
+| `location.lat` | number | -90 to 90 | `39.9654` |
+| `location.lng` | number | -180 to 180 | `-75.1527` |
+| `location.place_id` | text | External place ID | `"ChIJ..."` |
+| `tags` | list of text | Max 15 tags. See tag list below. | `["outdoor", "free"]` |
+| `wheelchair_accessible` | boolean | | `true` |
+| `external_id` | text | Your system's ID for this event. Used for dedup. | `"my-system-12345"` |
+| `venue_id` | UUID | Link to a Commons venue account | `"uuid-here"` |
+| `recurrence` | text | RRULE format (see below) | `"FREQ=WEEKLY;COUNT=12"` |
+| `instance_count` | number | 0-52, how many instances to generate | `12` |
+| `custom_category` | text | Max 50 chars, for niche sub-categories | `"sound bath"` |
+
+### Submitting Recurring Events
+
+Use RRULE format (the same standard used by iCalendar). The Commons expands your pattern into individual event instances.
+
+| Pattern | RRULE | What it means |
+|---------|-------|--------------|
+| Every day | `FREQ=DAILY` | Daily, uses default count |
+| Every week | `FREQ=WEEKLY` | Same day each week |
+| Every 2 weeks | `FREQ=WEEKLY;INTERVAL=2` | Biweekly |
+| Every month | `FREQ=MONTHLY` | Same date each month |
+| 2nd Friday of each month | `FREQ=MONTHLY;BYDAY=2FR` | Ordinal weekday |
+| Mon/Wed/Fri | `FREQ=WEEKLY;BYDAY=MO,WE,FR` | Multiple days per week |
+| 12 weeks then stop | `FREQ=WEEKLY;COUNT=12` | Bounded series |
+
+Example — trivia every Tuesday for 8 weeks:
+```json
+{
+  "name": "Tuesday Trivia",
+  "start": "2026-04-07T19:00:00-04:00",
   "timezone": "America/New_York",
-  "category": "fitness",
-  "location": { "name": "Frankford Hall", "address": "1210 Frankford Ave, Philadelphia PA 19125" },
-  "recurrence": "FREQ=WEEKLY;COUNT=12",
-  "tags": ["outdoor", "free", "beginner-friendly"]
+  "category": "trivia-games",
+  "location": { "name": "The Pub" },
+  "recurrence": "FREQ=WEEKLY;COUNT=8"
 }
 ```
 
-Recurrence uses RRULE format. Supported: FREQ=DAILY, FREQ=WEEKLY, FREQ=WEEKLY;INTERVAL=2, FREQ=MONTHLY, FREQ=MONTHLY;BYDAY=2FR, FREQ=WEEKLY;BYDAY=MO,WE,FR. Append ;COUNT=N for bounded series.
-
-Single event response: `{ "event": { "id", "status", "source" } }`
-Recurring response: `{ "event": { "series_id", "instance_count", "instance_ids", "status", "source" } }`
-
-#### POST /contribute/batch — Submit Up to 50 Events
-
-Body: `{ "events": [...] }`. Response codes: 201 (all), 207 (partial), 400 (none).
-
-#### PATCH /contribute/:id — Edit Your Event
-
-All fields optional. Ownership enforced. Cannot change recurrence (delete and recreate).
-
-#### GET /contribute/mine — List Your Events
-
-Query: `status` (published, pending_review, unpublished), `limit`, `offset`.
-
-#### DELETE /contribute/:id — Delete Your Event
-
-Ownership enforced.
-
-#### PATCH /contribute/events/:id/group — Link Event to Group
-
-Body: `{ "group_id": "uuid" }` or `{ "group_id": null }` to unlink. Ownership enforced.
-
-### Venues
-
-#### POST /contribute/venues — Create Venue
-
-Required: `name`, `address`. Optional: `lat`, `lng`, `place_id`, `phone`, `website`.
-Dedup by slug — returns existing venue if match found (200 vs 201).
-
-#### GET /contribute/venues — Search Venues
-
-Query: `q`, `limit` (max 100), `offset`.
-
-### Groups
-
-#### POST /contribute/groups — Create Group
-
+Response:
 ```json
 {
-  "name": "Philly Bike Train",
-  "slug": "philly-bike-train",
-  "type": "community_group",
-  "category_tags": ["fitness", "outdoors"],
-  "neighborhood": "Fishtown",
-  "city": "Philadelphia"
+  "event": {
+    "series_id": "new-series-uuid",
+    "instance_count": 8,
+    "instance_ids": ["id-1", "id-2", "...", "id-8"],
+    "status": "pending_review",
+    "source": { "publisher": "My App", "method": "api" }
+  }
 }
 ```
 
-Dedup by slug. Group types: business, community_group, nonprofit, collective, curator.
+### Submitting Multiple Events at Once
 
-#### GET /contribute/groups — Search Groups
+```bash
+curl -X POST "https://api.neighborhood-commons.org/api/v1/contribute/batch" \
+  -H "X-API-Key: nc_yourkey..." \
+  -H "Content-Type: application/json" \
+  -d '{ "events": [
+    { "name": "Event 1", "start": "...", "timezone": "...", "category": "...", "location": { "name": "..." } },
+    { "name": "Event 2", "start": "...", "timezone": "...", "category": "...", "location": { "name": "..." } }
+  ] }'
+```
 
-Query: `q`, `type`, `limit`, `offset`.
+Up to 50 events per batch. Response codes:
+- `201` — all events accepted
+- `207` — some succeeded, some failed (check per-event results)
+- `400` — all failed
 
-#### PATCH /contribute/groups/:id — Update Group
+Each event in the batch counts individually against your rate limit.
 
-All fields optional except slug.
+### Managing Your Events
 
-#### POST /contribute/groups/:id/venues — Add Venue to Group
+```bash
+# List events you submitted
+curl "https://api.neighborhood-commons.org/api/v1/contribute/mine?status=published" \
+  -H "X-API-Key: nc_yourkey..."
 
-Body: `{ "venue_name", "venue_address", "is_primary" }`.
+# Edit an event you submitted
+curl -X PATCH "https://api.neighborhood-commons.org/api/v1/contribute/:id" \
+  -H "X-API-Key: nc_yourkey..." \
+  -H "Content-Type: application/json" \
+  -d '{ "description": "Updated description" }'
 
-#### DELETE /contribute/groups/:groupId/venues/:venueId — Remove Venue
+# Delete an event you submitted
+curl -X DELETE "https://api.neighborhood-commons.org/api/v1/contribute/:id" \
+  -H "X-API-Key: nc_yourkey..."
+
+# Link an event to a group
+curl -X PATCH "https://api.neighborhood-commons.org/api/v1/contribute/events/:id/group" \
+  -H "X-API-Key: nc_yourkey..." \
+  -H "Content-Type: application/json" \
+  -d '{ "group_id": "uuid" }'
+```
+
+You can only edit and delete events you submitted. Ownership is enforced by your API key.
+
+### Creating Venues and Groups
+
+**Venues** represent physical locations (bars, coffee shops, parks):
+```bash
+curl -X POST "https://api.neighborhood-commons.org/api/v1/contribute/venues" \
+  -H "X-API-Key: nc_yourkey..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "The Coffee Shop",
+    "address": "123 Main St, Philadelphia PA 19125"
+  }'
+```
+If a venue with the same slug already exists, the existing venue is returned (200) instead of creating a duplicate (201).
+
+**Groups** represent organizations (community groups, nonprofits, collectives, curators):
+```bash
+curl -X POST "https://api.neighborhood-commons.org/api/v1/contribute/groups" \
+  -H "X-API-Key: nc_yourkey..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Philly Bike Train",
+    "slug": "philly-bike-train",
+    "type": "community_group",
+    "category_tags": ["fitness", "outdoors"],
+    "neighborhood": "Fishtown",
+    "city": "Philadelphia"
+  }'
+```
+
+Group types: `business`, `community_group`, `nonprofit`, `collective`, `curator`.
+
+### Important Behaviors
+
+- **Geocoding:** If you provide `location.address` but no coordinates, the Commons geocodes it automatically (via OpenStreetMap/Nominatim). The resulting lat/lng are stored on the event.
+- **Region resolution:** Coordinates are used to assign the event to a geographic region. Events without a region won't appear in location-filtered feeds — so always provide an address or coordinates.
+- **Image processing:** If you provide `image_url`, the Commons downloads the image, strips metadata, re-encodes it as JPEG (max 1200px wide), and stores it on Cloudflare R2. The response contains the final hosted URL.
+- **URL sanitization:** The `url` field is validated against an approved domain list (major ticketing platforms, social media, venue websites). Tracking parameters (`utm_*`, `fbclid`, etc.) are stripped automatically. Unapproved domains return a 400 error.
+- **Deduplication:** If you provide `external_id`, the Commons enforces uniqueness per API key. Submitting the same `external_id` twice returns `409 CONFLICT`.
+- **Tag validation:** Tags are checked against the category's allowed set. Invalid tags for that category are silently removed. You may get fewer tags back than you sent. Custom tags (not in the prescribed list) are accepted as-is.
+
+### Checking Your Key Status
+
+```bash
+# See your key info, tier, and usage
+curl "https://api.neighborhood-commons.org/api/v1/developers/me" \
+  -H "X-API-Key: nc_yourkey..."
+
+# Rotate your key (requires email re-verification)
+curl -X POST "https://api.neighborhood-commons.org/api/v1/developers/keys/rotate" \
+  -H "X-API-Key: nc_yourkey..." \
+  -H "Content-Type: application/json" \
+  -d '{ "email": "you@example.com" }'
+```
 
 ---
 
-## API Key Registration
+## Part 4: Real-Time Updates via Webhooks
 
-### POST /api/v1/developers/register/send-otp
+Instead of polling for changes, you can subscribe to real-time notifications. When an event is created, updated, or deleted, the Commons sends an HTTPS POST to your endpoint.
 
-Body: `{ "email": "you@example.com" }`
+### Setting Up a Webhook
 
-### POST /api/v1/developers/register/verify-otp
+```bash
+curl -X POST "https://api.neighborhood-commons.org/api/v1/webhooks" \
+  -H "X-API-Key: nc_yourkey..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://yourapp.com/webhooks/commons",
+    "event_types": ["event.created", "event.updated", "event.deleted"]
+  }'
+```
 
-Body: `{ "email": "you@example.com", "token": "12345678", "name": "My App" }`
+The response includes a `signing_secret` — **save it immediately.** It is shown exactly once.
 
-Response includes `raw_key` — save it, shown once.
+### Event Types
 
-### GET /api/v1/developers/me — Your Key Info
+| Type | When it fires |
+|------|--------------|
+| `event.created` | A new event is published |
+| `event.updated` | An existing event is modified |
+| `event.deleted` | An event is removed |
+| `event.series_created` | A new recurring series is created (one webhook for the whole series, includes all instance IDs) |
 
-Headers: `X-API-Key` required.
+### Verifying Webhook Signatures
 
-### POST /api/v1/developers/keys/rotate — Rotate Key
-
-Requires current key + email re-verification via OTP.
-
----
-
-## Webhooks
-
-Subscribe to event changes. Requires API key.
-
-Event types: `event.created`, `event.updated`, `event.deleted`, `event.series_created`
-
-- POST /api/v1/webhooks — create subscription (returns signing secret once)
-- GET /api/v1/webhooks — list your subscriptions
-- PATCH /api/v1/webhooks/:id — update
-- DELETE /api/v1/webhooks/:id — delete
-- POST /api/v1/webhooks/:id/test — send test delivery
-- GET /api/v1/webhooks/:id/deliveries — delivery history
-
-Signing: HMAC-SHA256. Header: `X-NC-Signature: sha256=<hex>`.
-Retry: 3 times (1min, 5min, 25min). 10 consecutive failures = auto-disabled.
+Every delivery includes an `X-NC-Signature` header. Verify it to confirm the request came from the Commons:
 
 ```javascript
 const crypto = require('crypto');
-function verify(rawBody, signature, secret) {
-  const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
-  return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+
+function verifySignature(rawBody, signatureHeader, secret) {
+  const expected = 'sha256=' + crypto.createHmac('sha256', secret)
+    .update(rawBody)
+    .digest('hex');
+  return crypto.timingSafeEqual(
+    Buffer.from(signatureHeader),
+    Buffer.from(expected)
+  );
 }
+```
+
+### Reliability
+
+- Failed deliveries retry 3 times: after 1 minute, 5 minutes, 25 minutes.
+- 10 consecutive failures automatically disables your subscription.
+- Re-enable with `PATCH /api/v1/webhooks/:id` setting `{ "status": "active" }`.
+- Max 5 subscriptions per API key.
+- Webhook URLs must be HTTPS. Private IPs and cloud metadata endpoints are blocked.
+
+### Managing Webhooks
+
+```bash
+# List your subscriptions
+curl "https://api.neighborhood-commons.org/api/v1/webhooks" \
+  -H "X-API-Key: nc_yourkey..."
+
+# Test a webhook (sends a test delivery)
+curl -X POST "https://api.neighborhood-commons.org/api/v1/webhooks/:id/test" \
+  -H "X-API-Key: nc_yourkey..."
+
+# View delivery history
+curl "https://api.neighborhood-commons.org/api/v1/webhooks/:id/deliveries" \
+  -H "X-API-Key: nc_yourkey..."
+
+# Update a webhook
+curl -X PATCH "https://api.neighborhood-commons.org/api/v1/webhooks/:id" \
+  -H "X-API-Key: nc_yourkey..." \
+  -H "Content-Type: application/json" \
+  -d '{ "url": "https://newurl.com/hook", "status": "active" }'
+
+# Delete a webhook
+curl -X DELETE "https://api.neighborhood-commons.org/api/v1/webhooks/:id" \
+  -H "X-API-Key: nc_yourkey..."
 ```
 
 ---
 
-## Event Schema
+## Reference: Categories
 
-Every event response contains all fields. Absent values are null or [], never omitted.
+20 categories. Use the slug (left column) in API requests. Both kebab-case (`live-music`) and underscore (`live_music`) are accepted on input. Responses always use kebab-case.
 
-| Field | Type | Notes |
-|-------|------|-------|
-| id | string | UUID |
-| name | string | Event title |
-| start | string | ISO 8601 with offset, DST-aware |
-| end | string or null | Same format |
-| timezone | string | IANA timezone (e.g., America/New_York) |
-| description | string or null | |
-| category | string[] | One-element array, kebab-case slug |
-| tags | string[] | Experience/access tags, may be empty |
-| place_id | string or null | |
-| location | object | { name, address, lat, lng } |
-| url | string or null | Event page or ticket link |
-| images | string[] | Zero or one URL |
-| organizer | object | { name, phone: null } |
-| cost | string or null | "Free", "$10", "$5-15" |
-| series_id | string or null | Links recurring instances |
-| series_instance_number | number or null | |
-| series_instance_count | number or null | |
-| start_time_required | boolean | true = hidden after start, false = visible until end |
-| wheelchair_accessible | boolean or null | |
-| runtime_minutes | number or null | Film-specific |
-| content_rating | string or null | Film-specific |
-| showtimes | array or null | Film-specific |
-| recurrence | object or null | { rrule: "FREQ=WEEKLY" } |
-| source | object | { publisher, collected_at, method, license } |
+| Slug | Label | Group |
+|------|-------|-------|
+| `live-music` | Live Music | Performance |
+| `dj-dance` | DJ & Dance | Performance |
+| `comedy` | Comedy | Performance |
+| `theatre` | Theatre | Performance |
+| `open-mic` | Open Mic | Performance |
+| `karaoke` | Karaoke | Performance |
+| `art-exhibit` | Art & Exhibits | Arts & Culture |
+| `film` | Film | Arts & Culture |
+| `literary` | Literary | Arts & Culture |
+| `tour` | Tour | Arts & Culture |
+| `happy-hour` | Happy Hour | Food & Drink |
+| `market` | Market & Pop-up | Food & Drink |
+| `fitness` | Fitness | Active |
+| `sports` | Sports & Rec | Active |
+| `outdoors` | Outdoors & Nature | Active |
+| `class` | Class & Workshop | Learning & Social |
+| `trivia-games` | Trivia & Games | Learning & Social |
+| `kids-family` | Kids & Family | Learning & Social |
+| `community` | Community | Civic |
+| `spectator` | Spectator | Civic |
 
-Categories (20): live-music, dj-dance, comedy, theatre, open-mic, karaoke, art-exhibit, film, literary, tour, happy-hour, market, fitness, sports, outdoors, class, trivia-games, kids-family, community, spectator.
+## Reference: Tags
 
-Prescribed tags (30): all-ages, 18-plus, 21-plus, family-friendly, free, cover-charge, donation-based, na-friendly, byob, dog-friendly, cash-only, registration-required, drop-in, limited-spots, solo-friendly, bring-gear, outdoor, rooftop, seated, chill, high-energy, late-night, beginner-friendly, themed, competitive, hands-on, tasting, acoustic, participatory, volunteer.
+30 prescribed tags plus any custom tags you want. Tags describe the experience of attending — "Can I go? What's the space like? What's the energy?"
 
-Tags are open-ended — custom tags (e.g. jazz-crawl-2026, porchfest) are accepted alongside prescribed ones. Must be lowercase kebab-case, max 100 chars, max 15 per event. Age tags (all-ages, 18-plus, 21-plus) are mutually exclusive.
+**Access — "Can I go?"**
+`all-ages`, `18-plus`, `21-plus`, `family-friendly`, `free`, `cover-charge`, `donation-based`, `na-friendly`, `byob`, `dog-friendly`, `cash-only`
+
+**Logistics — "How do I attend?"**
+`registration-required`, `drop-in`, `limited-spots`, `solo-friendly`, `bring-gear`
+
+**Setting — "What's the space like?"**
+`outdoor`, `rooftop`, `seated`
+
+**Vibe — "What's the energy?"**
+`chill`, `high-energy`, `late-night`, `beginner-friendly`, `themed`, `competitive`
+
+**Format — "What happens there?"**
+`hands-on`, `tasting`, `acoustic`, `participatory`, `volunteer`
+
+**Rules:**
+- Age tags (`all-ages`, `18-plus`, `21-plus`) are mutually exclusive. If you submit more than one, only the first is kept.
+- Max 15 tags per event.
+- Custom tags are accepted alongside prescribed ones. Must be lowercase kebab-case, max 100 characters.
+- Each category has an approved subset of prescribed tags. Tags not approved for the category are silently removed.
+
+## Reference: Errors
+
+Every error response has this shape:
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Human-readable explanation of what went wrong"
+  }
+}
+```
+
+| Code | HTTP Status | What it means |
+|------|-------------|--------------|
+| `VALIDATION_ERROR` | 400 | Your request body failed validation. The message says which field. |
+| `UNAUTHORIZED` | 401 | Missing or invalid API key. |
+| `FORBIDDEN` | 403 | Your key doesn't have permission for this action. |
+| `NOT_FOUND` | 404 | That event/account/group doesn't exist. |
+| `DUPLICATE` | 409 | You already submitted an event with this `external_id`. |
+| `RATE_LIMIT` | 429 | Too many requests. Check `RateLimit-*` headers for when to retry. |
+| `SERVER_ERROR` | 500 | Something broke on our end. No internal details exposed. |
+
+## Reference: Regions
+
+Every event belongs to a geographic region (a city or neighborhood). When you submit an event:
+
+1. If you provide coordinates (`location.lat` + `location.lng`) — the Commons resolves the containing region automatically.
+2. If you provide only an address — the Commons geocodes it first, then resolves the region.
+3. If neither is provided — the event gets the default region.
+
+Events without a proper region won't appear in location-filtered feeds. Always provide an address or coordinates.
+
+---
 
 ## License
 
-All data: Creative Commons Attribution 4.0 International (CC BY 4.0).
-Attribution: Credit "Neighborhood Commons" or link to the API.
+All event data is published under **Creative Commons Attribution 4.0 International (CC BY 4.0)**. You can use it for any purpose — commercial or non-commercial — as long as you credit "Neighborhood Commons."
+
 Contact: hello@joinfiber.app
+Spec: [Neighborhood API v0.2](https://github.com/The-Relational-Technology-Project/neighborhood-api)
