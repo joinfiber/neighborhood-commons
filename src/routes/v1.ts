@@ -84,10 +84,10 @@ router.get('/', async (req, res, next) => {
       .from('events')
       .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, event_image_focal_y, created_at, creator_account_id, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, runtime_minutes, content_rating, showtimes, source_method, source_publisher, portal_accounts!events_creator_account_id_fkey(business_name, status, wheelchair_accessible)', { count: 'exact' })
       .eq('status', 'published')
-      // Visibility: over-fetch with 3h lookback, then JS filter applies precise
-      // start_time_required logic. The lookback catches open-window events that
-      // started recently but are still active.
-      .or(`event_at.gte.${recentCutoff},end_time.gte.${nowUtc}`)
+      // Visibility: 3h lookback catches open-window events (happy hours, etc.)
+      // that started recently but are still active. JS filter applies precise
+      // start_time_required logic after fetch.
+      .gte('event_at', recentCutoff)
       .order('event_at', { ascending: true })
       .range(params.offset, params.offset + fetchLimit - 1);
 
