@@ -373,6 +373,7 @@ The test suite is designed around the question: **what would silently break the 
 - **New public endpoint?** Add integration tests in `api-integration.test.ts` that verify the response shape, status codes, and error handling.
 - **New portal endpoint?** Add integration tests in `portal-crud.test.ts` — auth enforcement, input validation, and response shape.
 - **Changed auth, RLS, rate limits, or access patterns?** Update this file (CLAUDE.md), `public/llms.txt`, and `docs/consumer-guide.md` in the same commit. The docs are the contract.
+- **New, changed, or removed endpoint?** Update `public/openapi.json` in the same commit. The OpenAPI spec is manually maintained and must stay in sync with the actual API surface — endpoints, parameters, request/response schemas, and auth requirements.
 - **New transform or helper?** Add unit tests in the appropriate test file.
 - **New table?** Add it to `SCHEMA`. The test will catch you if you forget.
 
