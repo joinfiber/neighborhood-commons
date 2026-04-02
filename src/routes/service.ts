@@ -493,10 +493,10 @@ router.post('/events', serviceLimiter, async (req, res, next) => {
   try {
     const data = validateRequest(createEventSchema, req.body);
 
-    // Verify account exists
+    // Verify account exists and fetch its venue coordinates
     const { data: account } = await supabaseAdmin
       .from('portal_accounts')
-      .select('id, auth_user_id')
+      .select('id, auth_user_id, default_address, default_latitude, default_longitude')
       .eq('id', data.account_id)
       .maybeSingle();
 
@@ -511,11 +511,26 @@ router.post('/events', serviceLimiter, async (req, res, next) => {
       tags: validatedTags,
     }, data.account_id, adminUserId);
 
-    // Resolve coordinates + region (matching Contribute API behavior)
+    // Resolve coordinates: explicit > venue account > geocode
     let lat = data.latitude ?? null;
     let lng = data.longitude ?? null;
 
-    // If no coordinates but has address, geocode it
+    // If no explicit coordinates, inherit from venue account when address matches
+    if (lat == null && lng == null && account.default_latitude != null && account.default_longitude != null) {
+      const eventAddr = (data.address || '').toLowerCase().trim();
+      const venueAddr = (account.default_address || '').toLowerCase().trim();
+      // Use venue coords if: no event address, or event address matches venue address
+      if (!eventAddr || !venueAddr || eventAddr === venueAddr) {
+        lat = account.default_latitude;
+        lng = account.default_longitude;
+        insert.latitude = lat;
+        insert.longitude = lng;
+        insert.approximate_location = `POINT(${lng} ${lat})`;
+        console.log(`[SERVICE] Using venue account coordinates for "${data.title}": ${lat}, ${lng}`);
+      }
+    }
+
+    // Geocode only as a last resort — event has an address but no coords from above
     if (lat == null && lng == null && data.address) {
       try {
         const coords = await nominatimGeocode(data.address);
