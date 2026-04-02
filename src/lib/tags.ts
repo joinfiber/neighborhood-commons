@@ -102,14 +102,19 @@ export const CATEGORY_TAGS: Record<EventCategory, EventTag[]> = {
   spectator:     ['outdoor', 'all-ages', 'family-friendly', '21-plus', 'free', 'cover-charge', 'seated', 'high-energy', 'themed', 'cash-only', 'na-friendly', 'dog-friendly'],
 };
 
+/** Tag format: lowercase kebab-case */
+const TAG_FORMAT = /^[a-z0-9][a-z0-9-]*$/;
+
 /**
  * Validate tags for a given category.
- * Returns the subset of tags that are valid for the category.
- * Enforces age-tag mutual exclusivity.
+ * Accepts both prescribed tags and custom tags (e.g. jazz-crawl-2026, porchfest).
+ * Enforces format (kebab-case, max 100 chars) and age-tag mutual exclusivity.
  */
-export function validateTags(tags: string[], category: string): string[] {
-  const allowed = CATEGORY_TAGS[category as EventCategory] || ALL_TAG_SLUGS;
-  const valid = tags.filter(t => allowed.includes(t as EventTag));
+export function validateTags(tags: string[], _category: string): string[] {
+  // Filter to valid format: lowercase kebab-case, max 100 chars
+  const valid = tags
+    .map(t => t.trim().toLowerCase())
+    .filter(t => t.length > 0 && t.length <= 100 && TAG_FORMAT.test(t));
 
   // Enforce age-tag mutual exclusivity: keep only the first age tag
   const ageTags = valid.filter(t => AGE_TAGS.includes(t as EventTag));

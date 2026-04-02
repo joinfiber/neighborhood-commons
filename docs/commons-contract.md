@@ -611,33 +611,29 @@ API responses use kebab-case (`live-music`). Internal storage uses underscore ke
 
 ## Tags
 
-30 experience/access tags across 6 dimensions. Tags describe the experience of attending — "Can I go? What's the space like? What's the energy?" — not the content.
+Tags are open-ended. The Commons prescribes 30 standard tags for describing the experience of attending an event, but you can also include custom tags to group related events (e.g. `jazz-crawl-2026`, `porchfest`, `first-friday`).
 
-### Access — "Can I go?"
+### Prescribed Tags
 
-`all-ages`, `18-plus`, `21-plus`, `family-friendly`, `free`, `cover-charge`, `donation-based`, `na-friendly`, `byob`, `dog-friendly`, `cash-only`
+Standard descriptors that consuming apps may filter on:
 
-### Logistics — "How do I attend?"
+**Access:** `all-ages`, `18-plus`, `21-plus`, `family-friendly`, `free`, `cover-charge`, `donation-based`, `na-friendly`, `byob`, `dog-friendly`, `cash-only`
 
-`registration-required`, `drop-in`, `limited-spots`, `solo-friendly`, `bring-gear`
+**Logistics:** `registration-required`, `drop-in`, `limited-spots`, `solo-friendly`, `bring-gear`
 
-### Setting — "What's the space like?"
+**Setting:** `outdoor`, `rooftop`, `seated`
 
-`outdoor`, `rooftop`, `seated`
+**Vibe:** `chill`, `high-energy`, `late-night`, `beginner-friendly`, `themed`, `competitive`
 
-### Vibe — "What's the energy?"
-
-`chill`, `high-energy`, `late-night`, `beginner-friendly`, `themed`, `competitive`
-
-### Format — "What happens there?"
-
-`hands-on`, `tasting`, `acoustic`, `participatory`, `volunteer`
+**Format:** `hands-on`, `tasting`, `acoustic`, `participatory`, `volunteer`
 
 ### Rules
 
-- Each category has an approved subset of tags. Invalid tags for a category are silently removed on write. The full mapping is in `src/lib/tags.ts`.
-- Age tags (`all-ages`, `18-plus`, `21-plus`) are mutually exclusive. If multiple are submitted, only the first is kept.
 - Max 15 tags per event.
+- Tags must be lowercase kebab-case (`/^[a-z0-9][a-z0-9-]*$/`), max 100 characters.
+- Age tags (`all-ages`, `18-plus`, `21-plus`) are mutually exclusive. If multiple are submitted, only the first is kept.
+- Custom tags are stored and returned as-is. Use them to group related events across a festival, crawl, or series of happenings.
+- The `CATEGORY_TAGS` mapping in `src/lib/tags.ts` is retained as a UI hint — apps can use it to suggest relevant prescribed tags for each category.
 
 ---
 
@@ -742,7 +738,7 @@ Practical guidance for anyone writing code against the Commons.
 7. **Recurrence uses RRULE on the Contribute API.** `"recurrence": "FREQ=WEEKLY;COUNT=12"`. The Service API uses an internal format. Both produce the same result.
 8. **Recurrence creates instances at write time.** You submit the pattern and count; the Commons generates N individual rows. You never expand a series.
 9. **Images are re-encoded.** Pass a URL; the Commons downloads, strips metadata, re-encodes to JPEG via Sharp, uploads to R2. The response contains the final URL.
-10. **Tags are validated per category.** Invalid tags for the category are silently removed. Check the mapping if you're getting fewer tags back than you sent.
+10. **Tags are open-ended.** The 30 prescribed tags are standard descriptors. You can also include custom tags (e.g. `jazz-crawl-2026`, `porchfest`) to group related events. Tags must be lowercase kebab-case, max 100 chars. Age tags are mutually exclusive.
 11. **The venue slug is derived, not stored.** Compute it from `business_name` using the algorithm above if you need it.
 12. **URLs are sanitized.** Tracking parameters are stripped. The Contribute API enforces a domain allowlist on `url` fields.
 13. **Webhooks use `X-NC-Signature`, not `X-Webhook-Signature`.** The signing secret is shown once on creation.

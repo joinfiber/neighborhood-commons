@@ -299,7 +299,9 @@ Every event response contains all fields. Absent values are null or [], never om
 
 Categories (20): live-music, dj-dance, comedy, theatre, open-mic, karaoke, art-exhibit, film, literary, tour, happy-hour, market, fitness, sports, outdoors, class, trivia-games, kids-family, community, spectator.
 
-Tags (30): all-ages, 18-plus, 21-plus, family-friendly, free, cover-charge, donation-based, na-friendly, byob, dog-friendly, cash-only, registration-required, drop-in, limited-spots, solo-friendly, bring-gear, outdoor, rooftop, seated, chill, high-energy, late-night, beginner-friendly, themed, competitive, hands-on, tasting, acoustic, participatory, volunteer.
+Prescribed tags (30): all-ages, 18-plus, 21-plus, family-friendly, free, cover-charge, donation-based, na-friendly, byob, dog-friendly, cash-only, registration-required, drop-in, limited-spots, solo-friendly, bring-gear, outdoor, rooftop, seated, chill, high-energy, late-night, beginner-friendly, themed, competitive, hands-on, tasting, acoustic, participatory, volunteer.
+
+Tags are open-ended — custom tags (e.g. jazz-crawl-2026, porchfest) are accepted alongside prescribed ones. Must be lowercase kebab-case, max 100 chars, max 15 per event. Age tags (all-ages, 18-plus, 21-plus) are mutually exclusive.
 
 ## License
 

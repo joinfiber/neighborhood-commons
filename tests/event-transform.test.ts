@@ -334,11 +334,17 @@ describe('toNeighborhoodEvent — tags', () => {
 });
 
 describe('validateTags', () => {
-  it('filters tags to those allowed for the category', () => {
-    const result = validateTags(['outdoor', 'free', 'tasting'], 'live_music');
+  it('accepts prescribed and custom tags for any category', () => {
+    const result = validateTags(['outdoor', 'free', 'tasting', 'jazz-crawl-2026'], 'live_music');
     expect(result).toContain('outdoor');
     expect(result).toContain('free');
-    expect(result).not.toContain('tasting');
+    expect(result).toContain('tasting');
+    expect(result).toContain('jazz-crawl-2026');
+  });
+
+  it('rejects invalid tag formats', () => {
+    const result = validateTags(['good-tag', 'BAD TAG', 'also bad!', '123-ok'], 'live_music');
+    expect(result).toEqual(['good-tag', '123-ok']);
   });
 
   it('enforces age tag mutual exclusivity', () => {
