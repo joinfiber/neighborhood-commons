@@ -1,0 +1,241 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Neighborhood Commons API",
+    "description": "Open neighborhood event data. Implements the Neighborhood API v0.2 spec. CC BY 4.0.",
+    "version": "0.2.0",
+    "license": {
+      "name": "CC-BY-4.0",
+      "url": "https://creativecommons.org/licenses/by/4.0/"
+    },
+    "contact": {
+      "name": "Neighborhood Commons",
+      "url": "https://api.neighborhood-commons.org",
+      "email": "hello@joinfiber.app"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.neighborhood-commons.org/api/v1",
+      "description": "Production"
+    }
+  ],
+  "paths": {
+    "/events": {
+      "get": {
+        "summary": "List events",
+        "description": "Published events, paginated and filtered. No authentication required.",
+        "operationId": "listEvents",
+        "parameters": [
+          { "name": "start_after", "in": "query", "schema": { "type": "string", "format": "date" }, "description": "Events starting after this date (YYYY-MM-DD)" },
+          { "name": "start_before", "in": "query", "schema": { "type": "string", "format": "date" }, "description": "Events starting before this date (YYYY-MM-DD)" },
+          { "name": "category", "in": "query", "schema": { "type": "string" }, "description": "Filter by category slug" },
+          { "name": "tag", "in": "query", "schema": { "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }] }, "description": "Filter by tag(s) — AND semantics" },
+          { "name": "q", "in": "query", "schema": { "type": "string", "maxLength": 200 }, "description": "Text search across name and description" },
+          { "name": "near", "in": "query", "schema": { "type": "string", "pattern": "^-?\\d+\\.?\\d*,-?\\d+\\.?\\d*$" }, "description": "Coordinates as lat,lng for proximity filtering" },
+          { "name": "radius_km", "in": "query", "schema": { "type": "number", "minimum": 0.1, "maximum": 100, "default": 10 }, "description": "Proximity radius in km (requires near)" },
+          { "name": "collapse_series", "in": "query", "schema": { "type": "string", "enum": ["true", "false"] }, "description": "Deduplicate series to nearest upcoming instance" },
+          { "name": "series_id", "in": "query", "schema": { "type": "string", "format": "uuid" }, "description": "Filter to events in a specific series" },
+          { "name": "recurring", "in": "query", "schema": { "type": "string", "enum": ["true", "false"] }, "description": "Filter recurring (true) or one-off (false) events" },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 200, "default": 50 }, "description": "Page size" },
+          { "name": "offset", "in": "query", "schema": { "type": "integer", "minimum": 0, "default": 0 }, "description": "Page offset" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated event list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["meta", "events"],
+                  "properties": {
+                    "meta": { "$ref": "#/components/schemas/Meta" },
+                    "events": { "type": "array", "items": { "$ref": "#/components/schemas/Event" } }
+                  }
+                }
+              }
+            }
+          },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    },
+    "/events/{id}": {
+      "get": {
+        "summary": "Get event",
+        "description": "Single event by ID in Neighborhood API format.",
+        "operationId": "getEvent",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Event detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "event": { "$ref": "#/components/schemas/Event" }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/events/terms": {
+      "get": {
+        "summary": "Data license terms",
+        "operationId": "getTerms",
+        "responses": {
+          "200": {
+            "description": "License and usage terms",
+            "content": { "application/json": { "schema": { "type": "object" } } }
+          }
+        }
+      }
+    },
+    "/events.ics": {
+      "get": {
+        "summary": "iCalendar feed",
+        "operationId": "getIcalFeed",
+        "responses": {
+          "200": {
+            "description": "iCalendar feed of upcoming events",
+            "content": { "text/calendar": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/events.rss": {
+      "get": {
+        "summary": "RSS feed",
+        "operationId": "getRssFeed",
+        "responses": {
+          "200": {
+            "description": "RSS 2.0 feed of upcoming events",
+            "content": { "application/rss+xml": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/meta": {
+      "get": {
+        "summary": "Feed metadata",
+        "operationId": "getMeta",
+        "responses": {
+          "200": {
+            "description": "Feed name, stewards, license, and supported resources",
+            "content": { "application/json": { "schema": { "type": "object" } } }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Meta": {
+        "type": "object",
+        "required": ["total", "limit", "offset", "spec", "license"],
+        "properties": {
+          "total": { "type": "integer" },
+          "limit": { "type": "integer" },
+          "offset": { "type": "integer" },
+          "spec": { "type": "string", "example": "neighborhood-api-v0.2" },
+          "license": { "type": "string", "example": "CC-BY-4.0" }
+        }
+      },
+      "Event": {
+        "type": "object",
+        "required": ["id", "name", "start", "timezone", "category", "source"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "start": { "type": "string", "format": "date-time", "description": "ISO 8601 with timezone offset" },
+          "end": { "type": ["string", "null"], "format": "date-time" },
+          "timezone": { "type": "string", "description": "IANA timezone name", "example": "America/New_York" },
+          "description": { "type": ["string", "null"] },
+          "category": { "type": "array", "items": { "type": "string" } },
+          "place_id": { "type": ["string", "null"] },
+          "location": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "address": { "type": ["string", "null"] },
+              "lat": { "type": ["number", "null"] },
+              "lng": { "type": ["number", "null"] }
+            }
+          },
+          "url": { "type": ["string", "null"], "format": "uri" },
+          "images": { "type": "array", "items": { "type": "string", "format": "uri" } },
+          "organizer": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "phone": { "type": ["string", "null"] }
+            }
+          },
+          "cost": { "type": ["string", "null"] },
+          "tags": { "type": "array", "items": { "type": "string" } },
+          "wheelchair_accessible": { "type": ["boolean", "null"] },
+          "start_time_required": { "type": "boolean" },
+          "series_id": { "type": ["string", "null"], "format": "uuid" },
+          "series_instance_number": { "type": ["integer", "null"] },
+          "series_instance_count": { "type": ["integer", "null"] },
+          "recurrence": {
+            "oneOf": [
+              { "type": "null" },
+              { "type": "object", "properties": { "rrule": { "type": "string" } } }
+            ]
+          },
+          "source": { "$ref": "#/components/schemas/Source" }
+        }
+      },
+      "Source": {
+        "type": "object",
+        "required": ["publisher", "collected_at", "method", "license"],
+        "properties": {
+          "publisher": { "type": "string" },
+          "collected_at": { "type": "string", "format": "date-time" },
+          "method": { "type": "string", "enum": ["portal", "import", "api", "admin"] },
+          "license": { "type": "string", "example": "CC BY 4.0" }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": ["code", "message"],
+            "properties": {
+              "code": { "type": "string" },
+              "message": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "NotFound": {
+        "description": "Resource not found",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      },
+      "RateLimited": {
+        "description": "Rate limit exceeded",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      }
+    },
+    "securitySchemes": {
+      "apiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "Optional API key for dedicated rate limit bucket"
+      }
+    }
+  }
+}

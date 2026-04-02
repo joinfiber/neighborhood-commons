@@ -24,8 +24,7 @@ Thumbs.db
 # Test
 coverage
 
-# Generated files
-public/openapi.json
+# Generated files (none currently)
 
 # Internal tools and field data
 scripts/
