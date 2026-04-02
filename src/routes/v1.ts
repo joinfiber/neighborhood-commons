@@ -71,14 +71,23 @@ router.get('/', async (req, res, next) => {
     // When collapsing series, over-fetch to compensate for dedup reducing the result set.
     const fetchLimit = collapseSeries ? params.limit * 3 : params.limit;
 
+    // Lookback window: include events that started up to 3h ago (for open-window
+    // categories like happy hours that remain visible after start). This is much
+    // tighter than the old filter (`event_at >= now OR end_time >= now`) which
+    // included events from days ago if they had a future end_time, causing the
+    // first page of results to be dominated by past events and the JS visibility
+    // filter to strip them all out.
+    const lookbackMs = 3 * 60 * 60 * 1000;
+    const recentCutoff = new Date(Date.now() - lookbackMs).toISOString();
+
     let query = supabaseAdmin
       .from('events')
       .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, event_image_focal_y, created_at, creator_account_id, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, runtime_minutes, content_rating, showtimes, source_method, source_publisher, portal_accounts!events_creator_account_id_fkey(business_name, status, wheelchair_accessible)', { count: 'exact' })
       .eq('status', 'published')
-      // Visibility: include events still relevant to browse feeds.
-      // start_time_required=true events are visible until start; =false until end_time.
-      // We over-fetch here (event_at OR end_time >= now) and filter precisely below.
-      .or(`event_at.gte.${nowUtc},end_time.gte.${nowUtc}`)
+      // Visibility: over-fetch with 3h lookback, then JS filter applies precise
+      // start_time_required logic. The lookback catches open-window events that
+      // started recently but are still active.
+      .or(`event_at.gte.${recentCutoff},end_time.gte.${nowUtc}`)
       .order('event_at', { ascending: true })
       .range(params.offset, params.offset + fetchLimit - 1);
 
