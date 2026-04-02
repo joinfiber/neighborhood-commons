@@ -872,8 +872,7 @@ router.post('/accounts/:id/cover-image', imageBodyLimit, serviceLimiter, async (
 
       const buffer = Buffer.from(await response.arrayBuffer());
       const base64 = buffer.toString('base64');
-      const servingPath = `/api/portal/accounts/${accountId}/cover`;
-      const imageUrl = await processAndUploadImage(`accounts/${accountId}/cover`, base64, servingPath);
+      const imageUrl = await processAndUploadImage(`accounts/${accountId}/cover`, base64);
 
       await supabaseAdmin.from('portal_accounts').update({ cover_image_url: imageUrl }).eq('id', accountId);
       res.json({ cover_image_url: imageUrl });
@@ -884,8 +883,7 @@ router.post('/accounts/:id/cover-image', imageBodyLimit, serviceLimiter, async (
         throw createError('image must be a non-empty base64 string', 400, 'VALIDATION_ERROR');
       }
 
-      const servingPath = `/api/portal/accounts/${accountId}/cover`;
-      const imageUrl = await processAndUploadImage(`accounts/${accountId}/cover`, image, servingPath);
+      const imageUrl = await processAndUploadImage(`accounts/${accountId}/cover`, image);
       await supabaseAdmin.from('portal_accounts').update({ cover_image_url: imageUrl }).eq('id', accountId);
       res.json({ cover_image_url: imageUrl });
 
@@ -920,16 +918,14 @@ router.post('/accounts/:id/logo', imageBodyLimit, serviceLimiter, async (req, re
 
       const buffer = Buffer.from(await response.arrayBuffer());
       const base64 = buffer.toString('base64');
-      const servingPath = `/api/portal/accounts/${accountId}/logo`;
-      const imageUrl = await processAndUploadImage(`accounts/${accountId}/logo`, base64, servingPath);
+      const imageUrl = await processAndUploadImage(`accounts/${accountId}/logo`, base64);
 
       await supabaseAdmin.from('portal_accounts').update({ logo_url: imageUrl }).eq('id', accountId);
       res.json({ logo_url: imageUrl });
 
     } else if (req.body?.image) {
       const image = req.body.image as string;
-      const servingPath = `/api/portal/accounts/${accountId}/logo`;
-      const imageUrl = await processAndUploadImage(`accounts/${accountId}/logo`, image, servingPath);
+      const imageUrl = await processAndUploadImage(`accounts/${accountId}/logo`, image);
 
       await supabaseAdmin.from('portal_accounts').update({ logo_url: imageUrl }).eq('id', accountId);
       res.json({ logo_url: imageUrl });
@@ -1371,6 +1367,113 @@ router.patch('/events/:id/group', serviceLimiter, async (req, res, next) => {
     if (error) throw createError('Failed to update event group', 500, 'SERVER_ERROR');
 
     res.json({ updated: true, event_id: req.params.id, group_id });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================================================
+// IMAGE URL MIGRATION
+// =============================================================================
+
+/**
+ * POST /service/migrate-image-urls — Rewrite all image URLs to direct R2 public URLs.
+ * Converts portal proxy URLs and re-hosts external URLs (Google, gstatic, etc.)
+ * One-time migration endpoint. Requires R2_PUBLIC_URL to be configured.
+ */
+router.post('/migrate-image-urls', serviceLimiter, async (_req, res, next) => {
+  try {
+    if (!config.r2.publicUrl) {
+      throw createError('R2_PUBLIC_URL not configured', 400, 'VALIDATION_ERROR');
+    }
+
+    const r2Base = config.r2.publicUrl;
+    const results = { accounts: { logo: 0, cover: 0, rehosted: 0 }, events: 0, errors: [] as string[] };
+
+    // --- Migrate portal_accounts ---
+    const { data: accounts } = await supabaseAdmin
+      .from('portal_accounts')
+      .select('id, logo_url, cover_image_url')
+      .or('logo_url.not.is.null,cover_image_url.not.is.null');
+
+    for (const account of accounts || []) {
+      const update: Record<string, string | null> = {};
+
+      for (const [field, r2Type] of [['logo_url', 'logo'], ['cover_image_url', 'cover']] as const) {
+        const url = account[field] as string | null;
+        if (!url) continue;
+
+        // Already an R2 public URL — skip
+        if (url.startsWith(r2Base)) continue;
+
+        // Portal proxy URL — rewrite to direct R2 URL
+        const portalMatch = url.match(/\/api\/portal\/accounts\/([^/]+)\/(logo|cover)$/);
+        if (portalMatch) {
+          // The R2 key is portal-events/accounts/{id}/{type}/image
+          update[field] = `${r2Base}/portal-events/accounts/${portalMatch[1]}/${portalMatch[2]}/image`;
+          if (r2Type === 'logo') results.accounts.logo++;
+          else results.accounts.cover++;
+          continue;
+        }
+
+        // External URL (Google, gstatic, etc.) — download, re-encode, upload to R2
+        if (url.startsWith('http')) {
+          try {
+            const response = await fetch(url, {
+              headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NeighborhoodCommons/1.0)' },
+              signal: AbortSignal.timeout(10_000),
+            });
+            if (!response.ok) {
+              results.errors.push(`${account.id}/${r2Type}: download failed (${response.status})`);
+              continue;
+            }
+            const buffer = Buffer.from(await response.arrayBuffer());
+            const base64 = buffer.toString('base64');
+            const newUrl = await processAndUploadImage(`accounts/${account.id}/${r2Type}`, base64);
+            update[field] = newUrl;
+            results.accounts.rehosted++;
+            console.log(`[SERVICE] Re-hosted ${r2Type} for account ${account.id}: ${url} → ${newUrl}`);
+          } catch (err) {
+            results.errors.push(`${account.id}/${r2Type}: ${err instanceof Error ? err.message : 'unknown'}`);
+          }
+          continue;
+        }
+      }
+
+      if (Object.keys(update).length > 0) {
+        await supabaseAdmin.from('portal_accounts').update(update).eq('id', account.id);
+      }
+    }
+
+    // --- Migrate events ---
+    const { data: events } = await supabaseAdmin
+      .from('events')
+      .select('id, event_image_url')
+      .not('event_image_url', 'is', null);
+
+    for (const event of events || []) {
+      const url = event.event_image_url as string;
+      if (!url || url.startsWith(r2Base)) continue;
+
+      // Portal proxy URL — rewrite to direct R2 URL
+      const eventMatch = url.match(/\/api\/portal\/events\/([^/]+)\/image$/);
+      if (eventMatch) {
+        const newUrl = `${r2Base}/portal-events/${eventMatch[1]}/image`;
+        await supabaseAdmin.from('events').update({ event_image_url: newUrl }).eq('id', event.id);
+        results.events++;
+        continue;
+      }
+
+      // Raw R2 key stored directly
+      if (url.startsWith('portal-events/')) {
+        const newUrl = `${r2Base}/${url}`;
+        await supabaseAdmin.from('events').update({ event_image_url: newUrl }).eq('id', event.id);
+        results.events++;
+      }
+    }
+
+    console.log(`[SERVICE] Image URL migration complete:`, JSON.stringify(results));
+    res.json({ migration: results });
   } catch (err) {
     next(err);
   }

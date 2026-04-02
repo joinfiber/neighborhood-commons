@@ -58,9 +58,13 @@ export function validateUuidParam(value: unknown, name: string): asserts value i
  * External event images (DICE, etc.) are already full URLs.
  * This helper converts R2 keys to the serving endpoint URL.
  */
-export function resolveEventImageUrl(raw: string | null | undefined, apiBaseUrl: string): string | null {
+export function resolveEventImageUrl(raw: string | null | undefined, apiBaseUrl: string, r2PublicUrl?: string): string | null {
   if (!raw) return null;
+  // Raw R2 key stored in DB — resolve to public URL
   if (raw.startsWith('portal-events/')) {
+    if (r2PublicUrl) {
+      return `${r2PublicUrl}/${raw}`;
+    }
     const id = raw.replace('portal-events/', '').replace('/image', '');
     return `${apiBaseUrl}/api/portal/events/${id}/image`;
   }

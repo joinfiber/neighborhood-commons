@@ -55,7 +55,12 @@ export async function processAndUploadImage(entityId: string, base64: string, se
     throw createError('Failed to upload image', 500, 'SERVER_ERROR');
   }
 
-  // Return the serving URL. Account images use a different route than event images.
+  // Direct R2 public URL when configured (CDN-fast, no Express proxy)
+  if (config.r2.publicUrl) {
+    return `${config.r2.publicUrl}/${r2Key}`;
+  }
+
+  // Fallback to Express proxy routes
   if (servingPath) {
     return `${config.apiBaseUrl}${servingPath}`;
   }
@@ -106,7 +111,9 @@ export async function downloadAndAttachImage(eventId: string, imageUrl: string):
     return;
   }
 
-  const finalUrl = `${config.apiBaseUrl}/api/portal/events/${eventId}/image`;
+  const finalUrl = config.r2.publicUrl
+    ? `${config.r2.publicUrl}/${r2Key}`
+    : `${config.apiBaseUrl}/api/portal/events/${eventId}/image`;
   await supabaseAdmin
     .from('events')
     .update({ event_image_url: finalUrl })

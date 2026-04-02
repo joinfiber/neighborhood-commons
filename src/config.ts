@@ -38,6 +38,7 @@ const envSchema = z.object({
   COMMONS_R2_ACCESS_KEY_ID: z.string().min(1).optional(),
   COMMONS_R2_SECRET_ACCESS_KEY: z.string().min(1).optional(),
   COMMONS_R2_BUCKET_NAME: z.string().default('neighborhood-commons-images'),
+  R2_PUBLIC_URL: z.string().url().optional(),
 
   // Cron secret
   CRON_SECRET: z.string().min(16).optional(),
@@ -123,6 +124,7 @@ export const config = {
     secretAccessKey: env.COMMONS_R2_SECRET_ACCESS_KEY || '',
     bucketName: env.COMMONS_R2_BUCKET_NAME,
     enabled: !!(env.COMMONS_R2_ACCOUNT_ID && env.COMMONS_R2_ACCESS_KEY_ID && env.COMMONS_R2_SECRET_ACCESS_KEY),
+    publicUrl: env.R2_PUBLIC_URL || '',
   },
 
   cors: {
