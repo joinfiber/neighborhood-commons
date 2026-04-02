@@ -222,7 +222,69 @@ router.patch('/accounts/:id', serviceLimiter, async (req, res, next) => {
       .single();
 
     if (error) throw createError('Failed to update account', 500, 'SERVER_ERROR');
-    res.json({ account });
+
+    // Propagate coordinate changes to all events owned by this account
+    const coordsChanged = update.default_latitude !== undefined || update.default_longitude !== undefined;
+    let eventsUpdated = 0;
+    if (coordsChanged) {
+      const newLat = account.default_latitude as number | null;
+      const newLng = account.default_longitude as number | null;
+
+      const eventUpdate: Record<string, unknown> = {
+        latitude: newLat,
+        longitude: newLng,
+        approximate_location: newLat != null && newLng != null ? `POINT(${newLng} ${newLat})` : null,
+      };
+
+      // Re-resolve region from new coordinates
+      if (newLat != null && newLng != null) {
+        const { data: regionData } = await supabaseAdmin.rpc('find_user_region', {
+          p_longitude: newLng,
+          p_latitude: newLat,
+        });
+        if (regionData && regionData.length > 0) {
+          eventUpdate.region_id = regionData[0].region_id;
+          console.log(`[SERVICE] Account region re-resolved: ${regionData[0].region_name}`);
+        }
+      }
+
+      // Fetch affected event IDs before updating (for webhooks)
+      const { data: affectedEvents } = await supabaseAdmin
+        .from('events')
+        .select('id')
+        .eq('creator_account_id', req.params.id)
+        .in('source', [...MANAGED_SOURCES]);
+
+      const affectedIds = (affectedEvents || []).map((e) => e.id);
+
+      if (affectedIds.length > 0) {
+        await supabaseAdmin
+          .from('events')
+          .update(eventUpdate)
+          .in('id', affectedIds);
+
+        eventsUpdated = affectedIds.length;
+        console.log(`[SERVICE] Propagated coordinates to ${eventsUpdated} events for account ${account.business_name}`);
+
+        // Fire event.updated webhooks (fire-and-forget)
+        void (async () => {
+          try {
+            for (const eventId of affectedIds) {
+              const { data: row } = await supabaseAdmin
+                .from('events')
+                .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name)`)
+                .eq('id', eventId)
+                .maybeSingle();
+              if (row) void dispatchWebhooks('event.updated', eventId, toNeighborhoodEvent(row as unknown as PortalEventRow));
+            }
+          } catch (err) {
+            console.error('[SERVICE] Webhook dispatch error during coord propagation:', err instanceof Error ? err.message : err);
+          }
+        })();
+      }
+    }
+
+    res.json({ account, ...(coordsChanged ? { events_updated: eventsUpdated } : {}) });
   } catch (err) {
     next(err);
   }
