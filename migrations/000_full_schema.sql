@@ -425,6 +425,7 @@ CREATE TABLE IF NOT EXISTS events (
   source_method text NOT NULL DEFAULT 'portal',    -- 020
   source_publisher text,                           -- 020
   source_feed_url text,                            -- 020
+  source_contributor_url text,                     -- 045
   external_id text,                                -- 020
 
   -- Group link (034)
@@ -662,6 +663,9 @@ CREATE TABLE IF NOT EXISTS api_keys (
 
   -- Contributor trust level (021, 037)
   contributor_tier text NOT NULL DEFAULT 'pending',
+
+  -- Contributor attribution (045)
+  url text,
 
   -- Track last usage (007)
   last_used_at timestamptz,

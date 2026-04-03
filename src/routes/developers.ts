@@ -36,6 +36,7 @@ const verifyOtpSchema = z.object({
   email: z.string().email().max(320),
   token: z.string().min(6).max(8),
   name: z.string().min(1).max(200).trim(),
+  url: z.string().url().max(500).optional(),
 });
 
 const rotateKeySchema = z.object({
@@ -148,7 +149,7 @@ router.post('/register/send-otp', enumerationLimiter, async (req, res, next) => 
 
 router.post('/register/verify-otp', enumerationLimiter, verifyOtpLimiter, async (req, res, next) => {
   try {
-    const { email, token, name } = validateRequest(verifyOtpSchema, req.body);
+    const { email, token, name, url } = validateRequest(verifyOtpSchema, req.body);
 
     // Check if an active key already exists
     const { data: existing } = await supabaseAdmin
@@ -171,7 +172,7 @@ router.post('/register/verify-otp', enumerationLimiter, verifyOtpLimiter, async 
     // Generate and store the API key
     let key;
     try {
-      key = await generateAndStoreKey(name.trim(), email.toLowerCase());
+      key = await generateAndStoreKey(name.trim(), email.toLowerCase(), 'pending', 1000, url);
     } catch (err: unknown) {
       console.error('[DEVELOPERS] Key insert failed:', JSON.stringify(err, null, 2));
       throw createError('Failed to create API key', 500, 'SERVER_ERROR');

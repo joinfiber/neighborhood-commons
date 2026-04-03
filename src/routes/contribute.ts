@@ -129,17 +129,18 @@ async function checkContributeRateLimit(apiKeyId: string, tier: string, batchSiz
 // HELPERS
 // =============================================================================
 
-/** Look up the API key's contributor tier and name */
-async function getKeyInfo(apiKeyId: string): Promise<{ tier: string; name: string }> {
+/** Look up the API key's contributor tier, name, and URL */
+async function getKeyInfo(apiKeyId: string): Promise<{ tier: string; name: string; url: string | null }> {
   const { data } = await supabaseAdmin
     .from('api_keys')
-    .select('contributor_tier, name')
+    .select('contributor_tier, name, url')
     .eq('id', apiKeyId)
     .single();
 
   return {
     tier: data?.contributor_tier || 'pending',
     name: data?.name || 'Unknown',
+    url: (data?.url as string) || null,
   };
 }
 
@@ -197,6 +198,7 @@ function contributeEventToInsert(
   event: z.infer<typeof contributeEventSchema>,
   apiKeyId: string,
   keyName: string,
+  keyUrl: string | null,
   tier: string,
   resolved: { lat: number | null; lng: number | null; regionId: string | null },
   opts?: { internalRecurrence?: string; venueId?: string },
@@ -237,6 +239,7 @@ function contributeEventToInsert(
     source: 'api',
     source_method: 'api',
     source_publisher: keyName,
+    source_contributor_url: keyUrl,
     source_feed_url: `api-key:${apiKeyId}`,
     external_id: event.external_id || null,
     visibility: 'public',
@@ -268,7 +271,7 @@ router.post('/', writeLimiter, async (req, res, next) => {
     const apiKeyId = req.apiKeyInfo?.id;
     if (!apiKeyId) throw createError('API key required', 401, 'UNAUTHORIZED');
 
-    const { tier, name: keyName } = await getKeyInfo(apiKeyId);
+    const { tier, name: keyName, url: keyUrl } = await getKeyInfo(apiKeyId);
     const event = validateRequest(contributeEventSchema, req.body);
 
     // Parse RRULE if provided (before rate limit so we know the instance count)
@@ -318,7 +321,7 @@ router.post('/', writeLimiter, async (req, res, next) => {
       venueId = venue.id;
     }
 
-    const insertData = contributeEventToInsert(event, apiKeyId, keyName, tier, resolved, {
+    const insertData = contributeEventToInsert(event, apiKeyId, keyName, keyUrl, tier, resolved, {
       internalRecurrence,
       venueId,
     });
@@ -431,7 +434,7 @@ router.post('/batch', writeLimiter, async (req, res, next) => {
     const apiKeyId = req.apiKeyInfo?.id;
     if (!apiKeyId) throw createError('API key required', 401, 'UNAUTHORIZED');
 
-    const { tier, name: keyName } = await getKeyInfo(apiKeyId);
+    const { tier, name: keyName, url: keyUrl } = await getKeyInfo(apiKeyId);
     const { events } = validateRequest(contributeBatchSchema, req.body);
     await checkContributeRateLimit(apiKeyId, tier, events.length);
 
@@ -451,7 +454,7 @@ router.post('/batch', writeLimiter, async (req, res, next) => {
 
       // Resolve coordinates and region (geocode if needed)
       const resolved = await resolveLocationAndRegion(event);
-      const insertData = contributeEventToInsert(event, apiKeyId, keyName, tier, resolved);
+      const insertData = contributeEventToInsert(event, apiKeyId, keyName, keyUrl, tier, resolved);
 
       const { data: row, error } = await supabaseAdmin
         .from('events')

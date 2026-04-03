@@ -42,6 +42,7 @@ export async function generateAndStoreKey(
   contactEmail: string,
   contributorTier: string = 'pending',
   rateLimitPerHour: number = 1000,
+  url?: string,
 ): Promise<GeneratedKey> {
   const rawKey = generateRawKey();
   const keyHash = hashApiKey(rawKey);
@@ -56,6 +57,7 @@ export async function generateAndStoreKey(
       contact_email: contactEmail,
       contributor_tier: contributorTier,
       rate_limit_per_hour: rateLimitPerHour,
+      url: url || null,
     })
     .select('id, name, created_at')
     .single();

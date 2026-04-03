@@ -69,6 +69,7 @@ That's it. You just pulled 5 events from the Commons. Here's what comes back:
         "method": "portal",
         "contributor": null,
         "license": "CC BY 4.0"
+
       }
     }
   ]
@@ -189,11 +190,22 @@ Every event response includes every field listed below. If a value doesn't apply
 
 | Field | Type | Example | What it is |
 |-------|------|---------|-----------|
-| `source` | object | `{ "publisher": "Tattooed Moms", "collected_at": "...", "method": "portal", "contributor": null, "license": "CC BY 4.0" }` | Provenance: who published, how, and which app contributed. |
+| `source` | object | See below | Provenance: who published, how, and which app contributed. |
 
 `source.method` is one of: `portal` (venue submitted via web portal), `import` (bulk imported by admin), `api` (submitted via the Contribute API).
 
-`source.publisher` is always the venue/organizer name. `source.contributor` is the app or tool that contributed the data to the commons (e.g., "Fiber Studio", "Playdate"). It's `null` for portal-submitted events (the venue posted directly). This distinction lets consumers show both "where" and "how" an event reached the commons.
+`source.publisher` is always the venue/organizer name.
+
+`source.contributor` is the app or tool that contributed the data to the commons. It's an object with `name` and `url`, or `null` for portal-submitted events (the venue posted directly):
+```json
+"source": {
+  "publisher": "Johnny Brenda's",
+  "method": "api",
+  "contributor": { "name": "Playdate", "url": "https://playdate.com" },
+  "license": "CC BY 4.0"
+}
+```
+When `contributor` is present, consumers can display "Event data contributed by [Playdate](https://playdate.com)" — giving credit to the app that brought this data to the commons.
 
 ### Understanding Timestamps and Timezones
 
@@ -301,7 +313,7 @@ Check your email for a one-time code. Then verify and get your key:
 ```bash
 curl -X POST "https://api.neighborhood-commons.org/api/v1/developers/register/verify-otp" \
   -H "Content-Type: application/json" \
-  -d '{ "email": "you@example.com", "token": "12345678", "name": "My Event App" }'
+  -d '{ "email": "you@example.com", "token": "12345678", "name": "My Event App", "url": "https://myeventapp.com" }'
 ```
 
 The response includes your `raw_key` — it looks like `nc_a1b2c3d4e5f6...`. **Save it immediately.** It is shown exactly once and cannot be recovered.

@@ -43,9 +43,10 @@ export interface PortalEventRow {
   link_url: string | null;
   event_image_url: string | null;
   created_at: string;
-  // Contributor tracking (migration 020)
+  // Contributor tracking (migration 020, 045)
   source_method: string | null;
   source_publisher: string | null;
+  source_contributor_url: string | null;
   // Movie showtimes (migration 029)
   runtime_minutes: number | null;
   content_rating: string | null;
@@ -90,7 +91,7 @@ export interface NeighborhoodEvent {
     publisher: string;
     collected_at: string;
     method: 'portal' | 'import' | 'api';
-    contributor: string | null;
+    contributor: { name: string; url: string | null } | null;
     license: 'CC BY 4.0';
   };
 }
@@ -226,8 +227,9 @@ export function toNeighborhoodEvent(row: PortalEventRow): NeighborhoodEvent {
       publisher: row.portal_accounts?.business_name || row.source_publisher || 'Neighborhood Commons',
       collected_at: row.created_at,
       method: (row.source_method || 'portal') as 'portal' | 'import' | 'api',
-      // contributor: the app/tool that brought this data to the commons (only for API-contributed events)
-      contributor: row.source_method === 'api' && row.source_publisher ? row.source_publisher : null,
+      contributor: row.source_method === 'api' && row.source_publisher
+        ? { name: row.source_publisher, url: row.source_contributor_url || null }
+        : null,
       license: 'CC BY 4.0',
     },
   };

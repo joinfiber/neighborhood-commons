@@ -1025,7 +1025,7 @@ router.get('/api-keys', serviceLimiter, async (_req, res, next) => {
   try {
     const { data: keys, error } = await supabaseAdmin
       .from('api_keys')
-      .select('id, key_prefix, name, contact_email, rate_limit_per_hour, status, contributor_tier, last_used_at, created_at')
+      .select('id, key_prefix, name, url, contact_email, rate_limit_per_hour, status, contributor_tier, last_used_at, created_at')
       .order('created_at', { ascending: false });
 
     if (error) throw createError('Failed to list API keys', 500, 'SERVER_ERROR');
@@ -1077,6 +1077,7 @@ router.patch('/api-keys/:id', serviceLimiter, async (req, res, next) => {
     validateUuidParam(req.params.id, 'API key ID');
     const schema = z.object({
       name: z.string().min(1).max(100).optional(),
+      url: z.string().url().max(500).optional().nullable(),
       status: z.enum(['active', 'revoked']).optional(),
       contributor_tier: z.enum(['pending', 'verified', 'trusted']).optional(),
       contact_email: z.string().email().max(200).optional(),
@@ -1089,7 +1090,7 @@ router.patch('/api-keys/:id', serviceLimiter, async (req, res, next) => {
       .from('api_keys')
       .update(updates)
       .eq('id', req.params.id)
-      .select('id, key_prefix, name, contact_email, rate_limit_per_hour, status, contributor_tier, last_used_at, created_at')
+      .select('id, key_prefix, name, url, contact_email, rate_limit_per_hour, status, contributor_tier, last_used_at, created_at')
       .single();
 
     if (error) throw createError('Failed to update API key', 500, 'SERVER_ERROR');
