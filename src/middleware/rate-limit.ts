@@ -60,7 +60,7 @@ export const enumerationLimiter = isTest ? passthrough : rateLimit({
 export const serviceLimiter = isTest ? passthrough : rateLimit({
   windowMs: 60 * 1000,
   max: 300,
-  keyGenerator: (req: Request) => req.ip || 'unknown',
+  keyGenerator: (req: Request) => req.apiKeyInfo?.id || req.ip || 'unknown',
   message: { error: { code: 'RATE_LIMIT', message: 'Too many requests' } },
   standardHeaders: true,
   legacyHeaders: false,

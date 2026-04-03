@@ -58,7 +58,7 @@ const APPROVED_DOMAINS = new Set([
   'uwishunu.com', 'visitphilly.com', 'phillymag.com', 'billypenn.com',
   'thephiladelphiacitizen.org', 'whyy.org',
   // Neighborhood Commons ecosystem
-  'merrie.co', 'joinfiber.app', 'commons.joinfiber.app',
+  'merrie.co', 'joinfiber.app',
   'neighborhood-commons.org', 'api.neighborhood-commons.org',
 ]);
 

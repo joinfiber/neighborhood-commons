@@ -76,7 +76,7 @@ When you read an event from the Commons, this is the shape. Every field is prese
     "lng": -75.1534
   },
   "url": "https://example.com/event",
-  "images": ["https://r2.api.neighborhood-commons.org/..."],
+  "images": ["https://images.neighborhood-commons.org/portal-events/..."],
   "organizer": {
     "name": "Tattooed Moms",
     "phone": null

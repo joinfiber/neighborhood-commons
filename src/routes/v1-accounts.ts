@@ -35,7 +35,7 @@ export const accountsLimiter = rateLimit({
 });
 
 const ACCOUNT_SELECT = `
-  id, business_name, phone, website, logo_url, cover_image_url, description,
+  id, business_name, slug, phone, website, logo_url, cover_image_url, description,
   default_venue_name, default_place_id, default_address,
   default_latitude, default_longitude,
   operating_hours, status, created_at, updated_at
@@ -208,9 +208,9 @@ router.get('/:idOrSlug', async (req, res, next) => {
 // ---------------------------------------------------------------------------
 
 function formatAccount(row: Record<string, unknown>) {
-  // Generate a URL-safe slug from business name
   const name = (row.business_name as string) || '';
-  const slug = name
+  // Prefer DB slug; derive from name as fallback
+  const slug = (row.slug as string) || name
     .toLowerCase()
     .replace(/['']/g, '')
     .replace(/[^a-z0-9]+/g, '-')

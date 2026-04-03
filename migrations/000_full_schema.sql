@@ -749,11 +749,14 @@ CREATE TABLE IF NOT EXISTS webhook_subscriptions (
   -- Events to subscribe to
   event_types text[] NOT NULL DEFAULT '{"event.created","event.updated","event.deleted"}',
 
-  -- Status
-  is_active boolean DEFAULT true NOT NULL,
+  -- Status (active, paused, disabled)
+  status text NOT NULL DEFAULT 'active',
 
   -- Health tracking
   consecutive_failures integer NOT NULL DEFAULT 0,
+  last_success_at timestamptz,
+  last_failure_at timestamptz,
+  last_failure_reason text,
   disabled_at timestamptz,
 
   -- Timestamps
@@ -766,8 +769,8 @@ COMMENT ON TABLE webhook_subscriptions IS
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_webhook_subs_active
-  ON webhook_subscriptions(is_active)
-  WHERE is_active = true;
+  ON webhook_subscriptions(status)
+  WHERE status = 'active';
 
 CREATE INDEX IF NOT EXISTS idx_webhook_subs_key
   ON webhook_subscriptions(api_key_id);
