@@ -134,6 +134,140 @@
         }
       }
     },
+    "/accounts": {
+      "get": {
+        "summary": "Search venue accounts",
+        "description": "List and search venue/business accounts. Use ?include=events for each account's regular programming and upcoming events.",
+        "operationId": "listAccounts",
+        "parameters": [
+          { "name": "q", "in": "query", "schema": { "type": "string" }, "description": "Text search on business name, venue name, address" },
+          { "name": "include", "in": "query", "schema": { "type": "string", "enum": ["events"] }, "description": "Include regular_programming and upcoming_events per account" },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 100 }, "description": "Page size (max 50 when include=events)" },
+          { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 }, "description": "Pagination offset" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of accounts",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "accounts": { "type": "array" }, "pagination": { "type": "object", "properties": { "total": { "type": "integer" }, "limit": { "type": "integer" }, "offset": { "type": "integer" } } } } } } }
+          }
+        }
+      }
+    },
+    "/accounts/{idOrSlug}": {
+      "get": {
+        "summary": "Single venue account",
+        "description": "Get an account by UUID or slug. Returns the account with regular_programming (recurring series, deduplicated) and upcoming_events (one-off future events).",
+        "operationId": "getAccount",
+        "parameters": [
+          { "name": "idOrSlug", "in": "path", "required": true, "schema": { "type": "string" }, "description": "Account UUID or URL-safe slug (e.g. johnny-brendas)" }
+        ],
+        "responses": {
+          "200": { "description": "Account with events", "content": { "application/json": { "schema": { "type": "object" } } } },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/groups": {
+      "get": {
+        "summary": "List groups",
+        "description": "Search and filter groups (businesses, community groups, nonprofits, collectives, curators).",
+        "operationId": "listGroups",
+        "parameters": [
+          { "name": "type", "in": "query", "schema": { "type": "string", "enum": ["business", "community_group", "nonprofit", "collective", "curator"] }, "description": "Filter by group type" },
+          { "name": "category", "in": "query", "schema": { "type": "string" }, "description": "Filter by category tag" },
+          { "name": "neighborhood", "in": "query", "schema": { "type": "string" }, "description": "Filter by neighborhood name" },
+          { "name": "near", "in": "query", "schema": { "type": "string" }, "description": "Geographic center (lat,lng)" },
+          { "name": "radius_km", "in": "query", "schema": { "type": "number", "default": 10 }, "description": "Search radius in km" },
+          { "name": "q", "in": "query", "schema": { "type": "string" }, "description": "Text search on name, description" },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 100 } },
+          { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 } }
+        ],
+        "responses": {
+          "200": { "description": "Paginated list of groups", "content": { "application/json": { "schema": { "type": "object", "properties": { "groups": { "type": "array" }, "pagination": { "type": "object" } } } } } }
+        }
+      }
+    },
+    "/groups/{id}": {
+      "get": {
+        "summary": "Single group",
+        "description": "Get a group by UUID with its venues and next 5 upcoming events.",
+        "operationId": "getGroup",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": { "description": "Group with venues and events", "content": { "application/json": { "schema": { "type": "object" } } } },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/meta/regions": {
+      "get": {
+        "summary": "List active regions",
+        "description": "Geographic regions with timezone and center coordinates. Cached for 1 hour.",
+        "operationId": "listRegions",
+        "responses": {
+          "200": {
+            "description": "Active regions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "regions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": { "type": "string", "format": "uuid" },
+                          "name": { "type": "string" },
+                          "slug": { "type": "string" },
+                          "timezone": { "type": "string" },
+                          "latitude": { "type": "number", "nullable": true },
+                          "longitude": { "type": "number", "nullable": true }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/categories": {
+      "get": {
+        "summary": "List event categories with counts",
+        "description": "Categories with current event counts. Sorted by count descending. Cached for 30 minutes.",
+        "operationId": "listCategories",
+        "responses": {
+          "200": {
+            "description": "Event categories",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "categories": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "slug": { "type": "string", "description": "Kebab-case slug (e.g. live-music)" },
+                          "key": { "type": "string", "description": "Underscore key (e.g. live_music)" },
+                          "count": { "type": "integer" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/meta/stats": {
       "get": {
         "summary": "Platform statistics",

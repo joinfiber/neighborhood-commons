@@ -219,6 +219,8 @@ The `series_id` groups them. The `series_instance_number` tells you which one it
 
 **Tip:** Use `?collapse_series=true` if you want to show "Trivia Night (every Tuesday)" as a single item instead of 12 separate listings. The API returns only the nearest upcoming instance per series.
 
+**Note:** When `collapse_series=true`, pagination is approximate — `meta.total` is `null` because deduplication happens post-fetch. Use this for browse feeds that show "what's coming up," not for iterating the complete dataset. For exhaustive iteration, use `collapse_series=false` (the default).
+
 ### Merging Commons Data with Your Own
 
 If you're building an app that has its own events AND wants to include Commons events, here's the practical approach:

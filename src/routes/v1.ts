@@ -69,7 +69,8 @@ router.get('/', async (req, res, next) => {
     const collapseSeries = params.collapse_series === 'true';
 
     // When collapsing series, over-fetch to compensate for dedup reducing the result set.
-    const fetchLimit = collapseSeries ? params.limit * 3 : params.limit;
+    // Higher multiplier reduces the chance of returning fewer results than requested.
+    const fetchLimit = collapseSeries ? params.limit * 5 : params.limit;
 
     // Lookback window: include events that started up to 3h ago (for open-window
     // categories like happy hours that remain visible after start). This is much
@@ -202,8 +203,8 @@ router.get('/', async (req, res, next) => {
     res.set('Cache-Control', 'public, max-age=30');
     res.json({
       meta: {
-        // When collapsing series, total is approximate (dedup reduces it unpredictably)
-        total: collapseSeries ? results.length : (count || 0),
+        // When collapsing series, total is unknown (dedup happens post-fetch)
+        total: collapseSeries ? null : (count || 0),
         limit: params.limit,
         offset: params.offset,
         spec: 'neighborhood-api-v0.2',

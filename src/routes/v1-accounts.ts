@@ -93,6 +93,61 @@ async function getAccountEvents(accountId: string) {
   return { regular_programming: dedupedProgramming, upcoming_events: upcoming };
 }
 
+/** Format a raw event row into the API response shape */
+function formatEvent(e: Record<string, unknown>) {
+  return {
+    id: e.id,
+    name: e.content,
+    start: e.event_at,
+    end: e.end_time,
+    location: { name: e.place_name },
+    category: e.category ? [e.category] : [],
+    recurrence: e.recurrence || null,
+    series_id: e.series_id || null,
+    description: e.description || null,
+    image_url: e.event_image_url || null,
+    price: e.price || null,
+    link_url: e.link_url || null,
+  };
+}
+
+/** Batch-load events for multiple accounts in a single query (avoids N+1) */
+async function getEventsForAccounts(accountIds: string[]) {
+  if (accountIds.length === 0) return new Map<string, { regular_programming: ReturnType<typeof formatEvent>[]; upcoming_events: ReturnType<typeof formatEvent>[] }>();
+
+  const { data: allEvents } = await supabaseAdmin
+    .from('events')
+    .select('id, content, event_at, end_time, place_name, category, recurrence, series_id, description, event_image_url, price, link_url, creator_account_id')
+    .in('creator_account_id', accountIds)
+    .eq('status', 'published')
+    .gte('event_at', new Date().toISOString())
+    .order('event_at', { ascending: true });
+
+  // Group by account
+  const byAccount = new Map<string, ReturnType<typeof formatEvent>[]>();
+  for (const id of accountIds) byAccount.set(id, []);
+  for (const e of allEvents || []) {
+    const accId = e.creator_account_id as string;
+    byAccount.get(accId)?.push(formatEvent(e));
+  }
+
+  // Split + deduplicate per account
+  const result = new Map<string, { regular_programming: ReturnType<typeof formatEvent>[]; upcoming_events: ReturnType<typeof formatEvent>[] }>();
+  for (const [accId, events] of byAccount) {
+    const regular = events.filter(e => e.recurrence || e.series_id);
+    const upcoming = events.filter(e => !e.recurrence && !e.series_id);
+    const seenSeries = new Set<string>();
+    const dedupedProgramming = regular.filter(e => {
+      const key = (e.series_id || e.name) as string;
+      if (seenSeries.has(key)) return false;
+      seenSeries.add(key);
+      return true;
+    });
+    result.set(accId, { regular_programming: dedupedProgramming, upcoming_events: upcoming });
+  }
+  return result;
+}
+
 // ---------------------------------------------------------------------------
 // GET /api/v1/accounts — search accounts
 // ---------------------------------------------------------------------------
@@ -130,13 +185,13 @@ router.get('/', async (req, res, next) => {
 
     let response;
     if (includeEvents) {
-      // Fetch events for each account in parallel
-      response = await Promise.all(
-        (accounts || []).map(async (acct) => {
-          const events = await getAccountEvents(acct.id as string);
-          return { ...formatAccount(acct), ...events };
-        })
-      );
+      // Single batch query for all accounts' events (avoids N+1)
+      const accountIds = (accounts || []).map(a => a.id as string);
+      const eventsByAccount = await getEventsForAccounts(accountIds);
+      response = (accounts || []).map(acct => ({
+        ...formatAccount(acct),
+        ...(eventsByAccount.get(acct.id as string) || { regular_programming: [], upcoming_events: [] }),
+      }));
     } else {
       response = (accounts || []).map(formatAccount);
     }

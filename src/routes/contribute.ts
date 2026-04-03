@@ -18,13 +18,13 @@ import { requireApiKey } from '../middleware/api-key.js';
 import { validateRequest, validateUuidParam, sanitizeSearchInput } from '../lib/helpers.js';
 import { writeLimiter } from '../middleware/rate-limit.js';
 import { dispatchWebhooks } from '../lib/webhook-delivery.js';
-import type { NeighborhoodEvent } from '../lib/event-transform.js';
+import { toNeighborhoodEvent, type PortalEventRow } from '../lib/event-transform.js';
+import { PORTAL_SELECT, fromTimestamptz } from '../lib/event-operations.js';
 import { config } from '../config.js';
 import { downloadAndAttachImage } from '../lib/image-processing.js';
 import { nominatimGeocode } from '../lib/geocoding.js';
 import { sanitizeUrl, checkContributeUrlDomain } from '../lib/url-sanitizer.js';
 import { fromRRule } from '../lib/rrule.js';
-import { fromTimestamptz } from '../lib/event-operations.js';
 import { createEventSeries } from '../lib/event-series.js';
 
 const router: ReturnType<typeof Router> = Router();
@@ -390,9 +390,20 @@ router.post('/', writeLimiter, async (req, res, next) => {
       void downloadAndAttachImage(row.id, event.image_url);
     }
 
-    // Dispatch webhook for published events
+    // Dispatch webhook with full event data (fire-and-forget)
     if (row.status === 'published') {
-      void dispatchWebhooks('event.created', row.id, { id: row.id, name: event.name, start: event.start } as unknown as NeighborhoodEvent);
+      void (async () => {
+        try {
+          const { data: fullRow } = await supabaseAdmin
+            .from('events')
+            .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name)`)
+            .eq('id', row.id)
+            .maybeSingle();
+          if (fullRow) void dispatchWebhooks('event.created', row.id, toNeighborhoodEvent(fullRow as unknown as PortalEventRow));
+        } catch (err) {
+          console.error('[CONTRIBUTE] Webhook dispatch error:', err instanceof Error ? err.message : err);
+        }
+      })();
     }
 
     res.status(201).json({
@@ -464,9 +475,20 @@ router.post('/batch', writeLimiter, async (req, res, next) => {
         void downloadAndAttachImage(row.id, event.image_url);
       }
 
-      // Dispatch webhook for published events
+      // Dispatch webhook with full event data (fire-and-forget)
       if (row.status === 'published') {
-        void dispatchWebhooks('event.created', row.id, { id: row.id, name: event.name, start: event.start } as unknown as NeighborhoodEvent);
+        void (async () => {
+          try {
+            const { data: fullRow } = await supabaseAdmin
+              .from('events')
+              .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name)`)
+              .eq('id', row.id)
+              .maybeSingle();
+            if (fullRow) void dispatchWebhooks('event.created', row.id, toNeighborhoodEvent(fullRow as unknown as PortalEventRow));
+          } catch (err) {
+            console.error('[CONTRIBUTE] Webhook dispatch error:', err instanceof Error ? err.message : err);
+          }
+        })();
       }
     }
 
@@ -565,6 +587,13 @@ router.delete('/:id', writeLimiter, async (req, res, next) => {
       throw createError('Event not found or not owned by this API key', 404, 'NOT_FOUND');
     }
 
+    // Fetch full event for webhook before deletion
+    const { data: fullRow } = await supabaseAdmin
+      .from('events')
+      .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name)`)
+      .eq('id', req.params.id)
+      .maybeSingle();
+
     // Defense-in-depth: carry ownership constraints on the DELETE itself
     const { error: deleteError } = await supabaseAdmin
       .from('events')
@@ -578,7 +607,9 @@ router.delete('/:id', writeLimiter, async (req, res, next) => {
       throw createError('Failed to delete event', 500, 'SERVER_ERROR');
     }
 
-    void dispatchWebhooks('event.deleted', req.params.id, { id: req.params.id } as unknown as NeighborhoodEvent);
+    if (fullRow) {
+      void dispatchWebhooks('event.deleted', req.params.id as string, toNeighborhoodEvent(fullRow as unknown as PortalEventRow));
+    }
 
     res.json({ deleted: true, id: req.params.id });
   } catch (err) {
@@ -714,9 +745,20 @@ router.patch('/:id', writeLimiter, async (req, res, next) => {
       void downloadAndAttachImage(req.params.id, data.image_url);
     }
 
-    // Dispatch webhook if published
+    // Dispatch webhook with full event data (fire-and-forget)
     if (existing.status === 'published') {
-      void dispatchWebhooks('event.updated', req.params.id, { id: req.params.id } as unknown as NeighborhoodEvent);
+      void (async () => {
+        try {
+          const { data: fullRow } = await supabaseAdmin
+            .from('events')
+            .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name)`)
+            .eq('id', req.params.id)
+            .maybeSingle();
+          if (fullRow) void dispatchWebhooks('event.updated', req.params.id as string, toNeighborhoodEvent(fullRow as unknown as PortalEventRow));
+        } catch (err) {
+          console.error('[CONTRIBUTE] Webhook dispatch error:', err instanceof Error ? err.message : err);
+        }
+      })();
     }
 
     console.log(`[CONTRIBUTE] Event updated: ${req.params.id}`);
