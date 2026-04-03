@@ -67,6 +67,7 @@ That's it. You just pulled 5 events from the Commons. Here's what comes back:
         "publisher": "Tattooed Moms",
         "collected_at": "2026-03-30T17:00:00Z",
         "method": "portal",
+        "contributor": null,
         "license": "CC BY 4.0"
       }
     }
@@ -188,9 +189,11 @@ Every event response includes every field listed below. If a value doesn't apply
 
 | Field | Type | Example | What it is |
 |-------|------|---------|-----------|
-| `source` | object | `{ "publisher": "Tattooed Moms", "collected_at": "2026-03-30T17:00:00Z", "method": "portal", "license": "CC BY 4.0" }` | Who published this event and how. |
+| `source` | object | `{ "publisher": "Tattooed Moms", "collected_at": "...", "method": "portal", "contributor": null, "license": "CC BY 4.0" }` | Provenance: who published, how, and which app contributed. |
 
 `source.method` is one of: `portal` (venue submitted via web portal), `import` (bulk imported by admin), `api` (submitted via the Contribute API).
+
+`source.publisher` is always the venue/organizer name. `source.contributor` is the app or tool that contributed the data to the commons (e.g., "Fiber Studio", "Playdate"). It's `null` for portal-submitted events (the venue posted directly). This distinction lets consumers show both "where" and "how" an event reached the commons.
 
 ### Understanding Timestamps and Timezones
 

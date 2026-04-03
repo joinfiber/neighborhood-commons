@@ -90,6 +90,7 @@ export interface NeighborhoodEvent {
     publisher: string;
     collected_at: string;
     method: 'portal' | 'import' | 'api';
+    contributor: string | null;
     license: 'CC BY 4.0';
   };
 }
@@ -222,9 +223,11 @@ export function toNeighborhoodEvent(row: PortalEventRow): NeighborhoodEvent {
     showtimes: row.showtimes || null,
     recurrence: rrule ? { rrule } : null,
     source: {
-      publisher: row.source_publisher || row.portal_accounts?.business_name || 'Neighborhood Commons',
+      publisher: row.portal_accounts?.business_name || row.source_publisher || 'Neighborhood Commons',
       collected_at: row.created_at,
       method: (row.source_method || 'portal') as 'portal' | 'import' | 'api',
+      // contributor: the app/tool that brought this data to the commons (only for API-contributed events)
+      contributor: row.source_method === 'api' && row.source_publisher ? row.source_publisher : null,
       license: 'CC BY 4.0',
     },
   };

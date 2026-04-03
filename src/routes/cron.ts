@@ -9,6 +9,7 @@ import { Router } from 'express';
 import { requireCronSecret } from '../middleware/cron-auth.js';
 import { retryFailedWebhooks } from '../lib/webhook-delivery.js';
 import { geocodeBackfill } from '../lib/geocoding.js';
+import { verifyEventImages, verifyAccountImages } from '../lib/image-verification.js';
 
 
 const router: ReturnType<typeof Router> = Router();
@@ -41,6 +42,24 @@ router.post('/geocode-backfill', async (_req, res, next) => {
 
     console.log(`[CRON] geocode-backfill completed: ${result.geocoded}/${result.processed} geocoded, ${result.failed} failed`);
     res.json({ success: true, ...result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /verify-images — Check that image URLs are reachable
+// ---------------------------------------------------------------------------
+
+router.post('/verify-images', async (_req, res, next) => {
+  try {
+    const [events, accounts] = await Promise.all([
+      verifyEventImages(),
+      verifyAccountImages(),
+    ]);
+
+    console.log(`[CRON] verify-images: events ${events.broken}/${events.checked} broken (${events.cleared} cleared), accounts ${accounts.broken}/${accounts.checked} broken (${accounts.cleared} cleared)`);
+    res.json({ success: true, events, accounts });
   } catch (err) {
     next(err);
   }

@@ -283,6 +283,7 @@ router.post('/:id/test', writeLimiter, async (req, res, next) => {
         publisher: 'neighborhood-commons' as const,
         collected_at: new Date().toISOString(),
         method: 'portal' as const,
+        contributor: null,
         license: 'CC BY 4.0' as const,
       },
     };
