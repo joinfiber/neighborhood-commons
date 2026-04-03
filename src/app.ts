@@ -315,6 +315,7 @@ export function createApp(): Express {
 
   // ─── .well-known discovery ───────────────────────────────────────
   app.get('/.well-known/neighborhood', (_req, res) => {
+    res.set('Cache-Control', 'public, max-age=3600');
     res.json({
       name: 'Neighborhood Commons',
       version: '0.2',

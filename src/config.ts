@@ -58,14 +58,6 @@ const envSchema = z.object({
   // Google Places API (venue search in portal)
   GOOGLE_PLACES_API_KEY: z.string().min(1).optional(),
 
-  // Newsletter ingestion: LLM extraction via inference.net
-  INFERENCE_API_KEY: z.string().min(1).optional(),
-  INFERENCE_API_URL: z.string().url().optional(),
-  INFERENCE_MODEL: z.string().min(1).optional(),
-
-  // Mailgun inbound webhook signature validation
-  MAILGUN_SIGNING_KEY: z.string().min(1).optional(),
-
   // Default region for new portal events (UUID from regions table)
   DEFAULT_REGION_ID: z.string().uuid().optional(),
 });
@@ -162,16 +154,6 @@ export const config = {
 
   google: {
     placesApiKey: env.GOOGLE_PLACES_API_KEY || '',
-  },
-
-  inference: {
-    apiKey: env.INFERENCE_API_KEY || '',
-    apiUrl: env.INFERENCE_API_URL || 'https://api.inference.net/v1',
-    model: env.INFERENCE_MODEL || 'inference-net/schematron-8b',
-  },
-
-  mailgunWebhook: {
-    signingKey: env.MAILGUN_SIGNING_KEY || '',
   },
 
   defaultRegionId: env.DEFAULT_REGION_ID || null,

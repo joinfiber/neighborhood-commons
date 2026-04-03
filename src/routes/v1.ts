@@ -17,7 +17,7 @@ import { EVENT_CATEGORIES } from '../lib/categories.js';
 import { ALL_TAG_SLUGS } from '../lib/tags.js';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { createError } from '../middleware/error-handler.js';
-import { validateRequest, validateUuidParam } from '../lib/helpers.js';
+import { validateRequest, validateUuidParam, sanitizeSearchInput } from '../lib/helpers.js';
 import { toNeighborhoodEvent, toRRule, type PortalEventRow } from '../lib/event-transform.js';
 import { optionalApiKey } from '../middleware/api-key.js';
 
@@ -131,8 +131,8 @@ router.get('/', async (req, res, next) => {
 
     // Text search
     if (params.q) {
-      const sanitized = params.q.replace(/[,.()"\\%_;:'`*]/g, ' ').trim();
-      if (sanitized.length > 0) {
+      const sanitized = sanitizeSearchInput(params.q);
+      if (sanitized) {
         query = query.or(`content.ilike.%${sanitized}%,description.ilike.%${sanitized}%`);
       }
     }
@@ -217,6 +217,7 @@ router.get('/', async (req, res, next) => {
 });
 
 router.get('/terms', (_req, res) => {
+  res.set('Cache-Control', 'public, max-age=86400');
   res.json({
     version: '2.0',
     summary: 'Neighborhood event data, free to use under CC BY 4.0.',
@@ -506,6 +507,7 @@ export async function icsHandler(_req: import('express').Request, res: import('e
 
     res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="neighborhood-commons-events.ics"');
+    res.setHeader('Cache-Control', 'public, max-age=300');
     res.send(lines.join('\r\n'));
   } catch (err) {
     next(err);
@@ -561,6 +563,7 @@ ${items}
 </rss>`;
 
     res.setHeader('Content-Type', 'application/rss+xml; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=300');
     res.send(rss);
   } catch (err) {
     next(err);

@@ -16,7 +16,7 @@ import { EVENT_CATEGORY_KEYS } from '../lib/categories.js';
 import { validateTags } from '../lib/tags.js';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { createError } from '../middleware/error-handler.js';
-import { validateRequest, validateUuidParam, resolveEventImageUrl } from '../lib/helpers.js';
+import { validateRequest, validateUuidParam, resolveEventImageUrl, sanitizeSearchInput } from '../lib/helpers.js';
 import { requireServiceApiKey } from '../middleware/api-key.js';
 import { dispatchWebhooks } from '../lib/webhook-delivery.js';
 import { toNeighborhoodEvent, type PortalEventRow } from '../lib/event-transform.js';
@@ -27,6 +27,7 @@ import {
 } from '../lib/event-operations.js';
 import { createEventSeries } from '../lib/event-series.js';
 import { processAndUploadImage, downloadAndAttachImage } from '../lib/image-processing.js';
+import { validateFeedUrl } from '../lib/url-validation.js';
 import { nominatimGeocode } from '../lib/geocoding.js';
 import { config } from '../config.js';
 
@@ -96,7 +97,10 @@ router.get('/accounts', serviceLimiter, async (req, res, next) => {
       .order('created_at', { ascending: false });
 
     if (search) {
-      query = query.or(`business_name.ilike.%${search}%,default_address.ilike.%${search}%`);
+      const sanitized = sanitizeSearchInput(search);
+      if (sanitized) {
+        query = query.or(`business_name.ilike.%${sanitized}%,default_address.ilike.%${sanitized}%`);
+      }
     }
 
     query = query.range(offset, offset + limit - 1);
@@ -432,7 +436,8 @@ router.get('/events', serviceLimiter, async (req, res, next) => {
 
     // Text search on title, venue name, and address (covers zip code searches)
     if (search) {
-      query = query.or(`content.ilike.%${search}%,place_name.ilike.%${search}%,venue_address.ilike.%${search}%`);
+      const sanitized = sanitizeSearchInput(search);
+      if (sanitized) query = query.or(`content.ilike.%${sanitized}%,place_name.ilike.%${sanitized}%,venue_address.ilike.%${sanitized}%`);
     }
 
     // Time filter
@@ -863,7 +868,9 @@ router.post('/accounts/:id/cover-image', imageBodyLimit, serviceLimiter, async (
         throw createError('image_url must be a valid HTTP URL', 400, 'VALIDATION_ERROR');
       }
 
-      // Download, re-encode, upload — reuse event image pipeline with account-specific key
+      // SSRF protection
+      await validateFeedUrl(image_url);
+
       const response = await fetch(image_url, {
         headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NeighborhoodCommons/1.0)' },
         signal: AbortSignal.timeout(10_000),
@@ -909,6 +916,9 @@ router.post('/accounts/:id/logo', imageBodyLimit, serviceLimiter, async (req, re
       if (typeof image_url !== 'string' || !image_url.startsWith('http')) {
         throw createError('image_url must be a valid HTTP URL', 400, 'VALIDATION_ERROR');
       }
+
+      // SSRF protection
+      await validateFeedUrl(image_url);
 
       const response = await fetch(image_url, {
         headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NeighborhoodCommons/1.0)' },
@@ -1153,7 +1163,8 @@ router.get('/groups', serviceLimiter, async (req, res, next) => {
       .range(offset, offset + limit - 1);
 
     if (search) {
-      query = query.or(`name.ilike.%${search}%,neighborhood.ilike.%${search}%`);
+      const sanitized = sanitizeSearchInput(search);
+      if (sanitized) query = query.or(`name.ilike.%${sanitized}%,neighborhood.ilike.%${sanitized}%`);
     }
 
     const typeFilter = req.query.type as string | undefined;

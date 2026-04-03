@@ -15,7 +15,7 @@ import { z } from 'zod';
 import rateLimit from 'express-rate-limit';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { createError } from '../middleware/error-handler.js';
-import { validateRequest } from '../lib/helpers.js';
+import { validateRequest, sanitizeSearchInput } from '../lib/helpers.js';
 import { optionalApiKey } from '../middleware/api-key.js';
 
 const router: ReturnType<typeof Router> = Router();
@@ -113,9 +113,12 @@ router.get('/', async (req, res, next) => {
       .range(offset, offset + limit - 1);
 
     if (params.q) {
-      query = query.or(
-        `business_name.ilike.%${params.q}%,default_venue_name.ilike.%${params.q}%,default_address.ilike.%${params.q}%`
-      );
+      const sanitized = sanitizeSearchInput(params.q);
+      if (sanitized) {
+        query = query.or(
+          `business_name.ilike.%${sanitized}%,default_venue_name.ilike.%${sanitized}%,default_address.ilike.%${sanitized}%`
+        );
+      }
     }
 
     const { data: accounts, error, count } = await query;

@@ -10,7 +10,7 @@
  */
 
 import { Router } from 'express';
-import { randomInt } from 'crypto';
+import { randomInt, timingSafeEqual } from 'crypto';
 import { z } from 'zod';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { validateRequest } from '../lib/helpers.js';
@@ -85,13 +85,15 @@ async function verifyOtp(email: string, token: string): Promise<boolean> {
 
   if (!otp) return false;
   if (new Date(otp.expires_at) < new Date()) {
-    // Expired — clean up
     await supabaseAdmin.from('developer_otps').delete().eq('id', otp.id);
     return false;
   }
-  if (otp.code !== token) return false;
 
-  // Valid — delete the code
+  // Timing-safe comparison to prevent side-channel attacks on OTP codes
+  const match = otp.code.length === token.length &&
+    timingSafeEqual(Buffer.from(otp.code), Buffer.from(token));
+  if (!match) return false;
+
   await supabaseAdmin.from('developer_otps').delete().eq('id', otp.id);
   return true;
 }

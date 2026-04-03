@@ -47,7 +47,7 @@ That's it. You just pulled 5 events from the Commons. Here's what comes back:
         "lng": -75.1534
       },
       "url": "https://example.com/event",
-      "images": ["https://r2.commons.joinfiber.app/events/abc123.jpg"],
+      "images": ["https://images.neighborhood-commons.org/portal-events/abc123/image"],
       "organizer": {
         "name": "Tattooed Moms",
         "phone": null

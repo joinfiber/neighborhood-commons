@@ -13,6 +13,7 @@ import { uploadToR2 } from './cloudflare.js';
 import { supabaseAdmin } from './supabase.js';
 import { config } from '../config.js';
 import { createError } from '../middleware/error-handler.js';
+import { validateFeedUrl } from './url-validation.js';
 
 export const SUPPORTED_MAGIC_BYTES: Record<string, string> = {
   'ffd8ff': 'image/jpeg',
@@ -72,6 +73,14 @@ export async function processAndUploadImage(entityId: string, base64: string, se
  * and set event_image_url. Used when approving newsletter/feed candidates.
  */
 export async function downloadAndAttachImage(eventId: string, imageUrl: string): Promise<void> {
+  // SSRF protection: validate URL resolves to a public IP before fetching
+  try {
+    await validateFeedUrl(imageUrl);
+  } catch (err) {
+    console.log(`[IMAGES] URL blocked by SSRF check: ${imageUrl} — ${err instanceof Error ? err.message : err}`);
+    return;
+  }
+
   const response = await fetch(imageUrl, {
     signal: AbortSignal.timeout(10000),
     headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NeighborhoodCommons/1.0)' },

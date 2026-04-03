@@ -48,6 +48,22 @@ export function validateUuidParam(value: unknown, name: string): asserts value i
 }
 
 // =============================================================================
+// POSTGREST SEARCH SANITIZATION
+// =============================================================================
+
+/**
+ * Sanitize user input for safe use in PostgREST .or() filter expressions.
+ * PostgREST interprets commas, dots, parentheses, and other characters as
+ * query operators. Stripping them prevents filter injection attacks.
+ *
+ * Returns null if the input is empty after sanitization.
+ */
+export function sanitizeSearchInput(raw: string): string | null {
+  const cleaned = raw.replace(/[^a-zA-Z0-9\s\-]/g, ' ').replace(/\s+/g, ' ').trim();
+  return cleaned.length > 0 ? cleaned : null;
+}
+
+// =============================================================================
 // EVENT IMAGE URL HELPERS
 // =============================================================================
 

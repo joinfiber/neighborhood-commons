@@ -15,7 +15,7 @@ import { EVENT_CATEGORY_KEYS } from '../lib/categories.js';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { createError } from '../middleware/error-handler.js';
 import { requireApiKey } from '../middleware/api-key.js';
-import { validateRequest, validateUuidParam } from '../lib/helpers.js';
+import { validateRequest, validateUuidParam, sanitizeSearchInput } from '../lib/helpers.js';
 import { writeLimiter } from '../middleware/rate-limit.js';
 import { dispatchWebhooks } from '../lib/webhook-delivery.js';
 import type { NeighborhoodEvent } from '../lib/event-transform.js';
@@ -857,9 +857,9 @@ router.get('/venues', async (req, res, next) => {
       .range(params.offset, params.offset + params.limit - 1);
 
     if (params.q) {
-      const q = params.q.replace(/[,.()"\\%_;:'`*]/g, ' ').trim();
-      if (q.length > 0) {
-        query = query.or(`business_name.ilike.%${q}%,default_address.ilike.%${q}%`);
+      const sanitized = sanitizeSearchInput(params.q);
+      if (sanitized) {
+        query = query.or(`business_name.ilike.%${sanitized}%,default_address.ilike.%${sanitized}%`);
       }
     }
 
@@ -1002,9 +1002,9 @@ router.get('/groups', async (req, res, next) => {
       .range(params.offset, params.offset + params.limit - 1);
 
     if (params.q) {
-      const q = params.q.replace(/[,.()"\\%_;:'`*]/g, ' ').trim();
-      if (q.length > 0) {
-        query = query.or(`name.ilike.%${q}%,neighborhood.ilike.%${q}%`);
+      const sanitized = sanitizeSearchInput(params.q);
+      if (sanitized) {
+        query = query.or(`name.ilike.%${sanitized}%,neighborhood.ilike.%${sanitized}%`);
       }
     }
     if (params.type) {

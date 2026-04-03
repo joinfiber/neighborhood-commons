@@ -15,7 +15,7 @@ import { z } from 'zod';
 import rateLimit from 'express-rate-limit';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { createError } from '../middleware/error-handler.js';
-import { validateRequest, validateUuidParam } from '../lib/helpers.js';
+import { validateRequest, validateUuidParam, sanitizeSearchInput } from '../lib/helpers.js';
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -85,10 +85,14 @@ router.get('/', async (req, res, next) => {
       query = query.contains('category_tags', [params.category]);
     }
     if (params.neighborhood) {
-      query = query.ilike('neighborhood', `%${params.neighborhood}%`);
+      const nbhd = sanitizeSearchInput(params.neighborhood);
+      if (nbhd) query = query.ilike('neighborhood', `%${nbhd}%`);
     }
     if (params.q) {
-      query = query.or(`name.ilike.%${params.q}%,description.ilike.%${params.q}%`);
+      const sanitized = sanitizeSearchInput(params.q);
+      if (sanitized) {
+        query = query.or(`name.ilike.%${sanitized}%,description.ilike.%${sanitized}%`);
+      }
     }
 
     // Geo filter (near + radius_km)
