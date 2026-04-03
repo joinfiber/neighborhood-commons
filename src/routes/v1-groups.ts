@@ -125,7 +125,8 @@ router.get('/', async (req, res, next) => {
         .from('events')
         .select('group_id')
         .in('group_id', groupIds)
-        .eq('status', 'published');
+        .eq('status', 'published')
+        .limit(10000);
 
       if (counts) {
         for (const row of counts) {

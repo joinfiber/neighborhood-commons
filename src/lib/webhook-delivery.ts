@@ -61,7 +61,8 @@ export async function dispatchWebhooks(
     const { data: subs } = await supabaseAdmin
       .from('webhook_subscriptions')
       .select('id, url, signing_secret, signing_secret_encrypted, event_types')
-      .eq('status', 'active');
+      .eq('status', 'active')
+      .limit(10000);
 
     if (!subs || subs.length === 0) return;
 
@@ -105,7 +106,8 @@ export async function dispatchSeriesCreatedWebhook(
     const { data: subs } = await supabaseAdmin
       .from('webhook_subscriptions')
       .select('id, url, signing_secret, signing_secret_encrypted, event_types')
-      .eq('status', 'active');
+      .eq('status', 'active')
+      .limit(10000);
 
     if (!subs || subs.length === 0) return;
 

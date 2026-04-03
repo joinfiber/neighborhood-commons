@@ -117,7 +117,8 @@ router.get('/accounts', serviceLimiter, async (req, res, next) => {
         .from('events')
         .select('creator_account_id, series_id, series_instance_number')
         .in('source', [...MANAGED_SOURCES])
-        .in('creator_account_id', accountIds);
+        .in('creator_account_id', accountIds)
+        .limit(10000);
 
       if (counts) {
         eventCounts = counts.reduce((acc: Record<string, number>, row: { creator_account_id: string; series_id: string | null; series_instance_number: number | null }) => {
@@ -977,13 +978,15 @@ router.get('/stats', serviceLimiter, async (_req, res, next) => {
       supabaseAdmin.from('events')
         .select('category')
         .in('source', [...MANAGED_SOURCES])
-        .or('series_id.is.null,series_instance_number.eq.1'),
+        .or('series_id.is.null,series_instance_number.eq.1')
+        .limit(10000),
     ]);
 
     // Account breakdowns need status/claimed_at — separate lightweight query
     const { data: accountStatuses } = await supabaseAdmin
       .from('portal_accounts')
-      .select('status, claimed_at');
+      .select('status, claimed_at')
+      .limit(10000);
 
     const totalAccounts = accountCounts.count || 0;
     const claimedAccounts = accountStatuses?.filter((a) => a.claimed_at).length || 0;

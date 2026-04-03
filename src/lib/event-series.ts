@@ -144,7 +144,8 @@ export async function deleteSeriesEvents(seriesId: string): Promise<number> {
     .from('events')
     .select('id')
     .eq('series_id', seriesId)
-    .in('source', [...MANAGED_SOURCES]);
+    .in('source', [...MANAGED_SOURCES])
+    .limit(5000);
 
   if (!events || events.length === 0) return 0;
 
