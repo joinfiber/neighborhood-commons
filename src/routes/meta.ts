@@ -138,4 +138,26 @@ router.get('/categories', async (_req, res, next) => {
   }
 });
 
+/**
+ * GET /api/meta/stats — Live platform statistics (public, cached)
+ */
+router.get('/stats', async (_req, res, next) => {
+  try {
+    const [eventResult, venueResult, regionResult] = await Promise.all([
+      supabaseAdmin.from('events').select('id', { count: 'exact', head: true }).eq('status', 'published'),
+      supabaseAdmin.from('portal_accounts').select('id', { count: 'exact', head: true }).eq('status', 'active'),
+      supabaseAdmin.from('regions').select('name').eq('is_active', true).limit(1).maybeSingle(),
+    ]);
+
+    res.set('Cache-Control', 'public, max-age=300');
+    res.json({
+      total_events: eventResult.count || 0,
+      total_venues: venueResult.count || 0,
+      region: regionResult.data?.name || null,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

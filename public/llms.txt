@@ -694,6 +694,12 @@ Events without a proper region won't appear in location-filtered feeds. Always p
 
 ---
 
+## Stability
+
+The v1 API is stable. Breaking changes to `/api/v1/*` endpoints require at least 90 days notice. Response shapes, query parameters, and authentication requirements are locked. Extension APIs (`/portal/*`, `/service/*`) may evolve with shorter notice. If a breaking change is needed, v2 will be introduced and v1 will keep running.
+
+---
+
 ## License
 
 All event data is published under **Creative Commons Attribution 4.0 International (CC BY 4.0)**. You can use it for any purpose — commercial or non-commercial — as long as you credit "Neighborhood Commons."

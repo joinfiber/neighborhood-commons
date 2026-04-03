@@ -13,6 +13,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 
 import { config } from './config.js';
+import { supabaseAdmin } from './lib/supabase.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { globalLimiter } from './middleware/rate-limit.js';
 
@@ -169,19 +170,40 @@ export function createApp(): Express {
   app.use('/api/places', placesRoutes);
 
   // ─── Landing page (API domain root) ──────────────────────────────
-  app.get('/', (_req, res) => {
-    const baseUrl = config.apiBaseUrl || 'https://api.neighborhood-commons.org';
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.setHeader('Cache-Control', 'public, max-age=3600');
-    res.send(`<!DOCTYPE html>
+  app.get('/', async (_req, res, next) => {
+    try {
+      const baseUrl = config.apiBaseUrl || 'https://api.neighborhood-commons.org';
+
+      // Fetch live stats — graceful degradation if DB is unreachable
+      let totalEvents = 0;
+      let totalVenues = 0;
+      let regionName = '';
+      try {
+        const [eventResult, venueResult, regionResult] = await Promise.all([
+          supabaseAdmin.from('events').select('id', { count: 'exact', head: true }).eq('status', 'published'),
+          supabaseAdmin.from('portal_accounts').select('id', { count: 'exact', head: true }).eq('status', 'active'),
+          supabaseAdmin.from('regions').select('name').eq('is_active', true).limit(1).maybeSingle(),
+        ]);
+        totalEvents = eventResult.count || 0;
+        totalVenues = venueResult.count || 0;
+        regionName = regionResult.data?.name || '';
+      } catch { /* stats are optional — page renders without them */ }
+
+      const statsLine = totalEvents > 0
+        ? `<p class="nc-stats">Currently serving <strong>${totalEvents.toLocaleString()} events</strong> across <strong>${totalVenues.toLocaleString()} venues</strong>${regionName ? ` in <strong>${regionName}</strong>` : ''}.</p>`
+        : '';
+
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.setHeader('Cache-Control', 'public, max-age=300');
+      res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Neighborhood Commons — Open Event Data Infrastructure</title>
-  <meta name="description" content="A shared, open database of neighborhood events. Free to read, free to contribute. CC BY 4.0.">
+  <meta name="description" content="Every event in the neighborhood, available to every app. Open data infrastructure, CC BY 4.0.">
   <meta property="og:title" content="Neighborhood Commons">
-  <meta property="og:description" content="Open event data infrastructure. One API, every neighborhood event.">
+  <meta property="og:description" content="Every event in the neighborhood, available to every app. Open data, free API, CC BY 4.0.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="${baseUrl}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -190,10 +212,11 @@ export function createApp(): Express {
   <link rel="stylesheet" href="/pages.css">
   <style>
     .nc-landing { max-width: 720px; margin: 0 auto; padding: 48px 24px 80px; }
-    .nc-landing h1 { font-size: 1.75rem; font-weight: 600; margin-bottom: 8px; }
-    .nc-landing .nc-tagline { color: var(--nc-muted); font-size: 1.05rem; margin-bottom: 40px; line-height: 1.5; }
-    .nc-landing h2 { font-size: 1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--nc-dim); margin: 40px 0 16px; }
-    .nc-landing h2:first-of-type { margin-top: 0; }
+    .nc-landing h1 { font-size: 2rem; font-weight: 600; margin-bottom: 12px; line-height: 1.3; }
+    .nc-landing .nc-tagline { color: var(--nc-muted); font-size: 1.05rem; margin-bottom: 12px; line-height: 1.6; }
+    .nc-landing .nc-stats { color: var(--nc-text); font-size: 1rem; margin-bottom: 40px; }
+    .nc-landing .nc-stats strong { color: var(--nc-accent); }
+    .nc-landing h2 { font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--nc-dim); margin: 40px 0 16px; }
     .nc-code { background: var(--nc-accent); color: #e8e6e1; border-radius: var(--nc-radius); padding: 20px 24px; font-family: 'DM Mono', monospace; font-size: 0.85rem; line-height: 1.7; overflow-x: auto; margin: 12px 0 24px; }
     .nc-code .nc-dim { color: #9c9791; }
     .nc-code .nc-url { color: #a3d9a5; }
@@ -210,6 +233,10 @@ export function createApp(): Express {
     .nc-links .nc-primary:hover { background: #444; text-decoration: none; }
     .nc-links .nc-secondary { background: var(--nc-surface); border: 1px solid var(--nc-border); color: var(--nc-text); }
     .nc-links .nc-secondary:hover { background: var(--nc-cream); text-decoration: none; }
+    .nc-stability { background: var(--nc-cream); border-radius: var(--nc-radius); padding: 24px 28px; margin: 16px 0; font-size: 0.9rem; line-height: 1.7; color: var(--nc-text); }
+    .nc-stability strong { font-weight: 600; }
+    .nc-stability p { margin: 0 0 8px; }
+    .nc-stability p:last-child { margin-bottom: 0; }
     .nc-license { margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--nc-border); color: var(--nc-muted); font-size: 0.85rem; line-height: 1.6; }
   </style>
 </head>
@@ -221,8 +248,9 @@ export function createApp(): Express {
       </div>
     </header>
     <main class="nc-landing">
-      <h1>Open Event Data Infrastructure</h1>
-      <p class="nc-tagline">A shared, open database of neighborhood events. Not an app&nbsp;&mdash; plumbing.<br>Free to read. Free to contribute. All data is CC&nbsp;BY&nbsp;4.0.</p>
+      <h1>Every event in the neighborhood, available to every app.</h1>
+      <p class="nc-tagline">Open event data infrastructure. Posted by venue owners, curators, and community organizers. Licensed CC&nbsp;BY&nbsp;4.0 because public facts shouldn't be locked up.</p>
+      ${statsLine}
 
       <h2>Try It Now</h2>
       <div class="nc-code"><span class="nc-dim">$</span> curl <span class="nc-url">"${baseUrl}/api/v1/events?limit=3"</span></div>
@@ -248,7 +276,7 @@ export function createApp(): Express {
 
       <h2>Documentation</h2>
       <div class="nc-links">
-        <a href="/llms.txt" class="nc-primary">Complete Guide (llms.txt)</a>
+        <a href="/llms.txt" class="nc-primary">Complete Guide</a>
         <a href="/api/v1/openapi.json" class="nc-secondary">OpenAPI Spec</a>
         <a href="https://github.com/joinfiber/neighborhood-commons" class="nc-secondary">GitHub</a>
       </div>
@@ -260,6 +288,16 @@ export function createApp(): Express {
         <li><code><span class="nc-method">GET</span> <span class="nc-path">/.well-known/neighborhood</span></code> <span class="nc-desc">Auto-discovery</span></li>
       </ul>
 
+      <h2>Stability</h2>
+      <div class="nc-stability">
+        <p><strong>The v1 API is stable.</strong> We will not make breaking changes to <code>/api/v1/*</code> endpoints without at least 90 days notice. Response shapes, query parameters, and authentication requirements are locked.</p>
+        <p>Extension APIs (<code>/portal/*</code>, <code>/service/*</code>) may evolve with shorter notice. These are for operators, not public consumers.</p>
+        <p>If we need to break something, we'll bump to v2 and keep v1 running. Your integration won't break overnight.</p>
+      </div>
+
+      <h2>Fork It</h2>
+      <p style="color:var(--nc-muted);font-size:0.9rem;line-height:1.6;">This is infrastructure designed to be cloned and run by any city. Clone the <a href="https://github.com/joinfiber/neighborhood-commons">repo</a>, stand up a Supabase instance, run the migrations, seed your data. Full setup instructions in the README. If your neighborhood needs a commons, you can have one running today.</p>
+
       <div class="nc-license">
         <strong>Data:</strong> Creative Commons Attribution 4.0 International (CC BY 4.0)<br>
         <strong>Code:</strong> MIT License<br>
@@ -270,6 +308,9 @@ export function createApp(): Express {
   </div>
 </body>
 </html>`);
+    } catch (err) {
+      next(err);
+    }
   });
 
   // ─── .well-known discovery ───────────────────────────────────────

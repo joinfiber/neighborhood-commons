@@ -133,6 +133,30 @@
           }
         }
       }
+    },
+    "/meta/stats": {
+      "get": {
+        "summary": "Platform statistics",
+        "description": "Live counts of published events, active venues, and primary region. No authentication required. Cached for 5 minutes.",
+        "operationId": "getStats",
+        "responses": {
+          "200": {
+            "description": "Platform statistics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "total_events": { "type": "integer", "description": "Published events" },
+                    "total_venues": { "type": "integer", "description": "Active venue accounts" },
+                    "region": { "type": "string", "nullable": true, "description": "Primary region name" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {

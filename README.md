@@ -39,6 +39,40 @@ cd portal && npm run dev  # Portal on :3002 (proxies API)
 npm run test:run       # <1 second, all must pass
 ```
 
+## Local development in 5 minutes
+
+The fastest path uses the [Supabase CLI](https://supabase.com/docs/guides/cli), which runs Postgres + PostgREST + Auth locally in Docker. No Supabase account required.
+
+**Prerequisites:** Node.js 20+, Docker, [Supabase CLI](https://supabase.com/docs/guides/cli/getting-started)
+
+```bash
+# 1. Clone and install
+git clone https://github.com/joinfiber/neighborhood-commons.git
+cd neighborhood-commons
+npm install
+
+# 2. Start local Supabase (Postgres + PostgREST + Auth in Docker)
+supabase init           # First time only
+supabase start          # Prints connection details
+
+# 3. Run schema and seed data
+# Paste migrations/000_full_schema.sql into the SQL editor at http://localhost:54323
+# Then paste migrations/seed.sql for sample events
+
+# 4. Configure environment
+cp .env.example .env
+# Fill in SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
+# from the output of `supabase status`
+
+# 5. Start the API
+npm run dev             # http://localhost:3001
+
+# 6. Verify
+curl http://localhost:3001/api/v1/events
+```
+
+The `.env.example` file documents every environment variable. Only 4 are required.
+
 ## Consume the API
 
 No API key required for public reads:

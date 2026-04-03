@@ -322,6 +322,16 @@ Both represent 7pm local time in Philadelphia. The offset differs because of DST
 - API keys stored as SHA-256 hashes (plaintext returned once, never stored)
 - Rate limits enforced per route, not just globally
 
+## Versioning & Stability
+
+The v1 API is stable. We will not make breaking changes to `/api/v1/*` endpoints without at least 90 days notice. Response shapes, query parameters, and authentication requirements are locked.
+
+Extension APIs (`/api/portal/*`, `/api/v1/service/*`) may evolve with shorter notice. These are for operators, not public consumers.
+
+If we need to break something, we'll bump to v2 and keep v1 running. Your integration won't break overnight.
+
+The current spec version is `neighborhood-api-v0.2`, visible in the `meta.spec` field and the `.well-known/neighborhood` endpoint. Watch these values for version changes.
+
 ## License
 
 All event data is licensed under [Creative Commons Attribution 4.0 International (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/).
