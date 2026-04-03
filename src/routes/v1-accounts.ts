@@ -115,13 +115,16 @@ function formatEvent(e: Record<string, unknown>) {
 async function getEventsForAccounts(accountIds: string[]) {
   if (accountIds.length === 0) return new Map<string, { regular_programming: ReturnType<typeof formatEvent>[]; upcoming_events: ReturnType<typeof formatEvent>[] }>();
 
+  // Fetch up to 2500 events (50 accounts × 50 events each). PostgREST defaults
+  // to 1000 rows without an explicit limit, which could silently truncate results.
   const { data: allEvents } = await supabaseAdmin
     .from('events')
     .select('id, content, event_at, end_time, place_name, category, recurrence, series_id, description, event_image_url, price, link_url, creator_account_id')
     .in('creator_account_id', accountIds)
     .eq('status', 'published')
     .gte('event_at', new Date().toISOString())
-    .order('event_at', { ascending: true });
+    .order('event_at', { ascending: true })
+    .limit(2500);
 
   // Group by account
   const byAccount = new Map<string, ReturnType<typeof formatEvent>[]>();
