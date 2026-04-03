@@ -5,7 +5,7 @@
  * These are the portal_accounts imported via Studio — venues, bars,
  * music halls, restaurants, etc.
  *
- * No authentication required. Rate-limited.
+ * No authentication required. Optional API key for dedicated rate limit.
  *
  * Base: /api/v1/accounts
  */
@@ -16,12 +16,20 @@ import rateLimit from 'express-rate-limit';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { createError } from '../middleware/error-handler.js';
 import { validateRequest } from '../lib/helpers.js';
+import { optionalApiKey } from '../middleware/api-key.js';
 
 const router: ReturnType<typeof Router> = Router();
 
+// Extract API key if present (for rate limit keying), but don't require it
+router.use(optionalApiKey);
+
+// 1000 requests/hr — keyed by API key if present, otherwise by IP.
+// Matches the events endpoint. Generous enough for full catalog sync.
 export const accountsLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 30,
+  windowMs: 60 * 60 * 1000,
+  max: 1000,
+  keyGenerator: (req) => req.apiKeyInfo?.id || req.ip || 'unknown',
+  message: { error: { code: 'RATE_LIMIT', message: 'Rate limit exceeded (1000/hr). Register for an API key at /api/v1/developers for a dedicated limit bucket.' } },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -35,9 +43,55 @@ const ACCOUNT_SELECT = `
 
 const listSchema = z.object({
   q: z.string().max(200).optional(),
+  include: z.string().optional(),
   limit: z.coerce.number().min(1).max(100).optional(),
   offset: z.coerce.number().min(0).optional(),
 });
+
+// ---------------------------------------------------------------------------
+// Shared: fetch events for an account (regular programming + upcoming)
+// ---------------------------------------------------------------------------
+
+async function getAccountEvents(accountId: string) {
+  const { data: futureEvents } = await supabaseAdmin
+    .from('events')
+    .select('id, content, event_at, end_time, place_name, category, recurrence, series_id, description, event_image_url, price, link_url')
+    .eq('creator_account_id', accountId)
+    .eq('status', 'published')
+    .gte('event_at', new Date().toISOString())
+    .order('event_at', { ascending: true })
+    .limit(50);
+
+  const allEvents = (futureEvents || []).map(e => ({
+    id: e.id,
+    name: e.content,
+    start: e.event_at,
+    end: e.end_time,
+    location: { name: e.place_name },
+    category: e.category ? [e.category] : [],
+    recurrence: e.recurrence || null,
+    series_id: e.series_id || null,
+    description: e.description || null,
+    image_url: e.event_image_url || null,
+    price: e.price || null,
+    link_url: e.link_url || null,
+  }));
+
+  // Split into regular programming (recurring) vs upcoming (one-off)
+  const regularProgramming = allEvents.filter(e => e.recurrence || e.series_id);
+  const upcoming = allEvents.filter(e => !e.recurrence && !e.series_id);
+
+  // Deduplicate regular programming by series — show only the next instance
+  const seenSeries = new Set<string>();
+  const dedupedProgramming = regularProgramming.filter(e => {
+    const key = e.series_id || e.name;
+    if (seenSeries.has(key)) return false;
+    seenSeries.add(key);
+    return true;
+  });
+
+  return { regular_programming: dedupedProgramming, upcoming_events: upcoming };
+}
 
 // ---------------------------------------------------------------------------
 // GET /api/v1/accounts — search accounts
@@ -46,7 +100,9 @@ const listSchema = z.object({
 router.get('/', async (req, res, next) => {
   try {
     const params = validateRequest(listSchema, req.query);
-    const limit = params.limit || 20;
+    const includeEvents = params.include === 'events';
+    // Lower max page size when including events to keep response sizes reasonable
+    const limit = Math.min(params.limit || 20, includeEvents ? 50 : 100);
     const offset = params.offset || 0;
 
     let query = supabaseAdmin
@@ -69,7 +125,18 @@ router.get('/', async (req, res, next) => {
       throw createError('Failed to fetch accounts', 500, 'SERVER_ERROR');
     }
 
-    const response = (accounts || []).map(formatAccount);
+    let response;
+    if (includeEvents) {
+      // Fetch events for each account in parallel
+      response = await Promise.all(
+        (accounts || []).map(async (acct) => {
+          const events = await getAccountEvents(acct.id as string);
+          return { ...formatAccount(acct), ...events };
+        })
+      );
+    } else {
+      response = (accounts || []).map(formatAccount);
+    }
 
     res.set('Cache-Control', 'public, max-age=60');
     res.json({
@@ -86,7 +153,7 @@ router.get('/', async (req, res, next) => {
 });
 
 // ---------------------------------------------------------------------------
-// GET /api/v1/accounts/:id — single account by ID
+// GET /api/v1/accounts/:id — single account by ID or slug
 // ---------------------------------------------------------------------------
 
 router.get('/:idOrSlug', async (req, res, next) => {
@@ -119,50 +186,13 @@ router.get('/:idOrSlug', async (req, res, next) => {
       throw createError('Account not found', 404, 'NOT_FOUND');
     }
 
-    // Get all future events for this account (with recurrence/series info)
-    const { data: futureEvents } = await supabaseAdmin
-      .from('events')
-      .select('id, content, event_at, end_time, place_name, category, recurrence, series_id, description, event_image_url, price, link_url')
-      .eq('creator_account_id', account.id)
-      .eq('status', 'published')
-      .gte('event_at', new Date().toISOString())
-      .order('event_at', { ascending: true })
-      .limit(50);
-
-    const allEvents = (futureEvents || []).map(e => ({
-      id: e.id,
-      name: e.content,
-      start: e.event_at,
-      end: e.end_time,
-      location: { name: e.place_name },
-      category: e.category ? [e.category] : [],
-      recurrence: e.recurrence || null,
-      series_id: e.series_id || null,
-      description: e.description || null,
-      image_url: e.event_image_url || null,
-      price: e.price || null,
-      link_url: e.link_url || null,
-    }));
-
-    // Split into regular programming (recurring) vs upcoming (one-off)
-    const regularProgramming = allEvents.filter(e => e.recurrence || e.series_id);
-    const upcoming = allEvents.filter(e => !e.recurrence && !e.series_id);
-
-    // Deduplicate regular programming by series — show only the next instance
-    const seenSeries = new Set<string>();
-    const dedupedProgramming = regularProgramming.filter(e => {
-      const key = e.series_id || e.name;
-      if (seenSeries.has(key)) return false;
-      seenSeries.add(key);
-      return true;
-    });
+    const events = await getAccountEvents(account.id as string);
 
     res.set('Cache-Control', 'public, max-age=60');
     res.json({
       account: {
         ...formatAccount(account),
-        regular_programming: dedupedProgramming,
-        upcoming_events: upcoming,
+        ...events,
       },
     });
   } catch (err) {

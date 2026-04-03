@@ -108,6 +108,7 @@ The `meta.total` field tells you how many total events match your filters.
 | iCal feed | `GET /api/v1/events.ics` | Subscribe in Google/Apple Calendar |
 | RSS feed | `GET /api/v1/events.rss` | For feed readers |
 | Search venues | `GET /api/v1/accounts?q=coffee` | Returns matching venue/business accounts |
+| Venues with events | `GET /api/v1/accounts?include=events` | Each venue includes `regular_programming` and `upcoming_events` |
 | Single venue | `GET /api/v1/accounts/:idOrSlug` | By UUID or slug (e.g., `johnny-brendas`) |
 | List groups | `GET /api/v1/groups` | Filter by `type`, `category`, `near`, `q` |
 | Single group | `GET /api/v1/groups/:id` | Group with venues and upcoming events |
@@ -119,7 +120,9 @@ The `meta.total` field tells you how many total events match your filters.
 
 ### Rate Limits
 
-Without an API key: 1000 requests per hour, per IP address. That's plenty for most apps. If you need more, or share an IP with other consumers, get a free API key (see Part 3) and pass it as `X-API-Key` header for a dedicated rate limit bucket.
+All public read endpoints (events, accounts, groups, meta): **1000 requests per hour**. With an API key (`X-API-Key` header), you get a dedicated rate limit bucket keyed to your key. Without one, the limit is per IP address.
+
+For most apps, this means you can sync the full venue catalog with events in 3 paginated requests (`/accounts?include=events&limit=50`), then poll for changes — well within limits.
 
 Every response includes `RateLimit-*` headers so you can see where you stand.
 
