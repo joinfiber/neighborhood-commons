@@ -262,8 +262,9 @@ export function createApp(): Express {
         <li><code><span class="nc-method">GET</span> <span class="nc-path">/api/v1/events/:id</span></code> <span class="nc-desc">Single event</span></li>
         <li><code><span class="nc-method">GET</span> <span class="nc-path">/api/v1/events.ics</span></code> <span class="nc-desc">iCalendar feed</span></li>
         <li><code><span class="nc-method">GET</span> <span class="nc-path">/api/v1/events.rss</span></code> <span class="nc-desc">RSS feed</span></li>
-        <li><code><span class="nc-method">GET</span> <span class="nc-path">/api/v1/accounts</span></code> <span class="nc-desc">Search venues</span></li>
-        <li><code><span class="nc-method">GET</span> <span class="nc-path">/api/v1/meta</span></code> <span class="nc-desc">Feed metadata, license, regions</span></li>
+        <li><code><span class="nc-method">GET</span> <span class="nc-path">/api/v1/accounts</span></code> <span class="nc-desc">Search venues (with events via ?include=events)</span></li>
+        <li><code><span class="nc-method">GET</span> <span class="nc-path">/api/v1/groups</span></code> <span class="nc-desc">Community groups, orgs, curators</span></li>
+        <li><code><span class="nc-method">GET</span> <span class="nc-path">/api/v1/meta</span></code> <span class="nc-desc">Feed metadata, stats, regions, categories</span></li>
       </ul>
 
       <h2>Contribute API</h2>

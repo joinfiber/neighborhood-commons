@@ -105,6 +105,27 @@ Returns one event by UUID.
 curl "https://api.neighborhood-commons.org/api/v1/events/abc-123-uuid"
 ```
 
+### Venues & Accounts
+
+```
+GET /api/v1/accounts?q=coffee&limit=20
+GET /api/v1/accounts?include=events&limit=50
+GET /api/v1/accounts/:idOrSlug
+```
+
+Search venue/business accounts by name, address, or venue name. Use `?include=events` to get each account's `regular_programming` (recurring series, deduplicated) and `upcoming_events` (one-off future events) inline — this lets you sync the full venue catalog in 3 paginated requests instead of N+1 individual calls.
+
+Single accounts can be fetched by UUID or slug (e.g., `johnny-brendas`).
+
+### Groups
+
+```
+GET /api/v1/groups?type=community_group&near=39.97,-75.13
+GET /api/v1/groups/:id
+```
+
+Groups are organizations: businesses, community groups, nonprofits, collectives, curators. Filter by `type`, `category`, `neighborhood`, `near`+`radius_km`, or `q` (text search). Single groups include their venues and next 5 upcoming events.
+
 ### Incremental Sync (Changes Feed)
 
 For apps that cache events locally and need to stay in sync:

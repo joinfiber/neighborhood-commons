@@ -349,6 +349,10 @@
               { "type": "object", "properties": { "rrule": { "type": "string" } } }
             ]
           },
+          "event_image_focal_y": { "type": "number", "description": "Vertical focal point for image cropping (0=top, 1=bottom, 0.5=center)" },
+          "runtime_minutes": { "type": ["integer", "null"], "description": "Film-specific: duration in minutes" },
+          "content_rating": { "type": ["string", "null"], "description": "Film-specific: e.g. PG-13" },
+          "showtimes": { "oneOf": [{ "type": "null" }, { "type": "array", "items": { "type": "object", "properties": { "at": { "type": "string" } } } }], "description": "Film-specific: multiple screening times" },
           "source": { "$ref": "#/components/schemas/Source" }
         }
       },
@@ -356,9 +360,16 @@
         "type": "object",
         "required": ["publisher", "collected_at", "method", "license"],
         "properties": {
-          "publisher": { "type": "string" },
+          "publisher": { "type": "string", "description": "Venue or organizer name" },
           "collected_at": { "type": "string", "format": "date-time" },
-          "method": { "type": "string", "enum": ["portal", "import", "api", "admin"] },
+          "method": { "type": "string", "enum": ["portal", "import", "api"] },
+          "contributor": {
+            "oneOf": [
+              { "type": "null" },
+              { "type": "object", "properties": { "name": { "type": "string", "description": "App/tool that contributed this data" }, "url": { "type": "string", "format": "uri", "nullable": true, "description": "Contributor website" } } }
+            ],
+            "description": "The app that contributed this data to the commons. Null for portal-submitted events."
+          },
           "license": { "type": "string", "example": "CC BY 4.0" }
         }
       },

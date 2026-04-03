@@ -114,7 +114,9 @@ The `meta.total` field tells you how many total events match your filters.
 | Single venue | `GET /api/v1/accounts/:idOrSlug` | By UUID or slug (e.g., `johnny-brendas`) |
 | List groups | `GET /api/v1/groups` | Filter by `type`, `category`, `near`, `q` |
 | Single group | `GET /api/v1/groups/:id` | Group with venues and upcoming events |
+| Changes feed | `GET /api/events/changes?since=<ISO-8601>` | Incremental sync (10 req/min) |
 | Feed metadata | `GET /api/v1/meta` | License, stewards, spec version |
+| Live stats | `GET /api/v1/meta/stats` | Event count, venue count, region |
 | Regions | `GET /api/v1/meta/regions` | Geographic regions with timezones |
 | Categories | `GET /api/v1/meta/categories` | Categories with current event counts |
 
@@ -122,9 +124,16 @@ The `meta.total` field tells you how many total events match your filters.
 
 ### Rate Limits
 
-All public read endpoints (events, accounts, groups, meta): **1000 requests per hour**. With an API key (`X-API-Key` header), you get a dedicated rate limit bucket keyed to your key. Without one, the limit is per IP address.
+| Endpoint | Limit | Key |
+|----------|-------|-----|
+| Events, accounts, meta | 1000/hr | API key ID or IP |
+| Groups | 30/min | IP |
+| Changes feed | 10/min | IP |
+| Contribute (pending tier) | 20/hr, 100/day | API key |
+| Contribute (verified) | 100/hr, 500/day | API key |
+| Contribute (trusted) | 500/hr, 2000/day | API key |
 
-For most apps, this means you can sync the full venue catalog with events in 3 paginated requests (`/accounts?include=events&limit=50`), then poll for changes — well within limits.
+With an API key (`X-API-Key` header), events and accounts endpoints give you a dedicated rate limit bucket. Without one, the limit is per IP address.
 
 Every response includes `RateLimit-*` headers so you can see where you stand.
 

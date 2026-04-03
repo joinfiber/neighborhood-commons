@@ -96,6 +96,7 @@ When you read an event from the Commons, this is the shape. Every field is prese
     "publisher": "Tattooed Moms",
     "collected_at": "2026-03-30T17:00:00Z",
     "method": "portal",
+    "contributor": null,
     "license": "CC BY 4.0"
   }
 }

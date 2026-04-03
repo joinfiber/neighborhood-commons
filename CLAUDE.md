@@ -65,6 +65,7 @@ The v1 public API (`/api/v1/events`) **must** return events conforming to the Ne
     "publisher": "portal-account-slug-or-name",
     "collected_at": "2025-08-13T09:00:03Z",
     "method": "portal",
+    "contributor": null,
     "license": "CC BY 4.0"
   }
 }
@@ -83,7 +84,8 @@ The v1 public API (`/api/v1/events`) **must** return events conforming to the Ne
 | `GET /dreams` | Not yet (spec pending) | — |
 | `GET /plans` | Not yet (spec pending) | — |
 | `GET /notices` | Not yet (spec pending) | — |
-| `GET /groups` | Not yet (spec pending) | — |
+| `GET /groups` | Implemented | `routes/v1-groups.ts` |
+| `GET /accounts` | Implemented | `routes/v1-accounts.ts` |
 
 ### Query Filters
 
