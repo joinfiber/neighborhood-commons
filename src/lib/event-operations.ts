@@ -146,6 +146,8 @@ export function portalInputToInsert(
     wheelchair_accessible?: boolean | null | undefined;
     rsvp_limit?: number | null | undefined;
     image_focal_y?: number | undefined;
+    source_method?: 'manual' | 'auto' | undefined;
+    source_publisher?: string | undefined;
   },
   accountId: string,
   adminUserId: string,
@@ -193,6 +195,8 @@ export function portalInputToInsert(
     event_image_focal_y: data.image_focal_y ?? 0.5,
     creator_account_id: accountId,
     source: 'portal',
+    source_method: data.source_method || null,
+    source_publisher: data.source_publisher || null,
     visibility: 'public',
     status: accountStatus === 'active' ? 'published' : 'pending_review',
     is_business: true,

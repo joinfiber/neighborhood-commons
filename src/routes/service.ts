@@ -373,6 +373,8 @@ const createEventSchema = z.object({
   rsvp_limit: z.number().int().min(1).max(10000).nullable().default(null),
   start_time_required: z.boolean().default(true),
   image_focal_y: z.number().min(0).max(1).optional(),
+  source_method: z.enum(['manual', 'auto']).optional(),
+  source_publisher: z.string().max(100).optional(),
 });
 
 const updateEventSchema = z.object({
