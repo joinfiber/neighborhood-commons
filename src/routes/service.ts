@@ -25,7 +25,7 @@ import {
   PORTAL_SELECT, MANAGED_SOURCES, toPortalEvent, portalInputToInsert,
   toTimestamptz, getAdminUserId,
 } from '../lib/event-operations.js';
-import { createEventSeries } from '../lib/event-series.js';
+import { createEventSeries, deleteSeriesEvents } from '../lib/event-series.js';
 import { processAndUploadImage, downloadAndAttachImage } from '../lib/image-processing.js';
 import { validateFeedUrl } from '../lib/url-validation.js';
 import { nominatimGeocode } from '../lib/geocoding.js';
@@ -456,8 +456,12 @@ router.get('/events', serviceLimiter, async (req, res, next) => {
       query = query.order('created_at', { ascending: false });
     }
 
-    // Filter to unique events: one-offs + first instance of each series
-    query = query.or('series_id.is.null,series_instance_number.eq.1');
+    // By default, show only one-offs + first instance of each series (for listing UI).
+    // Pass ?all_instances=true to include every series instance (for reconciliation).
+    const allInstances = req.query.all_instances === 'true';
+    if (!allInstances) {
+      query = query.or('series_id.is.null,series_instance_number.eq.1');
+    }
     query = query.range(offset, offset + limit - 1);
 
     const { data: rawEvents, error, count } = await query;
@@ -761,6 +765,17 @@ router.delete('/events/:id', serviceLimiter, async (req, res, next) => {
 
     if (error) throw createError('Failed to delete event', 500, 'SERVER_ERROR');
     res.json({ deleted: true, id: req.params.id });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** DELETE /service/events/series/:seriesId — Delete all events in a series */
+router.delete('/events/series/:seriesId', serviceLimiter, async (req, res, next) => {
+  try {
+    validateUuidParam(req.params.seriesId, 'series ID');
+    const deleted = await deleteSeriesEvents(req.params.seriesId);
+    res.json({ deleted: true, series_id: req.params.seriesId, count: deleted });
   } catch (err) {
     next(err);
   }
