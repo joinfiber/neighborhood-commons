@@ -211,7 +211,7 @@ CREATE TABLE IF NOT EXISTS event_series (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Creator
-  creator_account_id uuid REFERENCES portal_accounts(id) ON DELETE CASCADE,
+  creator_account_id uuid REFERENCES portal_accounts(id) ON DELETE SET NULL,
 
   -- Recurrence rule (011: expanded regex to include ordinal_weekday and weekly_days)
   recurrence text NOT NULL DEFAULT 'none'
