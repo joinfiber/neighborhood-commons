@@ -170,24 +170,33 @@ export function createApp(): Express {
   app.use('/api/places', placesRoutes);
 
   // ─── Landing page (API domain root) ──────────────────────────────
+  // ─── Cached landing page stats (refresh hourly, not per-request) ────
+  let cachedStats = { totalEvents: 0, totalVenues: 0, regionName: '', fetchedAt: 0 };
+  const STATS_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+  async function getLandingStats() {
+    if (Date.now() - cachedStats.fetchedAt < STATS_TTL_MS) return cachedStats;
+    try {
+      const [eventResult, venueResult, regionResult] = await Promise.all([
+        supabaseAdmin.from('events').select('id', { count: 'exact', head: true }).eq('status', 'published'),
+        supabaseAdmin.from('portal_accounts').select('id', { count: 'exact', head: true }).eq('status', 'active'),
+        supabaseAdmin.from('regions').select('name').eq('is_active', true).limit(1).maybeSingle(),
+      ]);
+      cachedStats = {
+        totalEvents: eventResult.count || 0,
+        totalVenues: venueResult.count || 0,
+        regionName: regionResult.data?.name || '',
+        fetchedAt: Date.now(),
+      };
+    } catch { /* stats are optional — stale cache is fine */ }
+    return cachedStats;
+  }
+
   app.get('/', async (_req, res, next) => {
     try {
       const baseUrl = config.apiBaseUrl || 'https://api.neighborhood-commons.org';
 
-      // Fetch live stats — graceful degradation if DB is unreachable
-      let totalEvents = 0;
-      let totalVenues = 0;
-      let regionName = '';
-      try {
-        const [eventResult, venueResult, regionResult] = await Promise.all([
-          supabaseAdmin.from('events').select('id', { count: 'exact', head: true }).eq('status', 'published'),
-          supabaseAdmin.from('portal_accounts').select('id', { count: 'exact', head: true }).eq('status', 'active'),
-          supabaseAdmin.from('regions').select('name').eq('is_active', true).limit(1).maybeSingle(),
-        ]);
-        totalEvents = eventResult.count || 0;
-        totalVenues = venueResult.count || 0;
-        regionName = regionResult.data?.name || '';
-      } catch { /* stats are optional — page renders without them */ }
+      const { totalEvents, totalVenues, regionName } = await getLandingStats();
 
       const statsLine = totalEvents > 0
         ? `<p class="nc-stats">Currently serving <strong>${totalEvents.toLocaleString()} events</strong> across <strong>${totalVenues.toLocaleString()} venues</strong>${regionName ? ` in <strong>${regionName}</strong>` : ''}.</p>`
