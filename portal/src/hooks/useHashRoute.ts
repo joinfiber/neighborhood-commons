@@ -13,6 +13,7 @@ interface RoutePattern {
 
 const routes: RoutePattern[] = [
   { pattern: /^#\/terms$/, screen: 'terms', paramNames: [] },
+  { pattern: /^#\/login$/, screen: 'login', paramNames: [] },
   { pattern: /^#\/developers$/, screen: 'developers', paramNames: [] },
   { pattern: /^#\/profile$/, screen: 'profile', paramNames: [] },
   { pattern: /^#\/upload$/, screen: 'upload', paramNames: [] },
