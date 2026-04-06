@@ -172,7 +172,7 @@ export function createApp(): Express {
   // ─── Landing page (API domain root) ──────────────────────────────
   // ─── Cached landing page stats (refresh hourly, not per-request) ────
   let cachedStats = { totalEvents: 0, totalVenues: 0, regionName: '', fetchedAt: 0 };
-  const STATS_TTL_MS = 60 * 60 * 1000; // 1 hour
+  const STATS_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
   async function getLandingStats() {
     if (Date.now() - cachedStats.fetchedAt < STATS_TTL_MS) return cachedStats;
