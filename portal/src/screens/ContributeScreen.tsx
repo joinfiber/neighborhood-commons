@@ -25,7 +25,7 @@ interface ContributeScreenProps {
 // SCREEN
 // =============================================================================
 
-export function ContributeScreen({ account, onDone }: ContributeScreenProps) {
+export function ContributeScreen({ onDone }: ContributeScreenProps) {
   // Step 1: upload
   const [csvText, setCsvText] = useState('');
   const [fileName, setFileName] = useState('');
