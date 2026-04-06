@@ -335,6 +335,13 @@ router.post('/csv/confirm', writeLimiter, async (req, res, next) => {
     const data = validateRequest(csvConfirmSchema, req.body);
     const adminUserId = getAdminUserId();
 
+    // Fetch contributor profile for attribution
+    const { data: accountProfile } = await supabaseAdmin
+      .from('portal_accounts')
+      .select('business_name, website')
+      .eq('id', account.id)
+      .single();
+
     // Fetch batch — verify ownership
     const { data: batch, error: batchError } = await supabaseAdmin
       .from('contribution_batches')
@@ -455,8 +462,8 @@ router.post('/csv/confirm', writeLimiter, async (req, res, next) => {
         creator_account_id: account.id,
         source: 'csv',
         source_method: 'csv',
-        source_publisher: account.business_name || null,
-        source_contributor_url: account.website || null,
+        source_publisher: accountProfile?.business_name || null,
+        source_contributor_url: accountProfile?.website || null,
         visibility: 'public',
         status: eventStatus,
         is_business: true,

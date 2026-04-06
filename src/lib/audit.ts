@@ -38,7 +38,8 @@ type PortalAuditAction =
   | 'feed_source_updated'
   | 'feed_source_polled'
   | 'feed_source_deleted'
-  | 'newsletter_candidates_batch_approved';
+  | 'newsletter_candidates_batch_approved'
+  | 'csv_contribution';
 
 /**
  * One-way hash for privacy-preserving logs.

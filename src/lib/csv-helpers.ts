@@ -6,7 +6,7 @@
  */
 
 import { supabaseAdmin } from './supabase.js';
-import { EVENT_CATEGORY_KEYS, type EventCategory } from './categories.js';
+import { EVENT_CATEGORY_KEYS } from './categories.js';
 
 // =============================================================================
 // CSV PARSING
