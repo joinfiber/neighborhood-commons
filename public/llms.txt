@@ -307,9 +307,33 @@ Rate limit: 10 requests/minute on this endpoint.
 
 ## Part 3: Becoming a Contributor
 
-Contributing means pushing events INTO the Commons so that every app connected to it can show them. You need a free API key.
+Contributing means pushing events INTO the Commons so that every app connected to it can show them. There are two ways to contribute:
 
-### Step 1: Get Your API Key (2 minutes)
+1. **Upload a CSV** — Sign in to the contributor portal, upload a spreadsheet, map your columns, and submit. Best for one-time contributions or if you're not a developer.
+2. **Use the Contribute API** — Get a free API key, send JSON. Best for ongoing programmatic integration.
+
+Both are free. Both go through the same review process (new contributors start with manual review, then get auto-publish after demonstrating quality).
+
+### Option A: Upload a CSV (No Code Required)
+
+Go to [api.neighborhood-commons.org](https://api.neighborhood-commons.org) and click "Contributor sign in." Register with your email, then use the **Upload** screen to:
+
+1. **Upload** — Drop a CSV file. The system detects your columns automatically.
+2. **Map** — Confirm which CSV columns map to Commons fields (name, date, venue, category, etc.). Common headers like "title", "event_name", "location" are auto-detected.
+3. **Preview** — See how your rows will look as events. Rows with errors are flagged. Unrecognized category terms can be mapped to Commons categories.
+4. **Submit** — Selected rows are created as events. New contributors' events go through admin review first.
+
+**Your CSV needs at minimum:** an event name column and a date column. Everything else (venue, time, category, description, price, URL, coordinates) is optional but makes the data more useful.
+
+**Category mapping:** If your CSV uses different category terms (e.g., "concert" instead of "live-music"), the system learns your vocabulary over time. The first time you upload "concert", you map it to `live-music`. Next time, it auto-maps.
+
+**Supported date formats:** `YYYY-MM-DD`, `MM/DD/YYYY`, `M/D/YYYY`, ISO 8601 datetimes. **Time formats:** `HH:MM` (24-hour), `h:mm AM/PM`.
+
+### Option B: Use the Contribute API
+
+For programmatic integration, get a free API key.
+
+#### Step 1: Get Your API Key (2 minutes)
 
 Send your email:
 ```bash

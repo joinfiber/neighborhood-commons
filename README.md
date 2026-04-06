@@ -2,7 +2,7 @@
 
 Open neighborhood event data infrastructure. Fork it, stand it up, fill it with your neighborhood's data.
 
-Neighborhood Commons is a thin data service: a database, an API, and a lightweight self-service portal. Venues and organizers post events — concerts, comedy, markets, community gatherings — and every app in the city can show them. It implements the [Neighborhood API](https://github.com/The-Relational-Technology-Project/neighborhood-api) spec, an open format for sharing local events across community tools.
+Neighborhood Commons is a thin data service: a database, an API, and a contributor portal. Community members, developers, and organizers contribute event data — concerts, comedy, markets, food pantries, community gatherings — and every app in the city can show them. It implements the [Neighborhood API](https://github.com/The-Relational-Technology-Project/neighborhood-api) spec, an open format for sharing local events across community tools.
 
 This is infrastructure designed to be cloned and run by any city. The data is the product.
 
@@ -11,7 +11,7 @@ This is infrastructure designed to be cloned and run by any city. The data is th
 ## What's here
 
 - **Public API** — Neighborhood API spec compliant. No auth required to read. `GET /api/v1/events`
-- **Portal** — React SPA where venue operators sign up, post events, done. Self-service, no admin needed.
+- **Contributor Portal** — React SPA where contributors upload CSV data, map columns, preview, and submit. Also supports API key registration and individual event management.
 - **Service API** — Full CRUD for trusted external tools (admin dashboards, import scripts, partner apps). Authenticated via service-tier API keys.
 - **Feeds** — iCal (`.ics`) and RSS (`.rss`) for calendar apps and feed readers.
 - **Webhooks** — Real-time push notifications for downstream consumers.
@@ -174,7 +174,7 @@ Store the raw key securely. It's hashed on insert and cannot be recovered. Your 
 
 ### 7. Start adding data
 
-Use the Service API to create accounts and events programmatically, or sign up through the portal as a venue operator.
+Use the Service API to create accounts and events programmatically, upload a CSV through the contributor portal, or use the Contribute API with a free API key.
 
 ## Project structure
 
@@ -185,9 +185,9 @@ src/
   middleware/    # Auth, rate limiting, error handling
   config.ts      # Environment validation (Zod)
   app.ts         # Express app factory
-portal/          # React SPA (self-service portal for venue operators)
+portal/          # React SPA (contributor portal — CSV upload, API key registration)
 tests/           # Vitest test suite
-migrations/      # Sequential SQL migrations (001–038)
+migrations/      # Sequential SQL migrations (001–049)
 docs/            # Consumer guide, email templates
 public/          # llms.txt (AI-readable API docs)
 CLAUDE.md        # Development guide and architecture decisions
@@ -203,7 +203,7 @@ Single Express server serving both the API and the portal SPA. Minimal runtime d
 - **Validation**: Zod on every input, no exceptions
 - **Rate limiting**: Per-route, explicit — browse (30/min), write (10/min), API key (1000/hr)
 
-The commons is deliberately thin. It stores events, serves them via a spec-compliant API, and provides a self-service portal for venue operators. Everything else — admin dashboards, import pipelines, curation tools, analytics — lives in external tools that connect via the Service API.
+The commons is deliberately thin. It stores events, serves them via a spec-compliant API, and provides a contributor portal for data upload. Everything else — admin dashboards, import pipelines, curation tools, analytics — lives in external tools that connect via the Service API.
 
 ## Testing
 
