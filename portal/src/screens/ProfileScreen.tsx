@@ -3,7 +3,6 @@ import { useBreakpoint } from '../hooks/useBreakpoint';
 import { styles, colors, radii, spacing } from '../lib/styles';
 import { updateProfile, type PortalAccount } from '../lib/api';
 import { supabase } from '../lib/supabase';
-import { OperatingHours, emptyWeek, type WeekHours } from '../components/OperatingHours';
 
 interface ProfileScreenProps {
   account: PortalAccount;
@@ -14,20 +13,9 @@ export function ProfileScreen({ account, onAccountUpdated }: ProfileScreenProps)
   const { isDesktop } = useBreakpoint();
 
   // Editable fields
-  const [businessName, setBusinessName] = useState(account.business_name);
-  const [venueName, setVenueName] = useState(account.default_venue_name || '');
+  const [displayName, setDisplayName] = useState(account.business_name);
   const [website, setWebsite] = useState(account.website || '');
   const [phone, setPhone] = useState(account.phone || '');
-  const [accessible, setAccessible] = useState(account.wheelchair_accessible);
-  const [operatingHours, setOperatingHours] = useState<WeekHours>(() => {
-    if (account.operating_hours && Array.isArray(account.operating_hours) && account.operating_hours.length === 7) {
-      return account.operating_hours as WeekHours;
-    }
-    return emptyWeek();
-  });
-  const [hoursExpanded, setHoursExpanded] = useState(() => {
-    return operatingHours.some(d => d.open);
-  });
 
   // Email change
   const [newEmail, setNewEmail] = useState('');
@@ -39,27 +27,16 @@ export function ProfileScreen({ account, onAccountUpdated }: ProfileScreenProps)
   const [toast, setToast] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   const isDirty =
-    businessName !== account.business_name ||
-    venueName !== (account.default_venue_name || '') ||
+    displayName !== account.business_name ||
     website !== (account.website || '') ||
-    phone !== (account.phone || '') ||
-    accessible !== account.wheelchair_accessible;
+    phone !== (account.phone || '');
 
   const handleSave = async () => {
     setSaving(true);
     const params: Record<string, unknown> = {};
-    if (businessName !== account.business_name) params.business_name = businessName;
-    if (venueName !== (account.default_venue_name || '')) params.default_venue_name = venueName;
+    if (displayName !== account.business_name) params.business_name = displayName;
     if (website !== (account.website || '')) params.website = website || null;
     if (phone !== (account.phone || '')) params.phone = phone || null;
-    if (accessible !== account.wheelchair_accessible) params.wheelchair_accessible = accessible;
-
-    // Always include operating hours if any day is open
-    const hasHours = operatingHours.some(d => d.open);
-    const storedHours = account.operating_hours;
-    if (hasHours || storedHours) {
-      params.operating_hours = hasHours ? operatingHours : null;
-    }
 
     if (Object.keys(params).length === 0) { setSaving(false); return; }
 
@@ -85,39 +62,23 @@ export function ProfileScreen({ account, onAccountUpdated }: ProfileScreenProps)
     else { setEmailStatus('Check your new email for a confirmation link.'); setNewEmail(''); }
   };
 
-  // ── Business Card Preview ─────────────────────────────────────────────
+  // ── Contributor Card Preview ───────────────────────────────────────────
 
-  const businessCard = (
+  const contributorCard = (
     <div style={{
       background: colors.card, border: `1px solid ${colors.border}`,
       borderRadius: radii.lg, padding: '20px',
     }}>
       <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase',
         letterSpacing: '0.06em', color: colors.dim, marginBottom: '12px' }}>
-        Your business
+        Contributor
       </div>
 
       <div style={{ fontSize: '18px', fontWeight: 600, color: colors.heading, lineHeight: 1.3, marginBottom: '6px' }}>
-        {businessName || <span style={{ color: colors.dim }}>Business name</span>}
+        {displayName || <span style={{ color: colors.dim }}>Display name</span>}
       </div>
 
-      {(venueName || account.default_address) && (
-        <div style={{ marginBottom: '8px' }}>
-          {venueName && (
-            <div style={{ fontSize: '14px', color: colors.muted }}>{venueName}</div>
-          )}
-          {account.default_address && (
-            <div style={{ fontSize: '13px', color: colors.dim }}>{account.default_address}</div>
-          )}
-        </div>
-      )}
-
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        {phone ? (
-          <div style={{ fontSize: '13px', color: colors.text }}>{phone}</div>
-        ) : (
-          <div style={{ fontSize: '13px', color: colors.dim, fontStyle: 'italic' }}>No phone</div>
-        )}
         {website ? (
           <div style={{ fontSize: '13px', color: colors.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {website.replace(/^https?:\/\//, '')}
@@ -125,41 +86,12 @@ export function ProfileScreen({ account, onAccountUpdated }: ProfileScreenProps)
         ) : (
           <div style={{ fontSize: '13px', color: colors.dim, fontStyle: 'italic' }}>No website</div>
         )}
+        {phone ? (
+          <div style={{ fontSize: '13px', color: colors.text }}>{phone}</div>
+        ) : (
+          <div style={{ fontSize: '13px', color: colors.dim, fontStyle: 'italic' }}>No phone</div>
+        )}
       </div>
-
-      {accessible && (
-        <div style={{ fontSize: '12px', color: colors.success, marginTop: '8px' }}>
-          ♿ Wheelchair accessible
-        </div>
-      )}
-
-      {/* Operating hours summary */}
-      {operatingHours.some(d => d.open) && (
-        <div style={{ marginTop: '12px', borderTop: `1px solid ${colors.border}`, paddingTop: '10px' }}>
-          <div style={{ fontSize: '11px', fontWeight: 600, color: colors.dim, marginBottom: '6px',
-            textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-            Hours
-          </div>
-          {operatingHours.map((day, i) => (
-            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px',
-              color: day.open ? colors.text : colors.dim, lineHeight: 1.8 }}>
-              <span>{['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i]}</span>
-              <span className="tnum">
-                {day.open && day.ranges.length > 0
-                  ? day.ranges.map(r => {
-                      const fmtT = (t: string) => {
-                        const [hh, mm] = t.split(':');
-                        const h = parseInt(hh!, 10);
-                        return `${h % 12 || 12}${mm === '00' ? '' : ':' + mm}${h >= 12 ? 'p' : 'a'}`;
-                      };
-                      return `${fmtT(r.start)}–${fmtT(r.end)}`;
-                    }).join(', ')
-                  : 'Closed'}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
 
       <div style={{ borderTop: `1px solid ${colors.border}`, marginTop: '10px', paddingTop: '10px',
         fontSize: '11px', color: colors.dim }}>
@@ -183,74 +115,27 @@ export function ProfileScreen({ account, onAccountUpdated }: ProfileScreenProps)
         </div>
       )}
 
-      {/* Business name */}
+      {/* Display name */}
       <div style={{ marginBottom: spacing.lg }}>
-        <label style={styles.formLabel}>Business name</label>
-        <input type="text" value={businessName} onChange={(e) => setBusinessName(e.target.value)}
+        <label style={styles.formLabel}>Display name</label>
+        <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)}
           style={styles.input} />
-      </div>
-
-      {/* Venue */}
-      <div style={{ marginBottom: spacing.lg }}>
-        <label style={styles.formLabel}>Default venue</label>
-        <input type="text" value={venueName} onChange={(e) => setVenueName(e.target.value)}
-          placeholder="Venue name" style={styles.input} />
-        {account.default_address && (
-          <div style={{ fontSize: '12px', color: colors.muted, marginTop: '4px' }}>
-            {account.default_address}
-          </div>
-        )}
+        <p style={styles.helperText}>
+          Shows in contributor attribution on events you contribute.
+        </p>
       </div>
 
       {/* Website + Phone */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: spacing.lg }}>
         <div>
           <label style={styles.formLabel}>Website</label>
-          <input type="url" placeholder="https://yourbusiness.com" value={website}
+          <input type="url" placeholder="https://yourproject.com" value={website}
             onChange={(e) => setWebsite(e.target.value)} style={styles.input} />
         </div>
         <div>
           <label style={styles.formLabel}>Phone</label>
           <input type="tel" placeholder="(215) 555-0100" value={phone}
             onChange={(e) => setPhone(e.target.value)} style={styles.input} />
-        </div>
-      </div>
-
-      {/* Accessible */}
-      <div style={{ marginBottom: spacing.lg }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-          <input type="checkbox" checked={accessible === true}
-            onChange={(e) => setAccessible(e.target.checked ? true : null)}
-            style={{ width: '16px', height: '16px' }} />
-          <span style={{ fontSize: '14px', color: colors.text }}>Wheelchair accessible</span>
-        </label>
-      </div>
-
-      {/* Operating Hours */}
-      <div style={{ marginBottom: spacing.lg }}>
-        <div style={{ borderTop: `1px solid ${colors.border}`, paddingTop: spacing.lg, marginTop: spacing.sm }}>
-          {hoursExpanded ? (
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-                <div style={{ ...styles.sectionLabel, margin: 0 }}>Operating Hours</div>
-                {!operatingHours.some(d => d.open) && (
-                  <button type="button" onClick={() => setHoursExpanded(false)}
-                    className="btn-text" style={{ ...styles.buttonText, fontSize: '12px', padding: 0 }}>
-                    Collapse
-                  </button>
-                )}
-              </div>
-              <OperatingHours value={operatingHours} onChange={setOperatingHours} />
-            </div>
-          ) : (
-            <button type="button" onClick={() => setHoursExpanded(true)}
-              className="btn-text"
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none',
-                color: colors.muted, fontSize: '13px', cursor: 'pointer', padding: '0', fontFamily: 'inherit' }}>
-              <span style={{ fontSize: '15px', lineHeight: 1, fontWeight: 300 }}>+</span>
-              Add operating hours
-            </button>
-          )}
         </div>
       </div>
 
@@ -299,7 +184,7 @@ export function ProfileScreen({ account, onAccountUpdated }: ProfileScreenProps)
       }}>
         <div>{editForm}</div>
         <div style={{ position: 'sticky', top: '40px' }}>
-          {businessCard}
+          {contributorCard}
         </div>
       </div>
     );
@@ -307,7 +192,7 @@ export function ProfileScreen({ account, onAccountUpdated }: ProfileScreenProps)
 
   return (
     <div style={{ maxWidth: '600px', width: '100%' }}>
-      <div style={{ marginBottom: spacing.lg }}>{businessCard}</div>
+      <div style={{ marginBottom: spacing.lg }}>{contributorCard}</div>
       {editForm}
     </div>
   );

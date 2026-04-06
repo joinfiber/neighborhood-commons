@@ -101,16 +101,16 @@ export function LoginScreen({
         margin: '0 0 28px 0',
         letterSpacing: '-0.01em',
       }}>
-        Your events.<br />
-        Your neighbors.<br />
-        Open data.
+        Share your data.<br />
+        Enrich the commons.<br />
+        Open infrastructure.
       </h1>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '32px' }}>
         {[
-          'Post your happy hours, classes, open gym, specials — and neighbors nearby discover them',
-          'Other event apps can pull your data in — for free',
-          'Post once, reach everywhere',
+          'Upload a CSV of events, food pantries, community resources — anything your neighborhood should know about',
+          'Your data flows to every app connected to the Commons',
+          'Contribute once, reach everywhere',
         ].map((text, i) => (
           <div key={i} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
             <span style={{ color: loginColors.accent, fontSize: '16px', lineHeight: '22px', flexShrink: 0 }}>—</span>
@@ -238,10 +238,10 @@ export function LoginScreen({
                 />
               </div>
               <div style={{ marginBottom: '12px' }}>
-                <label style={loginStyles.formLabel}>Business name</label>
+                <label style={loginStyles.formLabel}>Organization or project name</label>
                 <input
                   type="text"
-                  placeholder="e.g. Joe's Coffee"
+                  placeholder="e.g. Philly Food Map"
                   value={businessName}
                   onChange={(e) => setBusinessName(e.target.value)}
                   style={loginStyles.input}

@@ -223,6 +223,9 @@ const updateProfileSchema = z.object({
   phone: z.string().max(50).optional().nullable(),
   wheelchair_accessible: z.boolean().nullable().optional(),
   operating_hours: z.array(dayHoursSchema).length(7).optional().nullable(),
+  organization_name: z.string().max(200).optional().nullable(),
+  contributor_type: z.enum(['developer', 'community_org', 'government', 'media', 'individual', 'other']).optional().nullable(),
+  data_description: z.string().max(1000).optional().nullable(),
 });
 
 /**
@@ -246,6 +249,9 @@ router.patch('/account/profile', writeLimiter, async (req, res, next) => {
     if (data.phone !== undefined) update.phone = data.phone || null;
     if (data.wheelchair_accessible !== undefined) update.wheelchair_accessible = data.wheelchair_accessible;
     if (data.operating_hours !== undefined) update.operating_hours = data.operating_hours;
+    if (data.organization_name !== undefined) update.organization_name = data.organization_name || null;
+    if (data.contributor_type !== undefined) update.contributor_type = data.contributor_type || null;
+    if (data.data_description !== undefined) update.data_description = data.data_description || null;
 
     if (Object.keys(update).length === 0) {
       throw createError('No fields to update — include at least one field to change (e.g., title, description, category)', 400, 'VALIDATION_ERROR');

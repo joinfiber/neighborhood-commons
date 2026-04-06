@@ -2,12 +2,17 @@ import { getAccessToken } from './supabase';
 import type {
   PortalAccount, PortalEvent, CreateEventParams, PlaceResult,
   CheckEmailResult, WhoamiResponse,
+  CsvUploadResponse, CsvPreviewResponse, CsvConfirmResponse,
+  ContributionBatch, ContributionRow,
 } from './types';
 
 // Re-export all types for backward compatibility
 export type {
   PortalAccount, PortalEvent, CreateEventParams, PlaceResult,
   UserRole, CheckEmailResult, WhoamiResponse, EventFormData,
+  ContributionBatch, ContributionRow,
+  CsvUploadResponse, CsvPreviewResponse, CsvConfirmResponse,
+  CsvPreviewRow,
 } from './types';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -257,6 +262,49 @@ export async function importConfirm(params: {
     method: 'POST',
     body: JSON.stringify(params),
   });
+}
+
+// =============================================================================
+// CSV CONTRIBUTION
+// =============================================================================
+
+export async function csvUpload(csvText: string, fileName?: string, timezone?: string) {
+  return apiRequest<CsvUploadResponse>('/api/portal/csv/upload', {
+    method: 'POST',
+    body: JSON.stringify({
+      csv_text: csvText,
+      file_name: fileName,
+      event_timezone: timezone || 'America/New_York',
+    }),
+  });
+}
+
+export async function csvPreview(params: {
+  batch_id: string;
+  column_mapping: Record<string, string>;
+  default_category: string;
+  category_column?: string;
+  category_overrides?: Record<string, string>;
+}) {
+  return apiRequest<CsvPreviewResponse>('/api/portal/csv/preview', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+}
+
+export async function csvConfirm(batchId: string, selectedRows: number[]) {
+  return apiRequest<CsvConfirmResponse>('/api/portal/csv/confirm', {
+    method: 'POST',
+    body: JSON.stringify({ batch_id: batchId, selected_rows: selectedRows }),
+  });
+}
+
+export async function fetchBatches() {
+  return apiRequest<{ batches: ContributionBatch[] }>('/api/portal/csv/batches');
+}
+
+export async function fetchBatch(batchId: string) {
+  return apiRequest<{ batch: ContributionBatch; rows: ContributionRow[] }>(`/api/portal/csv/batches/${batchId}`);
 }
 
 // =============================================================================

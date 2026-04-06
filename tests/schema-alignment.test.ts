@@ -31,6 +31,7 @@ const SCHEMA: Record<string, string[]> = {
   api_keys: [
     'id', 'name', 'tier', 'rate_limit_per_hour', 'created_at',
     'key_hash', 'key_prefix', 'contact_email', 'status', 'last_used_at', 'contributor_tier',
+    'url',
   ],
   audit_logs: [
     'id', 'action', 'actor_hash', 'resource_id', 'metadata', 'endpoint',
@@ -45,7 +46,7 @@ const SCHEMA: Record<string, string[]> = {
     'broadcast_mode', 'discovery_radius_meters', 'recurrence', 'series_id',
     'series_instance_number', 'becomes_visible_at', 'expires_at', 'ended_at',
     'start_time_required', 'tags', 'wheelchair_accessible', 'rsvp_limit',
-    'source_method', 'source_publisher', 'source_feed_url', 'external_id',
+    'source_method', 'source_publisher', 'source_feed_url', 'external_id', 'source_contributor_url',
     'runtime_minutes', 'content_rating', 'showtimes',
     'group_id',
     'created_at', 'updated_at',
@@ -72,6 +73,7 @@ const SCHEMA: Record<string, string[]> = {
     'default_latitude', 'default_longitude', 'logo_url', 'cover_image_url', 'description',
     'status', 'claimed_at', 'created_at', 'updated_at', 'last_login_at',
     'wheelchair_accessible', 'slug', 'operating_hours',
+    'organization_name', 'contributor_type', 'data_description',
   ],
   regions: [
     'id', 'name', 'slug', 'type', 'parent_id', 'bounds', 'centroid',
@@ -88,6 +90,21 @@ const SCHEMA: Record<string, string[]> = {
   ],
   developer_otps: [
     'id', 'email', 'code', 'expires_at', 'created_at',
+  ],
+  category_mappings: [
+    'id', 'source_term', 'canonical_category', 'confidence',
+    'created_by_account_id', 'created_at',
+  ],
+  contribution_batches: [
+    'id', 'contributor_account_id', 'status', 'file_name', 'file_hash',
+    'event_timezone', 'column_mapping', 'total_rows', 'valid_rows', 'error_rows', 'created_events',
+    'reviewer_notes', 'reviewed_at', 'reviewed_by',
+    'created_at', 'updated_at',
+  ],
+  contribution_rows: [
+    'id', 'batch_id', 'row_number', 'raw_data', 'mapped_data',
+    'category_source_term', 'category_mapped_to', 'validation_errors',
+    'status', 'created_event_id', 'created_at',
   ],
   // Ingestion tables (newsletter_sources, newsletter_emails, event_candidates,
   // feed_sources) exist in the database but are no longer referenced by code

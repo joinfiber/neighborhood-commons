@@ -14,6 +14,7 @@ import accountRoutes from './account.js';
 import eventRoutes from './events.js';
 import imageRoutes from './images.js';
 import importRoutes from './import.js';
+import csvRoutes from './contribute-csv.js';
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -30,5 +31,6 @@ router.use(accountRoutes);
 router.use(eventRoutes);
 router.use(imageRoutes);
 router.use(importRoutes);
+router.use(csvRoutes);
 
 export default router;

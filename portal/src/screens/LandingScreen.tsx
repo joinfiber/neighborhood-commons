@@ -88,7 +88,7 @@ export function LandingScreen({ onShowLogin, onShowDevelopers }: LandingScreenPr
         }}>
           This is the Neighborhood Commons. It's open infrastructure maintained by{' '}
           <a href="https://joinfiber.app" style={{ color: lc.cream, textDecoration: 'underline', textDecorationColor: `${lc.cream}30`, textUnderlineOffset: '3px' }}>Fiber</a>
-          {' '}and available for use by all. The data is ungated and you may consume it as you wish. To contribute, create an API key and get in touch.
+          {' '}and available for use by all. The data is ungated and you may consume it as you wish. To contribute, sign in and upload a CSV — or create an API key for programmatic access.
         </p>
 
         <p style={{
@@ -256,10 +256,10 @@ export function LandingScreen({ onShowLogin, onShowDevelopers }: LandingScreenPr
               Contribute
             </div>
             <p style={{ color: lc.cream, fontSize: '17px', fontWeight: 500, margin: '0 0 12px', lineHeight: 1.4 }}>
-              Push event data into the Commons
+              Share your data with the Commons
             </p>
             <p style={{ ...prose, fontSize: '14px', marginBottom: '20px' }}>
-              Register with your email — no approval, no waiting. You get an API key instantly. Create venues, post events (one-off or recurring), organize them into groups. Your data flows to every app in the ecosystem.
+              Upload a CSV of events, community resources, or anything your neighborhood should know about. Or get an API key for programmatic access. Your data flows to every app in the ecosystem.
             </p>
             <pre style={{
               background: '#070706',
@@ -351,7 +351,7 @@ export function LandingScreen({ onShowLogin, onShowDevelopers }: LandingScreenPr
             onClick={onShowLogin}
             style={{ ...footerLink, background: 'none', border: 'none', cursor: 'pointer', padding: 0, font: 'inherit' }}
           >
-            Manage events
+            Contributor sign in
           </button>
           <div style={{ flex: 1 }} />
           <span style={{ color: lc.dim, fontSize: '12px' }}>CC BY 4.0</span>

@@ -16,11 +16,11 @@ interface NavItem {
 
 const ICON_SIZE = 20;
 
-const BUSINESS_NAV: NavItem[] = [
-  { id: 'dashboard', label: 'Events', hash: '#/', screens: ['dashboard', 'edit-event', 'create-event'],
+const CONTRIBUTOR_NAV: NavItem[] = [
+  { id: 'contributions', label: 'Contributions', hash: '#/', screens: ['contributions', 'dashboard', 'edit-event'],
     icon: <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="14" height="13" rx="2" /><path d="M6 2v3M14 2v3M3 9h14" /></svg> },
-  { id: 'new', label: 'New', hash: '#/events/new', screens: [],
-    icon: <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M10 4v12M4 10h12" /></svg> },
+  { id: 'upload', label: 'Upload', hash: '#/upload', screens: ['upload'],
+    icon: <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M10 14V4M6 8l4-4 4 4M4 16h12" /></svg> },
   { id: 'developers', label: 'API', hash: '#/developers', screens: ['developers'],
     icon: <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><path d="M6 5L2 10l4 5M14 5l4 5-4 5" /></svg> },
   { id: 'profile', label: 'Profile', hash: '#/profile', screens: ['profile'],
@@ -56,7 +56,7 @@ export function WorkspaceShell({
 }: WorkspaceShellProps) {
   void _onSignOutEverywhere; // retained for future use
   const { isDesktop } = useBreakpoint();
-  const navItems = BUSINESS_NAV;
+  const navItems = CONTRIBUTOR_NAV;
 
   function isActive(item: NavItem) {
     return item.screens.includes(activeScreen);
@@ -71,13 +71,13 @@ export function WorkspaceShell({
       <div style={styles.workspace}>
         {/* Sidebar */}
         <nav style={styles.sidebar} aria-label="Main navigation">
-          {/* Business identity */}
+          {/* Contributor identity */}
           <div style={{ padding: '0 20px', marginBottom: '24px' }}>
             <div style={{
               fontSize: '11px', fontWeight: 500, textTransform: 'uppercase',
               letterSpacing: '0.1em', color: colors.dim, marginBottom: '6px',
             }}>
-              neighborhood commons
+              commons contributor
             </div>
             {account?.business_name && (
               <div style={{ fontSize: '14px', fontWeight: 500, color: colors.heading, lineHeight: 1.3 }}>
@@ -86,23 +86,9 @@ export function WorkspaceShell({
             )}
           </div>
 
-          {/* New Event button */}
-          <div style={{ padding: '0 16px', marginBottom: '16px' }}>
-            <button
-              type="button"
-              className="btn-primary"
-              onClick={() => onNavigate('#/events/new')}
-              style={{
-                ...styles.buttonPrimary, padding: '9px 16px', fontSize: '13px',
-              }}
-            >
-              + New Event
-            </button>
-          </div>
-
           {/* Nav items */}
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {navItems.filter(n => n.id !== 'new').map((item) => {
+            {navItems.filter(n => n.id !== 'upload').map((item) => {
               const active = isActive(item);
               return (
                 <button

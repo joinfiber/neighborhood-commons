@@ -1,14 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useHashRoute } from './hooks/useHashRoute';
-import { claimAccount, fetchAccount, fetchWhoami, updateProfile, type PortalAccount, type UserRole } from './lib/api';
-import { colors, styles, spacing, radii } from './lib/styles';
+import { claimAccount, fetchAccount, fetchWhoami, type PortalAccount, type UserRole } from './lib/api';
+import { colors, styles } from './lib/styles';
 import { LandingScreen } from './screens/LandingScreen';
 import { LoginScreen } from './screens/LoginScreen';
 import { DashboardScreen } from './screens/DashboardScreen';
 import { CreateEventScreen } from './screens/CreateEventScreen';
 import { EditEventScreen } from './screens/EditEventScreen';
 import { ImportEventsScreen } from './screens/ImportEventsScreen';
+import { ContributeScreen } from './screens/ContributeScreen';
+import { ContributionsScreen } from './screens/ContributionsScreen';
 import { DevelopersScreen } from './screens/DevelopersScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { TermsScreen } from './screens/TermsScreen';
@@ -18,7 +20,7 @@ import { WorkspaceShell } from './components/WorkspaceShell';
 function contentWidthForRoute(screen: string): 'normal' | 'wide' | 'full' {
   const full = ['create-event', 'edit-event', 'profile'];
   if (full.includes(screen)) return 'full';
-  const wide = ['dashboard', 'developers'];
+  const wide = ['dashboard', 'contributions', 'developers'];
   return wide.includes(screen) ? 'wide' : 'normal';
 }
 
@@ -37,7 +39,6 @@ export default function App() {
 
   // UI state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  const [showOnboarding, setShowOnboarding] = useState(false);
 
   // Detect role after authentication via /whoami
   const detectRole = useCallback(async () => {
@@ -47,9 +48,7 @@ export default function App() {
       setRole(res.data.role);
       if (res.data.role === 'business' && res.data.account) {
         setAccount(res.data.account);
-        if (res.data.account.status === 'pending' && !res.data.account.default_address) {
-          setShowOnboarding(true);
-        }
+        // No more venue onboarding — contributors don't need address setup
       }
     } else {
       setRole('business');
@@ -64,22 +63,14 @@ export default function App() {
 
     const claimRes = await claimAccount();
     if (claimRes.data) {
-      const acct = claimRes.data.account;
-      setAccount(acct);
-      if (acct.status === 'pending' && !acct.default_address) {
-        setShowOnboarding(true);
-      }
+      setAccount(claimRes.data.account);
       setClaiming(false);
       return;
     }
 
     const fetchRes = await fetchAccount();
     if (fetchRes.data) {
-      const acct = fetchRes.data.account;
-      setAccount(acct);
-      if (acct.status === 'pending' && !acct.default_address) {
-        setShowOnboarding(true);
-      }
+      setAccount(fetchRes.data.account);
       setClaiming(false);
       return;
     }
@@ -99,7 +90,6 @@ export default function App() {
       setRole(null);
       setAccount(null);
       setClaimError(null);
-      setShowOnboarding(false);
     }
   }, [isAuthenticated, role, roleLoading, account, claiming, claimError, detectRole, loadAccount]);
 
@@ -237,22 +227,21 @@ export default function App() {
   }
 
   // =========================================================================
-  // ONBOARDING
-  // =========================================================================
-  if (showOnboarding) {
-    return (
-      <OnboardingScreen
-        account={account}
-        onComplete={(updated) => { setAccount(updated); setShowOnboarding(false); }}
-        onSkip={() => setShowOnboarding(false)}
-      />
-    );
-  }
-
-  // =========================================================================
-  // BUSINESS ROUTES
+  // CONTRIBUTOR ROUTES
   // =========================================================================
   const businessContent = (() => {
+    if (route.screen === 'upload') {
+      return (
+        <ContributeScreen
+          account={account}
+          onDone={(count) => {
+            navigate('#/');
+            setToast({ message: `Contributed ${count} event${count !== 1 ? 's' : ''}`, type: 'success' });
+          }}
+        />
+      );
+    }
+
     if (route.screen === 'profile') {
       return (
         <ProfileScreen
@@ -310,12 +299,22 @@ export default function App() {
       );
     }
 
-    // Default: dashboard
+    // Dashboard (accessible via #/events but not primary nav)
+    if (route.screen === 'dashboard' || route.screen === 'events') {
+      return (
+        <DashboardScreen
+          account={account}
+          onEditEvent={(event) => navigate(`#/events/${event.id}/edit`)}
+          onShareEvent={(event) => navigate(`#/events/${event.id}/share`)}
+        />
+      );
+    }
+
+    // Default: contributions
     return (
-      <DashboardScreen
+      <ContributionsScreen
         account={account}
-        onEditEvent={(event) => navigate(`#/events/${event.id}/edit`)}
-        onShareEvent={(event) => navigate(`#/events/${event.id}/share`)}
+        onNavigate={(screen) => navigate(`#/${screen}`)}
       />
     );
   })();
@@ -337,76 +336,3 @@ export default function App() {
   );
 }
 
-// =============================================================================
-// ONBOARDING SCREEN (inline — shown once after signup)
-// =============================================================================
-
-function OnboardingScreen({ account, onComplete, onSkip }: {
-  account: PortalAccount;
-  onComplete: (updated: PortalAccount) => void;
-  onSkip: () => void;
-}) {
-  const [venueName, setVenueName] = useState(account.default_venue_name || account.business_name);
-  const [address, setAddress] = useState(account.default_address || '');
-  const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    setErr(null);
-
-    const params: Record<string, unknown> = {};
-    if (venueName) params.default_venue_name = venueName;
-    if (address) params.default_address = address;
-
-    if (Object.keys(params).length === 0) { onSkip(); return; }
-
-    const res = await updateProfile(params as Parameters<typeof updateProfile>[0]);
-    setSaving(false);
-    if (res.data?.account) onComplete(res.data.account);
-    else setErr(res.error?.message || 'Failed to save');
-  };
-
-  return (
-    <div style={styles.page}>
-      <div style={{ ...styles.content, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '80vh' }}>
-        <div className="motion-fade-in" style={{ ...styles.card, maxWidth: '420px', width: '100%' }}>
-          <h2 style={{ ...styles.pageTitle, textAlign: 'center', marginBottom: '6px' }}>
-            Where is your business?
-          </h2>
-          <p style={{ fontSize: '13px', color: colors.muted, textAlign: 'center', marginBottom: spacing.lg, lineHeight: 1.5 }}>
-            This auto-fills the venue on your events. You can change it anytime in your profile.
-          </p>
-
-          {err && (
-            <div style={{ background: colors.errorBg, color: colors.error, padding: '10px 14px', borderRadius: radii.md, fontSize: '14px', marginBottom: spacing.md }}>
-              {err}
-            </div>
-          )}
-
-          <form onSubmit={handleSave}>
-            <div style={{ marginBottom: spacing.md }}>
-              <input type="text" value={venueName || ''} onChange={(e) => setVenueName(e.target.value)}
-                placeholder="Your venue name" style={styles.input} />
-            </div>
-            <div style={{ marginBottom: spacing.lg }}>
-              <input type="text" value={address} onChange={(e) => setAddress(e.target.value)}
-                placeholder="Address" style={styles.input} />
-            </div>
-
-            <button type="submit" className="btn-primary" style={styles.buttonPrimary} disabled={saving}>
-              {saving ? 'Saving...' : 'Continue'}
-            </button>
-          </form>
-
-          <div style={{ textAlign: 'center', marginTop: '10px' }}>
-            <button type="button" className="btn-text" style={styles.buttonText} onClick={onSkip}>
-              Skip — I'll add it later
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
