@@ -249,7 +249,7 @@ export function createApp(): Express {
     </header>
     <main class="nc-landing">
       <h1>Every event in the neighborhood, available to every app.</h1>
-      <p class="nc-tagline">Open event data infrastructure. Posted by venue owners, curators, and community organizers. Licensed CC&nbsp;BY&nbsp;4.0 because public facts shouldn't be locked up.</p>
+      <p class="nc-tagline">Open event data infrastructure. Contributed by community members, developers, and organizers. Licensed CC&nbsp;BY&nbsp;4.0 because public facts shouldn't be locked up.</p>
       ${statsLine}
 
       <h2>Try It Now</h2>
@@ -274,6 +274,13 @@ export function createApp(): Express {
         <li><code><span class="nc-method">POST</span> <span class="nc-path">/api/v1/contribute/batch</span></code> <span class="nc-desc">Submit up to 50 events</span></li>
         <li><code><span class="nc-method">POST</span> <span class="nc-path">/api/v1/developers/register/send-otp</span></code> <span class="nc-desc">Get your API key</span></li>
       </ul>
+
+      <h2>Contribute Data</h2>
+      <p style="color:var(--nc-muted);font-size:0.9rem;margin-bottom:12px;">Have event data to share? Upload a CSV or use the API. Community contributors, developers, and organizers welcome.</p>
+      <div class="nc-links">
+        <a href="/portal" class="nc-primary">Contributor Portal</a>
+        <a href="/llms.txt" class="nc-secondary">API Guide</a>
+      </div>
 
       <h2>Documentation</h2>
       <div class="nc-links">
