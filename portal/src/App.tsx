@@ -113,8 +113,8 @@ export default function App() {
     return <DevelopersScreen />;
   }
 
-  // Unauthenticated: login screen (accessed via #/login or "Business sign in" link)
-  if (!isAuthenticated && route.screen === 'login') {
+  // Not authenticated → show login screen (regardless of which route they wanted)
+  if (!isAuthenticated) {
     return (
       <LoginScreen
         onSignIn={signIn}
@@ -126,31 +126,6 @@ export default function App() {
         canSignUp={canSignUp}
         onShowDevelopers={() => navigate('#/developers')}
       />
-    );
-  }
-
-  // Unauthenticated with no specific portal route: show minimal entry point
-  // (The main landing page is server-rendered at /. This fallback handles
-  // visitors who arrive at /portal directly, e.g. from cached redirects.)
-  if (!isAuthenticated) {
-    return (
-      <div style={{ minHeight: '100vh', background: '#0f0f0e', color: '#d4d0c8', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
-        <div style={{ textAlign: 'center', maxWidth: '400px' }}>
-          <div style={{ fontSize: '11px', fontWeight: 500, letterSpacing: '0.16em', textTransform: 'uppercase' as const, color: '#9c9791', marginBottom: '16px' }}>neighborhood commons</div>
-          <h1 style={{ fontSize: '24px', fontWeight: 400, color: '#f5f0e8', marginBottom: '16px' }}>Welcome</h1>
-          <p style={{ fontSize: '15px', color: '#7a7670', lineHeight: 1.6, marginBottom: '24px' }}>
-            Open event data infrastructure. Sign in to upload data, or visit the landing page for API docs.
-          </p>
-          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
-            <button type="button" onClick={() => navigate('#/login')} style={{ background: '#c4b89e', color: '#0f0f0e', border: 'none', borderRadius: '8px', padding: '10px 24px', fontSize: '14px', fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>
-              Sign In
-            </button>
-            <a href="/" style={{ display: 'inline-block', background: 'transparent', color: '#c4b89e', border: '1px solid #2a2825', borderRadius: '8px', padding: '10px 24px', fontSize: '14px', fontWeight: 500, textDecoration: 'none', fontFamily: 'inherit' }}>
-              Landing Page
-            </a>
-          </div>
-        </div>
-      </div>
     );
   }
 
