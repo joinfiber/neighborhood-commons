@@ -3,7 +3,6 @@ import { useAuth } from './hooks/useAuth';
 import { useHashRoute } from './hooks/useHashRoute';
 import { claimAccount, fetchAccount, fetchWhoami, type PortalAccount, type UserRole } from './lib/api';
 import { colors, styles } from './lib/styles';
-import { LandingScreen } from './screens/LandingScreen';
 import { LoginScreen } from './screens/LoginScreen';
 import { DashboardScreen } from './screens/DashboardScreen';
 import { CreateEventScreen } from './screens/CreateEventScreen';
@@ -130,14 +129,10 @@ export default function App() {
     );
   }
 
-  // Unauthenticated: landing page (default)
+  // Unauthenticated: redirect to server-rendered landing page
   if (!isAuthenticated) {
-    return (
-      <LandingScreen
-        onShowLogin={() => navigate('#/login')}
-        onShowDevelopers={() => navigate('#/developers')}
-      />
-    );
+    window.location.href = '/';
+    return null;
   }
 
   // Role loading
