@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { colors, styles } from '../lib/styles';
-import { fetchBatches } from '../lib/api';
+import { fetchBatches, deleteBatch } from '../lib/api';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import type { PortalAccount, ContributionBatch } from '../lib/api';
 
 // =============================================================================
@@ -44,6 +45,8 @@ export function ContributionsScreen({ account, onNavigate }: ContributionsScreen
   const [batches, setBatches] = useState<ContributionBatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<ContributionBatch | null>(null);
 
   useEffect(() => {
     loadBatches();
@@ -60,6 +63,20 @@ export function ContributionsScreen({ account, onNavigate }: ContributionsScreen
     }
 
     setBatches(res.data?.batches || []);
+  }
+
+  async function handleDeleteBatch(batch: ContributionBatch) {
+    setDeleting(batch.id);
+    setError(null);
+    const res = await deleteBatch(batch.id);
+    setDeleting(null);
+
+    if (res.error) {
+      setError(res.error.message);
+      return;
+    }
+
+    setBatches(prev => prev.filter(b => b.id !== batch.id));
   }
 
   const totalEvents = batches.reduce((sum, b) => sum + b.created_events, 0);
@@ -162,7 +179,12 @@ export function ContributionsScreen({ account, onNavigate }: ContributionsScreen
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           {batches.map(batch => (
-            <BatchCard key={batch.id} batch={batch} />
+            <BatchCard
+              key={batch.id}
+              batch={batch}
+              deleting={deleting === batch.id}
+              onDelete={() => setConfirmDelete(batch)}
+            />
           ))}
         </div>
       )}
@@ -187,6 +209,21 @@ export function ContributionsScreen({ account, onNavigate }: ContributionsScreen
           </button>
         </div>
       )}
+
+      {/* Confirm delete dialog */}
+      {confirmDelete && (
+        <ConfirmDialog
+          title="Delete upload"
+          message={`This will permanently delete "${confirmDelete.file_name || 'this upload'}" and ${confirmDelete.created_events} event${confirmDelete.created_events !== 1 ? 's' : ''} it created. This cannot be undone.`}
+          confirmLabel="Delete"
+          destructive
+          onConfirm={() => {
+            handleDeleteBatch(confirmDelete);
+            setConfirmDelete(null);
+          }}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
     </>
   );
 }
@@ -195,7 +232,7 @@ export function ContributionsScreen({ account, onNavigate }: ContributionsScreen
 // BATCH CARD
 // =============================================================================
 
-function BatchCard({ batch }: { batch: ContributionBatch }) {
+function BatchCard({ batch, deleting, onDelete }: { batch: ContributionBatch; deleting: boolean; onDelete: () => void }) {
   const statusConfig = STATUS_CONFIG[batch.status] || STATUS_CONFIG.draft!;
 
   return (
@@ -214,16 +251,39 @@ function BatchCard({ batch }: { batch: ContributionBatch }) {
         <div style={{ fontSize: '14px', fontWeight: 500, color: colors.heading }}>
           {batch.file_name || 'Unnamed upload'}
         </div>
-        <span style={{
-          fontSize: '10px',
-          padding: '1px 8px',
-          borderRadius: '10px',
-          color: statusConfig.color,
-          background: statusConfig.bg,
-          border: `1px solid ${statusConfig.border}`,
-        }}>
-          {statusConfig.label}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{
+            fontSize: '10px',
+            padding: '1px 8px',
+            borderRadius: '10px',
+            color: statusConfig.color,
+            background: statusConfig.bg,
+            border: `1px solid ${statusConfig.border}`,
+          }}>
+            {statusConfig.label}
+          </span>
+          <button
+            type="button"
+            onClick={onDelete}
+            disabled={deleting}
+            title="Delete this upload and its events"
+            style={{
+              background: 'none',
+              border: 'none',
+              color: colors.dim,
+              cursor: deleting ? 'default' : 'pointer',
+              padding: '2px 4px',
+              fontSize: '13px',
+              fontFamily: 'inherit',
+              opacity: deleting ? 0.4 : 0.6,
+              transition: 'opacity 0.15s',
+            }}
+            onMouseEnter={(e) => { if (!deleting) (e.target as HTMLElement).style.opacity = '1'; (e.target as HTMLElement).style.color = colors.error; }}
+            onMouseLeave={(e) => { (e.target as HTMLElement).style.opacity = '0.6'; (e.target as HTMLElement).style.color = colors.dim; }}
+          >
+            {deleting ? '...' : '\u00D7'}
+          </button>
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: '16px', fontSize: '12px', color: colors.muted }}>

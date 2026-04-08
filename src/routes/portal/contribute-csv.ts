@@ -610,4 +610,89 @@ router.get('/csv/batches/:id', async (req, res, next) => {
   }
 });
 
+/**
+ * DELETE /api/portal/csv/batches/:id
+ * Delete a batch and all events it created.
+ * Contributor can undo their own uploads — they're the authority on their data.
+ */
+router.delete('/csv/batches/:id', writeLimiter, async (req, res, next) => {
+  try {
+    const account = await getPortalAccount(req);
+    const batchId = validateUuidParam(req.params.id, 'batch id');
+
+    // Verify ownership
+    const { data: batch, error: batchError } = await supabaseAdmin
+      .from('contribution_batches')
+      .select('id, contributor_account_id, created_events')
+      .eq('id', batchId)
+      .single();
+
+    if (batchError || !batch) {
+      throw createError('Batch not found', 404, 'NOT_FOUND');
+    }
+    if (batch.contributor_account_id !== account.id) {
+      throw createError('Batch not found', 404, 'NOT_FOUND');
+    }
+
+    // Find all events created by this batch
+    const { data: rows } = await supabaseAdmin
+      .from('contribution_rows')
+      .select('created_event_id')
+      .eq('batch_id', batchId)
+      .not('created_event_id', 'is', null);
+
+    const eventIds = (rows || []).map(r => r.created_event_id).filter(Boolean) as string[];
+
+    // Delete the events (cascade from contribution_rows.created_event_id is SET NULL,
+    // so we delete events explicitly first)
+    if (eventIds.length > 0) {
+      const { error: deleteError } = await supabaseAdmin
+        .from('events')
+        .delete()
+        .in('id', eventIds);
+
+      if (deleteError) {
+        console.error('[CSV] Batch event deletion error:', deleteError.message);
+        throw createError('Failed to delete batch events', 500, 'INTERNAL_ERROR');
+      }
+
+      // Dispatch webhooks for deleted events (fire-and-forget)
+      for (const eventId of eventIds) {
+        void dispatchWebhooks('event.deleted', eventId, {
+          id: eventId, name: '', start: '', end: null, timezone: 'UTC', description: null,
+          category: [], place_id: null,
+          location: { name: '', address: null, lat: null, lng: null },
+          url: null, images: [], event_image_focal_y: 0.5, organizer: { name: '', phone: null },
+          cost: null, series_id: null, series_instance_number: null, series_instance_count: null,
+          start_time_required: true, tags: [], wheelchair_accessible: null,
+          runtime_minutes: null, content_rating: null, showtimes: null, recurrence: null,
+          source: { publisher: 'neighborhood-commons', collected_at: new Date().toISOString(), method: 'portal', contributor: null, license: 'CC BY 4.0' },
+        });
+      }
+    }
+
+    // Delete the batch (cascades to contribution_rows)
+    const { error: batchDeleteError } = await supabaseAdmin
+      .from('contribution_batches')
+      .delete()
+      .eq('id', batchId);
+
+    if (batchDeleteError) {
+      console.error('[CSV] Batch deletion error:', batchDeleteError.message);
+      throw createError('Failed to delete batch', 500, 'INTERNAL_ERROR');
+    }
+
+    const { actor, impersonationMeta } = getAuditActor(req, account.id);
+    auditPortalAction('contribution_batch_deleted', actor, batchId, {
+      events_deleted: eventIds.length,
+      ...impersonationMeta,
+    });
+
+    console.log(`[CSV] Batch ${batchId} deleted: ${eventIds.length} events removed`);
+    res.json({ success: true, events_deleted: eventIds.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

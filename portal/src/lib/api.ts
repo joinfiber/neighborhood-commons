@@ -307,6 +307,12 @@ export async function fetchBatch(batchId: string) {
   return apiRequest<{ batch: ContributionBatch; rows: ContributionRow[] }>(`/api/portal/csv/batches/${batchId}`);
 }
 
+export async function deleteBatch(batchId: string) {
+  return apiRequest<{ success: boolean; events_deleted: number }>(`/api/portal/csv/batches/${batchId}`, {
+    method: 'DELETE',
+  });
+}
+
 // =============================================================================
 // PLACES
 // =============================================================================
