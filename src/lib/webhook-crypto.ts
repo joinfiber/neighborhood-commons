@@ -63,16 +63,23 @@ export function encryptSecret(plaintext: string): Buffer {
  * Decrypt a signing secret from the stored format.
  * Input: Buffer of iv(12) || authTag(16) || ciphertext
  */
-export function decryptSecret(data: Buffer): string {
+export function decryptSecret(data: Buffer | string): string {
   const key = getKey();
 
-  if (data.length < IV_LENGTH + TAG_LENGTH + 1) {
+  // Supabase returns bytea columns as hex-encoded strings (\\x prefix)
+  const buf = Buffer.isBuffer(data)
+    ? data
+    : typeof data === 'string' && data.startsWith('\\x')
+      ? Buffer.from(data.slice(2), 'hex')
+      : Buffer.from(data as string, 'base64');
+
+  if (buf.length < IV_LENGTH + TAG_LENGTH + 1) {
     throw new Error('Invalid encrypted data: too short');
   }
 
-  const iv = data.subarray(0, IV_LENGTH);
-  const authTag = data.subarray(IV_LENGTH, IV_LENGTH + TAG_LENGTH);
-  const ciphertext = data.subarray(IV_LENGTH + TAG_LENGTH);
+  const iv = buf.subarray(0, IV_LENGTH);
+  const authTag = buf.subarray(IV_LENGTH, IV_LENGTH + TAG_LENGTH);
+  const ciphertext = buf.subarray(IV_LENGTH + TAG_LENGTH);
 
   const decipher = createDecipheriv(ALGORITHM, key, iv);
   decipher.setAuthTag(authTag);
