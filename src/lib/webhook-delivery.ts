@@ -84,7 +84,8 @@ export async function dispatchWebhooks(
 
       if (!delivery) continue;
 
-      void deliverWebhook(sub as WebhookSub, delivery.id, eventType, eventData);
+      void deliverWebhook(sub as WebhookSub, delivery.id, eventType, eventData)
+        .catch(e => console.error('[WEBHOOKS] Delivery error:', e instanceof Error ? e.message : e));
     }
   } catch (err) {
     console.error('[WEBHOOKS] Dispatch error:', err instanceof Error ? err.message : err);
@@ -356,7 +357,8 @@ export async function deliverTestWebhook(
       .single();
 
     if (!delivery) return;
-    void deliverWebhook(sub, delivery.id, eventType, eventData);
+    void deliverWebhook(sub, delivery.id, eventType, eventData)
+      .catch(e => console.error('[WEBHOOKS] Delivery error:', e instanceof Error ? e.message : e));
   } catch (err) {
     console.error('[WEBHOOKS] Test delivery error:', err instanceof Error ? err.message : err);
   }
@@ -419,7 +421,8 @@ export async function retryFailedWebhooks(): Promise<number> {
 
     // Re-transform and deliver with incremented attempt number
     const eventData = toNeighborhoodEvent(event as unknown as PortalEventRow);
-    void deliverWebhook(sub as WebhookSub, d.id, d.event_type, eventData, d.attempt + 1);
+    void deliverWebhook(sub as WebhookSub, d.id, d.event_type, eventData, d.attempt + 1)
+      .catch(e => console.error('[WEBHOOKS] Retry delivery error:', e instanceof Error ? e.message : e));
     retried++;
   }
 
