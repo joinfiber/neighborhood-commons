@@ -744,6 +744,113 @@ Events without a proper region won't appear in location-filtered feeds. Always p
 
 ---
 
+## Part 5: Service API (Building Consumer Apps)
+
+If you're building an app that manages events on behalf of venue operators — a CMS, a scheduling tool, a venue management platform — you need the Service API. This is the layer that lets your app authenticate its own users, link them to Commons portal accounts, and manage their data via REST.
+
+### The Model
+
+Your app owns authentication. The Commons owns event data. The link between them is a portal account, identified by email.
+
+1. A venue operator signs up on **your** app (your auth, your database)
+2. Your app calls the Commons to establish the link
+3. Your app creates/updates/deletes events on their behalf
+4. The data flows to every other app connected to the Commons
+
+### Getting a Service Key
+
+Service keys are issued by the Commons operator. Contact hi@neighborhood-commons.org with:
+- Your app name and URL
+- What you're building and how you'll use the data
+- Contact email for your team
+
+Service keys are scoped: you can only modify data for accounts you've explicitly linked to your key. You cannot read, modify, or delete data belonging to other apps' accounts.
+
+### Linking Accounts
+
+```bash
+# Find-or-create a portal account and link it to your service key
+curl -X POST "https://api.neighborhood-commons.org/api/v1/service/accounts/link" \
+  -H "X-API-Key: nc_your_service_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "john@johnnysbar.com",
+    "business_name": "Johnny'\''s Bar",
+    "claimed_by": "your-app-name"
+  }'
+```
+
+Response:
+```json
+{
+  "account": {
+    "id": "uuid-of-portal-account",
+    "email": "john@johnnysbar.com",
+    "business_name": "Johnny's Bar",
+    "status": "active",
+    "claimed_at": "2026-04-08T...",
+    "claimed_by": "your-app-name"
+  },
+  "created": true,
+  "linked": true
+}
+```
+
+If the account already exists (same email), it's returned as-is with `created: false`. The link to your service key is established either way.
+
+### Looking Up Accounts
+
+```bash
+# Check if an account exists before linking
+curl "https://api.neighborhood-commons.org/api/v1/service/accounts?email=john@johnnysbar.com" \
+  -H "X-API-Key: nc_your_service_key"
+```
+
+### Creating Events for Linked Accounts
+
+Once linked, create events using the account's portal ID:
+
+```bash
+curl -X POST "https://api.neighborhood-commons.org/api/v1/service/events" \
+  -H "X-API-Key: nc_your_service_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "account_id": "uuid-from-link-response",
+    "title": "Thursday Jazz Night",
+    "event_date": "2026-04-17",
+    "start_time": "19:00",
+    "end_time": "22:00",
+    "venue_name": "Johnny'\''s Bar",
+    "address": "1234 Frankford Ave, Philadelphia PA",
+    "category": "live_music",
+    "description": "Weekly jazz trio. BYOB.",
+    "price": "Free"
+  }'
+```
+
+### Scoping Rules
+
+- **Reads are unrestricted** — any service key can read all public data (same as the public API)
+- **Writes are scoped** — you can only create/update/delete events for accounts linked to your key
+- **Cross-account writes return 403** — `"This API key is not linked to the target account"`
+- **Admin keys** bypass scoping (issued only to the platform operator)
+
+### Available Service Endpoints
+
+| Method | Path | Scope |
+|--------|------|-------|
+| `POST` | `/service/accounts/link` | Link account to your key |
+| `GET` | `/service/accounts` | List all accounts (read-only) |
+| `GET` | `/service/accounts/:id` | Single account detail |
+| `PATCH` | `/service/accounts/:id` | Update linked account |
+| `DELETE` | `/service/accounts/:id` | Delete linked account + events |
+| `POST` | `/service/events` | Create event for linked account |
+| `PATCH` | `/service/events/:id` | Update linked event |
+| `DELETE` | `/service/events/:id` | Delete linked event |
+| `POST` | `/service/events/:id/image` | Upload image for linked event |
+
+---
+
 ## Stability
 
 The v1 API is stable. Breaking changes to `/api/v1/*` endpoints require at least 90 days notice. Response shapes, query parameters, and authentication requirements are locked. Extension APIs (`/portal/*`, `/service/*`) may evolve with shorter notice. If a breaking change is needed, v2 will be introduced and v1 will keep running.

@@ -294,6 +294,55 @@
       }
     }
   },
+    "/service/accounts/link": {
+      "post": {
+        "summary": "Link account to service key",
+        "description": "Find-or-create a portal account by email and link it to the calling service key. This is how consumer apps establish a relationship with a venue operator. The service key can then CRUD events for linked accounts only.",
+        "operationId": "linkAccount",
+        "security": [{ "serviceApiKey": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "business_name"],
+                "properties": {
+                  "email": { "type": "string", "format": "email" },
+                  "business_name": { "type": "string", "maxLength": 200 },
+                  "claimed_by": { "type": "string", "maxLength": 50, "description": "Consumer app identifier (e.g. 'merrie')" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Existing account found and linked", "content": { "application/json": { "schema": { "type": "object", "properties": { "account": { "type": "object" }, "created": { "type": "boolean" }, "linked": { "type": "boolean" } } } } } },
+          "201": { "description": "New account created and linked", "content": { "application/json": { "schema": { "type": "object", "properties": { "account": { "type": "object" }, "created": { "type": "boolean" }, "linked": { "type": "boolean" } } } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "description": "API key is not service-tier" }
+        }
+      }
+    },
+    "/service/accounts": {
+      "get": {
+        "summary": "List all accounts (service)",
+        "description": "List all portal accounts with event counts. Supports search and email lookup. Service-tier API key required.",
+        "operationId": "serviceListAccounts",
+        "security": [{ "serviceApiKey": [] }],
+        "parameters": [
+          { "name": "email", "in": "query", "schema": { "type": "string", "format": "email" }, "description": "Case-insensitive exact email lookup" },
+          { "name": "search", "in": "query", "schema": { "type": "string" }, "description": "Text search on business name or address" },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 500, "maximum": 500 } },
+          { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 } }
+        ],
+        "responses": {
+          "200": { "description": "Accounts with event counts", "content": { "application/json": { "schema": { "type": "object", "properties": { "accounts": { "type": "array" }, "total": { "type": "integer" } } } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    }
+  },
   "components": {
     "schemas": {
       "Meta": {
@@ -397,6 +446,10 @@
       "RateLimited": {
         "description": "Rate limit exceeded",
         "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      },
+      "Unauthorized": {
+        "description": "Missing or invalid API key",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
       }
     },
     "securitySchemes": {
@@ -405,6 +458,12 @@
         "in": "header",
         "name": "X-API-Key",
         "description": "Optional API key for dedicated rate limit bucket"
+      },
+      "serviceApiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "Service-tier API key. Scoped: can only modify data for accounts linked to this key. Admin keys bypass scoping."
       }
     }
   }
