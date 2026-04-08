@@ -122,10 +122,22 @@ export function ContributeScreen({ onDone }: ContributeScreenProps) {
     setLoading(true);
     setError(null);
 
+    // Clean overrides: remove entries with no actual changes and strip undefined values
+    const cleanOverrides: Record<number, CsvRowOverride> = {};
+    for (const [key, override] of Object.entries(rowOverrides)) {
+      const cleaned: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(override)) {
+        if (v !== undefined) cleaned[k] = v;
+      }
+      if (Object.keys(cleaned).length > 0) {
+        cleanOverrides[Number(key)] = cleaned as CsvRowOverride;
+      }
+    }
+
     const res = await csvConfirm(
       uploadResult.batch_id,
       Array.from(selected),
-      Object.keys(rowOverrides).length > 0 ? rowOverrides : undefined,
+      Object.keys(cleanOverrides).length > 0 ? cleanOverrides : undefined,
       categoryProposals.length > 0 ? categoryProposals : undefined,
     );
     setLoading(false);
