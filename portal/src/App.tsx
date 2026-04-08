@@ -194,7 +194,7 @@ export default function App() {
             </div>
             <div style={{ fontSize: '13px', color: colors.muted, marginBottom: '20px' }}>
               <strong>{user?.email}</strong> doesn't have a portal account yet.
-              Contact us at hello@joinfiber.app to get set up.
+              Contact us at hi@neighborhood-commons.org to get set up.
             </div>
             <button
               className="btn-secondary"

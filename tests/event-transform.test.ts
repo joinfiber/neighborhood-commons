@@ -161,6 +161,7 @@ describe('toNeighborhoodEvent', () => {
       publisher: 'South Jazz Kitchen',
       collected_at: '2026-03-10T12:00:00.000Z',
       method: 'portal',
+      contributor: null,
       license: 'CC BY 4.0',
     });
   });

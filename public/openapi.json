@@ -11,7 +11,7 @@
     "contact": {
       "name": "Neighborhood Commons",
       "url": "https://api.neighborhood-commons.org",
-      "email": "hello@joinfiber.app"
+      "email": "hi@neighborhood-commons.org"
     }
   },
   "servers": [
@@ -36,6 +36,7 @@
           { "name": "radius_km", "in": "query", "schema": { "type": "number", "minimum": 0.1, "maximum": 100, "default": 10 }, "description": "Proximity radius in km (requires near)" },
           { "name": "collapse_series", "in": "query", "schema": { "type": "string", "enum": ["true", "false"] }, "description": "Deduplicate series to nearest upcoming instance" },
           { "name": "series_id", "in": "query", "schema": { "type": "string", "format": "uuid" }, "description": "Filter to events in a specific series" },
+          { "name": "group_id", "in": "query", "schema": { "type": "string", "format": "uuid" }, "description": "Filter to events belonging to a specific group" },
           { "name": "recurring", "in": "query", "schema": { "type": "string", "enum": ["true", "false"] }, "description": "Filter recurring (true) or one-off (false) events" },
           { "name": "limit", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 200, "default": 50 }, "description": "Page size" },
           { "name": "offset", "in": "query", "schema": { "type": "integer", "minimum": 0, "default": 0 }, "description": "Page offset" }

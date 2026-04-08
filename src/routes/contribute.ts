@@ -298,7 +298,7 @@ router.post('/', writeLimiter, async (req, res, next) => {
       const domainCheck = checkContributeUrlDomain(event.url);
       if (!domainCheck.approved) {
         throw createError(
-          `URL domain "${domainCheck.domain}" is not on the approved list. Contact hello@joinfiber.app to request approval.`,
+          `URL domain "${domainCheck.domain}" is not on the approved list. Contact hi@neighborhood-commons.org to request approval.`,
           400,
           'DOMAIN_NOT_APPROVED',
         );

@@ -30,7 +30,7 @@ router.get('/', (_req, res) => {
       {
         name: 'Neighborhood Commons',
         url: 'https://neighborhood-commons.org',
-        contact: 'hello@joinfiber.app',
+        contact: 'hi@neighborhood-commons.org',
         role: 'maintainer',
       },
     ],

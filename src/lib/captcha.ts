@@ -77,8 +77,7 @@ export async function verifyTurnstile(token: string, remoteIp?: string): Promise
     return data.success === true;
   } catch (error) {
     console.error('[CAPTCHA] Verification error:', error);
-    // Fail open in case of network errors to avoid blocking legitimate users
-    // Consider changing this to fail closed (return false) for higher security
+    // Fail closed: network errors reject the request rather than bypassing CAPTCHA
     return false;
   }
 }

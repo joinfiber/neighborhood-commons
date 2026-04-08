@@ -569,7 +569,7 @@ curl -H "X-API-Key: nc_..." \\
             Building something with this data?
           </p>
           <p style={{ color: colors.dim, fontSize: '14px' }}>
-            We'd love to hear about it — <span style={{ color: colors.muted }}>hello@joinfiber.app</span>
+            We'd love to hear about it — <span style={{ color: colors.muted }}>hi@neighborhood-commons.org</span>
           </p>
         </div>
     </>

@@ -224,7 +224,11 @@ export function toNeighborhoodEvent(row: PortalEventRow): NeighborhoodEvent {
     showtimes: row.showtimes || null,
     recurrence: rrule ? { rrule } : null,
     source: {
-      publisher: row.portal_accounts?.business_name || row.source_publisher || 'Neighborhood Commons',
+      // API/import events: source_publisher is the canonical publisher (the external source).
+      // Portal events: business_name is the publisher (the venue operator).
+      publisher: (row.source_method && row.source_method !== 'portal' && row.source_publisher)
+        ? row.source_publisher
+        : (row.portal_accounts?.business_name || row.source_publisher || 'Neighborhood Commons'),
       collected_at: row.created_at,
       method: (row.source_method || 'portal') as 'portal' | 'import' | 'api',
       contributor: row.source_method === 'api' && row.source_publisher

@@ -4,8 +4,8 @@
 
 1. Go to **Supabase Dashboard** → your Commons project
 2. **Authentication → URL Configuration**:
-   - Site URL: `https://commons.joinfiber.app`
-   - Redirect URLs: add `https://commons.joinfiber.app`
+   - Site URL: `https://your-commons-domain.example.com` (e.g. `https://api.neighborhood-commons.org`)
+   - Redirect URLs: add your portal's domain
 3. **Authentication → Email Templates** → paste each template below
 
 ---

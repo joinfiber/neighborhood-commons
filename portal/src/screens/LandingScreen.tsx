@@ -340,7 +340,7 @@ ${API_BASE}/api/v1/events.ics`}</Code>
           <a href="#/terms" style={footerLink}>Terms</a>
           <button type="button" onClick={onShowLogin} style={footerLink}>Contributor Sign In</button>
           <div style={{ flex: 1 }} />
-          <span style={{ color: lc.dim, fontSize: '12px' }}>CC BY 4.0 &middot; MIT &middot; hello@joinfiber.app</span>
+          <span style={{ color: lc.dim, fontSize: '12px' }}>CC BY 4.0 &middot; MIT &middot; hi@neighborhood-commons.org</span>
         </footer>
       </div>
     </div>

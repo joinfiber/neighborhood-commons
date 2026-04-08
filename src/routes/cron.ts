@@ -7,6 +7,7 @@
 
 import { Router } from 'express';
 import { requireCronSecret } from '../middleware/cron-auth.js';
+import { writeLimiter } from '../middleware/rate-limit.js';
 import { retryFailedWebhooks } from '../lib/webhook-delivery.js';
 import { geocodeBackfill } from '../lib/geocoding.js';
 import { verifyEventImages, verifyAccountImages } from '../lib/image-verification.js';
@@ -14,8 +15,10 @@ import { verifyEventImages, verifyAccountImages } from '../lib/image-verificatio
 
 const router: ReturnType<typeof Router> = Router();
 
-// All cron routes require secret auth
+// All cron routes require secret auth + rate limiting
+// Rate limiting provides defense-in-depth if the cron secret is compromised
 router.use(requireCronSecret);
+router.use(writeLimiter);
 
 // ---------------------------------------------------------------------------
 // POST /retry-webhooks — Retry failed webhook deliveries

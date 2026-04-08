@@ -5,9 +5,14 @@
  */
 
 import { Router } from 'express';
+import { readFileSync } from 'fs';
 import { supabaseAdmin } from '../lib/supabase.js';
 
 const router: ReturnType<typeof Router> = Router();
+
+// Read version once at startup from package.json
+const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf-8'));
+const API_VERSION: string = pkg.version;
 
 // ---------------------------------------------------------------------------
 // GET /health — Health check
@@ -25,7 +30,7 @@ router.get('/health', async (_req, res) => {
       res.status(503).json({
         status: 'error',
         timestamp: new Date().toISOString(),
-        version: '0.1.0',
+        version: API_VERSION,
         error: 'Database connection failed',
       });
       return;
@@ -34,13 +39,13 @@ router.get('/health', async (_req, res) => {
     res.json({
       status: 'ok',
       timestamp: new Date().toISOString(),
-      version: '0.1.0',
+      version: API_VERSION,
     });
   } catch {
     res.status(503).json({
       status: 'error',
       timestamp: new Date().toISOString(),
-      version: '0.1.0',
+      version: API_VERSION,
       error: 'Health check failed',
     });
   }

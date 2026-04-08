@@ -40,21 +40,11 @@ export function LoginScreen({
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Require captcha before submission (matches admin app pattern)
-    const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
-    if (siteKey && !captchaToken) {
-      setCaptchaError(true);
-      return;
-    }
-    const result = await onSignIn(email, captchaToken || undefined);
+    const result = await onSignIn(email);
     if (result === 'otp_sent') {
       setScreen('otp');
-    } else if (result === 'error') {
-      // Reset captcha on failure so user gets a fresh token
-      setCaptchaToken(null);
     }
     // 'needs_signup' is handled by the canSignUp effect above
-    // captchaToken is preserved in state for the register call
   };
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
@@ -251,6 +241,13 @@ export function LoginScreen({
                   required
                 />
               </div>
+              <div style={{ margin: '12px 0', display: 'flex', justifyContent: 'center' }}>
+                <Turnstile
+                  onVerify={(token) => { setCaptchaToken(token); setCaptchaError(false); }}
+                  onError={() => { setCaptchaError(true); setCaptchaToken(null); }}
+                  onExpire={() => setCaptchaToken(null)}
+                />
+              </div>
               <button
                 type="submit"
                 style={loginStyles.buttonPrimary}
@@ -285,16 +282,9 @@ export function LoginScreen({
                 autoFocus
                 required
               />
-              <div style={{ margin: '12px 0', display: 'flex', justifyContent: 'center' }}>
-                <Turnstile
-                  onVerify={(token) => { setCaptchaToken(token); setCaptchaError(false); }}
-                  onError={() => { setCaptchaError(true); setCaptchaToken(null); }}
-                  onExpire={() => setCaptchaToken(null)}
-                />
-              </div>
               <button
                 type="submit"
-                style={loginStyles.buttonPrimary}
+                style={{ ...loginStyles.buttonPrimary, marginTop: '12px' }}
                 disabled={loading || !email.trim()}
               >
                 {loading ? 'Checking...' : 'Continue'}

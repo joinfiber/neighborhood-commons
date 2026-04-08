@@ -131,7 +131,7 @@ export function TermsScreen({ onBack }: TermsScreenProps) {
             We may suspend or terminate accounts that violate these terms, that we determine are not legitimate business or organization accounts, or that otherwise undermine the mission of the Commons. We'll explain our reasoning when possible.
           </P>
           <P>
-            You can delete your account at any time by contacting us at <a href="mailto:hello@joinfiber.app" style={{ color: colors.muted, textDecoration: 'underline' }}>hello@joinfiber.app</a>. We'll remove your account and all associated event data.
+            You can delete your account at any time by contacting us at <a href="mailto:hi@neighborhood-commons.org" style={{ color: colors.muted, textDecoration: 'underline' }}>hi@neighborhood-commons.org</a>. We'll remove your account and all associated event data.
           </P>
         </Section>
 
@@ -156,7 +156,7 @@ export function TermsScreen({ onBack }: TermsScreenProps) {
             We may update these terms as the project evolves. When we do, we'll update the date at the top of this page. Continued use of the portal after changes constitutes acceptance.
           </P>
           <P>
-            Questions? <a href="mailto:hello@joinfiber.app" style={{ color: colors.muted, textDecoration: 'underline' }}>hello@joinfiber.app</a>
+            Questions? <a href="mailto:hi@neighborhood-commons.org" style={{ color: colors.muted, textDecoration: 'underline' }}>hi@neighborhood-commons.org</a>
           </P>
         </Section>
 

@@ -233,7 +233,7 @@ router.get('/terms', (_req, res) => {
       'Building products with this data is encouraged.',
     ],
     rate_limit: '1000 requests/hour per IP. Use X-API-Key header for a dedicated rate limit bucket.',
-    contact: 'hello@joinfiber.app',
+    contact: 'hi@neighborhood-commons.org',
   });
 });
 

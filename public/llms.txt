@@ -754,5 +754,5 @@ The v1 API is stable. Breaking changes to `/api/v1/*` endpoints require at least
 
 All event data is published under **Creative Commons Attribution 4.0 International (CC BY 4.0)**. You can use it for any purpose — commercial or non-commercial — as long as you credit "Neighborhood Commons."
 
-Contact: hello@joinfiber.app
+Contact: hi@neighborhood-commons.org
 Spec: [Neighborhood API v0.2](https://github.com/The-Relational-Technology-Project/neighborhood-api)

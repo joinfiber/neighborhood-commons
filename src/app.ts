@@ -221,6 +221,10 @@ export function createApp(): Express {
     .nc-hero .nc-stats strong { font-weight: 600; }
     .nc-label { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--nc-dim); margin: 48px 0 14px; }
     .nc-hero .nc-label { margin-top: 0; margin-bottom: 20px; }
+    .nc-case { margin: 48px 0 0; }
+    .nc-case-point { margin-bottom: 32px; }
+    .nc-case-heading { font-size: 1.05rem; font-weight: 500; color: var(--nc-text); margin-bottom: 8px; }
+    .nc-case-point p { font-size: 0.9rem; color: var(--nc-muted); line-height: 1.7; margin: 0; }
     .nc-ctas { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 40px 0; }
     .nc-cta { background: var(--nc-surface); border: 1px solid var(--nc-border); border-radius: 12px; padding: 24px; }
     .nc-cta-label { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--nc-dim); margin-bottom: 10px; }
@@ -271,11 +275,26 @@ export function createApp(): Express {
 
       <div class="nc-hero">
         <div class="nc-label">neighborhood commons</div>
-        <h1>A public database of neighborhood events.</h1>
+        <h1>The neighborhood&rsquo;s event data, available to everyone.</h1>
         <p>
-          Open infrastructure for local event data. Read for free. Contribute via CSV or API. All data is CC&nbsp;BY&nbsp;4.0.
+          A band plays at a bar on Thursday. A yoga class meets in the park on Saturday. A food pantry opens its doors every other Wednesday. These are public facts. The Commons collects them so anyone can build with them.
           ${statsLine ? `<span class="nc-stats">${statsLine}</span>` : ''}
         </p>
+      </div>
+
+      <div class="nc-case">
+        <div class="nc-case-point">
+          <div class="nc-case-heading">Public data is already public</div>
+          <p>Every event posted to a venue&rsquo;s Instagram, a community board, or a ticketing site is already out there. The question isn&rsquo;t whether this information should be available &mdash; it&rsquo;s whether a hundred apps should each scrape it separately, or whether we can assemble it once and share.</p>
+        </div>
+        <div class="nc-case-point">
+          <div class="nc-case-heading">Shared data makes neighborhoods more capable</div>
+          <p>When event data flows freely, a developer can build a nightlife guide. A newspaper can power a community calendar. A civic group can track neighborhood vitality. A parent can find every story time within walking distance. None of these require permission from a platform &mdash; just access to the facts.</p>
+        </div>
+        <div class="nc-case-point">
+          <div class="nc-case-heading">Contributing is participation, not sacrifice</div>
+          <p>Adding your data to the Commons doesn&rsquo;t diminish it. It connects it. Your events reach audiences you&rsquo;d never reach alone, through apps you didn&rsquo;t build and channels you didn&rsquo;t know existed. The more complete the picture, the more alive the neighborhood feels to everyone in it.</p>
+        </div>
       </div>
 
       <div class="nc-ctas">
@@ -363,9 +382,9 @@ ${baseUrl}/api/v1/events.ics</div>
       <div class="nc-app"><a href="https://joinfiber.app" target="_blank" rel="noopener">Fiber &nearr;</a><p>A mobile app for social event discovery. Browse feeds, share plans with friends, find what's on tonight. Same data, different experience.</p></div>
       <div class="nc-app nc-app-placeholder"><span style="font-size:0.9rem;font-weight:500;color:var(--nc-dim);">Yours</span><p>A nightlife guide. A community calendar. A civic dashboard. A newsletter. Whatever your audience, the data is here.</p></div>
 
-      <div class="nc-label">Why this exists</div>
-      <p class="nc-prose">Events are public facts. A band plays at a bar on Thursday. A yoga class meets in the park on Saturday mornings. These are not opinions. They are not proprietary. They are things that happen in the world, and anyone should be able to know about them.</p>
-      <p class="nc-prose" style="color:var(--nc-dim);">The Commons is thin on purpose. It stores data and serves it. It doesn't editorialize, recommend, or curate. Those are the concerns of the apps that build on top. The Commons is plumbing &mdash; and good plumbing doesn't change with the winds.</p>
+      <div class="nc-label">How this is built</div>
+      <p class="nc-prose">The Commons is thin on purpose. It stores data and serves it. It doesn&rsquo;t editorialize, recommend, or curate. Those are the concerns of the apps that build on top. The Commons is plumbing &mdash; and good plumbing doesn&rsquo;t change with the winds.</p>
+      <p class="nc-prose" style="color:var(--nc-dim);">Row Level Security on every table. Zod validation on every input. Images re-encoded through Sharp. No ORMs, no magic. Every behavior is traceable from the route handler to the database query to the response. The <a href="https://github.com/joinfiber/neighborhood-commons" target="_blank" rel="noopener">source is open</a> and written to be read by skeptics.</p>
 
       <div class="nc-stability">
         <strong>The v1 API is stable.</strong> Breaking changes to <code>/api/v1/*</code> require 90+ days notice. Response shapes, query parameters, and auth requirements are locked.
@@ -378,7 +397,7 @@ ${baseUrl}/api/v1/events.ics</div>
         <a href="https://github.com/joinfiber/neighborhood-commons" target="_blank" rel="noopener">GitHub</a>
         <a href="/portal#/login">Contributor Sign In</a>
         <div style="flex:1"></div>
-        <span style="color:var(--nc-dim);">CC BY 4.0 &middot; MIT &middot; hello@joinfiber.app</span>
+        <span style="color:var(--nc-dim);">CC BY 4.0 &middot; MIT &middot; hi@neighborhood-commons.org</span>
       </div>
     </main>
   </div>
