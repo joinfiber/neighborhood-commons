@@ -9,6 +9,7 @@ import { Router } from 'express';
 import { createHash } from 'crypto';
 import { z } from 'zod';
 import { EVENT_CATEGORY_KEYS } from '../../lib/categories.js';
+import { validateTags } from '../../lib/tags.js';
 import { supabaseAdmin } from '../../lib/supabase.js';
 import { createError } from '../../middleware/error-handler.js';
 import { validateRequest, validateUuidParam } from '../../lib/helpers.js';
@@ -55,9 +56,28 @@ const csvPreviewSchema = z.object({
   category_overrides: z.record(z.string(), z.enum(EVENT_CATEGORY_KEYS as [string, ...string[]])).optional(),
 });
 
+const rowOverrideSchema = z.object({
+  name: z.string().max(200).optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  start_time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  end_time: z.string().regex(/^\d{2}:\d{2}$/).optional().nullable(),
+  venue_name: z.string().max(200).optional(),
+  category: z.enum(EVENT_CATEGORY_KEYS as [string, ...string[]]).optional(),
+  custom_category: z.string().max(50).optional(),
+  description: z.string().max(5000).optional(),
+  price: z.string().max(100).optional(),
+  tags: z.array(z.string().max(50)).max(15).optional(),
+});
+
 const csvConfirmSchema = z.object({
   batch_id: z.string().uuid(),
   selected_rows: z.array(z.number().int().min(1)).min(1).max(500),
+  row_overrides: z.record(z.string(), rowOverrideSchema).optional(),
+  category_proposals: z.array(z.object({
+    proposed_name: z.string().max(50),
+    justification: z.string().max(500).optional(),
+    fallback_category: z.enum(EVENT_CATEGORY_KEYS as [string, ...string[]]),
+  })).max(10).optional(),
 });
 
 // =============================================================================
@@ -306,9 +326,13 @@ router.post('/csv/preview', writeLimiter, async (req, res, next) => {
         row_number: r.row_number,
         name: r.mapped['name'] || '',
         date: r.mapped['date'] || r.mapped['start'] || '',
+        start_time: r.mapped['start_time'] || null,
+        end_time: r.mapped['end_time'] || null,
         venue_name: r.mapped['venue_name'] || null,
         category: r.category,
         description: r.mapped['description']?.slice(0, 200) || null,
+        price: r.mapped['price'] || null,
+        tags: [],
       })),
       error_rows: errorRows,
       unmapped_categories: unmappedCategories,
@@ -386,33 +410,38 @@ router.post('/csv/confirm', writeLimiter, async (req, res, next) => {
 
     for (const row of rows) {
       const mapped = row.mapped_data as Record<string, string>;
-      const category = row.category_mapped_to as string;
-      const name = mapped['name'] || 'Untitled';
+      const override = data.row_overrides?.[String(row.row_number)];
+      const category = override?.category || (row.category_mapped_to as string);
+      const name = override?.name || mapped['name'] || 'Untitled';
 
-      // Parse date and time
+      // Parse date and time — overrides take precedence (already in YYYY-MM-DD / HH:MM)
       let eventDate: string | null = null;
       let startTime: string | null = null;
       let endTimeStr: string | null = null;
 
-      if (mapped['start']) {
-        // Combined datetime field
+      if (override?.date) {
+        eventDate = override.date;
+        startTime = override.start_time || parseFlexibleTime(mapped['start_time'] || '') || '12:00';
+      } else if (mapped['start']) {
         const d = new Date(mapped['start']);
         if (isNaN(d.getTime())) {
           skipped.push({ row_number: row.row_number, name, reason: 'Invalid start datetime' });
           continue;
         }
         eventDate = d.toLocaleDateString('en-CA', { timeZone: batchTimezone });
-        startTime = d.toLocaleTimeString('en-GB', { timeZone: batchTimezone, hour: '2-digit', minute: '2-digit', hour12: false });
+        startTime = override?.start_time || d.toLocaleTimeString('en-GB', { timeZone: batchTimezone, hour: '2-digit', minute: '2-digit', hour12: false });
       } else {
         eventDate = parseFlexibleDate(mapped['date'] || '');
         if (!eventDate) {
           skipped.push({ row_number: row.row_number, name, reason: 'Could not parse date' });
           continue;
         }
-        startTime = parseFlexibleTime(mapped['start_time'] || '') || '12:00';
+        startTime = override?.start_time || parseFlexibleTime(mapped['start_time'] || '') || '12:00';
       }
 
-      if (mapped['end_time']) {
+      if (override?.end_time !== undefined) {
+        endTimeStr = override.end_time;
+      } else if (mapped['end_time']) {
         endTimeStr = parseFlexibleTime(mapped['end_time']) || null;
       } else if (mapped['end']) {
         const d = new Date(mapped['end']);
@@ -435,11 +464,14 @@ router.post('/csv/confirm', writeLimiter, async (req, res, next) => {
       const lat = mapped['latitude'] ? parseFloat(mapped['latitude']) : null;
       const lng = mapped['longitude'] ? parseFloat(mapped['longitude']) : null;
 
+      // Validate tags if overridden
+      const eventTags = override?.tags ? validateTags(override.tags, category) : [];
+
       const insertData = {
         user_id: adminUserId,
         content: name.slice(0, 200),
-        description: (mapped['description'] || '').slice(0, 5000) || null,
-        place_name: (mapped['venue_name'] || 'TBA').slice(0, 200),
+        description: (override?.description ?? mapped['description'] ?? '').slice(0, 5000) || null,
+        place_name: (override?.venue_name ?? mapped['venue_name'] ?? 'TBA').slice(0, 200),
         venue_address: (mapped['address'] || '').slice(0, 500) || null,
         place_id: null,
         approximate_location: lat != null && lng != null ? `POINT(${lng} ${lat})` : null,
@@ -449,12 +481,12 @@ router.post('/csv/confirm', writeLimiter, async (req, res, next) => {
         end_time: endTime,
         event_timezone: batchTimezone,
         category,
-        custom_category: null,
+        custom_category: override?.custom_category || null,
         recurrence: 'none',
-        price: (mapped['price'] || '').slice(0, 100) || null,
+        price: (override?.price ?? mapped['price'] ?? '').slice(0, 100) || null,
         link_url: mapped['ticket_url'] ? (() => { try { checkApprovedDomain(mapped['ticket_url']!); return sanitizeUrl(mapped['ticket_url']!).slice(0, 2000); } catch { return null; } })() : null,
         start_time_required: true,
-        tags: [],
+        tags: eventTags,
         wheelchair_accessible: null,
         rsvp_limit: null,
         event_image_focal_y: 0.5,
@@ -510,6 +542,22 @@ router.post('/csv/confirm', writeLimiter, async (req, res, next) => {
       await saveCategoryMappings(newCategoryMappings, account.id);
     }
 
+    // Store category proposals for admin review
+    if (data.category_proposals && data.category_proposals.length > 0) {
+      for (const proposal of data.category_proposals) {
+        await supabaseAdmin
+          .from('category_proposals')
+          .insert({
+            proposed_name: proposal.proposed_name,
+            justification: proposal.justification || null,
+            fallback_category: proposal.fallback_category,
+            contributor_account_id: account.id,
+            batch_id: data.batch_id,
+          });
+      }
+      console.log(`[CSV] ${data.category_proposals.length} category proposal(s) stored for review`);
+    }
+
     // Update batch status and stats
     await supabaseAdmin
       .from('contribution_batches')
@@ -535,6 +583,48 @@ router.post('/csv/confirm', writeLimiter, async (req, res, next) => {
       total_created: created.length,
       total_skipped: skipped.length,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================================================
+// POPULAR TAGS — Usage counts for tag alignment
+// =============================================================================
+
+let popularTagsCache: { data: Array<{ slug: string; label: string; count: number }>; fetchedAt: number } = { data: [], fetchedAt: 0 };
+const POPULAR_TAGS_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+/**
+ * GET /api/portal/tags/popular
+ * Returns tags used on published events in the last 90 days, with usage counts.
+ * Cached for 1 hour to avoid repeated aggregate queries.
+ */
+router.get('/tags/popular', async (_req, res, next) => {
+  try {
+    if (Date.now() - popularTagsCache.fetchedAt < POPULAR_TAGS_TTL_MS) {
+      res.json({ tags: popularTagsCache.data });
+      return;
+    }
+
+    const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: rows, error } = await supabaseAdmin.rpc('get_popular_tags' as never, { since: ninetyDaysAgo } as never);
+
+    if (error) {
+      // Fallback: return empty if the RPC doesn't exist yet
+      console.warn('[TAGS] Popular tags query failed:', error.message);
+      res.json({ tags: [] });
+      return;
+    }
+
+    const tags = ((rows as Array<{ tag: string; count: number }>) || []).map(r => ({
+      slug: r.tag,
+      label: r.tag.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+      count: Number(r.count),
+    }));
+
+    popularTagsCache = { data: tags, fetchedAt: Date.now() };
+    res.json({ tags });
   } catch (err) {
     next(err);
   }
@@ -618,7 +708,8 @@ router.get('/csv/batches/:id', async (req, res, next) => {
 router.delete('/csv/batches/:id', writeLimiter, async (req, res, next) => {
   try {
     const account = await getPortalAccount(req);
-    const batchId = validateUuidParam(req.params.id, 'batch id');
+    validateUuidParam(req.params.id, 'batch id');
+    const batchId = req.params.id;
 
     // Verify ownership
     const { data: batch, error: batchError } = await supabaseAdmin

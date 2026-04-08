@@ -12,7 +12,7 @@ export type {
   UserRole, CheckEmailResult, WhoamiResponse, EventFormData,
   ContributionBatch, ContributionRow,
   CsvUploadResponse, CsvPreviewResponse, CsvConfirmResponse,
-  CsvPreviewRow,
+  CsvPreviewRow, CsvRowOverride, CategoryProposal,
 } from './types';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -292,10 +292,20 @@ export async function csvPreview(params: {
   });
 }
 
-export async function csvConfirm(batchId: string, selectedRows: number[]) {
+export async function csvConfirm(
+  batchId: string,
+  selectedRows: number[],
+  rowOverrides?: Record<number, import('./types').CsvRowOverride>,
+  categoryProposals?: import('./types').CategoryProposal[],
+) {
   return apiRequest<CsvConfirmResponse>('/api/portal/csv/confirm', {
     method: 'POST',
-    body: JSON.stringify({ batch_id: batchId, selected_rows: selectedRows }),
+    body: JSON.stringify({
+      batch_id: batchId,
+      selected_rows: selectedRows,
+      ...(rowOverrides && Object.keys(rowOverrides).length > 0 && { row_overrides: rowOverrides }),
+      ...(categoryProposals && categoryProposals.length > 0 && { category_proposals: categoryProposals }),
+    }),
   });
 }
 
@@ -305,6 +315,10 @@ export async function fetchBatches() {
 
 export async function fetchBatch(batchId: string) {
   return apiRequest<{ batch: ContributionBatch; rows: ContributionRow[] }>(`/api/portal/csv/batches/${batchId}`);
+}
+
+export async function fetchPopularTags() {
+  return apiRequest<{ tags: Array<{ slug: string; label: string; count: number }> }>('/api/portal/tags/popular');
 }
 
 export async function deleteBatch(batchId: string) {

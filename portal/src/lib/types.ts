@@ -119,9 +119,33 @@ export interface CsvPreviewRow {
   row_number: number;
   name: string;
   date: string;
+  start_time: string | null;
+  end_time: string | null;
   venue_name: string | null;
   category: string;
   description: string | null;
+  price: string | null;
+  tags: string[];
+}
+
+/** Per-row edits made by the contributor in the preview step */
+export interface CsvRowOverride {
+  name?: string;
+  date?: string;
+  start_time?: string;
+  end_time?: string | null;
+  venue_name?: string;
+  category?: string;
+  custom_category?: string;
+  description?: string;
+  price?: string;
+  tags?: string[];
+}
+
+export interface CategoryProposal {
+  proposed_name: string;
+  justification?: string;
+  fallback_category: string;
 }
 
 export interface CsvPreviewResponse {

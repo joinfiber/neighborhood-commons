@@ -106,6 +106,10 @@ const SCHEMA: Record<string, string[]> = {
     'category_source_term', 'category_mapped_to', 'validation_errors',
     'status', 'created_event_id', 'created_at',
   ],
+  category_proposals: [
+    'id', 'proposed_name', 'justification', 'fallback_category',
+    'contributor_account_id', 'batch_id', 'status', 'created_at',
+  ],
   // Ingestion tables (newsletter_sources, newsletter_emails, event_candidates,
   // feed_sources) exist in the database but are no longer referenced by code
   // in this repo. They're managed by external admin tools via the Service API.

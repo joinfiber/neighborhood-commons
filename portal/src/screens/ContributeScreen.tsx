@@ -1,13 +1,18 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { PORTAL_CATEGORIES, type PortalCategory } from '../lib/categories';
 import { colors, styles } from '../lib/styles';
-import { csvUpload, csvPreview, csvConfirm } from '../lib/api';
+import { csvUpload, csvPreview, csvConfirm, fetchPopularTags } from '../lib/api';
+import { CalendarPicker } from '../components/CalendarPicker';
+import { TimePicker } from '../components/TimePicker';
+import { TagPicker } from '../components/TagPicker';
 import type {
   PortalAccount,
   CsvUploadResponse,
   CsvPreviewResponse,
   CsvConfirmResponse,
   CsvPreviewRow,
+  CsvRowOverride,
+  CategoryProposal,
 } from '../lib/api';
 
 // =============================================================================
@@ -41,6 +46,10 @@ export function ContributeScreen({ onDone }: ContributeScreenProps) {
   // Step 3: preview
   const [previewResult, setPreviewResult] = useState<CsvPreviewResponse | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [rowOverrides, setRowOverrides] = useState<Record<number, CsvRowOverride>>({});
+  const [categoryProposals, setCategoryProposals] = useState<CategoryProposal[]>([]);
+  const [expandedRow, setExpandedRow] = useState<number | null>(null);
+  const [popularTagCounts, setPopularTagCounts] = useState<Record<string, number>>({});
 
   // Step 4: result
   const [confirmResult, setConfirmResult] = useState<CsvConfirmResponse | null>(null);
@@ -113,7 +122,12 @@ export function ContributeScreen({ onDone }: ContributeScreenProps) {
     setLoading(true);
     setError(null);
 
-    const res = await csvConfirm(uploadResult.batch_id, Array.from(selected));
+    const res = await csvConfirm(
+      uploadResult.batch_id,
+      Array.from(selected),
+      Object.keys(rowOverrides).length > 0 ? rowOverrides : undefined,
+      categoryProposals.length > 0 ? categoryProposals : undefined,
+    );
     setLoading(false);
 
     if (res.error) {
@@ -183,11 +197,18 @@ export function ContributeScreen({ onDone }: ContributeScreenProps) {
           unmappedCategories={previewResult.unmapped_categories}
           categoryOverrides={categoryOverrides}
           setCategoryOverrides={setCategoryOverrides}
+          rowOverrides={rowOverrides}
+          setRowOverrides={setRowOverrides}
+          categoryProposals={categoryProposals}
+          setCategoryProposals={setCategoryProposals}
+          expandedRow={expandedRow}
+          setExpandedRow={setExpandedRow}
+          popularTagCounts={popularTagCounts}
+          setPopularTagCounts={setPopularTagCounts}
           loading={loading}
           onConfirm={handleConfirm}
           onBack={() => { setStep('map'); setPreviewResult(null); setError(null); }}
           onRepreview={async () => {
-            // Re-run preview with updated category overrides
             setPreviewResult(null);
             setError(null);
             await handlePreview();
@@ -554,18 +575,37 @@ function MappingStep({ upload, columnMapping, setColumnMapping, defaultCategory,
 // STEP 3: PREVIEW
 // =============================================================================
 
-function PreviewStep({ preview, selected, setSelected, unmappedCategories, categoryOverrides, setCategoryOverrides, loading, onConfirm, onBack, onRepreview }: {
+function PreviewStep({ preview, selected, setSelected, unmappedCategories, categoryOverrides, setCategoryOverrides, rowOverrides, setRowOverrides, categoryProposals, setCategoryProposals, expandedRow, setExpandedRow, popularTagCounts, setPopularTagCounts, loading, onConfirm, onBack, onRepreview }: {
   preview: CsvPreviewResponse;
   selected: Set<number>;
   setSelected: (v: Set<number>) => void;
   unmappedCategories: string[];
   categoryOverrides: Record<string, string>;
   setCategoryOverrides: (v: Record<string, string>) => void;
+  rowOverrides: Record<number, CsvRowOverride>;
+  setRowOverrides: (v: Record<number, CsvRowOverride>) => void;
+  categoryProposals: CategoryProposal[];
+  setCategoryProposals: (v: CategoryProposal[]) => void;
+  expandedRow: number | null;
+  setExpandedRow: (v: number | null) => void;
+  popularTagCounts: Record<string, number>;
+  setPopularTagCounts: (v: Record<string, number>) => void;
   loading: boolean;
   onConfirm: () => void;
   onBack: () => void;
   onRepreview: () => void;
 }) {
+  // Fetch popular tags once when entering preview
+  useEffect(() => {
+    if (Object.keys(popularTagCounts).length > 0) return;
+    fetchPopularTags().then(res => {
+      if (res.data?.tags) {
+        const counts: Record<string, number> = {};
+        for (const t of res.data.tags) counts[t.slug] = t.count;
+        setPopularTagCounts(counts);
+      }
+    });
+  }, []);
   function toggleRow(rowNum: number) {
     setSelected((() => {
       const next = new Set(selected);
@@ -684,7 +724,20 @@ function PreviewStep({ preview, selected, setSelected, unmappedCategories, categ
               key={row.row_number}
               row={row}
               checked={selected.has(row.row_number)}
+              expanded={expandedRow === row.row_number}
+              overrides={rowOverrides[row.row_number]}
               onToggle={() => toggleRow(row.row_number)}
+              onExpand={() => setExpandedRow(expandedRow === row.row_number ? null : row.row_number)}
+              onOverride={(field, value) => {
+                setRowOverrides({
+                  ...rowOverrides,
+                  [row.row_number]: { ...rowOverrides[row.row_number], [field]: value },
+                });
+              }}
+              onPropose={(proposal) => {
+                setCategoryProposals([...categoryProposals.filter(p => p.proposed_name !== proposal.proposed_name), proposal]);
+              }}
+              popularTagCounts={popularTagCounts}
             />
           ))}
         </div>
@@ -742,70 +795,279 @@ function PreviewStep({ preview, selected, setSelected, unmappedCategories, categ
   );
 }
 
-function CsvPreviewRowCard({ row, checked, onToggle }: {
+function CsvPreviewRowCard({ row, checked, expanded, overrides, onToggle, onExpand, onOverride, onPropose, popularTagCounts: _popularTagCounts }: {
   row: CsvPreviewRow;
   checked: boolean;
+  expanded: boolean;
+  overrides: CsvRowOverride | undefined;
   onToggle: () => void;
+  onExpand: () => void;
+  onOverride: (field: keyof CsvRowOverride, value: unknown) => void;
+  onPropose: (proposal: CategoryProposal) => void;
+  popularTagCounts: Record<string, number>;
 }) {
-  const catLabel = PORTAL_CATEGORIES[row.category as PortalCategory]?.label || row.category;
+  const [proposing, setProposing] = useState(false);
+  const [proposedName, setProposedName] = useState('');
+  const [justification, setJustification] = useState('');
+  const [fallbackCategory, setFallbackCategory] = useState(row.category);
+
+  // Merged values: override takes precedence
+  const name = overrides?.name ?? row.name;
+  const date = overrides?.date ?? row.date;
+  const startTime = overrides?.start_time ?? row.start_time ?? '';
+  const endTime = overrides?.end_time ?? row.end_time ?? '';
+  const venueName = overrides?.venue_name ?? row.venue_name ?? '';
+  const category = overrides?.category ?? row.category;
+  const description = overrides?.description ?? row.description ?? '';
+  const price = overrides?.price ?? row.price ?? '';
+  const tags = overrides?.tags ?? row.tags ?? [];
+  const catLabel = PORTAL_CATEGORIES[category as PortalCategory]?.label || overrides?.custom_category || category;
 
   return (
-    <div
-      onClick={onToggle}
-      style={{
-        background: colors.card,
-        border: `1px solid ${checked ? colors.accent : colors.border}`,
-        borderRadius: '10px',
-        padding: '12px 14px',
-        cursor: 'pointer',
-        display: 'flex',
-        gap: '12px',
-        alignItems: 'flex-start',
-        transition: 'border-color 0.15s',
-      }}
-    >
-      {/* Checkbox */}
-      <div style={{
-        width: '18px',
-        height: '18px',
-        borderRadius: '3px',
-        border: `1.5px solid ${checked ? colors.accent : colors.dim}`,
-        background: checked ? colors.accent : 'transparent',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexShrink: 0,
-        marginTop: '2px',
-      }}>
-        {checked && (
-          <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-            <path d="M2 6l3 3 5-5" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        )}
-      </div>
+    <div style={{
+      background: colors.card,
+      border: `1px solid ${checked ? colors.accent : colors.border}`,
+      borderRadius: '10px',
+      overflow: 'hidden',
+      transition: 'border-color 0.15s',
+    }}>
+      {/* Collapsed summary — always visible */}
+      <div
+        style={{
+          padding: '12px 14px',
+          cursor: 'pointer',
+          display: 'flex',
+          gap: '12px',
+          alignItems: 'flex-start',
+        }}
+        onClick={onExpand}
+      >
+        {/* Checkbox */}
+        <div
+          onClick={(e) => { e.stopPropagation(); onToggle(); }}
+          style={{
+            width: '18px',
+            height: '18px',
+            borderRadius: '3px',
+            border: `1.5px solid ${checked ? colors.accent : colors.dim}`,
+            background: checked ? colors.accent : 'transparent',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            marginTop: '2px',
+            cursor: 'pointer',
+          }}
+        >
+          {checked && (
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+              <path d="M2 6l3 3 5-5" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
+        </div>
 
-      {/* Content */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: '14px', fontWeight: 500, color: colors.heading, marginBottom: '3px' }}>
-          {row.name}
+        {/* Content */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: '14px', fontWeight: 500, color: colors.heading, marginBottom: '3px' }}>
+            {name}
+          </div>
+          <div style={{ fontSize: '13px', color: colors.muted }}>
+            {date}{startTime ? ` ${startTime}` : ''}
+            {venueName && ` \u00B7 ${venueName}`}
+          </div>
+          <div style={{ display: 'flex', gap: '4px', marginTop: '4px', flexWrap: 'wrap' }}>
+            <span style={{
+              fontSize: '10px',
+              padding: '1px 6px',
+              borderRadius: '10px',
+              background: colors.accentDim,
+              color: colors.muted,
+              border: `1px solid ${colors.accentBorder}`,
+            }}>
+              {catLabel}
+            </span>
+            {tags.length > 0 && (
+              <span style={{ fontSize: '10px', color: colors.dim }}>
+                +{tags.length} tag{tags.length !== 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
         </div>
-        <div style={{ fontSize: '13px', color: colors.muted }}>
-          {row.date}
-          {row.venue_name && ` \u00B7 ${row.venue_name}`}
-        </div>
-        <span style={{
-          fontSize: '10px',
-          padding: '1px 6px',
-          borderRadius: '10px',
-          background: colors.accentDim,
-          color: colors.muted,
-          border: `1px solid ${colors.accentBorder}`,
-          marginTop: '4px',
-          display: 'inline-block',
-        }}>
-          {catLabel}
+
+        {/* Expand indicator */}
+        <span style={{ color: colors.dim, fontSize: '12px', flexShrink: 0, marginTop: '2px' }}>
+          {expanded ? '\u25B2' : '\u25BC'}
         </span>
       </div>
+
+      {/* Expanded edit form */}
+      {expanded && (
+        <div style={{
+          borderTop: `1px solid ${colors.border}`,
+          padding: '16px 14px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px',
+        }}>
+          {/* Name */}
+          <div>
+            <label style={styles.formLabel}>Event Name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => onOverride('name', e.target.value)}
+              style={styles.input}
+              maxLength={200}
+            />
+          </div>
+
+          {/* Date + Times */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+            <div>
+              <label style={styles.formLabel}>Date</label>
+              <CalendarPicker value={date} onChange={(v) => onOverride('date', v)} />
+            </div>
+            <div>
+              <label style={styles.formLabel}>Start Time</label>
+              <TimePicker value={startTime || '12:00'} onChange={(v) => onOverride('start_time', v)} />
+            </div>
+            <div>
+              <label style={styles.formLabel}>End Time</label>
+              <TimePicker value={endTime || '23:00'} onChange={(v) => onOverride('end_time', v)} />
+            </div>
+          </div>
+
+          {/* Venue */}
+          <div>
+            <label style={styles.formLabel}>Venue</label>
+            <input
+              type="text"
+              value={venueName}
+              onChange={(e) => onOverride('venue_name', e.target.value)}
+              style={styles.input}
+              maxLength={200}
+            />
+          </div>
+
+          {/* Category */}
+          <div>
+            <label style={styles.formLabel}>Category</label>
+            {proposing ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <input
+                  type="text"
+                  placeholder="Proposed category name"
+                  value={proposedName}
+                  onChange={(e) => setProposedName(e.target.value)}
+                  style={styles.input}
+                  maxLength={50}
+                  autoFocus
+                />
+                <textarea
+                  placeholder="Why does this need a new category? (optional)"
+                  value={justification}
+                  onChange={(e) => setJustification(e.target.value)}
+                  style={{ ...styles.input, minHeight: '48px', resize: 'vertical' }}
+                  maxLength={500}
+                />
+                <div>
+                  <label style={{ ...styles.formLabel, fontSize: '11px' }}>Closest existing category (used as fallback)</label>
+                  <select
+                    value={fallbackCategory}
+                    onChange={(e) => setFallbackCategory(e.target.value)}
+                    style={styles.select}
+                  >
+                    {Object.entries(PORTAL_CATEGORIES).map(([key, cat]) => (
+                      <option key={key} value={key}>{cat.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    type="button"
+                    style={{ ...styles.buttonPrimary, flex: 1, padding: '8px' }}
+                    disabled={!proposedName.trim()}
+                    onClick={() => {
+                      onOverride('category', fallbackCategory);
+                      onOverride('custom_category', proposedName.trim());
+                      onPropose({ proposed_name: proposedName.trim(), justification: justification.trim() || undefined, fallback_category: fallbackCategory });
+                      setProposing(false);
+                    }}
+                  >
+                    Save Proposal
+                  </button>
+                  <button
+                    type="button"
+                    style={{ ...styles.buttonSecondary, width: 'auto', padding: '8px 16px' }}
+                    onClick={() => setProposing(false)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <select
+                  value={category}
+                  onChange={(e) => {
+                    if (e.target.value === '__propose__') {
+                      setProposing(true);
+                      return;
+                    }
+                    onOverride('category', e.target.value);
+                    onOverride('custom_category', undefined);
+                  }}
+                  style={styles.select}
+                >
+                  <option value="__propose__">Propose new category...</option>
+                  {Object.entries(PORTAL_CATEGORIES).map(([key, cat]) => (
+                    <option key={key} value={key}>{cat.label}</option>
+                  ))}
+                </select>
+                {overrides?.custom_category && (
+                  <div style={{ fontSize: '12px', color: colors.pending, marginTop: '4px' }}>
+                    Proposed: "{overrides.custom_category}" (fallback: {catLabel})
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Tags */}
+          <div>
+            <label style={styles.formLabel}>Tags</label>
+            <TagPicker
+              category={category}
+              value={tags}
+              onChange={(v) => onOverride('tags', v)}
+            />
+          </div>
+
+          {/* Description */}
+          <div>
+            <label style={styles.formLabel}>Description</label>
+            <textarea
+              value={description}
+              onChange={(e) => onOverride('description', e.target.value)}
+              style={{ ...styles.input, minHeight: '60px', resize: 'vertical' }}
+              maxLength={5000}
+            />
+          </div>
+
+          {/* Price */}
+          <div>
+            <label style={styles.formLabel}>Price</label>
+            <input
+              type="text"
+              value={price}
+              onChange={(e) => onOverride('price', e.target.value)}
+              style={styles.input}
+              placeholder="Free, $10, $5-15"
+              maxLength={100}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
