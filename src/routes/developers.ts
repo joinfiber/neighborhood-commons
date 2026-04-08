@@ -18,7 +18,7 @@ import { createError } from '../middleware/error-handler.js';
 import { enumerationLimiter, writeLimiter, verifyOtpLimiter } from '../middleware/rate-limit.js';
 import { requireApiKey } from '../middleware/api-key.js';
 import { generateAndStoreKey } from '../lib/api-keys.js';
-import { sendEmail } from '../lib/mailgun.js';
+import { sendEmail } from '../lib/email.js';
 
 const router: ReturnType<typeof Router> = Router();
 

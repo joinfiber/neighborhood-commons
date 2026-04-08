@@ -29,9 +29,9 @@ const envSchema = z.object({
   // Commons Admin (comma-separated UIDs)
   COMMONS_ADMIN_USER_IDS: z.string().optional(),
 
-  // Mailgun (portal account emails)
-  MAILGUN_API_KEY: z.string().min(1).optional(),
-  MAILGUN_DOMAIN: z.string().min(1).optional(),
+  // Email (transactional emails via Resend)
+  RESEND_API_KEY: z.string().min(1).optional(),
+  RESEND_FROM_DOMAIN: z.string().min(1).optional(),
 
   // Cloudflare R2 (neighborhood-commons-images bucket)
   COMMONS_R2_ACCOUNT_ID: z.string().min(1).optional(),
@@ -104,10 +104,10 @@ export const config = {
     userIds: parseList(env.COMMONS_ADMIN_USER_IDS),
   },
 
-  mailgun: {
-    apiKey: env.MAILGUN_API_KEY || '',
-    domain: env.MAILGUN_DOMAIN || '',
-    from: env.MAILGUN_DOMAIN ? `Neighborhood Commons <noreply@${env.MAILGUN_DOMAIN}>` : '',
+  email: {
+    apiKey: env.RESEND_API_KEY || '',
+    domain: env.RESEND_FROM_DOMAIN || '',
+    from: env.RESEND_FROM_DOMAIN ? `Neighborhood Commons <noreply@${env.RESEND_FROM_DOMAIN}>` : '',
   },
 
   r2: {
