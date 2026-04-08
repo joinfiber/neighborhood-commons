@@ -4,33 +4,34 @@
 
 1. Go to **Supabase Dashboard** → your Commons project
 2. **Authentication → URL Configuration**:
-   - Site URL: `https://your-commons-domain.example.com` (e.g. `https://api.neighborhood-commons.org`)
-   - Redirect URLs: add your portal's domain
+   - Site URL: `https://api.neighborhood-commons.org/portal`
+   - Redirect URLs: add `https://api.neighborhood-commons.org/portal`
 3. **Authentication → Email Templates** → paste each template below
 
 ---
 
 ## 1. Confirm Signup
 
-Subject: `Your Neighborhood Commons code`
+Subject: `Sign in to Neighborhood Commons`
 
 ```html
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Your Neighborhood Commons code</title>
+  <meta name="color-scheme" content="dark">
+  <title>Sign in to Neighborhood Commons</title>
 </head>
-<body style="margin:0;padding:0;background-color:#0f0f0e;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+<body style="margin:0;padding:0;background-color:#0f0f0e;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#0f0f0e;">
     <tr>
-      <td align="center" style="padding:40px 20px;">
+      <td align="center" style="padding:64px 24px;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:460px;">
 
           <!-- Header -->
           <tr>
-            <td style="padding:0 0 32px 0;">
+            <td style="padding:0 0 40px 0;">
               <span style="font-size:13px;font-weight:300;letter-spacing:0.12em;text-transform:uppercase;color:#D4A853;">neighborhood commons</span>
             </td>
           </tr>
@@ -43,20 +44,20 @@ Subject: `Your Neighborhood Commons code`
                 Welcome to Neighborhood Commons
               </p>
               <p style="margin:0 0 28px 0;font-size:14px;color:#7a7670;line-height:1.5;">
-                Enter this code to verify your email and finish creating your account.
+                Tap the button below to sign in and finish creating your account.
               </p>
 
-              <!-- OTP Code -->
+              <!-- CTA Button -->
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                 <tr>
-                  <td align="center" style="background-color:#0f0f0e;border:1px solid #2a2825;border-radius:10px;padding:20px 16px;">
-                    <span style="font-size:32px;font-weight:500;letter-spacing:10px;font-family:'Courier New',Courier,monospace;color:#f5f0e8;">{{ .Token }}</span>
+                  <td align="center" style="padding:4px 0;">
+                    <a href="{{ .ConfirmationURL }}" target="_blank" style="display:inline-block;padding:14px 40px;font-size:15px;font-weight:500;color:#0f0f0e;background:#f5f0e8;border-radius:8px;text-decoration:none;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">Sign in to Neighborhood Commons</a>
                   </td>
                 </tr>
               </table>
 
               <p style="margin:24px 0 0 0;font-size:12px;color:#4a4740;line-height:1.5;">
-                This code expires in 1 hour. If you didn't sign up for Neighborhood Commons, you can safely ignore this email.
+                If you didn't sign up for Neighborhood Commons, you can safely ignore this email.
               </p>
 
             </td>
@@ -81,27 +82,28 @@ Subject: `Your Neighborhood Commons code`
 
 ---
 
-## 2. Magic Link (OTP Sign-In)
+## 2. Magic Link (Sign-In)
 
-Subject: `Your sign-in code`
+Subject: `Sign in to Neighborhood Commons`
 
 ```html
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Your sign-in code</title>
+  <meta name="color-scheme" content="dark">
+  <title>Sign in to Neighborhood Commons</title>
 </head>
-<body style="margin:0;padding:0;background-color:#0f0f0e;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+<body style="margin:0;padding:0;background-color:#0f0f0e;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#0f0f0e;">
     <tr>
-      <td align="center" style="padding:40px 20px;">
+      <td align="center" style="padding:64px 24px;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:460px;">
 
           <!-- Header -->
           <tr>
-            <td style="padding:0 0 32px 0;">
+            <td style="padding:0 0 40px 0;">
               <span style="font-size:13px;font-weight:300;letter-spacing:0.12em;text-transform:uppercase;color:#D4A853;">neighborhood commons</span>
             </td>
           </tr>
@@ -114,20 +116,26 @@ Subject: `Your sign-in code`
                 Sign in to Neighborhood Commons
               </p>
               <p style="margin:0 0 28px 0;font-size:14px;color:#7a7670;line-height:1.5;">
-                Enter this code in the sign-in screen to continue.
+                Tap the button below to sign in.
               </p>
 
-              <!-- OTP Code -->
+              <!-- CTA Button -->
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                 <tr>
-                  <td align="center" style="background-color:#0f0f0e;border:1px solid #2a2825;border-radius:10px;padding:20px 16px;">
-                    <span style="font-size:32px;font-weight:500;letter-spacing:10px;font-family:'Courier New',Courier,monospace;color:#f5f0e8;">{{ .Token }}</span>
+                  <td align="center" style="padding:4px 0;">
+                    <a href="{{ .ConfirmationURL }}" target="_blank" style="display:inline-block;padding:14px 40px;font-size:15px;font-weight:500;color:#0f0f0e;background:#f5f0e8;border-radius:8px;text-decoration:none;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">Sign in to Neighborhood Commons</a>
                   </td>
                 </tr>
               </table>
 
-              <p style="margin:24px 0 0 0;font-size:12px;color:#4a4740;line-height:1.5;">
-                This code expires in 1 hour. If you didn't request this, you can safely ignore this email.
+              <!-- Fallback -->
+              <p style="margin:20px 0 0 0;font-size:11px;color:#4a4740;line-height:1.5;text-align:center;">
+                Button not working? Copy and paste this link:<br>
+                <span style="color:#706d6a;word-break:break-all;">{{ .ConfirmationURL }}</span>
+              </p>
+
+              <p style="margin:20px 0 0 0;font-size:12px;color:#4a4740;line-height:1.5;">
+                This link expires in 1 hour. If you didn't request this, you can safely ignore this email.
               </p>
 
             </td>
@@ -158,21 +166,22 @@ Subject: `Confirm your new email`
 
 ```html
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
   <title>Confirm your new email</title>
 </head>
-<body style="margin:0;padding:0;background-color:#0f0f0e;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+<body style="margin:0;padding:0;background-color:#0f0f0e;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#0f0f0e;">
     <tr>
-      <td align="center" style="padding:40px 20px;">
+      <td align="center" style="padding:64px 24px;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:460px;">
 
           <!-- Header -->
           <tr>
-            <td style="padding:0 0 32px 0;">
+            <td style="padding:0 0 40px 0;">
               <span style="font-size:13px;font-weight:300;letter-spacing:0.12em;text-transform:uppercase;color:#D4A853;">neighborhood commons</span>
             </td>
           </tr>
@@ -185,91 +194,20 @@ Subject: `Confirm your new email`
                 Confirm email change
               </p>
               <p style="margin:0 0 28px 0;font-size:14px;color:#7a7670;line-height:1.5;">
-                Enter this code to confirm your new email address.
+                Tap the button below to confirm your new email address.
               </p>
 
-              <!-- OTP Code -->
+              <!-- CTA Button -->
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                 <tr>
-                  <td align="center" style="background-color:#0f0f0e;border:1px solid #2a2825;border-radius:10px;padding:20px 16px;">
-                    <span style="font-size:32px;font-weight:500;letter-spacing:10px;font-family:'Courier New',Courier,monospace;color:#f5f0e8;">{{ .Token }}</span>
+                  <td align="center" style="padding:4px 0;">
+                    <a href="{{ .ConfirmationURL }}" target="_blank" style="display:inline-block;padding:14px 40px;font-size:15px;font-weight:500;color:#0f0f0e;background:#f5f0e8;border-radius:8px;text-decoration:none;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">Confirm new email</a>
                   </td>
                 </tr>
               </table>
 
               <p style="margin:24px 0 0 0;font-size:12px;color:#4a4740;line-height:1.5;">
-                If you didn't request this change, please ignore this email or contact support.
-              </p>
-
-            </td>
-          </tr>
-
-          <!-- Footer -->
-          <tr>
-            <td style="padding:28px 0 0 0;text-align:center;">
-              <p style="margin:0;font-size:11px;color:#4a4740;line-height:1.5;">
-                Neighborhood Commons — open event data for your neighborhood
-              </p>
-            </td>
-          </tr>
-
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
-```
-
----
-
-## 4. Reset Password
-
-Subject: `Reset your password`
-
-```html
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Reset your password</title>
-</head>
-<body style="margin:0;padding:0;background-color:#0f0f0e;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#0f0f0e;">
-    <tr>
-      <td align="center" style="padding:40px 20px;">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:460px;">
-
-          <!-- Header -->
-          <tr>
-            <td style="padding:0 0 32px 0;">
-              <span style="font-size:13px;font-weight:300;letter-spacing:0.12em;text-transform:uppercase;color:#D4A853;">neighborhood commons</span>
-            </td>
-          </tr>
-
-          <!-- Card -->
-          <tr>
-            <td style="background-color:#181715;border:1px solid #2a2825;border-radius:14px;padding:32px 28px;">
-
-              <p style="margin:0 0 8px 0;font-size:20px;font-weight:300;color:#f5f0e8;letter-spacing:0.02em;">
-                Reset your password
-              </p>
-              <p style="margin:0 0 28px 0;font-size:14px;color:#7a7670;line-height:1.5;">
-                Enter this code to reset your password.
-              </p>
-
-              <!-- OTP Code -->
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td align="center" style="background-color:#0f0f0e;border:1px solid #2a2825;border-radius:10px;padding:20px 16px;">
-                    <span style="font-size:32px;font-weight:500;letter-spacing:10px;font-family:'Courier New',Courier,monospace;color:#f5f0e8;">{{ .Token }}</span>
-                  </td>
-                </tr>
-              </table>
-
-              <p style="margin:24px 0 0 0;font-size:12px;color:#4a4740;line-height:1.5;">
-                This code expires in 1 hour. If you didn't request a password reset, you can safely ignore this email.
+                If you didn't request this change, please ignore this email.
               </p>
 
             </td>

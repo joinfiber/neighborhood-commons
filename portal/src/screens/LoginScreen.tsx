@@ -3,25 +3,24 @@ import { styles, loginColors, loginStyles } from '../lib/styles';
 import { Turnstile } from '../components/Turnstile';
 
 interface LoginScreenProps {
-  onSignIn: (email: string, captchaToken?: string) => Promise<'otp_sent' | 'needs_signup' | 'error'>;
+  onSignIn: (email: string) => Promise<'magic_link_sent' | 'needs_signup' | 'error'>;
   onRegister: (email: string, businessName: string, captchaToken: string) => Promise<boolean>;
-  onVerifyOtp: (email: string, token: string) => Promise<boolean>;
   onResetSignUp: () => void;
   loading: boolean;
   error: string | null;
   canSignUp: boolean;
+  magicLinkSent: boolean;
   onShowDevelopers?: () => void;
 }
 
-type ScreenState = 'email' | 'signup' | 'otp';
+type ScreenState = 'email' | 'signup' | 'check-email';
 
 export function LoginScreen({
-  onSignIn, onRegister, onVerifyOtp, onResetSignUp,
-  loading, error, canSignUp, onShowDevelopers,
+  onSignIn, onRegister, onResetSignUp,
+  loading, error, canSignUp, magicLinkSent, onShowDevelopers,
 }: LoginScreenProps) {
   const [email, setEmail] = useState('');
   const [businessName, setBusinessName] = useState('');
-  const [otpCode, setOtpCode] = useState('');
   const [screen, setScreen] = useState<ScreenState>('email');
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [captchaError, setCaptchaError] = useState(false);
@@ -38,31 +37,25 @@ export function LoginScreen({
     if (canSignUp && screen === 'email') setScreen('signup');
   }, [canSignUp, screen]);
 
+  // When magic link is sent, show "check your email" screen
+  useEffect(() => {
+    if (magicLinkSent) setScreen('check-email');
+  }, [magicLinkSent]);
+
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const result = await onSignIn(email);
-    if (result === 'otp_sent') {
-      setScreen('otp');
-    }
-    // 'needs_signup' is handled by the canSignUp effect above
+    await onSignIn(email);
   };
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!captchaToken) return;
-    const success = await onRegister(email, businessName, captchaToken);
-    if (success) setScreen('otp');
-  };
-
-  const handleOtpSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await onVerifyOtp(email, otpCode);
+    await onRegister(email, businessName, captchaToken);
   };
 
   const handleBack = () => {
     setScreen('email');
     setBusinessName('');
-    setOtpCode('');
     setCaptchaToken(null);
     setCaptchaError(false);
     onResetSignUp();
@@ -169,43 +162,22 @@ export function LoginScreen({
           </div>
         )}
 
-        {screen === 'otp' ? (
-          <div>
-            <p style={{ color: loginColors.muted, fontSize: '13px', marginBottom: '16px', textAlign: 'center' }}>
-              Enter the 8-digit code sent to{' '}
+        {screen === 'check-email' ? (
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '32px', marginBottom: '16px' }}>&#9993;</div>
+            <p style={{ color: loginColors.cream, fontSize: '16px', fontWeight: 500, marginBottom: '8px' }}>
+              Check your email
+            </p>
+            <p style={{ color: loginColors.muted, fontSize: '13px', marginBottom: '24px', lineHeight: 1.5 }}>
+              We sent a sign-in link to{' '}
               <strong style={{ color: loginColors.cream }}>{email}</strong>
             </p>
-            <form onSubmit={handleOtpSubmit}>
-              <input
-                type="text"
-                placeholder="00000000"
-                value={otpCode}
-                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 8))}
-                style={{
-                  ...loginStyles.input,
-                  textAlign: 'center',
-                  fontSize: '22px',
-                  letterSpacing: '8px',
-                  fontFamily: 'monospace',
-                }}
-                disabled={loading}
-                maxLength={8}
-                autoFocus
-                required
-              />
-              <button
-                type="submit"
-                style={{ ...loginStyles.buttonPrimary, marginTop: '8px' }}
-                disabled={loading || otpCode.length !== 8}
-              >
-                {loading ? 'Verifying...' : 'Sign In'}
-              </button>
-            </form>
-            <div style={{ textAlign: 'center', marginTop: '12px' }}>
-              <button type="button" style={loginStyles.buttonText} onClick={handleBack}>
-                Use different email
-              </button>
-            </div>
+            <p style={{ color: loginColors.dim, fontSize: '12px', lineHeight: 1.5, marginBottom: '20px' }}>
+              Click the link in your email to sign in. You can close this tab.
+            </p>
+            <button type="button" style={loginStyles.buttonText} onClick={handleBack}>
+              Use different email
+            </button>
           </div>
         ) : screen === 'signup' ? (
           <div>
@@ -213,7 +185,7 @@ export function LoginScreen({
               Let's get you set up
             </h2>
             <p style={{ fontSize: '13px', color: loginColors.muted, textAlign: 'center', marginBottom: '20px' }}>
-              Create your free business account
+              Create your free contributor account
             </p>
             <form onSubmit={handleRegisterSubmit}>
               <div style={{ marginBottom: '12px' }}>
@@ -290,7 +262,7 @@ export function LoginScreen({
                 {loading ? 'Checking...' : 'Continue'}
               </button>
               <p style={{ fontSize: '11px', color: loginColors.dim, textAlign: 'center', marginTop: '10px' }}>
-                We'll send you a code — no password needed
+                We'll send you a link — no password needed
               </p>
             </form>
           </div>

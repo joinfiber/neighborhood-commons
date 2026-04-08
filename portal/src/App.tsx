@@ -25,7 +25,7 @@ function contentWidthForRoute(screen: string): 'normal' | 'wide' | 'full' {
 
 export default function App() {
   const { route, navigate, back } = useHashRoute();
-  const { isAuthenticated, initializing, loading, error, signIn, register, verifyOtp, signOut, resetSignUp, canSignUp, user } = useAuth();
+  const { isAuthenticated, initializing, loading, error, signIn, register, signOut, resetSignUp, canSignUp, magicLinkSent, user } = useAuth();
 
   // Role detection (confirmed after auth via /whoami)
   const [role, setRole] = useState<UserRole | null>(null);
@@ -119,11 +119,11 @@ export default function App() {
       <LoginScreen
         onSignIn={signIn}
         onRegister={register}
-        onVerifyOtp={verifyOtp}
         onResetSignUp={resetSignUp}
         loading={loading}
         error={error}
         canSignUp={canSignUp}
+        magicLinkSent={magicLinkSent}
         onShowDevelopers={() => navigate('#/developers')}
       />
     );

@@ -112,8 +112,9 @@ router.post('/auth/register', blockDatacenterIps, enumerationLimiter, async (req
           throw createError('Failed to register', 500, 'SERVER_ERROR');
         }
         console.log(`[PORTAL] Account re-registered: ${business_name} (${email.substring(0, 3)}***)`);
-        await supabaseAdmin.auth.signInWithOtp({ email }).catch((e) =>
-          console.error('[PORTAL] OTP send failed after re-register:', e.message));
+        const redirectTo = `${config.apiBaseUrl}/portal`;
+        await supabaseAdmin.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo } }).catch((e) =>
+          console.error('[PORTAL] Magic link send failed after re-register:', e.message));
         res.status(201).json({ success: true });
         return;
       }
@@ -140,12 +141,13 @@ router.post('/auth/register', blockDatacenterIps, enumerationLimiter, async (req
     }
     console.log(`[PORTAL] Account row created: id=${inserted?.id}, email=${email.substring(0, 3)}***`);
 
-    // Send OTP from server side — supabaseAdmin uses service_role key
+    // Send magic link from server side — supabaseAdmin uses service_role key
     // which bypasses Turnstile captcha requirement on GoTrue
-    const { error: otpErr } = await supabaseAdmin.auth.signInWithOtp({ email });
-    if (otpErr) {
-      // Account was created but OTP failed — not fatal, user can retry from login
-      console.error('[PORTAL] OTP send failed after register:', otpErr.message);
+    const redirectTo = `${config.apiBaseUrl}/portal`;
+    const { error: linkErr } = await supabaseAdmin.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo } });
+    if (linkErr) {
+      // Account was created but magic link failed — not fatal, user can retry from login
+      console.error('[PORTAL] Magic link send failed after register:', linkErr.message);
     }
 
     console.log(`[PORTAL] Account registered (pending): ${business_name} (${email.substring(0, 3)}***)`);

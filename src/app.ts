@@ -446,7 +446,9 @@ ${baseUrl}/api/v1/events.ics</div>
   // points to an old JS bundle, and UI changes don't land after deploy.
   const portalDir = path.resolve(__dirname, '../portal');
   app.use('/assets', express.static(path.join(portalDir, 'assets'), { maxAge: '365d', immutable: true }));
-  app.use(express.static(portalDir, { maxAge: 0 }));
+  // index: false prevents express.static from serving portal/index.html for "/"
+  // — the server-rendered homepage handles that route explicitly above
+  app.use(express.static(portalDir, { maxAge: 0, index: false }));
 
   // SPA fallback: any non-API, non-page route serves index.html
   // (supports client-side hash routing)

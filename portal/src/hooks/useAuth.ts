@@ -12,6 +12,8 @@ interface AuthState {
   preAuthRole: UserRole | null;
   /** True when check-email returned canSignUp (unknown email) */
   canSignUp: boolean;
+  /** True after magic link email was sent (show "check your email" screen) */
+  magicLinkSent: boolean;
 }
 
 export function useAuth() {
@@ -23,6 +25,7 @@ export function useAuth() {
     error: null,
     preAuthRole: null,
     canSignUp: false,
+    magicLinkSent: false,
   });
 
   useEffect(() => {
@@ -35,6 +38,7 @@ export function useAuth() {
         error: error?.message ?? null,
         preAuthRole: null,
         canSignUp: false,
+        magicLinkSent: false,
       });
     });
 
@@ -46,6 +50,7 @@ export function useAuth() {
         user: session?.user ?? null,
         session,
         loading: false,
+        magicLinkSent: false,
       }));
     });
 
@@ -53,11 +58,11 @@ export function useAuth() {
   }, []);
 
   /**
-   * Check email and either send OTP (known user) or signal canSignUp (new user).
-   * Returns 'otp_sent' | 'needs_signup' | 'error'.
+   * Check email and send magic link (known user) or signal canSignUp (new user).
+   * Returns 'magic_link_sent' | 'needs_signup' | 'error'.
    */
-  const signIn = useCallback(async (email: string, captchaToken?: string): Promise<'otp_sent' | 'needs_signup' | 'error'> => {
-    setState((prev) => ({ ...prev, loading: true, error: null, canSignUp: false }));
+  const signIn = useCallback(async (email: string): Promise<'magic_link_sent' | 'needs_signup' | 'error'> => {
+    setState((prev) => ({ ...prev, loading: true, error: null, canSignUp: false, magicLinkSent: false }));
 
     const emailCheck = await checkPortalEmail(email);
 
@@ -76,23 +81,24 @@ export function useAuth() {
       return 'error';
     }
 
-    // Pass captcha token to Supabase (matches admin app pattern)
+    // Send magic link — Supabase emails a link that redirects back to the portal
+    const redirectTo = `${window.location.origin}/portal`;
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: captchaToken ? { captchaToken } : undefined,
+      options: { emailRedirectTo: redirectTo },
     });
     if (error) {
       setState((prev) => ({ ...prev, loading: false, error: error.message }));
       return 'error';
     }
 
-    setState((prev) => ({ ...prev, loading: false, preAuthRole: emailCheck.role || null }));
-    return 'otp_sent';
+    setState((prev) => ({ ...prev, loading: false, preAuthRole: emailCheck.role || null, magicLinkSent: true }));
+    return 'magic_link_sent';
   }, []);
 
   /**
-   * Register a new business account, then send OTP.
-   * Returns true if OTP was sent successfully.
+   * Register a new business account, then server sends magic link.
+   * Returns true if magic link was sent successfully.
    */
   const register = useCallback(async (email: string, businessName: string, captchaToken: string): Promise<boolean> => {
     setState((prev) => ({ ...prev, loading: true, error: null }));
@@ -103,44 +109,25 @@ export function useAuth() {
       return false;
     }
 
-    // OTP is sent server-side by the register endpoint (bypasses Supabase captcha)
-    setState((prev) => ({ ...prev, loading: false, canSignUp: false, preAuthRole: 'business' }));
-    return true;
-  }, []);
-
-  const verifyOtp = useCallback(async (email: string, token: string) => {
-    setState((prev) => ({ ...prev, loading: true, error: null }));
-
-    const { error } = await supabase.auth.verifyOtp({
-      email,
-      token,
-      type: 'email',
-    });
-
-    if (error) {
-      setState((prev) => ({ ...prev, loading: false, error: error.message }));
-      return false;
-    }
-
-    setState((prev) => ({ ...prev, loading: false }));
+    // Magic link is sent server-side by the register endpoint
+    setState((prev) => ({ ...prev, loading: false, canSignUp: false, preAuthRole: 'business', magicLinkSent: true }));
     return true;
   }, []);
 
   const signOut = useCallback(async (scope: 'local' | 'global' = 'local') => {
     await supabase.auth.signOut({ scope });
-    setState({ user: null, session: null, initializing: false, loading: false, error: null, preAuthRole: null, canSignUp: false });
+    setState({ user: null, session: null, initializing: false, loading: false, error: null, preAuthRole: null, canSignUp: false, magicLinkSent: false });
   }, []);
 
   /** Reset signup state (go back to email input) */
   const resetSignUp = useCallback(() => {
-    setState((prev) => ({ ...prev, canSignUp: false, error: null }));
+    setState((prev) => ({ ...prev, canSignUp: false, magicLinkSent: false, error: null }));
   }, []);
 
   return {
     ...state,
     signIn,
     register,
-    verifyOtp,
     signOut,
     resetSignUp,
     isAuthenticated: !!state.session,
