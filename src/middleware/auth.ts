@@ -27,6 +27,7 @@ declare global {
       apiKeyInfo?: {
         id: string;
         tier?: string;
+        isAdmin?: boolean;
       };
     }
   }

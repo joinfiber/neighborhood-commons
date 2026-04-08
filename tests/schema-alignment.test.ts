@@ -31,7 +31,7 @@ const SCHEMA: Record<string, string[]> = {
   api_keys: [
     'id', 'name', 'tier', 'rate_limit_per_hour', 'created_at',
     'key_hash', 'key_prefix', 'contact_email', 'status', 'last_used_at', 'contributor_tier',
-    'url',
+    'url', 'is_admin',
   ],
   audit_logs: [
     'id', 'action', 'actor_hash', 'resource_id', 'metadata', 'endpoint',
@@ -71,7 +71,7 @@ const SCHEMA: Record<string, string[]> = {
     'id', 'auth_user_id', 'email', 'business_name', 'phone', 'website',
     'default_venue_name', 'default_address', 'default_place_id',
     'default_latitude', 'default_longitude', 'logo_url', 'cover_image_url', 'description',
-    'status', 'claimed_at', 'created_at', 'updated_at', 'last_login_at',
+    'status', 'claimed_at', 'claimed_by', 'created_at', 'updated_at', 'last_login_at',
     'wheelchair_accessible', 'slug', 'operating_hours',
     'organization_name', 'contributor_type', 'data_description',
   ],
@@ -109,6 +109,9 @@ const SCHEMA: Record<string, string[]> = {
   category_proposals: [
     'id', 'proposed_name', 'justification', 'fallback_category',
     'contributor_account_id', 'batch_id', 'status', 'created_at',
+  ],
+  api_key_account_links: [
+    'api_key_id', 'portal_account_id', 'linked_at',
   ],
   // Ingestion tables (newsletter_sources, newsletter_emails, event_candidates,
   // feed_sources) exist in the database but are no longer referenced by code

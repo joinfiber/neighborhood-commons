@@ -38,7 +38,7 @@ const ACCOUNT_SELECT = `
   id, business_name, slug, phone, website, logo_url, cover_image_url, description,
   default_venue_name, default_place_id, default_address,
   default_latitude, default_longitude,
-  operating_hours, status, created_at, updated_at
+  operating_hours, status, claimed_at, created_at, updated_at
 `;
 
 const listSchema = z.object({
@@ -291,6 +291,7 @@ function formatAccount(row: Record<string, unknown>) {
       lng: row.default_longitude || null,
     },
     operating_hours: row.operating_hours || null,
+    is_claimed: !!(row.claimed_at),
     created_at: row.created_at,
     updated_at: row.updated_at,
   };

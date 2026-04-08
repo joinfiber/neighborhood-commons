@@ -96,7 +96,7 @@ export async function requireServiceApiKey(req: Request, res: Response, next: Ne
     const keyHash = hashApiKey(apiKey);
     const { data: keyInfo } = await supabaseAdmin
       .from('api_keys')
-      .select('id, contributor_tier')
+      .select('id, contributor_tier, is_admin')
       .eq('key_hash', keyHash)
       .eq('status', 'active')
       .maybeSingle();
@@ -111,7 +111,7 @@ export async function requireServiceApiKey(req: Request, res: Response, next: Ne
       return;
     }
 
-    req.apiKeyInfo = { id: keyInfo.id, tier: keyInfo.contributor_tier };
+    req.apiKeyInfo = { id: keyInfo.id, tier: keyInfo.contributor_tier, isAdmin: keyInfo.is_admin === true };
     next();
   } catch {
     res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'API key validation failed' } });

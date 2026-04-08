@@ -40,6 +40,53 @@ const router: ReturnType<typeof Router> = Router();
 router.use(requireServiceApiKey);
 
 // =============================================================================
+// SCOPED ACCESS — Service keys can only modify data for linked accounts
+// =============================================================================
+
+import type { Request } from 'express';
+
+/**
+ * Assert that the calling service key is linked to the target portal account.
+ * Admin keys (is_admin=true) bypass this check — they have full access.
+ * Read endpoints don't call this — public data is readable by any key.
+ */
+async function assertLinkedAccount(req: Request, accountId: string): Promise<void> {
+  if (req.apiKeyInfo?.isAdmin) return;
+
+  const { data } = await supabaseAdmin
+    .from('api_key_account_links')
+    .select('portal_account_id')
+    .eq('api_key_id', req.apiKeyInfo!.id)
+    .eq('portal_account_id', accountId)
+    .maybeSingle();
+
+  if (!data) {
+    throw createError(
+      'This API key is not linked to the target account. Use POST /accounts/link first.',
+      403,
+      'NOT_LINKED',
+    );
+  }
+}
+
+/**
+ * Assert that the calling service key is linked to the account that owns the given event.
+ */
+async function assertLinkedEvent(req: Request, eventId: string): Promise<string> {
+  const { data: event } = await supabaseAdmin
+    .from('events')
+    .select('creator_account_id')
+    .eq('id', eventId)
+    .maybeSingle();
+
+  if (!event) throw createError('Event not found', 404, 'NOT_FOUND');
+  if (!event.creator_account_id) throw createError('Event has no owner account', 400, 'NO_OWNER');
+
+  await assertLinkedAccount(req, event.creator_account_id);
+  return event.creator_account_id;
+}
+
+// =============================================================================
 // ACCOUNTS
 // =============================================================================
 
@@ -84,17 +131,120 @@ const updateAccountSchema = z.object({
   description: z.string().max(2000).optional().or(z.literal('')).or(z.null()),
 });
 
+// =============================================================================
+// ACCOUNT LINKING — Consumer apps link their users to portal accounts
+// =============================================================================
+
+const linkAccountSchema = z.object({
+  email: z.string().email().max(254).transform((e) => e.toLowerCase().trim()),
+  business_name: z.string().min(1).max(200),
+  claimed_by: z.string().max(50).optional(),
+});
+
+/**
+ * POST /service/accounts/link
+ * Find-or-create a portal account by email and link it to the calling service key.
+ * This is how consumer apps (Merrie, etc.) establish a relationship with a venue operator.
+ */
+router.post('/accounts/link', serviceLimiter, async (req, res, next) => {
+  try {
+    const data = validateRequest(linkAccountSchema, req.body);
+    const apiKeyId = req.apiKeyInfo!.id;
+    let created = false;
+    let linked = false;
+
+    // 1. Look up existing account by email
+    let { data: account } = await supabaseAdmin
+      .from('portal_accounts')
+      .select('id, email, business_name, status, claimed_at, claimed_by, slug, created_at, updated_at')
+      .ilike('email', data.email)
+      .maybeSingle();
+
+    // 2. Create if not found
+    if (!account) {
+      const { data: newAccount, error: createError_ } = await supabaseAdmin
+        .from('portal_accounts')
+        .insert({
+          email: data.email,
+          business_name: data.business_name,
+          status: 'active',
+        })
+        .select('id, email, business_name, status, claimed_at, claimed_by, slug, created_at, updated_at')
+        .single();
+
+      if (createError_) {
+        if (createError_.code === '23505') {
+          // Race condition: account was created between our check and insert
+          const { data: raceAccount } = await supabaseAdmin
+            .from('portal_accounts')
+            .select('id, email, business_name, status, claimed_at, claimed_by, slug, created_at, updated_at')
+            .ilike('email', data.email)
+            .single();
+          account = raceAccount;
+        } else {
+          console.error('[SERVICE] Account link create error:', createError_.message);
+          throw createError('Failed to create account', 500, 'SERVER_ERROR');
+        }
+      } else {
+        account = newAccount;
+        created = true;
+      }
+    }
+
+    if (!account) throw createError('Failed to resolve account', 500, 'SERVER_ERROR');
+
+    // 3. Link the service key to this account (upsert)
+    const { error: linkError } = await supabaseAdmin
+      .from('api_key_account_links')
+      .upsert(
+        { api_key_id: apiKeyId, portal_account_id: account.id },
+        { onConflict: 'api_key_id,portal_account_id' },
+      );
+
+    if (linkError) {
+      console.error('[SERVICE] Account link error:', linkError.message);
+    } else {
+      linked = true;
+    }
+
+    // 4. Mark as claimed if not already
+    if (!account.claimed_at) {
+      const claimedBy = data.claimed_by || 'api';
+      await supabaseAdmin
+        .from('portal_accounts')
+        .update({ claimed_at: new Date().toISOString(), claimed_by: claimedBy })
+        .eq('id', account.id);
+      account = { ...account, claimed_at: new Date().toISOString(), claimed_by: claimedBy };
+    }
+
+    console.log(`[SERVICE] Account linked: ${account.email} → key ${apiKeyId.slice(0, 8)}... (created=${created})`);
+    res.status(created ? 201 : 200).json({ account, created, linked });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================================================
+// ACCOUNT CRUD
+// =============================================================================
+
 /** GET /service/accounts — List accounts with event counts, optional search + pagination */
 router.get('/accounts', serviceLimiter, async (req, res, next) => {
   try {
     const search = req.query.search as string | undefined;
+    const email = req.query.email as string | undefined;
     const limit = Math.min(parseInt(req.query.limit as string) || 500, 500);
     const offset = parseInt(req.query.offset as string) || 0;
 
     let query = supabaseAdmin
       .from('portal_accounts')
-      .select('id, email, business_name, auth_user_id, status, default_venue_name, default_place_id, default_address, default_latitude, default_longitude, website, phone, operating_hours, logo_url, cover_image_url, description, last_login_at, created_at, updated_at', { count: 'exact' })
+      .select('id, email, business_name, auth_user_id, status, claimed_at, claimed_by, default_venue_name, default_place_id, default_address, default_latitude, default_longitude, website, phone, operating_hours, logo_url, cover_image_url, description, last_login_at, created_at, updated_at', { count: 'exact' })
       .order('created_at', { ascending: false });
+
+    // Exact email lookup (case-insensitive)
+    if (email) {
+      query = query.ilike('email', email.toLowerCase().trim());
+    }
 
     if (search) {
       const sanitized = sanitizeSearchInput(search);
@@ -206,10 +356,11 @@ router.post('/accounts', serviceLimiter, async (req, res, next) => {
   }
 });
 
-/** PATCH /service/accounts/:id — Update account */
+/** PATCH /service/accounts/:id — Update account (scoped to linked accounts) */
 router.patch('/accounts/:id', serviceLimiter, async (req, res, next) => {
   try {
     validateUuidParam(req.params.id, 'account ID');
+    await assertLinkedAccount(req, req.params.id);
     const data = validateRequest(updateAccountSchema, req.body);
 
     const update: Record<string, unknown> = {};
@@ -314,10 +465,11 @@ router.patch('/accounts/:id', serviceLimiter, async (req, res, next) => {
   }
 });
 
-/** DELETE /service/accounts/:id — Delete account and all its events */
+/** DELETE /service/accounts/:id — Delete account and all its events (scoped) */
 router.delete('/accounts/:id', serviceLimiter, async (req, res, next) => {
   try {
     validateUuidParam(req.params.id, 'account ID');
+    await assertLinkedAccount(req, req.params.id);
 
     // Delete all events owned by this account first
     await supabaseAdmin
@@ -500,10 +652,11 @@ router.get('/events/:id', serviceLimiter, async (req, res, next) => {
   }
 });
 
-/** POST /service/events — Create event (with optional recurrence) */
+/** POST /service/events — Create event (scoped to linked accounts) */
 router.post('/events', serviceLimiter, async (req, res, next) => {
   try {
     const data = validateRequest(createEventSchema, req.body);
+    await assertLinkedAccount(req, data.account_id);
 
     // Verify account exists and fetch its venue coordinates
     const { data: account } = await supabaseAdmin
@@ -629,9 +782,19 @@ router.post('/events', serviceLimiter, async (req, res, next) => {
   }
 });
 
-/** PATCH /service/events/batch — Bulk update events */
+/** PATCH /service/events/batch — Bulk update events (scoped) */
 router.patch('/events/batch', serviceLimiter, async (req, res, next) => {
   try {
+    // Scoping: verify all events belong to linked accounts
+    if (!req.apiKeyInfo?.isAdmin) {
+      const body = req.body as { ids?: string[] };
+      if (body.ids) {
+        for (const id of body.ids) {
+          await assertLinkedEvent(req, id);
+        }
+      }
+    }
+
     const schema = z.object({
       ids: z.array(z.string().uuid()).min(1).max(200),
       updates: z.object({
@@ -667,10 +830,11 @@ router.patch('/events/batch', serviceLimiter, async (req, res, next) => {
   }
 });
 
-/** PATCH /service/events/:id — Update single event */
+/** PATCH /service/events/:id — Update single event (scoped) */
 router.patch('/events/:id', serviceLimiter, async (req, res, next) => {
   try {
     validateUuidParam(req.params.id, 'event ID');
+    await assertLinkedEvent(req, req.params.id);
     const data = validateRequest(updateEventSchema, req.body);
 
     // Fetch existing event
@@ -753,10 +917,11 @@ router.patch('/events/:id', serviceLimiter, async (req, res, next) => {
   }
 });
 
-/** DELETE /service/events/:id — Delete event */
+/** DELETE /service/events/:id — Delete event (scoped) */
 router.delete('/events/:id', serviceLimiter, async (req, res, next) => {
   try {
     validateUuidParam(req.params.id, 'event ID');
+    await assertLinkedEvent(req, req.params.id);
 
     const { error } = await supabaseAdmin
       .from('events')
@@ -770,10 +935,20 @@ router.delete('/events/:id', serviceLimiter, async (req, res, next) => {
   }
 });
 
-/** DELETE /service/events/series/:seriesId — Delete all events in a series */
+/** DELETE /service/events/series/:seriesId — Delete all events in a series (scoped) */
 router.delete('/events/series/:seriesId', serviceLimiter, async (req, res, next) => {
   try {
     validateUuidParam(req.params.seriesId, 'series ID');
+    // Verify ownership via any event in the series
+    if (!req.apiKeyInfo?.isAdmin) {
+      const { data: sample } = await supabaseAdmin
+        .from('events')
+        .select('id')
+        .eq('series_id', req.params.seriesId)
+        .limit(1)
+        .maybeSingle();
+      if (sample) await assertLinkedEvent(req, sample.id);
+    }
     const deleted = await deleteSeriesEvents(req.params.seriesId);
     res.json({ deleted: true, series_id: req.params.seriesId, count: deleted });
   } catch (err) {
@@ -792,6 +967,7 @@ router.delete('/events/series/:seriesId', serviceLimiter, async (req, res, next)
 router.post('/events/:id/image', imageBodyLimit, serviceLimiter, async (req, res, next) => {
   try {
     validateUuidParam(req.params.id, 'event ID');
+    await assertLinkedEvent(req, req.params.id);
     const eventId = req.params.id;
 
     const contentType = req.headers['content-type'] || '';
@@ -877,6 +1053,7 @@ router.post('/events/:id/image', imageBodyLimit, serviceLimiter, async (req, res
 router.post('/accounts/:id/cover-image', imageBodyLimit, serviceLimiter, async (req, res, next) => {
   try {
     validateUuidParam(req.params.id, 'account ID');
+    await assertLinkedAccount(req, req.params.id);
     const accountId = req.params.id;
 
     if (req.body?.image_url) {
@@ -926,6 +1103,7 @@ router.post('/accounts/:id/cover-image', imageBodyLimit, serviceLimiter, async (
 router.post('/accounts/:id/logo', imageBodyLimit, serviceLimiter, async (req, res, next) => {
   try {
     validateUuidParam(req.params.id, 'account ID');
+    await assertLinkedAccount(req, req.params.id);
     const accountId = req.params.id;
 
     if (req.body?.image_url) {
@@ -1375,6 +1553,7 @@ router.delete('/groups/:groupId/venues/:venueId', serviceLimiter, async (req, re
 router.patch('/events/:id/group', serviceLimiter, async (req, res, next) => {
   try {
     validateUuidParam(req.params.id, 'event ID');
+    await assertLinkedEvent(req, req.params.id);
     const schema = z.object({
       group_id: z.string().uuid().nullable(),
     });
