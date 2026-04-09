@@ -442,6 +442,199 @@ export async function updateSeriesFutureInstances(input: SeriesUpdateInput): Pro
   return { updatedCount, totalAfter, instancesAdded, instancesRemoved, updatedIds };
 }
 
+// =============================================================================
+// AUTO-EXTEND — cron job to maintain the 6-week rolling horizon
+// =============================================================================
+
+/** How far into the future the horizon should extend (milliseconds) */
+const HORIZON_MS = 6 * 7 * 24 * 60 * 60 * 1000; // 6 weeks
+/** Refill when the last instance is within this threshold (milliseconds) */
+const REFILL_THRESHOLD_MS = 3 * 7 * 24 * 60 * 60 * 1000; // 3 weeks
+
+/**
+ * Auto-extend all active series to maintain the 6-week rolling horizon.
+ * For each active series whose last future instance is within 3 weeks of now,
+ * generates new instances to push the horizon back out to 6 weeks.
+ */
+export async function autoExtendSeries(): Promise<{
+  extended: number;
+  instancesCreated: number;
+  errors: number;
+}> {
+  // Fetch all active series (ongoing or bounded with future end)
+  const { data: allSeries } = await supabaseAdmin
+    .from('event_series')
+    .select('id, recurrence, base_event_data, creator_account_id, ends_at')
+    .or('ends_at.is.null,ends_at.gt.' + new Date().toISOString());
+
+  if (!allSeries || allSeries.length === 0) {
+    return { extended: 0, instancesCreated: 0, errors: 0 };
+  }
+
+  const now = Date.now();
+  const horizon = new Date(now + HORIZON_MS);
+  const refillThreshold = new Date(now + REFILL_THRESHOLD_MS);
+  let extended = 0;
+  let instancesCreated = 0;
+  let errors = 0;
+
+  for (const series of allSeries) {
+    try {
+      const recurrence = series.recurrence as string;
+      if (!recurrence || recurrence === 'none') continue;
+
+      const baseData = (series.base_event_data as Record<string, unknown>) || {};
+      const startTime = baseData.start_time as string;
+      const endTime = (baseData.end_time as string) || null;
+      const tz = (baseData.event_timezone as string) || 'America/New_York';
+
+      // Skip if base_event_data doesn't have time info (pre-migration series)
+      if (!startTime) {
+        console.log(`[CRON] Skipping series ${series.id} — no start_time in base_event_data`);
+        continue;
+      }
+
+      // Find the last future instance
+      const { data: lastEvent } = await supabaseAdmin
+        .from('events')
+        .select('event_at, event_timezone, series_instance_number')
+        .eq('series_id', series.id)
+        .gte('event_at', new Date().toISOString())
+        .order('event_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!lastEvent) {
+        // No future instances — generate from tomorrow
+        const tomorrow = new Date(now + 24 * 60 * 60 * 1000);
+        const startDate = formatDateStr(tomorrow);
+        const dates = generateInstanceDates(startDate, recurrence);
+
+        // Respect ends_at boundary
+        const endsAt = series.ends_at ? new Date(series.ends_at as string) : null;
+        const filtered = endsAt
+          ? dates.filter(d => new Date(d + 'T23:59:59') <= endsAt)
+          : dates.filter(d => new Date(d + 'T12:00:00') <= horizon);
+
+        if (filtered.length === 0) continue;
+
+        const adminUserId = getAdminUserId();
+        const rows = filtered.map((date, i) => {
+          const eventAt = toTimestamptz(date, startTime, tz);
+          let endTimeTs: string | null = null;
+          if (endTime) {
+            endTimeTs = toTimestamptz(date, endTime, tz);
+            if (new Date(endTimeTs) <= new Date(eventAt)) {
+              const nextDay = new Date(date);
+              nextDay.setDate(nextDay.getDate() + 1);
+              endTimeTs = toTimestamptz(nextDay.toISOString().split('T')[0]!, endTime, tz);
+            }
+          }
+          // Strip template-only time metadata before spreading into event row
+          const { start_time: _st, end_time: _et, event_timezone: _etz, ...eventFields } = baseData;
+          return {
+            ...eventFields,
+            creator_account_id: series.creator_account_id,
+            user_id: adminUserId,
+            source: 'portal', visibility: 'public', status: 'published',
+            is_business: true, region_id: null,
+            event_timezone: tz,
+            event_at: eventAt, end_time: endTimeTs,
+            recurrence, series_id: series.id,
+            series_instance_number: i + 1,
+          };
+        });
+
+        const { data: created, error: insertErr } = await supabaseAdmin
+          .from('events')
+          .insert(rows)
+          .select('id');
+
+        if (insertErr) {
+          console.error(`[CRON] extend-series: insert failed for ${series.id}:`, insertErr.message);
+          errors++;
+        } else {
+          const count = created?.length || 0;
+          instancesCreated += count;
+          extended++;
+          console.log(`[CRON] extend-series: ${series.id} regenerated ${count} instances (no future events existed)`);
+        }
+        continue;
+      }
+
+      // Check if the last instance is within the refill threshold
+      const lastEventDate = new Date(lastEvent.event_at as string);
+      if (lastEventDate > refillThreshold) continue; // Still has enough runway
+
+      // Generate new dates from day after last instance to horizon
+      const lastTz = (lastEvent.event_timezone as string) || tz;
+      const lastParsed = fromTimestamptz(lastEvent.event_at as string, lastTz);
+      const lastNum = (lastEvent.series_instance_number as number) || 0;
+
+      const lastDate = new Date(lastParsed.date + 'T12:00:00');
+      lastDate.setDate(lastDate.getDate() + 1);
+      const newStartDate = formatDateStr(lastDate);
+
+      const newDates = generateInstanceDates(newStartDate, recurrence);
+
+      // Respect ends_at and horizon boundaries
+      const endsAt = series.ends_at ? new Date(series.ends_at as string) : null;
+      const boundary = endsAt && endsAt < horizon ? endsAt : horizon;
+      const filtered = newDates.filter(d => new Date(d + 'T12:00:00') <= boundary);
+
+      if (filtered.length === 0) continue;
+
+      const adminUserId = getAdminUserId();
+      const rows = filtered.map((date, i) => {
+        const eventAt = toTimestamptz(date, startTime, tz);
+        let endTimeTs: string | null = null;
+        if (endTime) {
+          endTimeTs = toTimestamptz(date, endTime, tz);
+          if (new Date(endTimeTs) <= new Date(eventAt)) {
+            const nextDay = new Date(date);
+            nextDay.setDate(nextDay.getDate() + 1);
+            endTimeTs = toTimestamptz(nextDay.toISOString().split('T')[0]!, endTime, tz);
+          }
+        }
+        const { start_time: _st2, end_time: _et2, event_timezone: _etz2, ...evFields } = baseData;
+        return {
+          ...evFields,
+          creator_account_id: series.creator_account_id,
+          user_id: adminUserId,
+          source: 'portal', visibility: 'public', status: 'published',
+          is_business: true, region_id: null,
+          event_timezone: tz,
+          event_at: eventAt, end_time: endTimeTs,
+          recurrence, series_id: series.id,
+          series_instance_number: lastNum + i + 1,
+        };
+      });
+
+      const { data: created, error: insertErr } = await supabaseAdmin
+        .from('events')
+        .insert(rows)
+        .select('id');
+
+      if (insertErr) {
+        console.error(`[CRON] extend-series: insert failed for ${series.id}:`, insertErr.message);
+        errors++;
+      } else {
+        const count = created?.length || 0;
+        instancesCreated += count;
+        extended++;
+        // Dispatch webhooks for new published instances
+        if (count > 0) void dispatchSeriesWebhooks(created!);
+        console.log(`[CRON] extend-series: ${series.id} +${count} instances (last was ${lastParsed.date})`);
+      }
+    } catch (err) {
+      console.error(`[CRON] extend-series: error for ${series.id}:`, err instanceof Error ? err.message : err);
+      errors++;
+    }
+  }
+
+  return { extended, instancesCreated, errors };
+}
+
 /** Fire-and-forget webhook dispatch for newly created series events */
 export async function dispatchSeriesWebhooks(events: Array<{ id: string }>): Promise<void> {
   for (const e of events) {

@@ -11,6 +11,7 @@ import { writeLimiter } from '../middleware/rate-limit.js';
 import { retryFailedWebhooks } from '../lib/webhook-delivery.js';
 import { geocodeBackfill } from '../lib/geocoding.js';
 import { verifyEventImages, verifyAccountImages } from '../lib/image-verification.js';
+import { autoExtendSeries } from '../lib/event-series.js';
 
 
 const router: ReturnType<typeof Router> = Router();
@@ -63,6 +64,21 @@ router.post('/verify-images', async (_req, res, next) => {
 
     console.log(`[CRON] verify-images: events ${events.broken}/${events.checked} broken (${events.cleared} cleared), accounts ${accounts.broken}/${accounts.checked} broken (${accounts.cleared} cleared)`);
     res.json({ success: true, events, accounts });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /extend-series — Auto-extend series to maintain 6-week rolling horizon
+// ---------------------------------------------------------------------------
+
+router.post('/extend-series', async (_req, res, next) => {
+  try {
+    const result = await autoExtendSeries();
+
+    console.log(`[CRON] extend-series: ${result.extended} series extended, ${result.instancesCreated} instances created, ${result.errors} errors`);
+    res.json({ success: true, ...result });
   } catch (err) {
     next(err);
   }
