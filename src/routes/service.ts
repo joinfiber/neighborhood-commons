@@ -536,6 +536,7 @@ const createEventSchema = z.object({
 });
 
 const updateEventSchema = z.object({
+  account_id: z.string().uuid().optional(),
   title: z.string().min(1).max(200).optional(),
   venue_name: z.string().min(1).max(200).optional(),
   address: z.string().max(500).optional(),
@@ -857,6 +858,17 @@ router.patch('/events/:id', serviceLimiter, async (req, res, next) => {
     const tz = data.event_timezone || existing.event_timezone || 'America/New_York';
     const wasPublished = existing.status === 'published';
     const dbUpdate: Record<string, unknown> = {};
+
+    // Reassign event to a different account (for merging duplicates)
+    if (data.account_id !== undefined) {
+      const { data: newAccount } = await supabaseAdmin
+        .from('portal_accounts')
+        .select('id')
+        .eq('id', data.account_id)
+        .maybeSingle();
+      if (!newAccount) throw createError('Target account not found', 404, 'NOT_FOUND');
+      dbUpdate.creator_account_id = data.account_id;
+    }
 
     if (data.status !== undefined) dbUpdate.status = data.status;
     if (data.title !== undefined) dbUpdate.content = data.title;
