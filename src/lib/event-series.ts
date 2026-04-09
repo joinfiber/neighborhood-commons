@@ -8,6 +8,7 @@
 import { supabaseAdmin } from './supabase.js';
 import { dispatchWebhooks, dispatchSeriesCreatedWebhook } from './webhook-delivery.js';
 import { toNeighborhoodEvent, toRRule, type PortalEventRow } from './event-transform.js';
+import { createError } from '../middleware/error-handler.js';
 import {
   toTimestamptz, fromTimestamptz, generateInstanceDates,
   getAdminUserId, PORTAL_SELECT, MANAGED_SOURCES,
@@ -27,7 +28,12 @@ export async function createEventSeries(
   instanceCount?: number,
 ): Promise<Array<{ id: string; event_date: string }>> {
   const dates = generateInstanceDates(startDate, recurrence, instanceCount);
-  if (dates.length <= 1) return [];
+  if (dates.length <= 1) {
+    throw createError(
+      `Recurrence pattern "${recurrence}" generated ${dates.length} date(s) from ${startDate} — a series requires at least 2 instances`,
+      400, 'VALIDATION_ERROR',
+    );
+  }
 
   const adminUserId = getAdminUserId();
 
@@ -58,8 +64,8 @@ export async function createEventSeries(
     .single();
 
   if (seriesErr || !series) {
-    console.error('[PORTAL] Event series create failed:', seriesErr?.message);
-    return [];
+    console.error('[SERIES] Series row insert failed:', seriesErr?.message);
+    throw createError('Failed to create event series', 500, 'SERVER_ERROR');
   }
 
   // Build event rows
@@ -94,8 +100,10 @@ export async function createEventSeries(
     .order('event_at', { ascending: true });
 
   if (error) {
-    console.error('[PORTAL] Series insert failed:', error.message);
-    return [];
+    console.error('[SERIES] Event instances insert failed:', error.message);
+    // Clean up the orphaned series row
+    await supabaseAdmin.from('event_series').delete().eq('id', series.id);
+    throw createError('Failed to create event instances', 500, 'SERVER_ERROR');
   }
 
   // Dispatch webhooks only for published events (skip pending_review)
@@ -132,7 +140,7 @@ export async function createEventSeries(
     return { id: e.id, event_date: date };
   });
 
-  console.log(`[PORTAL] Series created: ${results.length} instances (series ${series.id})`);
+  console.log(`[SERIES] Created: ${results.length} instances (series ${series.id})`);
   return results;
 }
 
