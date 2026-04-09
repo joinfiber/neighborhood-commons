@@ -247,6 +247,33 @@ describe('Contribute API — input validation', () => {
     expect(res.status).toBe(400);
   });
 
+  it('accepts kebab-case category and normalizes to underscore', async () => {
+    mockValidApiKey();
+    // Mock the rate limit check and event insert
+    mockResponses.set('api_keys', {
+      data: { id: 'key-uuid-1', contributor_tier: 'verified', name: 'Test App', url: null, rate_limit_per_hour: 1000 },
+      error: null,
+    });
+    mockResponses.set('events', {
+      data: [{ id: 'new-evt-id', status: 'published', series_id: null }],
+      error: null,
+    });
+
+    const res = await fetch(`${baseUrl}/api/v1/contribute`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': VALID_API_KEY,
+      },
+      body: JSON.stringify({
+        ...VALID_EVENT,
+        category: 'live-music', // kebab-case, not underscore
+      }),
+    });
+    // Should not be rejected as invalid category
+    expect(res.status).not.toBe(400);
+  });
+
   it('rejects invalid timezone', async () => {
     mockValidApiKey();
 

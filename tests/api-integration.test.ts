@@ -557,3 +557,65 @@ describe('series deduplication', () => {
     expect(standalone.series_id).toBeNull();
   });
 });
+
+// =============================================================================
+// ACCOUNTS — SPEC-COMPLIANT EVENT EMBEDDING
+// =============================================================================
+
+describe('Accounts API — spec-compliant event embedding', () => {
+  it('returns events through toNeighborhoodEvent transform', async () => {
+    // Mock account lookup
+    mockResponses.set('portal_accounts', {
+      data: {
+        id: 'acc-uuid-1', business_name: 'Test Bar', slug: 'test-bar',
+        phone: null, website: null, logo_url: null, cover_image_url: null,
+        description: null, default_venue_name: 'Test Bar', default_place_id: null,
+        default_address: '123 Main St', default_latitude: 39.97, default_longitude: -75.13,
+        operating_hours: null, status: 'active', claimed_at: null,
+        created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+      },
+      error: null,
+    });
+    // Mock events for the account — include a one-off (recurrence='none') and a recurring
+    mockResponses.set('events', {
+      data: [
+        makeDbRow({
+          id: 'one-off-evt', recurrence: 'none', series_id: null,
+          creator_account_id: 'acc-uuid-1',
+        }),
+        makeDbRow({
+          id: 'recurring-evt', recurrence: 'weekly', series_id: 'series-1',
+          series_instance_number: 1, creator_account_id: 'acc-uuid-1',
+        }),
+      ],
+      error: null,
+    });
+
+    const res = await fetch(`${baseUrl}/api/v1/accounts/acc-uuid-1`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+
+    // One-off events (recurrence='none') should appear in upcoming_events, not regular_programming
+    expect(body.account.upcoming_events.length).toBe(1);
+    expect(body.account.upcoming_events[0].id).toBe('one-off-evt');
+
+    // Recurring events should appear in regular_programming
+    expect(body.account.regular_programming.length).toBe(1);
+    expect(body.account.regular_programming[0].id).toBe('recurring-evt');
+
+    // Events should have spec-compliant shape (via toNeighborhoodEvent)
+    const evt = body.account.upcoming_events[0];
+    expect(evt).toHaveProperty('name');       // not 'content'
+    expect(evt).toHaveProperty('timezone');
+    expect(evt).toHaveProperty('source');
+    expect(evt).toHaveProperty('organizer');
+    expect(evt.source).toHaveProperty('license', 'CC BY 4.0');
+    expect(evt.location).toHaveProperty('address');
+    expect(evt.recurrence).toBeNull(); // 'none' transformed to null
+    // Should NOT have raw DB field names
+    expect(evt).not.toHaveProperty('content');
+    expect(evt).not.toHaveProperty('image_url');
+    expect(evt).not.toHaveProperty('link_url');
+    expect(evt).not.toHaveProperty('price');
+  });
+});

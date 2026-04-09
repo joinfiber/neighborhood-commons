@@ -17,6 +17,7 @@ import { supabaseAdmin } from '../lib/supabase.js';
 import { createError } from '../middleware/error-handler.js';
 import { validateRequest, sanitizeSearchInput } from '../lib/helpers.js';
 import { optionalApiKey } from '../middleware/api-key.js';
+import { toNeighborhoodEvent, type PortalEventRow, type NeighborhoodEvent } from '../lib/event-transform.js';
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -49,41 +50,20 @@ const listSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
-// Shared: fetch events for an account (regular programming + upcoming)
+// Shared: event select + classification
 // ---------------------------------------------------------------------------
 
-async function getAccountEvents(accountId: string) {
-  const { data: futureEvents } = await supabaseAdmin
-    .from('events')
-    .select('id, content, event_at, end_time, place_name, category, recurrence, series_id, description, event_image_url, price, link_url')
-    .eq('creator_account_id', accountId)
-    .eq('status', 'published')
-    .gte('event_at', new Date().toISOString())
-    .order('event_at', { ascending: true })
-    .limit(50);
+// Full PortalEventRow select — matches v1.ts, feeds toNeighborhoodEvent()
+const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, event_image_focal_y, created_at, creator_account_id, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, runtime_minutes, content_rating, showtimes, source_method, source_publisher, source_contributor_url, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible)';
 
-  const allEvents = (futureEvents || []).map(e => ({
-    id: e.id,
-    name: e.content,
-    start: e.event_at,
-    end: e.end_time,
-    location: { name: e.place_name },
-    category: e.category ? [e.category] : [],
-    recurrence: e.recurrence || null,
-    series_id: e.series_id || null,
-    description: e.description || null,
-    image_url: e.event_image_url || null,
-    price: e.price || null,
-    link_url: e.link_url || null,
-  }));
-
-  // Split into regular programming (recurring) vs upcoming (one-off)
-  const regularProgramming = allEvents.filter(e => e.recurrence || e.series_id);
-  const upcoming = allEvents.filter(e => !e.recurrence && !e.series_id);
+/** Classify transformed events into regular programming (recurring) vs upcoming (one-off) */
+function classifyEvents(events: NeighborhoodEvent[]) {
+  const regular = events.filter(e => e.recurrence || e.series_id);
+  const upcoming = events.filter(e => !e.recurrence && !e.series_id);
 
   // Deduplicate regular programming by series — show only the next instance
   const seenSeries = new Set<string>();
-  const dedupedProgramming = regularProgramming.filter(e => {
+  const dedupedProgramming = regular.filter(e => {
     const key = e.series_id || e.name;
     if (seenSeries.has(key)) return false;
     seenSeries.add(key);
@@ -93,60 +73,47 @@ async function getAccountEvents(accountId: string) {
   return { regular_programming: dedupedProgramming, upcoming_events: upcoming };
 }
 
-/** Format a raw event row into the API response shape */
-function formatEvent(e: Record<string, unknown>) {
-  return {
-    id: e.id,
-    name: e.content,
-    start: e.event_at,
-    end: e.end_time,
-    location: { name: e.place_name },
-    category: e.category ? [e.category] : [],
-    recurrence: e.recurrence || null,
-    series_id: e.series_id || null,
-    description: e.description || null,
-    image_url: e.event_image_url || null,
-    price: e.price || null,
-    link_url: e.link_url || null,
-  };
+async function getAccountEvents(accountId: string) {
+  const { data: futureEvents } = await supabaseAdmin
+    .from('events')
+    .select(EVENTS_SELECT)
+    .eq('creator_account_id', accountId)
+    .eq('status', 'published')
+    .gte('event_at', new Date().toISOString())
+    .order('event_at', { ascending: true })
+    .limit(50);
+
+  const transformed = (futureEvents || []).map(e => toNeighborhoodEvent(e as unknown as PortalEventRow));
+  return classifyEvents(transformed);
 }
 
 /** Batch-load events for multiple accounts in a single query (avoids N+1) */
 async function getEventsForAccounts(accountIds: string[]) {
-  if (accountIds.length === 0) return new Map<string, { regular_programming: ReturnType<typeof formatEvent>[]; upcoming_events: ReturnType<typeof formatEvent>[] }>();
+  if (accountIds.length === 0) return new Map<string, { regular_programming: NeighborhoodEvent[]; upcoming_events: NeighborhoodEvent[] }>();
 
   // Fetch up to 2500 events (50 accounts × 50 events each). PostgREST defaults
   // to 1000 rows without an explicit limit, which could silently truncate results.
   const { data: allEvents } = await supabaseAdmin
     .from('events')
-    .select('id, content, event_at, end_time, place_name, category, recurrence, series_id, description, event_image_url, price, link_url, creator_account_id')
+    .select(EVENTS_SELECT)
     .in('creator_account_id', accountIds)
     .eq('status', 'published')
     .gte('event_at', new Date().toISOString())
     .order('event_at', { ascending: true })
     .limit(2500);
 
-  // Group by account
-  const byAccount = new Map<string, ReturnType<typeof formatEvent>[]>();
+  // Group by account, transform to spec format
+  const byAccount = new Map<string, NeighborhoodEvent[]>();
   for (const id of accountIds) byAccount.set(id, []);
   for (const e of allEvents || []) {
-    const accId = e.creator_account_id as string;
-    byAccount.get(accId)?.push(formatEvent(e));
+    const accId = (e as Record<string, unknown>).creator_account_id as string;
+    byAccount.get(accId)?.push(toNeighborhoodEvent(e as unknown as PortalEventRow));
   }
 
   // Split + deduplicate per account
-  const result = new Map<string, { regular_programming: ReturnType<typeof formatEvent>[]; upcoming_events: ReturnType<typeof formatEvent>[] }>();
+  const result = new Map<string, { regular_programming: NeighborhoodEvent[]; upcoming_events: NeighborhoodEvent[] }>();
   for (const [accId, events] of byAccount) {
-    const regular = events.filter(e => e.recurrence || e.series_id);
-    const upcoming = events.filter(e => !e.recurrence && !e.series_id);
-    const seenSeries = new Set<string>();
-    const dedupedProgramming = regular.filter(e => {
-      const key = (e.series_id || e.name) as string;
-      if (seenSeries.has(key)) return false;
-      seenSeries.add(key);
-      return true;
-    });
-    result.set(accId, { regular_programming: dedupedProgramming, upcoming_events: upcoming });
+    result.set(accId, classifyEvents(events));
   }
   return result;
 }

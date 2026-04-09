@@ -16,6 +16,7 @@ import rateLimit from 'express-rate-limit';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { createError } from '../middleware/error-handler.js';
 import { validateRequest, validateUuidParam, sanitizeSearchInput } from '../lib/helpers.js';
+import { toNeighborhoodEvent, type PortalEventRow } from '../lib/event-transform.js';
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -183,10 +184,10 @@ router.get('/:id', async (req, res, next) => {
       .eq('group_id', id)
       .eq('status', 'published');
 
-    // Get upcoming events (next 5)
+    // Get upcoming events (next 5) — full select for spec-compliant transform
     const { data: upcomingEvents } = await supabaseAdmin
       .from('events')
-      .select('id, content, event_at, end_time, place_name, category')
+      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, event_image_focal_y, created_at, creator_account_id, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, runtime_minutes, content_rating, showtimes, source_method, source_publisher, source_contributor_url, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible)')
       .eq('group_id', id)
       .eq('status', 'published')
       .gte('event_at', new Date().toISOString())
@@ -198,14 +199,7 @@ router.get('/:id', async (req, res, next) => {
         ...formatGroup(group),
         venues: group.group_venues || [],
         event_count: eventCount || 0,
-        upcoming_events: (upcomingEvents || []).map(e => ({
-          id: e.id,
-          name: e.content,
-          start: e.event_at,
-          end: e.end_time,
-          location: { name: e.place_name },
-          category: e.category ? [e.category] : [],
-        })),
+        upcoming_events: (upcomingEvents || []).map(e => toNeighborhoodEvent(e as unknown as PortalEventRow)),
       },
     });
   } catch (err) {

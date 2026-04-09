@@ -12,12 +12,12 @@ export function requireCronSecret(req: Request, res: Response, next: NextFunctio
   const secret = req.headers['x-cron-secret'];
 
   if (!config.cron.secret) {
-    res.status(403).json({ error: 'Cron not configured' });
+    res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Cron not configured' } });
     return;
   }
 
   if (typeof secret !== 'string' || !constantTimeCompare(secret, config.cron.secret)) {
-    res.status(403).json({ error: 'Invalid cron secret' });
+    res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Invalid cron secret' } });
     return;
   }
 

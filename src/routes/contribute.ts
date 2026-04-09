@@ -26,6 +26,7 @@ import { nominatimGeocode } from '../lib/geocoding.js';
 import { sanitizeUrl, checkContributeUrlDomain } from '../lib/url-sanitizer.js';
 import { fromRRule } from '../lib/rrule.js';
 import { createEventSeries } from '../lib/event-series.js';
+import { validateTags } from '../lib/tags.js';
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -54,7 +55,15 @@ const contributeEventSchema = z.object({
     (tz) => VALID_TIMEZONES.has(tz),
     { message: 'Invalid timezone. Use IANA format (e.g., America/New_York)' },
   ),
-  category: z.enum(EVENT_CATEGORY_KEYS as [string, ...string[]]),
+  category: z.string().max(50).transform((val, ctx) => {
+    // Accept both kebab-case (spec format: live-music) and underscore (DB format: live_music)
+    const normalized = val.replace(/-/g, '_');
+    if (!EVENT_CATEGORY_KEYS.includes(normalized as typeof EVENT_CATEGORY_KEYS[number])) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Invalid category: ${val}` });
+      return z.NEVER;
+    }
+    return normalized;
+  }),
   location: locationSchema,
 
   // Optional
@@ -230,7 +239,7 @@ function contributeEventToInsert(
     link_url: event.url ? sanitizeUrl(event.url) : null,
     event_image_url: null, // Set async by downloadAndAttachImage if image_url provided
     start_time_required: true,
-    tags: event.tags || [],
+    tags: event.tags ? validateTags(event.tags, event.category) : [],
     wheelchair_accessible: event.wheelchair_accessible ?? null,
     rsvp_limit: null,
     event_image_focal_y: 0.5,
