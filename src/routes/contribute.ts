@@ -461,10 +461,55 @@ router.post('/batch', writeLimiter, async (req, res, next) => {
         }
       }
 
+      // Parse recurrence if provided
+      let internalRecurrence: string | undefined;
+      let resolvedInstanceCount: number | undefined;
+      if (event.recurrence) {
+        try {
+          const parsed = fromRRule(event.recurrence);
+          internalRecurrence = parsed.recurrence;
+          resolvedInstanceCount = event.instance_count ?? parsed.instanceCount;
+        } catch (err) {
+          results.push({ index: i, error: `Invalid recurrence: ${(err as Error).message}` });
+          continue;
+        }
+      }
+
       // Resolve coordinates and region (geocode if needed)
       const resolved = await resolveLocationAndRegion(event);
-      const insertData = contributeEventToInsert(event, apiKeyId, keyName, keyUrl, tier, resolved);
+      const insertData = contributeEventToInsert(event, apiKeyId, keyName, keyUrl, tier, resolved, {
+        internalRecurrence,
+      });
 
+      // Recurring: create series
+      if (internalRecurrence && internalRecurrence !== 'none') {
+        try {
+          const { date: eventDate, time: eventStartTime } = fromTimestamptz(event.start, event.timezone);
+          const eventEndTime = event.end ? fromTimestamptz(event.end, event.timezone).time : null;
+          const instances = await createEventSeries(
+            insertData, internalRecurrence, eventDate, eventStartTime, eventEndTime,
+            event.timezone, resolvedInstanceCount,
+          );
+
+          const firstId = instances[0]?.id;
+          let seriesId: string | null = null;
+          if (firstId) {
+            const { data: firstEvent } = await supabaseAdmin
+              .from('events').select('series_id').eq('id', firstId).maybeSingle();
+            seriesId = firstEvent?.series_id || null;
+          }
+          results.push({ index: i, id: seriesId || firstId, status: insertData.status as string });
+
+          if (event.image_url && firstId) {
+            void downloadAndAttachImage(firstId, event.image_url);
+          }
+        } catch (err) {
+          results.push({ index: i, error: (err as Error).message });
+        }
+        continue;
+      }
+
+      // One-off event: direct insert
       const { data: row, error } = await supabaseAdmin
         .from('events')
         .insert(insertData)
