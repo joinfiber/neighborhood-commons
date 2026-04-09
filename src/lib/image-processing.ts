@@ -81,10 +81,11 @@ export async function downloadAndAttachImage(eventId: string, imageUrl: string):
     return;
   }
 
+  // redirect: 'error' prevents redirect-based SSRF (validated URL redirects to internal IP)
   const response = await fetch(imageUrl, {
     signal: AbortSignal.timeout(10000),
     headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NeighborhoodCommons/1.0)' },
-    redirect: 'follow',
+    redirect: 'error',
   });
 
   if (!response.ok) {

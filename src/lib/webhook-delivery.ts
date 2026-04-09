@@ -193,6 +193,7 @@ async function deliverWebhook(
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), DELIVERY_TIMEOUT_MS);
 
+    // redirect: 'error' — webhooks must not redirect (signature verification would fail)
     const response = await fetch(sub.url, {
       method: 'POST',
       headers: {
@@ -202,6 +203,7 @@ async function deliverWebhook(
         'User-Agent': 'Neighborhood-Commons/1.0',
       },
       body,
+      redirect: 'error',
       signal: controller.signal,
     });
 
@@ -276,6 +278,7 @@ async function deliverRawWebhook(
         'User-Agent': 'Neighborhood-Commons/1.0',
       },
       body,
+      redirect: 'error',
       signal: controller.signal,
     });
 

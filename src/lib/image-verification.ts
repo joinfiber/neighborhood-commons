@@ -7,6 +7,7 @@
  */
 
 import { supabaseAdmin } from './supabase.js';
+import { validateFeedUrl } from './url-validation.js';
 
 const BATCH_SIZE = 100;
 const TIMEOUT_MS = 5000;
@@ -40,10 +41,17 @@ export async function verifyEventImages(): Promise<VerifyResult> {
     const url = event.event_image_url as string;
     if (!url) continue;
 
+    // SSRF protection: validate URL resolves to a public IP before probing
+    try { await validateFeedUrl(url); } catch {
+      console.log(`[IMAGES] Skipping SSRF-blocked URL for event ${event.id}: ${url}`);
+      continue;
+    }
+
     try {
       const response = await fetch(url, {
         method: 'HEAD',
         signal: AbortSignal.timeout(TIMEOUT_MS),
+        redirect: 'error',
         headers: { 'User-Agent': 'NeighborhoodCommons/1.0 (image-verify)' },
       });
 
@@ -97,10 +105,17 @@ export async function verifyAccountImages(): Promise<VerifyResult> {
       if (!url) continue;
       checked++;
 
+      // SSRF protection: validate URL resolves to a public IP before probing
+      try { await validateFeedUrl(url); } catch {
+        console.log(`[IMAGES] Skipping SSRF-blocked ${field} for account ${account.id}: ${url}`);
+        continue;
+      }
+
       try {
         const response = await fetch(url, {
           method: 'HEAD',
           signal: AbortSignal.timeout(TIMEOUT_MS),
+          redirect: 'error',
           headers: { 'User-Agent': 'NeighborhoodCommons/1.0 (image-verify)' },
         });
 
