@@ -229,12 +229,16 @@ router.post('/accounts/link', serviceLimiter, async (req, res, next) => {
 // =============================================================================
 
 /** GET /service/accounts — List accounts with event counts, optional search + pagination */
+const listAccountsQuerySchema = z.object({
+  search: z.string().max(200).optional(),
+  email: z.string().max(254).optional(),
+  limit: z.coerce.number().int().min(1).max(500).optional().default(500),
+  offset: z.coerce.number().int().min(0).optional().default(0),
+});
+
 router.get('/accounts', serviceLimiter, async (req, res, next) => {
   try {
-    const search = req.query.search as string | undefined;
-    const email = req.query.email as string | undefined;
-    const limit = Math.min(parseInt(req.query.limit as string) || 500, 500);
-    const offset = parseInt(req.query.offset as string) || 0;
+    const { search, email, limit, offset } = validateRequest(listAccountsQuerySchema, req.query);
 
     let query = supabaseAdmin
       .from('portal_accounts')
@@ -559,23 +563,25 @@ const updateEventSchema = z.object({
 });
 
 /** GET /service/events — Events with pagination, search, and filters */
+const listEventsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(200).optional().default(50),
+  offset: z.coerce.number().int().min(0).optional().default(0),
+  search: z.string().max(200).optional(),
+  time: z.enum(['upcoming', 'past', 'all']).optional(),
+  status: z.enum(['published', 'pending_review', 'suspended', 'draft']).optional(),
+});
+
 router.get('/events', serviceLimiter, async (req, res, next) => {
   try {
-    const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
-    const offset = parseInt(req.query.offset as string) || 0;
-    const search = req.query.search as string | undefined;
-    const time = req.query.time as string | undefined; // 'upcoming' | 'past' | 'all'
+    const { limit, offset, search, time, status } = validateRequest(listEventsQuerySchema, req.query);
 
     let query = supabaseAdmin
       .from('events')
       .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name, email)`, { count: 'exact' })
       .in('source', [...MANAGED_SOURCES]);
 
-    // Status filter
-    const status = req.query.status as string | undefined;
+    // Status filter (validated by schema)
     if (status) {
-      const allowed = ['published', 'pending_review', 'suspended', 'draft'];
-      if (!allowed.includes(status)) throw createError(`Invalid status filter: ${status}`, 400, 'VALIDATION_ERROR');
       query = query.eq('status', status);
     }
 
@@ -975,10 +981,17 @@ router.post('/events/:id/image', imageBodyLimit, serviceLimiter, async (req, res
     const contentType = req.headers['content-type'] || '';
 
     if (contentType.includes('multipart/form-data')) {
-      // Multipart file upload — read raw body chunks
+      // Multipart file upload — read raw body chunks with size limit
+      const MAX_IMAGE_SIZE = 12 * 1024 * 1024; // 12MB, matching JSON body limit
       const chunks: Buffer[] = [];
+      let totalSize = 0;
       for await (const chunk of req) {
-        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        totalSize += buf.length;
+        if (totalSize > MAX_IMAGE_SIZE) {
+          throw createError('Image too large (max 12MB)', 413, 'PAYLOAD_TOO_LARGE');
+        }
+        chunks.push(buf);
       }
       const body = Buffer.concat(chunks);
 
@@ -1358,12 +1371,16 @@ const groupVenueSchema = z.object({
   is_primary: z.boolean().default(false),
 });
 
+const listGroupsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(200).optional().default(50),
+  offset: z.coerce.number().int().min(0).optional().default(0),
+  search: z.string().max(200).optional(),
+});
+
 /** GET /service/groups — List all groups */
 router.get('/groups', serviceLimiter, async (req, res, next) => {
   try {
-    const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
-    const offset = parseInt(req.query.offset as string) || 0;
-    const search = req.query.search as string | undefined;
+    const { limit, offset, search } = validateRequest(listGroupsQuerySchema, req.query);
 
     let query = supabaseAdmin
       .from('groups')

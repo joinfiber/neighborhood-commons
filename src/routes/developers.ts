@@ -252,7 +252,7 @@ router.post('/keys/rotate', writeLimiter, verifyOtpLimiter, requireApiKey, async
     // Verify the key belongs to this email
     const { data: keyInfo } = await supabaseAdmin
       .from('api_keys')
-      .select('id, contact_email')
+      .select('id, contact_email, name, contributor_tier, rate_limit_per_hour, url')
       .eq('id', keyId)
       .single();
 
@@ -275,7 +275,13 @@ router.post('/keys/rotate', writeLimiter, verifyOtpLimiter, requireApiKey, async
     // Create new key
     let newKey;
     try {
-      newKey = await generateAndStoreKey(keyInfo.contact_email, keyInfo.contact_email);
+      newKey = await generateAndStoreKey(
+        keyInfo.name || keyInfo.contact_email,
+        keyInfo.contact_email,
+        keyInfo.contributor_tier || 'pending',
+        keyInfo.rate_limit_per_hour || 1000,
+        keyInfo.url || undefined,
+      );
     } catch (err: unknown) {
       // Re-activate old key if new one fails
       await supabaseAdmin

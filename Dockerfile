@@ -8,14 +8,14 @@ WORKDIR /app
 # sharp prebuilt binary resolution fails on Alpine npm, so we
 # skip install scripts and explicitly add the musl prebuilt binary
 FROM base AS prod-deps
-COPY package.json ./
-RUN npm install --omit=dev --ignore-scripts && \
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --ignore-scripts && \
     npm install @img/sharp-linuxmusl-x64 --ignore-scripts
 
 # ─── API: All dependencies (for TypeScript compilation) ───────
 FROM base AS all-deps
-COPY package.json ./
-RUN npm install --ignore-scripts
+COPY package.json package-lock.json ./
+RUN npm ci --ignore-scripts
 
 # ─── API: Build TypeScript ────────────────────────────────────
 FROM base AS api-builder
@@ -28,8 +28,8 @@ RUN ls -la dist/ && test -f dist/index.js
 # ─── Portal: Build React SPA ─────────────────────────────────
 FROM base AS portal-builder
 WORKDIR /app/portal
-COPY portal/package.json ./
-RUN npm install
+COPY portal/package.json portal/package-lock.json ./
+RUN npm ci
 COPY portal/ .
 
 # Supabase config baked into the SPA at build time

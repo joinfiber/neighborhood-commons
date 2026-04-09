@@ -29,7 +29,7 @@ import { fileURLToPath } from 'url';
 
 const SCHEMA: Record<string, string[]> = {
   api_keys: [
-    'id', 'name', 'tier', 'rate_limit_per_hour', 'created_at',
+    'id', 'name', 'rate_limit_per_hour', 'created_at',
     'key_hash', 'key_prefix', 'contact_email', 'status', 'last_used_at', 'contributor_tier',
     'url', 'is_admin',
   ],
