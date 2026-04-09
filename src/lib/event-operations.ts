@@ -210,16 +210,17 @@ export function portalInputToInsert(
 
 const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
 
+// 6-week rolling horizon — auto-extend cron maintains this window
 const DEFAULT_LIMITS: Record<string, number> = {
-  daily: 180, weekly: 26, biweekly: 13, monthly: 6,
+  daily: 42, weekly: 6, biweekly: 3, monthly: 2,
 };
-const DEFAULT_ORDINAL_LIMIT = 6;
-const DEFAULT_WEEKLY_DAYS_LIMIT = 26; // ~6 months of specific-day events
+const DEFAULT_ORDINAL_LIMIT = 2;
+const DEFAULT_WEEKLY_DAYS_LIMIT = 6; // 6 weeks of specific-day events
 const ONGOING_LIMITS: Record<string, number> = {
-  daily: 180, weekly: 26, biweekly: 13, monthly: 12,
+  daily: 42, weekly: 6, biweekly: 3, monthly: 2,
 };
-const ONGOING_ORDINAL_LIMIT = 12;
-const ONGOING_WEEKLY_DAYS_LIMIT = 26; // ~6 months of specific-day events
+const ONGOING_ORDINAL_LIMIT = 2;
+const ONGOING_WEEKLY_DAYS_LIMIT = 6; // 6 weeks of specific-day events
 
 const DAY_ABBR_TO_INDEX: Record<string, number> = {
   sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6,
