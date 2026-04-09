@@ -271,15 +271,25 @@ export function generateInstanceDates(startDate: string, recurrence: string, ins
   }
 
   // weekly_days pattern: generate dates for specific days of the week
-  // instanceCount means "weeks" for this pattern — multiply by days per week
+  // When instanceCount is explicit, it means total events (not weeks).
+  // When using defaults, we generate DEFAULT_WEEKLY_DAYS_LIMIT weeks of events.
   const weeklyDays = parseWeeklyDays(recurrence);
   if (weeklyDays) {
-    const weeks = resolveLimit(DEFAULT_WEEKLY_DAYS_LIMIT, ONGOING_WEEKLY_DAYS_LIMIT);
-    const totalEvents = weeks * weeklyDays.length;
+    let totalEvents: number;
+    let maxWeeks: number;
+    if (instanceCount !== undefined && instanceCount > 0) {
+      // Explicit count = total events
+      totalEvents = instanceCount;
+      maxWeeks = Math.ceil(instanceCount / weeklyDays.length) + 2;
+    } else {
+      const weeks = instanceCount === 0 ? ONGOING_WEEKLY_DAYS_LIMIT : DEFAULT_WEEKLY_DAYS_LIMIT;
+      totalEvents = weeks * weeklyDays.length;
+      maxWeeks = weeks;
+    }
     // Walk forward day by day, collecting dates that match the target days
     const cursor = new Date(start);
     cursor.setDate(cursor.getDate() + 1); // start from next day (startDate already included)
-    const maxDays = weeks * 7 + 7; // safety bound
+    const maxDays = maxWeeks * 7 + 7; // safety bound
     let walked = 0;
     while (dates.length < totalEvents && walked < maxDays) {
       if (weeklyDays.includes(cursor.getDay())) {
