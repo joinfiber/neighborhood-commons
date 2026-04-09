@@ -65,7 +65,7 @@ const SCHEMA: Record<string, string[]> = {
   ],
   event_series: [
     'id', 'creator_account_id', 'recurrence', 'base_event_data',
-    'created_at', 'updated_at', 'user_id', 'recurrence_rule',
+    'created_at', 'updated_at', 'user_id', 'recurrence_rule', 'ends_at',
   ],
   portal_accounts: [
     'id', 'auth_user_id', 'email', 'business_name', 'phone', 'website',

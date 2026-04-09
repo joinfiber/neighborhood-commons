@@ -37,7 +37,8 @@ export async function createEventSeries(
 
   const adminUserId = getAdminUserId();
 
-  // Snapshot the template fields so we can detect per-instance customizations later
+  // Snapshot the template fields for future instance generation (auto-extend cron)
+  // and template-first editing (bulk-update futures from this snapshot)
   const baseEventData: Record<string, unknown> = {};
   const templateKeys = [
     'content', 'description', 'place_name', 'venue_address', 'place_id',
@@ -48,6 +49,10 @@ export async function createEventSeries(
   for (const key of templateKeys) {
     if (key in templateData) baseEventData[key] = templateData[key];
   }
+  // Store time info so auto-extend cron can generate instances without fetching existing events
+  baseEventData.start_time = startTime;
+  baseEventData.end_time = endTime || null;
+  baseEventData.event_timezone = timezone;
 
   // Create an event_series row
   const recurrenceRule = { frequency: recurrence, count: dates.length };
