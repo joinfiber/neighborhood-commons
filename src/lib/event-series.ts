@@ -10,7 +10,7 @@ import { dispatchWebhooks, dispatchSeriesCreatedWebhook } from './webhook-delive
 import { toNeighborhoodEvent, toRRule, type PortalEventRow } from './event-transform.js';
 import { createError } from '../middleware/error-handler.js';
 import {
-  toTimestamptz, fromTimestamptz, generateInstanceDates,
+  toTimestamptz, fromTimestamptz, generateInstanceDates, formatDateStr,
   getAdminUserId, PORTAL_SELECT, MANAGED_SOURCES,
 } from './event-operations.js';
 
@@ -192,6 +192,254 @@ export async function deleteSeriesEvents(seriesId: string): Promise<number> {
 
   console.log(`[PORTAL] Series ${seriesId} deleted: ${events.length} events`);
   return events.length;
+}
+
+// =============================================================================
+// SERIES UPDATE — shared by portal and admin
+// =============================================================================
+
+export interface SeriesUpdateInput {
+  seriesId: string;
+  /** DB-column-keyed template field updates (e.g., { content: 'New Title', price: '$5' }) */
+  updates: Record<string, unknown>;
+  /** Per-instance time changes — preserves each instance's date */
+  timeChange?: { startTime?: string; endTime?: string | null };
+  /** Change the number of future instances */
+  instanceCountChange?: number;
+  /** Timezone for time composition */
+  timezone: string;
+}
+
+export interface SeriesUpdateResult {
+  updatedCount: number;
+  totalAfter: number;
+  instancesAdded: number;
+  instancesRemoved: number;
+  updatedIds: string[];
+}
+
+/** Map from DB column names to base_event_data keys — used when updating the template snapshot */
+const COLUMN_TO_BASE_KEY: Record<string, string> = {
+  content: 'content', place_name: 'place_name', venue_address: 'venue_address',
+  place_id: 'place_id', latitude: 'latitude', longitude: 'longitude',
+  category: 'category', custom_category: 'custom_category',
+  description: 'description', price: 'price', link_url: 'link_url',
+  start_time_required: 'start_time_required', tags: 'tags',
+  wheelchair_accessible: 'wheelchair_accessible', rsvp_limit: 'rsvp_limit',
+  event_image_focal_y: 'event_image_focal_y',
+};
+
+/**
+ * Update all future instances of a series from the template.
+ * Template-first: all future instances get the update unconditionally.
+ * No per-instance customization detection — the operator edits "the thing."
+ */
+export async function updateSeriesFutureInstances(input: SeriesUpdateInput): Promise<SeriesUpdateResult> {
+  const { seriesId, updates, timeChange, instanceCountChange, timezone: tz } = input;
+
+  // Fetch series metadata
+  const { data: series } = await supabaseAdmin
+    .from('event_series')
+    .select('id, recurrence, base_event_data, creator_account_id')
+    .eq('id', seriesId)
+    .maybeSingle();
+
+  if (!series) throw createError('Series not found', 404, 'NOT_FOUND');
+
+  const baseData = (series.base_event_data as Record<string, unknown>) || {};
+
+  // Fetch all future instances
+  const now = new Date().toISOString();
+  const { data: futureEvents, error: fetchErr } = await supabaseAdmin
+    .from('events')
+    .select('id, event_at, end_time, event_timezone, series_instance_number')
+    .eq('series_id', seriesId)
+    .in('source', [...MANAGED_SOURCES])
+    .gte('event_at', now)
+    .order('event_at', { ascending: true });
+
+  if (fetchErr) throw createError('Failed to fetch series events', 500, 'SERVER_ERROR');
+  if (!futureEvents || futureEvents.length === 0) {
+    throw createError('No upcoming events in this series', 404, 'NOT_FOUND');
+  }
+
+  let updatedCount = 0;
+  const updatedIds: string[] = [];
+  const hasTimeChange = timeChange && (timeChange.startTime !== undefined || timeChange.endTime !== undefined);
+
+  if (Object.keys(updates).length > 0 || hasTimeChange) {
+    if (hasTimeChange) {
+      // Time changes need per-instance handling (each instance has its own date)
+      for (const ev of futureEvents) {
+        const instanceUpdate: Record<string, unknown> = { ...updates };
+        const instanceTz = (ev.event_timezone as string) || tz;
+        const parsed = ev.event_at ? fromTimestamptz(ev.event_at as string, instanceTz) : null;
+        const instanceDate = parsed?.date;
+
+        if (instanceDate) {
+          if (timeChange!.startTime !== undefined) {
+            const newTime = timeChange!.startTime || parsed?.time;
+            if (newTime) instanceUpdate.event_at = toTimestamptz(instanceDate, newTime, instanceTz);
+          }
+          if (timeChange!.endTime !== undefined) {
+            if (timeChange!.endTime) {
+              const eventAtRef = (instanceUpdate.event_at as string) || (ev.event_at as string);
+              let endTimeTs = toTimestamptz(instanceDate, timeChange!.endTime, instanceTz);
+              if (eventAtRef && new Date(endTimeTs) <= new Date(eventAtRef)) {
+                const nextDay = new Date(instanceDate);
+                nextDay.setDate(nextDay.getDate() + 1);
+                endTimeTs = toTimestamptz(nextDay.toISOString().split('T')[0]!, timeChange!.endTime, instanceTz);
+              }
+              instanceUpdate.end_time = endTimeTs;
+            } else {
+              instanceUpdate.end_time = null;
+            }
+          }
+        }
+
+        if (Object.keys(instanceUpdate).length === 0) continue;
+
+        const { error: updateErr } = await supabaseAdmin
+          .from('events')
+          .update(instanceUpdate)
+          .eq('id', ev.id as string);
+
+        if (!updateErr) {
+          updatedCount++;
+          updatedIds.push(ev.id as string);
+        }
+      }
+    } else {
+      // No time change — batch update all future instances at once
+      const ids = futureEvents.map(e => e.id as string);
+      const { error: updateErr } = await supabaseAdmin
+        .from('events')
+        .update(updates)
+        .in('id', ids);
+
+      if (!updateErr) {
+        updatedCount = ids.length;
+        updatedIds.push(...ids);
+      }
+    }
+  }
+
+  // Update base_event_data on the series row
+  const newBase = { ...baseData };
+  for (const [col, baseKey] of Object.entries(COLUMN_TO_BASE_KEY)) {
+    if (col in updates) newBase[baseKey] = updates[col];
+  }
+  if (hasTimeChange) {
+    if (timeChange!.startTime !== undefined) newBase.start_time = timeChange!.startTime;
+    if (timeChange!.endTime !== undefined) newBase.end_time = timeChange!.endTime || null;
+  }
+  await supabaseAdmin
+    .from('event_series')
+    .update({ base_event_data: newBase })
+    .eq('id', seriesId);
+
+  // Handle instance_count changes
+  let instancesAdded = 0;
+  let instancesRemoved = 0;
+
+  if (instanceCountChange !== undefined) {
+    const seriesRecurrence = series.recurrence as string;
+    if (seriesRecurrence && seriesRecurrence !== 'none') {
+      const desiredCount = generateInstanceDates('2025-01-01', seriesRecurrence, instanceCountChange).length;
+
+      // Re-fetch future instances (may have changed from template updates)
+      const { data: allFuture } = await supabaseAdmin
+        .from('events')
+        .select('id, event_at, event_timezone, end_time, series_instance_number')
+        .eq('series_id', seriesId)
+        .in('source', [...MANAGED_SOURCES])
+        .gte('event_at', now)
+        .order('event_at', { ascending: true });
+
+      const currentFutureCount = allFuture?.length || 0;
+
+      if (desiredCount > currentFutureCount && allFuture && allFuture.length > 0) {
+        // Extend: generate new instances from day after last existing one
+        const lastFuture = allFuture[allFuture.length - 1]!;
+        const lastTz = (lastFuture.event_timezone as string) || tz;
+        const lastParsed = fromTimestamptz(lastFuture.event_at as string, lastTz);
+        const lastNum = (lastFuture.series_instance_number as number) || allFuture.length;
+
+        const startTime = (newBase.start_time as string) || lastParsed.time;
+        let endTime: string | null = (newBase.end_time as string) || null;
+        if (!endTime && lastFuture.end_time) {
+          endTime = fromTimestamptz(lastFuture.end_time as string, lastTz).time;
+        }
+
+        const lastDate = new Date(lastParsed.date + 'T12:00:00');
+        lastDate.setDate(lastDate.getDate() + 1);
+        const newStartDate = formatDateStr(lastDate);
+
+        const needed = desiredCount - currentFutureCount;
+        const newDates = generateInstanceDates(newStartDate, seriesRecurrence, needed);
+
+        if (newDates.length > 0) {
+          const adminUserId = getAdminUserId();
+          const rows = newDates.map((date, i) => {
+            const eventAt = toTimestamptz(date, startTime, lastTz);
+            let endTimeTs: string | null = null;
+            if (endTime) {
+              endTimeTs = toTimestamptz(date, endTime, lastTz);
+              if (new Date(endTimeTs) <= new Date(eventAt)) {
+                const nextDay = new Date(date);
+                nextDay.setDate(nextDay.getDate() + 1);
+                endTimeTs = toTimestamptz(nextDay.toISOString().split('T')[0]!, endTime, lastTz);
+              }
+            }
+            return {
+              ...newBase,
+              creator_account_id: series.creator_account_id,
+              user_id: adminUserId,
+              source: 'portal',
+              visibility: 'public',
+              status: 'published',
+              is_business: true,
+              region_id: null,
+              event_timezone: lastTz,
+              event_at: eventAt,
+              end_time: endTimeTs,
+              recurrence: seriesRecurrence,
+              series_id: seriesId,
+              series_instance_number: lastNum + i + 1,
+            };
+          });
+
+          const { data: created, error: insertErr } = await supabaseAdmin
+            .from('events')
+            .insert(rows)
+            .select('id');
+
+          if (!insertErr) instancesAdded = created?.length || 0;
+        }
+      } else if (desiredCount < currentFutureCount && allFuture) {
+        // Shrink: remove the furthest-out instances
+        const toRemove = allFuture.slice(desiredCount);
+        const removeIds = toRemove.map(e => e.id as string);
+        if (removeIds.length > 0) {
+          const { error: delErr } = await supabaseAdmin
+            .from('events')
+            .delete()
+            .in('id', removeIds);
+          if (!delErr) instancesRemoved = removeIds.length;
+        }
+      }
+
+      // Update recurrence_rule count
+      const finalCount = currentFutureCount + instancesAdded - instancesRemoved;
+      await supabaseAdmin
+        .from('event_series')
+        .update({ recurrence_rule: { frequency: seriesRecurrence, count: finalCount } })
+        .eq('id', seriesId);
+    }
+  }
+
+  const totalAfter = futureEvents.length + instancesAdded - instancesRemoved;
+  return { updatedCount, totalAfter, instancesAdded, instancesRemoved, updatedIds };
 }
 
 /** Fire-and-forget webhook dispatch for newly created series events */
