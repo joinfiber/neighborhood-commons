@@ -797,3 +797,71 @@ describe('GET /api/v1/events/:id — UUID validation', () => {
     expect(res.status).toBe(404);
   });
 });
+
+// =============================================================================
+// SERVICE API — ADMIN LOCKDOWN
+// =============================================================================
+
+/** Set up mock so requireServiceApiKey middleware succeeds with given admin flag */
+function mockServiceApiKey(isAdmin: boolean) {
+  mockResponses.set('api_keys', {
+    data: { id: 'svc-key-uuid', contributor_tier: 'service', is_admin: isAdmin },
+    error: null,
+  });
+}
+
+const SERVICE_KEY = 'nc_service_key_0123456789abcdef';
+
+describe('Service API — admin lockdown', () => {
+  it('rejects non-admin service key on GET /service/api-keys', async () => {
+    mockServiceApiKey(false);
+    const res = await fetch(`${baseUrl}/api/v1/service/api-keys`, {
+      headers: { 'X-API-Key': SERVICE_KEY },
+    });
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error.code).toBe('FORBIDDEN');
+  });
+
+  it('rejects non-admin service key on PATCH /service/api-keys/:id', async () => {
+    mockServiceApiKey(false);
+    const res = await fetch(`${baseUrl}/api/v1/service/api-keys/a1b2c3d4-e5f6-7890-abcd-ef1234567890`, {
+      method: 'PATCH',
+      headers: { 'X-API-Key': SERVICE_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'hacked' }),
+    });
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error.code).toBe('FORBIDDEN');
+  });
+
+  it('rejects non-admin service key on GET /service/stats', async () => {
+    mockServiceApiKey(false);
+    const res = await fetch(`${baseUrl}/api/v1/service/stats`, {
+      headers: { 'X-API-Key': SERVICE_KEY },
+    });
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error.code).toBe('FORBIDDEN');
+  });
+
+  it('rejects non-admin service key on POST /service/migrate-image-urls', async () => {
+    mockServiceApiKey(false);
+    const res = await fetch(`${baseUrl}/api/v1/service/migrate-image-urls`, {
+      method: 'POST',
+      headers: { 'X-API-Key': SERVICE_KEY },
+    });
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error.code).toBe('FORBIDDEN');
+  });
+
+  it('allows admin service key on GET /service/api-keys', async () => {
+    mockServiceApiKey(true);
+    const res = await fetch(`${baseUrl}/api/v1/service/api-keys`, {
+      headers: { 'X-API-Key': SERVICE_KEY },
+    });
+    // 200 or 500 (mock may not return full data) — but NOT 403
+    expect(res.status).not.toBe(403);
+  });
+});

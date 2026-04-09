@@ -666,7 +666,8 @@ router.get('/csv/batches', async (req, res, next) => {
 router.get('/csv/batches/:id', async (req, res, next) => {
   try {
     const account = await getPortalAccount(req);
-    const batchId = validateUuidParam(req.params.id, 'batch id');
+    validateUuidParam(req.params.id, 'batch id');
+    const batchId = req.params.id;
 
     const { data: batch, error: batchError } = await supabaseAdmin
       .from('contribution_batches')

@@ -162,7 +162,8 @@ router.get('/', async (req, res, next) => {
 
 router.get('/:id', async (req, res, next) => {
   try {
-    const id = validateUuidParam(req.params.id, 'id');
+    validateUuidParam(req.params.id, 'id');
+    const id = req.params.id;
 
     const { data: group, error } = await supabaseAdmin
       .from('groups')

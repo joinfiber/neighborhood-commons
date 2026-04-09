@@ -1150,8 +1150,11 @@ router.post('/accounts/:id/logo', imageBodyLimit, serviceLimiter, async (req, re
 // =============================================================================
 
 /** GET /service/stats — Platform statistics + category distribution */
-router.get('/stats', serviceLimiter, async (_req, res, next) => {
+router.get('/stats', serviceLimiter, async (req, res, next) => {
   try {
+    if (!req.apiKeyInfo?.isAdmin) {
+      throw createError('Admin access required', 403, 'FORBIDDEN');
+    }
     // Run account and event counts in parallel
     const [accountCounts, oneOffCount, seriesCount, categoryRows] = await Promise.all([
       // Account counts: use head:true to avoid fetching rows
@@ -1218,8 +1221,11 @@ router.get('/stats', serviceLimiter, async (_req, res, next) => {
 // =============================================================================
 
 /** GET /service/api-keys — List all API keys with event stats */
-router.get('/api-keys', serviceLimiter, async (_req, res, next) => {
+router.get('/api-keys', serviceLimiter, async (req, res, next) => {
   try {
+    if (!req.apiKeyInfo?.isAdmin) {
+      throw createError('Admin access required', 403, 'FORBIDDEN');
+    }
     const { data: keys, error } = await supabaseAdmin
       .from('api_keys')
       .select('id, key_prefix, name, url, contact_email, rate_limit_per_hour, status, contributor_tier, last_used_at, created_at')
@@ -1271,6 +1277,9 @@ router.get('/api-keys', serviceLimiter, async (_req, res, next) => {
 /** PATCH /service/api-keys/:id — Update API key tier, name, status, or contact email */
 router.patch('/api-keys/:id', serviceLimiter, async (req, res, next) => {
   try {
+    if (!req.apiKeyInfo?.isAdmin) {
+      throw createError('Admin access required', 403, 'FORBIDDEN');
+    }
     validateUuidParam(req.params.id, 'API key ID');
     const schema = z.object({
       name: z.string().min(1).max(100).optional(),
@@ -1593,8 +1602,11 @@ router.patch('/events/:id/group', serviceLimiter, async (req, res, next) => {
  * Converts portal proxy URLs and re-hosts external URLs (Google, gstatic, etc.)
  * One-time migration endpoint. Requires R2_PUBLIC_URL to be configured.
  */
-router.post('/migrate-image-urls', serviceLimiter, async (_req, res, next) => {
+router.post('/migrate-image-urls', serviceLimiter, async (req, res, next) => {
   try {
+    if (!req.apiKeyInfo?.isAdmin) {
+      throw createError('Admin access required', 403, 'FORBIDDEN');
+    }
     if (!config.r2.publicUrl) {
       throw createError('R2_PUBLIC_URL not configured', 400, 'VALIDATION_ERROR');
     }
