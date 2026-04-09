@@ -276,9 +276,10 @@ router.get('/accounts', serviceLimiter, async (req, res, next) => {
 
       if (counts) {
         eventCounts = counts.reduce((acc: Record<string, number>, row: { creator_account_id: string; series_id: string | null; series_instance_number: number | null }) => {
-          // Count one-offs (no series_id) and first instance of each series.
-          // series_instance_number can be null for older events — treat as instance 1.
-          if (row.series_id && row.series_instance_number != null && row.series_instance_number !== 1) return acc;
+          // Count one-offs (no series_id) and one representative per series.
+          // Instance 0 = ongoing series, instance 1 = first of a bounded series,
+          // null = older events (treat as representative). Skip instances 2+.
+          if (row.series_id && row.series_instance_number != null && row.series_instance_number > 1) return acc;
           acc[row.creator_account_id] = (acc[row.creator_account_id] || 0) + 1;
           return acc;
         }, {});
@@ -316,7 +317,7 @@ router.get('/accounts/:id', serviceLimiter, async (req, res, next) => {
       .select(PORTAL_SELECT)
       .eq('creator_account_id', account.id)
       .in('source', [...MANAGED_SOURCES])
-      .or('series_id.is.null,series_instance_number.eq.1')
+      .or('series_id.is.null,series_instance_number.eq.0,series_instance_number.eq.1')
       .order('event_at', { ascending: false })
       .limit(200);
 
@@ -621,7 +622,7 @@ router.get('/events', serviceLimiter, async (req, res, next) => {
     // Pass ?all_instances=true to include every series instance (for reconciliation).
     const allInstances = req.query.all_instances === 'true';
     if (!allInstances) {
-      query = query.or('series_id.is.null,series_instance_number.eq.1');
+      query = query.or('series_id.is.null,series_instance_number.eq.0,series_instance_number.eq.1');
     }
     query = query.range(offset, offset + limit - 1);
 
@@ -1191,19 +1192,19 @@ router.get('/stats', serviceLimiter, async (req, res, next) => {
         .in('source', [...MANAGED_SOURCES])
         .is('series_id', null),
 
-      // Series (first instance only)
+      // Series (representative instance: 0 = ongoing, 1 = first of bounded)
       supabaseAdmin.from('events')
         .select('id', { count: 'exact', head: true })
         .in('source', [...MANAGED_SOURCES])
         .not('series_id', 'is', null)
-        .eq('series_instance_number', 1),
+        .or('series_instance_number.eq.0,series_instance_number.eq.1'),
 
       // Category distribution — only fetch unique events (one-offs + first instances)
       // Use minimal select to reduce payload
       supabaseAdmin.from('events')
         .select('category')
         .in('source', [...MANAGED_SOURCES])
-        .or('series_id.is.null,series_instance_number.eq.1')
+        .or('series_id.is.null,series_instance_number.eq.0,series_instance_number.eq.1')
         .limit(10000),
     ]);
 
