@@ -272,7 +272,9 @@ router.get('/accounts', serviceLimiter, async (req, res, next) => {
 
       if (counts) {
         eventCounts = counts.reduce((acc: Record<string, number>, row: { creator_account_id: string; series_id: string | null; series_instance_number: number | null }) => {
-          if (row.series_id && row.series_instance_number !== 1) return acc;
+          // Count one-offs (no series_id) and first instance of each series.
+          // series_instance_number can be null for older events — treat as instance 1.
+          if (row.series_id && row.series_instance_number != null && row.series_instance_number !== 1) return acc;
           acc[row.creator_account_id] = (acc[row.creator_account_id] || 0) + 1;
           return acc;
         }, {});
