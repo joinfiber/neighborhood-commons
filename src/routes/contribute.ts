@@ -99,6 +99,9 @@ const TIER_LIMITS: Record<string, { hourly: number; daily: number }> = {
   pending: { hourly: 20, daily: 100 },
   verified: { hourly: 100, daily: 500 },
   trusted: { hourly: 500, daily: 2000 },
+  // Service keys are issued to trusted consumer apps (Merrie, Studio). They
+  // should not be rate-limited more aggressively than a 'trusted' contributor.
+  service: { hourly: 2000, daily: 20000 },
 };
 
 async function checkContributeRateLimit(apiKeyId: string, tier: string, batchSize: number = 1): Promise<void> {
