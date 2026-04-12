@@ -25,7 +25,7 @@ import {
   PORTAL_SELECT, MANAGED_SOURCES, toPortalEvent, portalInputToInsert,
   toTimestamptz, getAdminUserId,
 } from '../lib/event-operations.js';
-import { createEventSeries, deleteSeriesEvents } from '../lib/event-series.js';
+import { createEventSeries, deleteSeriesEvents, updateSeriesFutureInstances } from '../lib/event-series.js';
 import { processAndUploadImage, downloadAndAttachImage } from '../lib/image-processing.js';
 import { validateFeedUrl } from '../lib/url-validation.js';
 import { invalidateApprovedDomainsCache } from '../lib/url-sanitizer.js';
@@ -956,6 +956,110 @@ router.delete('/events/:id', serviceLimiter, async (req, res, next) => {
 
     if (error) throw createError('Failed to delete event', 500, 'SERVER_ERROR');
     res.json({ deleted: true, id: req.params.id });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * PATCH /service/events/series/:seriesId — Update all future instances of a series (scoped).
+ *
+ * Template-first: the edit is applied unconditionally to every future instance
+ * AND to base_event_data so newly-materialized instances (from the auto-extend
+ * cron) also inherit it. Past instances are preserved.
+ */
+router.patch('/events/series/:seriesId', serviceLimiter, async (req, res, next) => {
+  try {
+    validateUuidParam(req.params.seriesId, 'series ID');
+    const data = validateRequest(updateEventSchema.extend({
+      instance_count: z.number().int().min(0).max(52).optional(),
+    }), req.body);
+
+    // Ownership: non-admin keys must be linked to the creator_account_id of the series.
+    const { data: sample } = await supabaseAdmin
+      .from('events')
+      .select('id, creator_account_id, event_timezone')
+      .eq('series_id', req.params.seriesId)
+      .limit(1)
+      .maybeSingle();
+    if (!sample) throw createError('Series not found', 404, 'NOT_FOUND');
+    if (!req.apiKeyInfo?.isAdmin) {
+      if (!sample.creator_account_id) throw createError('Series has no owner; admin access required', 403, 'FORBIDDEN');
+      await assertLinkedAccount(req, sample.creator_account_id);
+    }
+
+    const tz = data.event_timezone || (sample.event_timezone as string) || 'America/New_York';
+
+    const templateUpdate: Record<string, unknown> = {};
+    if (data.title !== undefined) templateUpdate.content = data.title;
+    if (data.venue_name !== undefined) templateUpdate.place_name = data.venue_name;
+    if (data.address !== undefined) templateUpdate.venue_address = data.address;
+    if (data.place_id !== undefined) templateUpdate.place_id = data.place_id;
+    if (data.latitude !== undefined) templateUpdate.latitude = data.latitude;
+    if (data.longitude !== undefined) templateUpdate.longitude = data.longitude;
+    if (data.latitude !== undefined || data.longitude !== undefined) {
+      const lat = data.latitude ?? null;
+      const lng = data.longitude ?? null;
+      templateUpdate.approximate_location = lat != null && lng != null ? `POINT(${lng} ${lat})` : null;
+    }
+    if (data.description !== undefined) templateUpdate.description = data.description;
+    if (data.price !== undefined) templateUpdate.price = data.price;
+    if (data.ticket_url !== undefined) templateUpdate.link_url = data.ticket_url || null;
+    if (data.category !== undefined) templateUpdate.category = data.category;
+    if (data.custom_category !== undefined) templateUpdate.custom_category = data.custom_category;
+    if (data.event_timezone !== undefined) templateUpdate.event_timezone = data.event_timezone;
+    if (data.wheelchair_accessible !== undefined) templateUpdate.wheelchair_accessible = data.wheelchair_accessible;
+    if (data.rsvp_limit !== undefined) templateUpdate.rsvp_limit = data.rsvp_limit;
+    if (data.start_time_required !== undefined) templateUpdate.start_time_required = data.start_time_required;
+    if (data.image_focal_y !== undefined) templateUpdate.event_image_focal_y = data.image_focal_y;
+    if (data.tags !== undefined) {
+      const cat = data.category || 'community';
+      templateUpdate.tags = validateTags(data.tags, cat);
+    }
+
+    const hasTimeChange = data.start_time !== undefined || data.end_time !== undefined;
+    const timeChange = hasTimeChange
+      ? { startTime: data.start_time, endTime: data.end_time ?? null }
+      : undefined;
+    const hasInstanceCountChange = data.instance_count !== undefined;
+
+    if (Object.keys(templateUpdate).length === 0 && !hasTimeChange && !hasInstanceCountChange) {
+      throw createError('No fields to update', 400, 'VALIDATION_ERROR');
+    }
+
+    const result = await updateSeriesFutureInstances({
+      seriesId: req.params.seriesId,
+      updates: templateUpdate,
+      timeChange,
+      instanceCountChange: hasInstanceCountChange ? data.instance_count : undefined,
+      timezone: tz,
+    });
+
+    void (async () => {
+      try {
+        for (const id of result.updatedIds) {
+          const { data: row } = await supabaseAdmin
+            .from('events')
+            .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name)`)
+            .eq('id', id)
+            .maybeSingle();
+          if (row && (row as Record<string, unknown>).status === 'published') {
+            void dispatchWebhooks('event.updated', id, toNeighborhoodEvent(row as unknown as PortalEventRow));
+          }
+        }
+      } catch (err) {
+        console.error('[SERVICE] Series webhook dispatch error:', err instanceof Error ? err.message : err);
+      }
+    })();
+
+    console.log(`[SERVICE] Series ${req.params.seriesId} updated: ${result.updatedCount} future instances`);
+    res.json({
+      series_id: req.params.seriesId,
+      updated: result.updatedCount,
+      total: result.totalAfter,
+      added: result.instancesAdded,
+      removed: result.instancesRemoved,
+    });
   } catch (err) {
     next(err);
   }

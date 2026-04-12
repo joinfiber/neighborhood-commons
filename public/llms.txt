@@ -245,6 +245,12 @@ The `series_id` groups them. The `series_instance_number` tells you which one it
 
 **Note:** When `collapse_series=true`, pagination is approximate — `meta.total` is `null` because deduplication happens post-fetch. Use this for browse feeds that show "what's coming up," not for iterating the complete dataset. For exhaustive iteration, use `collapse_series=false` (the default).
 
+**Bounded vs. unbounded series.** `series_instance_number` distinguishes the two shapes:
+- `series_instance_number = 0` — ongoing/unbounded series (submitted without `COUNT=` or `UNTIL=`). Commons materializes a rolling 6-week window of instances and extends the horizon automatically — contributors submit once and never need to re-post.
+- `series_instance_number >= 1` — bounded series. `series_instance_count` tells you the total.
+
+If you're building a UI that shows "the series" as a single thing, the canonical representative is the instance with the lowest `series_instance_number` (0 for ongoing, 1 for bounded).
+
 ### Merging Commons Data with Your Own
 
 If you're building an app that has its own events AND wants to include Commons events, here's the practical approach:
@@ -441,6 +447,8 @@ Tier upgrades are manual. Submit good data consistently and it happens.
 
 Use RRULE format (the same standard used by iCalendar). The Commons expands your pattern into individual event instances.
 
+**Bounded vs. unbounded.** If you include `COUNT=` or `UNTIL=` the Commons creates exactly that many instances (capped at 52). If you omit both (e.g. `FREQ=WEEKLY;INTERVAL=2`), the Commons treats the series as **ongoing** — it materializes a rolling 6-week horizon and extends automatically via a daily cron. **Submit once, never re-post.** Re-submitting an unbounded recurrence (via your resync logic) will create a duplicate series unless you also send `external_id`.
+
 | Pattern | RRULE | What it means |
 |---------|-------|--------------|
 | Every day | `FREQ=DAILY` | Daily, uses default count |
@@ -502,11 +510,19 @@ Each event in the batch counts individually against your rate limit.
 curl "https://api.neighborhood-commons.org/api/v1/contribute/mine?status=published" \
   -H "X-API-Key: nc_yourkey..."
 
-# Edit an event you submitted
+# Edit a single event you submitted (one instance only; does NOT affect siblings in a series)
 curl -X PATCH "https://api.neighborhood-commons.org/api/v1/contribute/:id" \
   -H "X-API-Key: nc_yourkey..." \
   -H "Content-Type: application/json" \
   -d '{ "description": "Updated description" }'
+
+# Edit a recurring event — applies to every future instance AND to the series template,
+# so instances the auto-extend cron materializes later also inherit the update.
+# Past instances are preserved. Use this (not PATCH /:id) when a user edits "the weekly event."
+curl -X PATCH "https://api.neighborhood-commons.org/api/v1/contribute/series/:seriesId" \
+  -H "X-API-Key: nc_yourkey..." \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "New title", "cost": "$10" }'
 
 # Delete an event you submitted
 curl -X DELETE "https://api.neighborhood-commons.org/api/v1/contribute/:id" \
@@ -852,7 +868,8 @@ curl -X POST "https://api.neighborhood-commons.org/api/v1/service/events" \
 | `PATCH` | `/service/accounts/:id` | Update linked account |
 | `DELETE` | `/service/accounts/:id` | Delete linked account + events |
 | `POST` | `/service/events` | Create event for linked account |
-| `PATCH` | `/service/events/:id` | Update linked event |
+| `PATCH` | `/service/events/:id` | Update linked event (one instance only) |
+| `PATCH` | `/service/events/series/:seriesId` | Update all future instances + series template |
 | `DELETE` | `/service/events/:id` | Delete linked event |
 | `POST` | `/service/events/:id/image` | Upload image for linked event |
 | `GET` | `/service/approved-domains` | List allowlisted contribute-URL domains (admin) |

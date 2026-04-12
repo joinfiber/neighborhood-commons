@@ -25,7 +25,7 @@ import { downloadAndAttachImage } from '../lib/image-processing.js';
 import { nominatimGeocode } from '../lib/geocoding.js';
 import { sanitizeUrl, validateContributeUrl, queueDomainApprovalRequest } from '../lib/url-sanitizer.js';
 import { fromRRule } from '../lib/rrule.js';
-import { createEventSeries } from '../lib/event-series.js';
+import { createEventSeries, updateSeriesFutureInstances } from '../lib/event-series.js';
 import { validateTags } from '../lib/tags.js';
 
 const router: ReturnType<typeof Router> = Router();
@@ -848,6 +848,146 @@ router.patch('/:id', writeLimiter, async (req, res, next) => {
 
     console.log(`[CONTRIBUTE] Event updated: ${req.params.id}`);
     res.json({ updated: true, id: req.params.id });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================================================
+// PATCH — Edit a series (all future instances)
+// =============================================================================
+//
+// Template-first: the edit is applied unconditionally to every future instance
+// AND to the series template (base_event_data) so newly-materialized instances
+// from the auto-extend cron also inherit it. Past instances are preserved.
+//
+// This is the correct surface for "the curator edited the recurring event" —
+// PATCH /:id only touches one instance and leaves future instances stale.
+
+const updateSeriesSchema = updateContributeEventSchema.extend({
+  instance_count: z.number().int().min(0).max(52).optional(),
+});
+
+router.patch('/series/:seriesId', writeLimiter, async (req, res, next) => {
+  try {
+    const apiKeyId = req.apiKeyInfo?.id;
+    if (!apiKeyId) throw createError('API key required', 401, 'UNAUTHORIZED');
+    validateUuidParam(req.params.seriesId, 'series ID');
+
+    const data = validateRequest(updateSeriesSchema, req.body);
+    if (Object.keys(data).length === 0) throw createError('No fields to update', 400, 'VALIDATION_ERROR');
+
+    // Ownership: at least one event in this series was created by this API key.
+    const { data: owned } = await supabaseAdmin
+      .from('events')
+      .select('id, event_timezone')
+      .eq('series_id', req.params.seriesId)
+      .eq('source_method', 'api')
+      .eq('source_feed_url', `api-key:${apiKeyId}`)
+      .limit(1)
+      .maybeSingle();
+
+    if (!owned) {
+      throw createError('Series not found or not owned by this API key', 404, 'NOT_FOUND');
+    }
+
+    // Build template update using the Contribute API's field names → DB columns.
+    const templateUpdate: Record<string, unknown> = {};
+    if (data.name !== undefined) templateUpdate.content = stripHtml(data.name);
+    if (data.description !== undefined) templateUpdate.description = data.description ? stripHtml(data.description) : null;
+    if (data.category !== undefined) templateUpdate.category = data.category;
+    if (data.custom_category !== undefined) templateUpdate.custom_category = data.custom_category;
+    if (data.cost !== undefined) templateUpdate.price = data.cost ? stripHtml(data.cost) : null;
+    if (data.tags !== undefined) templateUpdate.tags = data.tags;
+    if (data.wheelchair_accessible !== undefined) templateUpdate.wheelchair_accessible = data.wheelchair_accessible;
+
+    if (data.url !== undefined) {
+      if (data.url) {
+        const urlCheck = await validateContributeUrl(data.url);
+        if (!urlCheck.ok) {
+          if (urlCheck.code === 'DOMAIN_PENDING_REVIEW' && urlCheck.domain) {
+            void queueDomainApprovalRequest({
+              domain: urlCheck.domain,
+              apiKeyId,
+              url: data.url,
+              eventContext: { series_id: req.params.seriesId },
+            });
+          }
+          throw createError(urlCheck.message, 400, urlCheck.code);
+        }
+        templateUpdate.link_url = urlCheck.url;
+      } else {
+        templateUpdate.link_url = null;
+      }
+    }
+
+    if (data.location) {
+      if (data.location.name !== undefined) templateUpdate.place_name = stripHtml(data.location.name);
+      if (data.location.address !== undefined) templateUpdate.venue_address = data.location.address?.slice(0, 500) || null;
+      if (data.location.place_id !== undefined) templateUpdate.place_id = data.location.place_id || null;
+      if (data.location.lat !== undefined) templateUpdate.latitude = data.location.lat ?? null;
+      if (data.location.lng !== undefined) templateUpdate.longitude = data.location.lng ?? null;
+      if (data.location.lat != null && data.location.lng != null) {
+        templateUpdate.approximate_location = `POINT(${data.location.lng} ${data.location.lat})`;
+      }
+    }
+
+    const tz = data.timezone || (owned.event_timezone as string) || 'America/New_York';
+    if (data.timezone !== undefined) templateUpdate.event_timezone = data.timezone;
+
+    // Per-instance time change: apply the new start/end time-of-day to every
+    // future instance while preserving each instance's date.
+    const hasTimeChange = data.start !== undefined || data.end !== undefined;
+    const timeChange = hasTimeChange
+      ? {
+          startTime: data.start ? fromTimestamptz(data.start, tz).time : undefined,
+          endTime: data.end ? fromTimestamptz(data.end, tz).time : null,
+        }
+      : undefined;
+
+    const hasInstanceCountChange = data.instance_count !== undefined;
+    if (Object.keys(templateUpdate).length === 0 && !hasTimeChange && !hasInstanceCountChange) {
+      throw createError('No fields to update', 400, 'VALIDATION_ERROR');
+    }
+
+    const result = await updateSeriesFutureInstances({
+      seriesId: req.params.seriesId,
+      updates: templateUpdate,
+      timeChange,
+      instanceCountChange: hasInstanceCountChange ? data.instance_count : undefined,
+      timezone: tz,
+    });
+
+    if (data.image_url && result.updatedIds.length > 0) {
+      void downloadAndAttachImage(result.updatedIds[0]!, data.image_url);
+    }
+
+    // Dispatch webhooks for each updated instance (fire-and-forget).
+    void (async () => {
+      try {
+        for (const id of result.updatedIds) {
+          const { data: row } = await supabaseAdmin
+            .from('events')
+            .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name)`)
+            .eq('id', id)
+            .maybeSingle();
+          if (row && (row as Record<string, unknown>).status === 'published') {
+            void dispatchWebhooks('event.updated', id, toNeighborhoodEvent(row as unknown as PortalEventRow));
+          }
+        }
+      } catch (err) {
+        console.error('[CONTRIBUTE] Series webhook dispatch error:', err instanceof Error ? err.message : err);
+      }
+    })();
+
+    console.log(`[CONTRIBUTE] Series ${req.params.seriesId} updated: ${result.updatedCount} future instances`);
+    res.json({
+      series_id: req.params.seriesId,
+      updated: result.updatedCount,
+      total: result.totalAfter,
+      added: result.instancesAdded,
+      removed: result.instancesRemoved,
+    });
   } catch (err) {
     next(err);
   }
