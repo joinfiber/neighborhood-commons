@@ -2,6 +2,12 @@
 
 This guide is for developers (or Claude Code instances) building apps that pull event data from the Neighborhood Commons.
 
+## Source of Truth
+
+**The machine-readable contract is [`/openapi.json`](https://api.neighborhood-commons.org/openapi.json).** When this document and the OpenAPI spec disagree, **the spec wins.** This guide exists to explain *why* and *when* — not *what*. For exact request/response shapes, query parameters, and error codes, generate a client from the spec or read it directly.
+
+A narrative tour of the whole API (including the Contribute API for publishing events and the Service API for trusted consumer apps) lives in [`/llms.txt`](https://api.neighborhood-commons.org/llms.txt).
+
 ## Base URL
 
 ```

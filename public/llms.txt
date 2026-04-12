@@ -7,6 +7,8 @@ This document is everything you need to pull event data from the Neighborhood Co
 
 Base URL: `https://api.neighborhood-commons.org`
 
+**The machine-readable contract lives at [`/openapi.json`](https://api.neighborhood-commons.org/openapi.json).** If that spec and this document ever disagree about fields, endpoints, or error codes, **the OpenAPI spec wins** — this doc is a narrative companion, not the source of truth. When consuming Commons data programmatically, generate a client from the spec.
+
 ---
 
 ## Part 1: Reading Events (No Setup Required)
@@ -114,7 +116,7 @@ The `meta.total` field tells you how many total events match your filters.
 | Single venue | `GET /api/v1/accounts/:idOrSlug` | By UUID or slug (e.g., `johnny-brendas`) |
 | List groups | `GET /api/v1/groups` | Filter by `type`, `category`, `near`, `q` |
 | Single group | `GET /api/v1/groups/:id` | Group with venues and upcoming events |
-| Changes feed | `GET /api/events/changes?since=<ISO-8601>` | Incremental sync (10 req/min) |
+| Changes feed | `GET /api/events/changes?since=<ISO-8601>` | Incremental sync. NOTE: path lives OUTSIDE `/v1` — full URL is `https://api.neighborhood-commons.org/api/events/changes`. Rate limit 10/min per IP. |
 | Feed metadata | `GET /api/v1/meta` | License, stewards, spec version |
 | Live stats | `GET /api/v1/meta/stats` | Event count, venue count, region |
 | Regions | `GET /api/v1/meta/regions` | Geographic regions with timezones |
@@ -166,7 +168,7 @@ Every event response includes every field listed below. If a value doesn't apply
 | `description` | text or null | `"Live jazz quartet..."` | Event description. Max 2000 characters. |
 | `cost` | text or null | `"Free"`, `"$10"`, `"$5-15"` | Price as free-text. No structured pricing — just a human-readable string. |
 | `url` | text or null | `"https://example.com/event"` | Link to event page or tickets. |
-| `images` | list | `["https://r2.commons..."]` | Event cover image. Zero or one URL. All images are JPEG, max 1200px wide, metadata stripped. |
+| `images` | list | `["https://r2.commons..."]` | Event cover image. Zero or one URL. All images are WebP, max 1200px wide, metadata stripped. |
 | `tags` | list | `["outdoor", "free", "all-ages"]` | Experience/access descriptors. May be empty. See tag list below. |
 | `wheelchair_accessible` | boolean or null | `true` | Accessibility flag. Null means not specified. |
 
@@ -407,6 +409,7 @@ That's it. Your event is in the Commons.
 | `pending` (new keys) | Enter review queue, published after approval | 20/hour, 100/day |
 | `verified` | Auto-published immediately | 100/hour, 500/day |
 | `trusted` | Auto-published immediately | 500/hour, 2000/day |
+| `service` | Auto-published. Issued to trusted consumer apps (Merrie, Studio). | 2000/hour, 20000/day |
 
 Tier upgrades are manual. Submit good data consistently and it happens.
 
@@ -572,7 +575,7 @@ Group types: `business`, `community_group`, `nonprofit`, `collective`, `curator`
 
 - **Geocoding:** If you provide `location.address` but no coordinates, the Commons geocodes it automatically (via OpenStreetMap/Nominatim). The resulting lat/lng are stored on the event.
 - **Region resolution:** Coordinates are used to assign the event to a geographic region. Events without a region won't appear in location-filtered feeds — so always provide an address or coordinates.
-- **Image processing:** If you provide `image_url`, the Commons downloads the image, strips metadata, re-encodes it as JPEG (max 1200px wide), and stores it on Cloudflare R2. The response contains the final hosted URL.
+- **Image processing:** If you provide `image_url`, the Commons downloads the image, strips metadata, re-encodes it as WebP (max 1200px wide), and stores it on Cloudflare R2. The response contains the final hosted URL. Processing is asynchronous — POST/PATCH returns before the image is fetched.
 - **URL validation:** The `url` field is checked for normalcy and against an operator-managed allowlist of domains. Tracking parameters (`utm_*`, `fbclid`, etc.) are stripped automatically and `http://` is coerced to `https://`. The following return a `400` and are never accepted:
   - `INVALID_URL` — malformed URL
   - `INVALID_SCHEME` — scheme other than http/https
@@ -748,10 +751,21 @@ Every error response has this shape:
 | Code | HTTP Status | What it means |
 |------|-------------|--------------|
 | `VALIDATION_ERROR` | 400 | Your request body failed validation. The message says which field. |
+| `INVALID_URL` | 400 | A URL in the payload is malformed. |
+| `INVALID_SCHEME` | 400 | URL scheme is not http or https. |
+| `URL_CREDENTIALS` | 400 | URL contains embedded `user:pass@` credentials. |
+| `IP_LITERAL` | 400 | URL hostname is an IPv4 or IPv6 literal. |
+| `BLOCKED_HOSTNAME` | 400 | URL hostname is `localhost`, `*.local`, `*.internal`, or `*.localhost`. |
+| `DOMAIN_PENDING_REVIEW` | 400 | The URL's domain is not yet on the allowlist. A review request was logged automatically; response includes `error.domain`. Soft/transient — retry after approval. |
+| `DOMAIN_NOT_APPROVED` | 400 | Legacy error code kept for compatibility. New integrations should expect `DOMAIN_PENDING_REVIEW`. |
 | `UNAUTHORIZED` | 401 | Missing or invalid API key. |
 | `FORBIDDEN` | 403 | Your key doesn't have permission for this action. |
 | `NOT_FOUND` | 404 | That event/account/group doesn't exist. |
+| `NOT_LINKED` | 403 | Your service key is not linked to the target portal account. |
+| `NO_OWNER` | 403 | Operation requires an owning account and none is set (admin access required). |
+| `CONFLICT` | 409 | State conflict — e.g. a domain approval request is already reviewed. |
 | `DUPLICATE` | 409 | You already submitted an event with this `external_id`. |
+| `PAYLOAD_TOO_LARGE` | 413 | Request body exceeds the per-route limit. |
 | `RATE_LIMIT` | 429 | Too many requests. Check `RateLimit-*` headers for when to retry. |
 | `SERVER_ERROR` | 500 | Something broke on our end. No internal details exposed. |
 
@@ -858,26 +872,48 @@ curl -X POST "https://api.neighborhood-commons.org/api/v1/service/events" \
 - **Cross-account writes return 403** — `"This API key is not linked to the target account"`
 - **Admin keys** bypass scoping (issued only to the platform operator)
 
-### Available Service Endpoints
+### Service Endpoint Reference
+
+**The authoritative list of Service API endpoints lives in [`/openapi.json`](https://api.neighborhood-commons.org/openapi.json).** That spec is the contract — prefer it over this doc when they disagree. What follows is the common subset consumers reach for most often.
 
 | Method | Path | Scope |
 |--------|------|-------|
-| `POST` | `/service/accounts/link` | Link account to your key |
-| `GET` | `/service/accounts` | List all accounts (read-only) |
+| `POST` | `/service/accounts/link` | Find-or-create a portal account by email and link it to your key |
+| `GET` | `/service/accounts` | List/search linked accounts (with event counts) |
 | `GET` | `/service/accounts/:id` | Single account detail |
-| `PATCH` | `/service/accounts/:id` | Update linked account |
-| `DELETE` | `/service/accounts/:id` | Delete linked account + events |
-| `POST` | `/service/events` | Create event for linked account |
-| `PATCH` | `/service/events/:id` | Update linked event (one instance only) |
-| `PATCH` | `/service/events/series/:seriesId` | Update all future instances + series template |
-| `DELETE` | `/service/events/:id` | Delete linked event |
-| `POST` | `/service/events/:id/image` | Upload image for linked event |
+| `POST` | `/service/accounts` | Create a new portal account |
+| `PATCH` | `/service/accounts/:id` | Update a linked account |
+| `DELETE` | `/service/accounts/:id` | Delete a linked account (and its events) |
+| `POST` | `/service/accounts/:id/cover-image` | Upload an account cover image |
+| `POST` | `/service/accounts/:id/logo` | Upload an account logo |
+| `GET` | `/service/events` | List events (supports `time`, `search`, `source_method`, `category`, `all_instances` filters) |
+| `GET` | `/service/events/:id` | Single event detail |
+| `POST` | `/service/events` | Create an event (or recurring series) for a linked account |
+| `PATCH` | `/service/events/:id` | Update a single event (one instance only, does NOT propagate within a series) |
+| `PATCH` | `/service/events/batch` | Batch-update a subset of fields across many events |
+| `PATCH` | `/service/events/series/:seriesId` | Update all future instances AND the series template (auto-extend inherits) |
+| `DELETE` | `/service/events/:id` | Delete a single event |
+| `DELETE` | `/service/events/series/:seriesId` | Delete every event in a series |
+| `POST` | `/service/events/:id/image` | Upload an event image (JSON base64, JSON image_url, or multipart) |
+| `PATCH` | `/service/events/:id/group` | Link an event to a group (or unlink with `{ group_id: null }`) |
+| `GET` | `/service/groups` | List groups |
+| `GET` | `/service/groups/:id` | Group detail |
+| `POST` | `/service/groups` | Create a group |
+| `PATCH` | `/service/groups/:id` | Update a group |
+| `DELETE` | `/service/groups/:id` | Delete a group |
+| `POST` | `/service/groups/:id/venues` | Add a venue to a group |
+| `DELETE` | `/service/groups/:groupId/venues/:venueId` | Remove a venue from a group |
+| `GET` | `/service/stats` | Platform stats (admin) |
+| `GET` | `/service/api-keys` | List all API keys (admin) |
+| `PATCH` | `/service/api-keys/:id` | Update an API key (admin) |
 | `GET` | `/service/approved-domains` | List allowlisted contribute-URL domains (admin) |
 | `POST` | `/service/approved-domains` | Add a domain to the allowlist (admin) |
 | `DELETE` | `/service/approved-domains/:domain` | Remove a domain from the allowlist (admin) |
 | `GET` | `/service/domain-approval-requests?status=pending` | Review queue of pending domain requests (admin) |
-| `POST` | `/service/domain-approval-requests/:id/approve` | Approve a request and add the domain to the allowlist (admin) |
+| `POST` | `/service/domain-approval-requests/:id/approve` | Approve a request and add its domain (admin) |
 | `POST` | `/service/domain-approval-requests/:id/reject` | Reject a pending request without allowlisting (admin) |
+
+Admin-only endpoints require a service key with `is_admin=true`. Non-admin service keys are scoped to linked accounts only.
 
 ---
 
