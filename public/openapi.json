@@ -62,6 +62,59 @@
         }
       }
     },
+    "/events/changes": {
+      "servers": [
+        { "url": "https://api.neighborhood-commons.org/api", "description": "Changes feed lives OUTSIDE the /v1 prefix. Full URL: https://api.neighborhood-commons.org/api/events/changes" }
+      ],
+      "get": {
+        "summary": "Events changes feed",
+        "description": "Lightweight public sync endpoint for consumers without a service key. Returns events whose updated_at is greater than the `since` cursor, plus the IDs of events that have ended since that cursor. NOT under /v1 — the full URL is `/api/events/changes`. Rate limit: 10/min per IP. Responses are cached 60s. For higher throughput, use a service key and call `/v1/service/events`.",
+        "operationId": "getChangesFeed",
+        "parameters": [
+          { "name": "since", "in": "query", "required": true, "schema": { "type": "string", "format": "date-time" }, "description": "ISO 8601 timestamp. Returns events updated after this point." },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 50 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Changes since the cursor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["events", "deleted_ids", "sync_cursor", "has_more"],
+                  "properties": {
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": { "type": "string", "format": "uuid" },
+                          "content": { "type": "string" },
+                          "description": { "type": ["string", "null"] },
+                          "place_name": { "type": ["string", "null"] },
+                          "event_at": { "type": ["string", "null"], "format": "date-time" },
+                          "end_time": { "type": ["string", "null"], "format": "date-time" },
+                          "category": { "type": ["string", "null"] },
+                          "link_url": { "type": ["string", "null"] },
+                          "event_image_url": { "type": ["string", "null"] },
+                          "region_slug": { "type": ["string", "null"] },
+                          "updated_at": { "type": ["string", "null"], "format": "date-time" }
+                        }
+                      }
+                    },
+                    "deleted_ids": { "type": "array", "items": { "type": "string", "format": "uuid" } },
+                    "sync_cursor": { "type": "string", "format": "date-time", "description": "Pass this as the next request's `since` value." },
+                    "has_more": { "type": "boolean", "description": "If true, another page of changes exists — call again with the returned sync_cursor." }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    },
     "/events/{id}": {
       "get": {
         "summary": "Get event",
@@ -163,73 +216,6 @@
         }
       }
     },
-    "/accounts": {
-      "get": {
-        "summary": "Search venue accounts",
-        "description": "List and search venue/business accounts. Use ?include=events for each account's regular programming and upcoming events.",
-        "operationId": "listAccounts",
-        "parameters": [
-          { "name": "q", "in": "query", "schema": { "type": "string" }, "description": "Text search on business name, venue name, address" },
-          { "name": "include", "in": "query", "schema": { "type": "string", "enum": ["events"] }, "description": "Include regular_programming and upcoming_events per account" },
-          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 100 }, "description": "Page size (max 50 when include=events)" },
-          { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 }, "description": "Pagination offset" }
-        ],
-        "responses": {
-          "200": {
-            "description": "Paginated list of accounts",
-            "content": { "application/json": { "schema": { "type": "object", "properties": { "accounts": { "type": "array" }, "pagination": { "type": "object", "properties": { "total": { "type": "integer" }, "limit": { "type": "integer" }, "offset": { "type": "integer" } } } } } } }
-          }
-        }
-      }
-    },
-    "/accounts/{idOrSlug}": {
-      "get": {
-        "summary": "Single venue account",
-        "description": "Get an account by UUID or slug. Returns the account with regular_programming (recurring series, deduplicated) and upcoming_events (one-off future events).",
-        "operationId": "getAccount",
-        "parameters": [
-          { "name": "idOrSlug", "in": "path", "required": true, "schema": { "type": "string" }, "description": "Account UUID or URL-safe slug (e.g. johnny-brendas)" }
-        ],
-        "responses": {
-          "200": { "description": "Account with events", "content": { "application/json": { "schema": { "type": "object" } } } },
-          "404": { "$ref": "#/components/responses/NotFound" }
-        }
-      }
-    },
-    "/groups": {
-      "get": {
-        "summary": "List groups",
-        "description": "Search and filter groups (businesses, community groups, nonprofits, collectives, curators).",
-        "operationId": "listGroups",
-        "parameters": [
-          { "name": "type", "in": "query", "schema": { "type": "string", "enum": ["business", "community_group", "nonprofit", "collective", "curator"] }, "description": "Filter by group type" },
-          { "name": "category", "in": "query", "schema": { "type": "string" }, "description": "Filter by category tag" },
-          { "name": "neighborhood", "in": "query", "schema": { "type": "string" }, "description": "Filter by neighborhood name" },
-          { "name": "near", "in": "query", "schema": { "type": "string" }, "description": "Geographic center (lat,lng)" },
-          { "name": "radius_km", "in": "query", "schema": { "type": "number", "default": 10 }, "description": "Search radius in km" },
-          { "name": "q", "in": "query", "schema": { "type": "string" }, "description": "Text search on name, description" },
-          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 100 } },
-          { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 } }
-        ],
-        "responses": {
-          "200": { "description": "Paginated list of groups", "content": { "application/json": { "schema": { "type": "object", "properties": { "groups": { "type": "array" }, "pagination": { "type": "object" } } } } } }
-        }
-      }
-    },
-    "/groups/{id}": {
-      "get": {
-        "summary": "Single group",
-        "description": "Get a group by UUID with its venues and next 5 upcoming events.",
-        "operationId": "getGroup",
-        "parameters": [
-          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
-        ],
-        "responses": {
-          "200": { "description": "Group with venues and events", "content": { "application/json": { "schema": { "type": "object" } } } },
-          "404": { "$ref": "#/components/responses/NotFound" }
-        }
-      }
-    },
     "/meta/regions": {
       "get": {
         "summary": "List active regions",
@@ -252,8 +238,8 @@
                           "name": { "type": "string" },
                           "slug": { "type": "string" },
                           "timezone": { "type": "string" },
-                          "latitude": { "type": "number", "nullable": true },
-                          "longitude": { "type": "number", "nullable": true }
+                          "latitude": { "type": ["number", "null"] },
+                          "longitude": { "type": ["number", "null"] }
                         }
                       }
                     }
@@ -312,12 +298,934 @@
                   "properties": {
                     "total_events": { "type": "integer", "description": "Published events" },
                     "total_venues": { "type": "integer", "description": "Active venue accounts" },
-                    "region": { "type": "string", "nullable": true, "description": "Primary region name" }
+                    "region": { "type": ["string", "null"], "description": "Primary region name" }
                   }
                 }
               }
             }
           }
+        }
+      }
+    },
+    "/accounts": {
+      "get": {
+        "summary": "Search venue accounts",
+        "description": "List and search venue/business accounts. Use ?include=events for each account's regular programming and upcoming events.",
+        "operationId": "listAccounts",
+        "parameters": [
+          { "name": "q", "in": "query", "schema": { "type": "string" }, "description": "Text search on business name, venue name, address" },
+          { "name": "include", "in": "query", "schema": { "type": "string", "enum": ["events"] }, "description": "Include regular_programming and upcoming_events per account" },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 100 }, "description": "Page size (max 50 when include=events)" },
+          { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 }, "description": "Pagination offset" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of accounts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "accounts": { "type": "array", "items": { "$ref": "#/components/schemas/Account" } },
+                    "pagination": {
+                      "type": "object",
+                      "properties": {
+                        "total": { "type": "integer" },
+                        "limit": { "type": "integer" },
+                        "offset": { "type": "integer" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/accounts/{idOrSlug}": {
+      "get": {
+        "summary": "Single venue account",
+        "description": "Get an account by UUID or slug. Returns the account with regular_programming (recurring series, deduplicated) and upcoming_events (one-off future events).",
+        "operationId": "getAccount",
+        "parameters": [
+          { "name": "idOrSlug", "in": "path", "required": true, "schema": { "type": "string" }, "description": "Account UUID or URL-safe slug (e.g. johnny-brendas)" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Account with events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "account": { "$ref": "#/components/schemas/Account" }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/groups": {
+      "get": {
+        "summary": "List groups",
+        "description": "Search and filter groups (businesses, community groups, nonprofits, collectives, curators).",
+        "operationId": "listGroups",
+        "parameters": [
+          { "name": "type", "in": "query", "schema": { "type": "string", "enum": ["business", "community_group", "nonprofit", "collective", "curator"] }, "description": "Filter by group type" },
+          { "name": "category", "in": "query", "schema": { "type": "string" }, "description": "Filter by category tag" },
+          { "name": "neighborhood", "in": "query", "schema": { "type": "string" }, "description": "Filter by neighborhood name" },
+          { "name": "near", "in": "query", "schema": { "type": "string" }, "description": "Geographic center (lat,lng)" },
+          { "name": "radius_km", "in": "query", "schema": { "type": "number", "default": 10 }, "description": "Search radius in km" },
+          { "name": "q", "in": "query", "schema": { "type": "string" }, "description": "Text search on name, description" },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 100 } },
+          { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of groups",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "groups": { "type": "array", "items": { "$ref": "#/components/schemas/Group" } },
+                    "pagination": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/groups/{id}": {
+      "get": {
+        "summary": "Single group",
+        "description": "Get a group by UUID with its venues and next 5 upcoming events.",
+        "operationId": "getGroup",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Group with venues and events",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "group": { "$ref": "#/components/schemas/Group" } } } } }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/webhooks": {
+      "post": {
+        "summary": "Create webhook subscription",
+        "description": "Subscribe to event changes (create/update/delete/series_created). Returns the signing secret once — store it securely. Webhooks are signed with HMAC-SHA256. Max 5 subscriptions per API key.",
+        "operationId": "createWebhook",
+        "security": [{ "browseApiKey": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["url"],
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "HTTPS endpoint. Must resolve to a public IP (RFC 1918 and cloud metadata addresses blocked)."
+                  },
+                  "event_types": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": ["event.created", "event.updated", "event.deleted", "event.series_created"]
+                    },
+                    "default": ["event.created", "event.updated", "event.deleted", "event.series_created"],
+                    "description": "Event types to subscribe to. Defaults to all."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Subscription created. The signing_secret is returned only on creation — it cannot be recovered later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "webhook": { "$ref": "#/components/schemas/Webhook" },
+                    "signing_secret": {
+                      "type": "string",
+                      "description": "64-character hex secret for HMAC-SHA256 verification. Shown once."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid URL or URL validation failed (SSRF protection). Error codes: INVALID_WEBHOOK_URL",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "409": {
+            "description": "Subscription limit reached (max 5 per API key)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+          },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      },
+      "get": {
+        "summary": "List webhook subscriptions",
+        "description": "List all webhook subscriptions for the calling API key.",
+        "operationId": "listWebhooks",
+        "security": [{ "browseApiKey": [] }],
+        "responses": {
+          "200": {
+            "description": "List of webhook subscriptions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "webhooks": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Webhook" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    },
+    "/webhooks/{id}": {
+      "patch": {
+        "summary": "Update webhook subscription",
+        "description": "Update the URL, event types, or status (active/paused) of a webhook subscription.",
+        "operationId": "updateWebhook",
+        "security": [{ "browseApiKey": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "url": { "type": "string", "format": "uri", "description": "New HTTPS endpoint URL" },
+                  "event_types": {
+                    "type": "array",
+                    "items": { "type": "string", "enum": ["event.created", "event.updated", "event.deleted", "event.series_created"] }
+                  },
+                  "status": { "type": "string", "enum": ["active", "paused"] }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated subscription",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "webhook": { "$ref": "#/components/schemas/Webhook" } } } } }
+          },
+          "400": { "description": "Invalid URL", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "description": "Webhook belongs to a different API key", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      },
+      "delete": {
+        "summary": "Delete webhook subscription",
+        "description": "Delete a webhook subscription. Future events will not be delivered to this endpoint.",
+        "operationId": "deleteWebhook",
+        "security": [{ "browseApiKey": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "204": { "description": "Deleted" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "description": "Webhook belongs to a different API key" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    },
+    "/webhooks/{id}/test": {
+      "post": {
+        "summary": "Send test webhook delivery",
+        "description": "Send a test payload to the webhook endpoint. Useful for verifying signature verification logic.",
+        "operationId": "testWebhook",
+        "security": [{ "browseApiKey": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Test delivery result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "delivered": { "type": "boolean" },
+                    "status_code": { "type": ["integer", "null"] },
+                    "error": { "type": ["string", "null"] }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "description": "Webhook belongs to a different API key" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    },
+    "/webhooks/{id}/deliveries": {
+      "get": {
+        "summary": "List webhook deliveries",
+        "description": "Recent delivery attempts for a webhook subscription, newest first.",
+        "operationId": "listWebhookDeliveries",
+        "security": [{ "browseApiKey": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 100 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Delivery history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deliveries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": { "type": "string", "format": "uuid" },
+                          "event_type": { "type": "string" },
+                          "status": { "type": "string", "enum": ["delivered", "failed", "pending"] },
+                          "status_code": { "type": ["integer", "null"] },
+                          "error": { "type": ["string", "null"] },
+                          "attempt_count": { "type": "integer" },
+                          "delivered_at": { "type": ["string", "null"], "format": "date-time" },
+                          "created_at": { "type": "string", "format": "date-time" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "description": "Webhook belongs to a different API key" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    },
+    "/developers/register/send-otp": {
+      "post": {
+        "summary": "Send OTP for developer registration",
+        "description": "Send a one-time password to the provided email address to begin API key registration. The OTP expires in 10 minutes.",
+        "operationId": "sendDeveloperOtp",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email"],
+                "properties": {
+                  "email": { "type": "string", "format": "email", "maxLength": 320 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "OTP sent" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    },
+    "/developers/register/verify-otp": {
+      "post": {
+        "summary": "Verify OTP and issue API key",
+        "description": "Verify the OTP received by email. On success, issues an API key (pending tier). The key appears in the response once — store it securely.",
+        "operationId": "verifyDeveloperOtp",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "token", "name"],
+                "properties": {
+                  "email": { "type": "string", "format": "email", "maxLength": 320 },
+                  "token": { "type": "string", "minLength": 6, "maxLength": 8, "description": "8-digit OTP from email" },
+                  "name": { "type": "string", "minLength": 1, "maxLength": 200, "description": "Name of your app or tool" },
+                  "url": { "type": "string", "format": "uri", "maxLength": 500, "description": "Your app or website URL (optional)" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "API key issued. The key is shown only once.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "api_key": { "type": "string", "description": "Full API key — store this securely, it cannot be recovered." },
+                    "key_prefix": { "type": "string", "description": "First 8 characters, for display purposes." },
+                    "tier": { "type": "string", "enum": ["pending", "verified", "trusted"], "description": "Initial tier is pending." }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Invalid or expired OTP", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    },
+    "/developers/me": {
+      "get": {
+        "summary": "Get API key info",
+        "description": "Returns metadata about the calling API key — name, tier, rate limits.",
+        "operationId": "getDeveloperMe",
+        "security": [{ "browseApiKey": [] }],
+        "responses": {
+          "200": {
+            "description": "API key metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "object",
+                      "properties": {
+                        "key_prefix": { "type": "string" },
+                        "name": { "type": "string" },
+                        "url": { "type": ["string", "null"] },
+                        "tier": { "type": "string", "enum": ["pending", "verified", "trusted", "service"] },
+                        "rate_limit_per_hour": { "type": "integer" },
+                        "status": { "type": "string", "enum": ["active", "revoked"] },
+                        "created_at": { "type": "string", "format": "date-time" },
+                        "last_used_at": { "type": ["string", "null"], "format": "date-time" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/developers/keys/rotate": {
+      "post": {
+        "summary": "Rotate API key",
+        "description": "Rotate the calling API key. Requires OTP verification — send OTP first via /developers/register/send-otp. The old key is immediately revoked. The new key appears once in the response.",
+        "operationId": "rotateDeveloperKey",
+        "security": [{ "browseApiKey": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "token"],
+                "properties": {
+                  "email": { "type": "string", "format": "email", "maxLength": 320 },
+                  "token": { "type": "string", "minLength": 6, "maxLength": 8 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "New API key issued. Old key is revoked immediately.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "api_key": { "type": "string", "description": "New full API key — store securely, shown once." },
+                    "key_prefix": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Invalid or expired OTP" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    },
+    "/contribute": {
+      "post": {
+        "summary": "Contribute an event",
+        "description": "Submit a single event from an external app or data source. Uses Neighborhood API field names (name, start, cost). Events from pending-tier keys go into review queue; verified/trusted keys auto-publish. Supports recurring events via RRULE. Image URLs are downloaded and re-encoded through Sharp.",
+        "operationId": "contributeEvent",
+        "security": [{ "contributeApiKey": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ContributeEventInput" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Event created (or queued for review). For recurring events, returns series info.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "event": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "description": "Single event result",
+                          "properties": {
+                            "id": { "type": "string", "format": "uuid" },
+                            "status": { "type": "string", "enum": ["published", "pending_review"] },
+                            "source": {
+                              "type": "object",
+                              "properties": {
+                                "publisher": { "type": "string" },
+                                "method": { "type": "string", "example": "api" }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "type": "object",
+                          "description": "Recurring event result",
+                          "properties": {
+                            "series_id": { "type": ["string", "null"], "format": "uuid" },
+                            "instance_count": { "type": "integer" },
+                            "instance_ids": { "type": "array", "items": { "type": "string", "format": "uuid" } },
+                            "status": { "type": "string" },
+                            "source": { "type": "object" }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or URL not approved. URL error codes: INVALID_URL, INVALID_SCHEME, URL_CREDENTIALS, IP_LITERAL, BLOCKED_HOSTNAME, DOMAIN_PENDING_REVIEW (includes `domain` field in error object when status is pending review).",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "409": {
+            "description": "Duplicate event (external_id already exists for this API key)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+          },
+          "429": {
+            "description": "Contribution rate limit exceeded (hourly or daily, per API key tier)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+          }
+        }
+      }
+    },
+    "/contribute/batch": {
+      "post": {
+        "summary": "Contribute events in batch",
+        "description": "Submit up to 50 events at once. All events are validated before any are inserted; partial success is allowed (failures are returned per-event, successes are inserted). The full batch counts against rate limits atomically.",
+        "operationId": "contributeEventBatch",
+        "security": [{ "contributeApiKey": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["events"],
+                "properties": {
+                  "events": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 50,
+                    "items": { "$ref": "#/components/schemas/ContributeEventInput" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Batch processed. Check results for per-event outcomes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "index": { "type": "integer" },
+                          "ok": { "type": "boolean" },
+                          "id": { "type": ["string", "null"], "format": "uuid" },
+                          "status": { "type": ["string", "null"] },
+                          "error": { "type": ["string", "null"] }
+                        }
+                      }
+                    },
+                    "succeeded": { "type": "integer" },
+                    "failed": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    },
+    "/contribute/mine": {
+      "get": {
+        "summary": "List contributed events",
+        "description": "List events contributed by the calling API key.",
+        "operationId": "listContributedEvents",
+        "security": [{ "contributeApiKey": [] }],
+        "parameters": [
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 50, "maximum": 200 } },
+          { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of contributed events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "events": { "type": "array", "items": { "$ref": "#/components/schemas/Event" } },
+                    "total": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/contribute/{id}": {
+      "patch": {
+        "summary": "Update a contributed event",
+        "description": "Update an event previously contributed by this API key. Uses Neighborhood API field names.",
+        "operationId": "updateContributedEvent",
+        "security": [{ "contributeApiKey": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ContributeEventInput" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated event",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "event": { "$ref": "#/components/schemas/Event" } } } } }
+          },
+          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "description": "Event belongs to a different API key" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      },
+      "delete": {
+        "summary": "Delete a contributed event",
+        "description": "Delete an event previously contributed by this API key.",
+        "operationId": "deleteContributedEvent",
+        "security": [{ "contributeApiKey": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "204": { "description": "Deleted" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "description": "Event belongs to a different API key" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    },
+    "/contribute/series/{seriesId}": {
+      "patch": {
+        "summary": "Update a contributed series",
+        "description": "Update all future instances of a recurring series contributed by this API key.",
+        "operationId": "updateContributedSeries",
+        "security": [{ "contributeApiKey": [] }],
+        "parameters": [
+          { "name": "seriesId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/ContributeEventInput" } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Series updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "updated_count": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "description": "Series belongs to a different API key" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    },
+    "/contribute/venues": {
+      "post": {
+        "summary": "Create a venue",
+        "description": "Register a venue account associated with this API key.",
+        "operationId": "contributeCreateVenue",
+        "security": [{ "contributeApiKey": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["business_name"],
+                "properties": {
+                  "business_name": { "type": "string", "maxLength": 200 },
+                  "address": { "type": "string", "maxLength": 500 },
+                  "lat": { "type": "number" },
+                  "lng": { "type": "number" },
+                  "place_id": { "type": "string", "maxLength": 500 },
+                  "website": { "type": "string", "format": "uri", "maxLength": 500 },
+                  "phone": { "type": "string", "maxLength": 50 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Venue created",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "venue": { "type": "object" } } } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      },
+      "get": {
+        "summary": "List venues",
+        "description": "List venue accounts associated with this API key.",
+        "operationId": "contributeListVenues",
+        "security": [{ "contributeApiKey": [] }],
+        "responses": {
+          "200": {
+            "description": "Venues",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "venues": { "type": "array" } } } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/contribute/groups": {
+      "post": {
+        "summary": "Create a group",
+        "description": "Create a group (community group, collective, nonprofit, etc.) associated with this API key.",
+        "operationId": "contributeCreateGroup",
+        "security": [{ "contributeApiKey": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "type"],
+                "properties": {
+                  "name": { "type": "string", "maxLength": 200 },
+                  "type": { "type": "string", "enum": ["business", "community_group", "nonprofit", "collective", "curator"] },
+                  "description": { "type": "string", "maxLength": 2000 },
+                  "website": { "type": "string", "format": "uri", "maxLength": 500 },
+                  "category": { "type": "string", "maxLength": 50 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Group created",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "group": { "$ref": "#/components/schemas/Group" } } } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      },
+      "get": {
+        "summary": "List groups (contribute)",
+        "description": "List groups associated with this API key.",
+        "operationId": "contributeListGroups",
+        "security": [{ "contributeApiKey": [] }],
+        "responses": {
+          "200": {
+            "description": "Groups",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "groups": { "type": "array", "items": { "$ref": "#/components/schemas/Group" } } } } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/contribute/groups/{id}": {
+      "patch": {
+        "summary": "Update a group",
+        "operationId": "contributeUpdateGroup",
+        "security": [{ "contributeApiKey": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string", "maxLength": 200 },
+                  "description": { "type": "string", "maxLength": 2000 },
+                  "website": { "type": "string", "format": "uri", "maxLength": 500 },
+                  "category": { "type": "string", "maxLength": 50 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Group updated", "content": { "application/json": { "schema": { "type": "object", "properties": { "group": { "$ref": "#/components/schemas/Group" } } } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "description": "Group belongs to a different API key" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/contribute/groups/{id}/venues": {
+      "post": {
+        "summary": "Add venue to group",
+        "operationId": "contributeAddVenueToGroup",
+        "security": [{ "contributeApiKey": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "type": "object", "required": ["venue_id"], "properties": { "venue_id": { "type": "string", "format": "uuid" } } }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Venue added to group" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/contribute/groups/{groupId}/venues/{venueId}": {
+      "delete": {
+        "summary": "Remove venue from group",
+        "operationId": "contributeRemoveVenueFromGroup",
+        "security": [{ "contributeApiKey": [] }],
+        "parameters": [
+          { "name": "groupId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "venueId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "204": { "description": "Venue removed from group" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/contribute/events/{id}/group": {
+      "patch": {
+        "summary": "Assign event to group",
+        "description": "Assign or remove a group from an event contributed by this API key.",
+        "operationId": "contributeAssignEventGroup",
+        "security": [{ "contributeApiKey": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "group_id": { "type": ["string", "null"], "format": "uuid", "description": "Set to null to remove the group association" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Event group updated" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "description": "Event belongs to a different API key" },
+          "404": { "$ref": "#/components/responses/NotFound" }
         }
       }
     },
@@ -344,8 +1252,8 @@
           }
         },
         "responses": {
-          "200": { "description": "Existing account found and linked", "content": { "application/json": { "schema": { "type": "object", "properties": { "account": { "type": "object" }, "created": { "type": "boolean" }, "linked": { "type": "boolean" } } } } } },
-          "201": { "description": "New account created and linked", "content": { "application/json": { "schema": { "type": "object", "properties": { "account": { "type": "object" }, "created": { "type": "boolean" }, "linked": { "type": "boolean" } } } } } },
+          "200": { "description": "Existing account found and linked", "content": { "application/json": { "schema": { "type": "object", "properties": { "account": { "$ref": "#/components/schemas/ServiceAccount" }, "created": { "type": "boolean" }, "linked": { "type": "boolean" } } } } } },
+          "201": { "description": "New account created and linked", "content": { "application/json": { "schema": { "type": "object", "properties": { "account": { "$ref": "#/components/schemas/ServiceAccount" }, "created": { "type": "boolean" }, "linked": { "type": "boolean" } } } } } },
           "401": { "$ref": "#/components/responses/Unauthorized" },
           "403": { "description": "API key is not service-tier" }
         }
@@ -364,8 +1272,748 @@
           { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 } }
         ],
         "responses": {
-          "200": { "description": "Accounts with event counts", "content": { "application/json": { "schema": { "type": "object", "properties": { "accounts": { "type": "array" }, "total": { "type": "integer" } } } } } },
+          "200": {
+            "description": "Accounts with event counts",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "accounts": { "type": "array", "items": { "$ref": "#/components/schemas/ServiceAccount" } }, "total": { "type": "integer" } } } } }
+          },
           "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      },
+      "post": {
+        "summary": "Create account (service)",
+        "description": "Create a new portal account. Service-tier API key required.",
+        "operationId": "serviceCreateAccount",
+        "security": [{ "serviceApiKey": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "business_name"],
+                "properties": {
+                  "email": { "type": "string", "format": "email", "maxLength": 254 },
+                  "business_name": { "type": "string", "minLength": 1, "maxLength": 200 },
+                  "phone": { "type": "string", "maxLength": 50 },
+                  "website": { "type": "string", "format": "uri", "maxLength": 500 },
+                  "default_venue_name": { "type": "string", "maxLength": 200 },
+                  "default_place_id": { "type": "string", "maxLength": 500 },
+                  "default_address": { "type": "string", "maxLength": 500 },
+                  "default_latitude": { "type": "number", "minimum": -90, "maximum": 90 },
+                  "default_longitude": { "type": "number", "minimum": -180, "maximum": 180 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Account created",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "account": { "$ref": "#/components/schemas/ServiceAccount" } } } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "409": {
+            "description": "Account with this email already exists",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+          }
+        }
+      }
+    },
+    "/service/accounts/{id}": {
+      "get": {
+        "summary": "Get account (service)",
+        "description": "Get a portal account by UUID with its events.",
+        "operationId": "serviceGetAccount",
+        "security": [{ "serviceApiKey": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Account with events",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "account": { "$ref": "#/components/schemas/ServiceAccount" }, "events": { "type": "array" } } } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "patch": {
+        "summary": "Update account (service)",
+        "description": "Update a portal account. Scoped to accounts linked to this service key (admin keys bypass scoping). Coordinate changes propagate to all events owned by this account.",
+        "operationId": "serviceUpdateAccount",
+        "security": [{ "serviceApiKey": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "business_name": { "type": "string", "minLength": 1, "maxLength": 200 },
+                  "phone": { "type": "string", "maxLength": 50 },
+                  "website": { "type": "string", "format": "uri", "maxLength": 500 },
+                  "default_venue_name": { "type": "string", "maxLength": 200 },
+                  "default_place_id": { "type": "string", "maxLength": 500 },
+                  "default_address": { "type": "string", "maxLength": 500 },
+                  "default_latitude": { "type": "number", "minimum": -90, "maximum": 90 },
+                  "default_longitude": { "type": "number", "minimum": -180, "maximum": 180 },
+                  "status": { "type": "string", "enum": ["active", "suspended", "pending", "rejected"] },
+                  "description": { "type": ["string", "null"], "maxLength": 2000 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Account updated",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "account": { "$ref": "#/components/schemas/ServiceAccount" } } } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "description": "Service key is not linked to this account (NOT_LINKED)" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "delete": {
+        "summary": "Delete account (service)",
+        "description": "Delete a portal account and all associated events. Admin keys only.",
+        "operationId": "serviceDeleteAccount",
+        "security": [{ "serviceApiKey": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "204": { "description": "Account deleted" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "description": "Admin access required" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/service/accounts/{id}/cover-image": {
+      "post": {
+        "summary": "Upload account cover image",
+        "description": "Upload a cover image for a portal account. Image is re-encoded through Sharp (JPEG/PNG/WebP only, max 12MB). Returns the CDN URL.",
+        "operationId": "serviceUploadAccountCoverImage",
+        "security": [{ "serviceApiKey": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["image"],
+                "properties": {
+                  "image": { "type": "string", "description": "Base64-encoded image data" },
+                  "content_type": { "type": "string", "enum": ["image/jpeg", "image/png", "image/webp"] }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Image uploaded",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "cover_image_url": { "type": "string", "format": "uri" } } } } }
+          },
+          "400": { "description": "Invalid image" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "description": "NOT_LINKED or admin required" }
+        }
+      }
+    },
+    "/service/accounts/{id}/logo": {
+      "post": {
+        "summary": "Upload account logo",
+        "description": "Upload a logo for a portal account. Image is re-encoded through Sharp (JPEG/PNG/WebP only, max 12MB). Returns the CDN URL.",
+        "operationId": "serviceUploadAccountLogo",
+        "security": [{ "serviceApiKey": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["image"],
+                "properties": {
+                  "image": { "type": "string", "description": "Base64-encoded image data" },
+                  "content_type": { "type": "string", "enum": ["image/jpeg", "image/png", "image/webp"] }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Logo uploaded",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "logo_url": { "type": "string", "format": "uri" } } } } }
+          },
+          "400": { "description": "Invalid image" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "description": "NOT_LINKED or admin required" }
+        }
+      }
+    },
+    "/service/events": {
+      "get": {
+        "summary": "List events (service)",
+        "description": "List events with full internal fields. Supports filtering by status, time, category, search, and source method. By default shows one-offs + first instance of each series; pass all_instances=true for reconciliation.",
+        "operationId": "serviceListEvents",
+        "security": [{ "serviceApiKey": [] }],
+        "parameters": [
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["published", "pending_review", "draft"] } },
+          { "name": "time", "in": "query", "schema": { "type": "string", "enum": ["upcoming", "past", "all"] }, "description": "Default: upcoming" },
+          { "name": "search", "in": "query", "schema": { "type": "string" }, "description": "Text search on title, venue name, address" },
+          { "name": "category", "in": "query", "schema": { "type": "string" } },
+          { "name": "source_method", "in": "query", "schema": { "type": "string", "enum": ["portal", "api", "import"] } },
+          { "name": "all_instances", "in": "query", "schema": { "type": "string", "enum": ["true", "false"] }, "description": "Include all series instances (default: false)" },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 50, "maximum": 500 } },
+          { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Events with account info",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "events": { "type": "array" }, "total": { "type": "integer" } } } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      },
+      "post": {
+        "summary": "Create event (service)",
+        "description": "Create a single or recurring event on behalf of a linked account. Uses DB-style field names (title, event_date, start_time). For recurring events, creates a full series and returns series_count and instance_ids.",
+        "operationId": "serviceCreateEvent",
+        "security": [{ "serviceApiKey": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ServiceEventInput" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Event or series created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "description": "Single event",
+                      "properties": { "event": { "type": "object" } }
+                    },
+                    {
+                      "type": "object",
+                      "description": "Recurring series",
+                      "properties": {
+                        "series_count": { "type": "integer" },
+                        "series_id": { "type": ["string", "null"], "format": "uuid" },
+                        "instance_ids": { "type": "array", "items": { "type": "string", "format": "uuid" } }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "description": "Validation error" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "description": "NOT_LINKED — service key not linked to account" },
+          "404": { "description": "Account not found" }
+        }
+      }
+    },
+    "/service/events/batch": {
+      "patch": {
+        "summary": "Bulk update events (service)",
+        "description": "Bulk-update up to 200 events by ID. Only updates provided fields. Scoped to accounts linked to this key (admin keys bypass).",
+        "operationId": "serviceBatchUpdateEvents",
+        "security": [{ "serviceApiKey": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["ids", "updates"],
+                "properties": {
+                  "ids": { "type": "array", "items": { "type": "string", "format": "uuid" }, "minItems": 1, "maxItems": 200 },
+                  "updates": {
+                    "type": "object",
+                    "properties": {
+                      "category": { "type": "string" },
+                      "tags": { "type": "array", "items": { "type": "string", "maxLength": 100 }, "maxItems": 15 },
+                      "description": { "type": ["string", "null"], "maxLength": 2000 },
+                      "price": { "type": ["string", "null"], "maxLength": 100 },
+                      "wheelchair_accessible": { "type": ["boolean", "null"] },
+                      "status": { "type": "string", "enum": ["published", "pending_review", "draft"] },
+                      "first_party": { "type": "boolean" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Batch update complete",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "updated_count": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "description": "NOT_LINKED for one or more events" }
+        }
+      }
+    },
+    "/service/events/{id}": {
+      "get": {
+        "summary": "Get event (service)",
+        "description": "Get a single event with full internal fields and account info.",
+        "operationId": "serviceGetEvent",
+        "security": [{ "serviceApiKey": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Event with account",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "event": { "type": "object" }, "account": { "type": ["object", "null"] } } } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "patch": {
+        "summary": "Update event (service)",
+        "description": "Update a single event. Scoped to accounts linked to this service key.",
+        "operationId": "serviceUpdateEvent",
+        "security": [{ "serviceApiKey": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/ServiceEventInput" } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Event updated",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "event": { "type": "object" } } } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "description": "NOT_LINKED" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "delete": {
+        "summary": "Delete event (service)",
+        "description": "Delete a single event. Scoped to accounts linked to this service key.",
+        "operationId": "serviceDeleteEvent",
+        "security": [{ "serviceApiKey": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "204": { "description": "Deleted" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "description": "NOT_LINKED" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/service/events/series/{seriesId}": {
+      "patch": {
+        "summary": "Update series (service)",
+        "description": "Update all future instances of a recurring series. Scoped to accounts linked to this service key.",
+        "operationId": "serviceUpdateSeries",
+        "security": [{ "serviceApiKey": [] }],
+        "parameters": [
+          { "name": "seriesId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/ServiceEventInput" } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Series updated",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "updated_count": { "type": "integer" } } } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "description": "NOT_LINKED" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "delete": {
+        "summary": "Delete series (service)",
+        "description": "Delete all future instances of a recurring series. Scoped to accounts linked to this service key.",
+        "operationId": "serviceDeleteSeries",
+        "security": [{ "serviceApiKey": [] }],
+        "parameters": [
+          { "name": "seriesId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "204": { "description": "Series deleted" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "description": "NOT_LINKED" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/service/events/{id}/image": {
+      "post": {
+        "summary": "Upload event image (service)",
+        "description": "Upload an image for an event. Image is re-encoded through Sharp (JPEG/PNG/WebP only, max 12MB). Returns the CDN URL.",
+        "operationId": "serviceUploadEventImage",
+        "security": [{ "serviceApiKey": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["image"],
+                "properties": {
+                  "image": { "type": "string", "description": "Base64-encoded image data" },
+                  "content_type": { "type": "string", "enum": ["image/jpeg", "image/png", "image/webp"] },
+                  "focal_y": { "type": "number", "minimum": 0, "maximum": 1, "description": "Vertical focal point for cropping (0=top, 1=bottom, 0.5=center)" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Image uploaded",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "event_image_url": { "type": "string", "format": "uri" } } } } }
+          },
+          "400": { "description": "Invalid image type or corrupt file" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "description": "NOT_LINKED" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/service/events/{id}/group": {
+      "patch": {
+        "summary": "Assign event to group (service)",
+        "description": "Assign or remove a group from an event. Scoped to accounts linked to this service key.",
+        "operationId": "serviceAssignEventGroup",
+        "security": [{ "serviceApiKey": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "group_id": { "type": ["string", "null"], "format": "uuid", "description": "Set to null to remove the group association" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Event group updated" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "description": "NOT_LINKED" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/service/stats": {
+      "get": {
+        "summary": "Platform stats (service/admin)",
+        "description": "Detailed stats: account counts (total, claimed, pending), event counts, and category distribution. Admin service key required.",
+        "operationId": "serviceGetStats",
+        "security": [{ "serviceApiKey": [] }],
+        "responses": {
+          "200": {
+            "description": "Platform stats",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "stats": {
+                      "type": "object",
+                      "properties": {
+                        "total_accounts": { "type": "integer" },
+                        "claimed_accounts": { "type": "integer" },
+                        "pending_accounts": { "type": "integer" },
+                        "total_events": { "type": "integer" },
+                        "category_distribution": {
+                          "type": "object",
+                          "additionalProperties": { "type": "integer" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "description": "Admin access required" }
+        }
+      }
+    },
+    "/service/api-keys": {
+      "get": {
+        "summary": "List API keys (service/admin)",
+        "description": "List all API keys with event contribution stats. Admin service key required.",
+        "operationId": "serviceListApiKeys",
+        "security": [{ "serviceApiKey": [] }],
+        "responses": {
+          "200": {
+            "description": "API keys with event stats",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "api_keys": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": { "type": "string", "format": "uuid" },
+                          "key_prefix": { "type": "string" },
+                          "name": { "type": "string" },
+                          "url": { "type": ["string", "null"] },
+                          "contact_email": { "type": ["string", "null"] },
+                          "rate_limit_per_hour": { "type": "integer" },
+                          "status": { "type": "string" },
+                          "contributor_tier": { "type": "string" },
+                          "last_used_at": { "type": ["string", "null"], "format": "date-time" },
+                          "created_at": { "type": "string", "format": "date-time" },
+                          "event_count": { "type": "integer" },
+                          "pending_count": { "type": "integer" },
+                          "last_submitted_at": { "type": ["string", "null"], "format": "date-time" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "description": "Admin access required" }
+        }
+      }
+    },
+    "/service/api-keys/{id}": {
+      "patch": {
+        "summary": "Update API key (service/admin)",
+        "description": "Update an API key's name, URL, status, contributor_tier, or contact_email. Admin service key required.",
+        "operationId": "serviceUpdateApiKey",
+        "security": [{ "serviceApiKey": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+                  "url": { "type": ["string", "null"], "format": "uri", "maxLength": 500 },
+                  "status": { "type": "string", "enum": ["active", "revoked"] },
+                  "contributor_tier": { "type": "string", "enum": ["pending", "verified", "trusted"] },
+                  "contact_email": { "type": "string", "format": "email", "maxLength": 200 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "API key updated",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "api_key": { "type": "object" } } } } }
+          },
+          "400": { "description": "No fields to update" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "description": "Admin access required" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/service/groups": {
+      "get": {
+        "summary": "List groups (service)",
+        "description": "List all groups. Service-tier API key required.",
+        "operationId": "serviceListGroups",
+        "security": [{ "serviceApiKey": [] }],
+        "parameters": [
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 50, "maximum": 200 } },
+          { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Groups",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "groups": { "type": "array", "items": { "$ref": "#/components/schemas/Group" } } } } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      },
+      "post": {
+        "summary": "Create group (service)",
+        "description": "Create a new group. Service-tier API key required.",
+        "operationId": "serviceCreateGroup",
+        "security": [{ "serviceApiKey": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "type"],
+                "properties": {
+                  "name": { "type": "string", "maxLength": 200 },
+                  "type": { "type": "string", "enum": ["business", "community_group", "nonprofit", "collective", "curator"] },
+                  "description": { "type": "string", "maxLength": 2000 },
+                  "website": { "type": "string", "format": "uri", "maxLength": 500 },
+                  "category": { "type": "string", "maxLength": 50 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Group created",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "group": { "$ref": "#/components/schemas/Group" } } } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/service/groups/{id}": {
+      "get": {
+        "summary": "Get group (service)",
+        "operationId": "serviceGetGroup",
+        "security": [{ "serviceApiKey": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": { "description": "Group", "content": { "application/json": { "schema": { "type": "object", "properties": { "group": { "$ref": "#/components/schemas/Group" } } } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "patch": {
+        "summary": "Update group (service)",
+        "operationId": "serviceUpdateGroup",
+        "security": [{ "serviceApiKey": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string", "maxLength": 200 },
+                  "description": { "type": "string", "maxLength": 2000 },
+                  "website": { "type": "string", "format": "uri", "maxLength": 500 },
+                  "category": { "type": "string", "maxLength": 50 },
+                  "status": { "type": "string", "enum": ["active", "inactive"] }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Group updated", "content": { "application/json": { "schema": { "type": "object", "properties": { "group": { "$ref": "#/components/schemas/Group" } } } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "delete": {
+        "summary": "Delete group (service)",
+        "operationId": "serviceDeleteGroup",
+        "security": [{ "serviceApiKey": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "204": { "description": "Deleted" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/service/groups/{id}/venues": {
+      "post": {
+        "summary": "Add venue to group (service)",
+        "operationId": "serviceAddVenueToGroup",
+        "security": [{ "serviceApiKey": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "type": "object", "required": ["venue_id"], "properties": { "venue_id": { "type": "string", "format": "uuid" } } }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Venue added to group" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/service/groups/{groupId}/venues/{venueId}": {
+      "delete": {
+        "summary": "Remove venue from group (service)",
+        "operationId": "serviceRemoveVenueFromGroup",
+        "security": [{ "serviceApiKey": [] }],
+        "parameters": [
+          { "name": "groupId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "venueId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "204": { "description": "Venue removed from group" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" }
         }
       }
     },
@@ -376,7 +2024,23 @@
         "operationId": "serviceListApprovedDomains",
         "security": [{ "serviceApiKey": [] }],
         "responses": {
-          "200": { "description": "Allowlisted domains", "content": { "application/json": { "schema": { "type": "object", "properties": { "approved_domains": { "type": "array", "items": { "type": "object", "properties": { "domain": { "type": "string" }, "added_by": { "type": "string", "nullable": true }, "reason": { "type": "string", "nullable": true }, "added_at": { "type": "string", "format": "date-time" } } } } } } } } },
+          "200": {
+            "description": "Allowlisted domains",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "approved_domains": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/ApprovedDomain" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
           "403": { "description": "Admin access required" }
         }
       },
@@ -387,10 +2051,22 @@
         "security": [{ "serviceApiKey": [] }],
         "requestBody": {
           "required": true,
-          "content": { "application/json": { "schema": { "type": "object", "required": ["domain"], "properties": { "domain": { "type": "string", "description": "Lowercase hostname only — no scheme, port, or path." }, "reason": { "type": "string", "maxLength": 500 } } } } }
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["domain"],
+                "properties": {
+                  "domain": { "type": "string", "description": "Lowercase hostname only — no scheme, port, or path." },
+                  "reason": { "type": "string", "maxLength": 500 }
+                }
+              }
+            }
+          }
         },
         "responses": {
           "201": { "description": "Domain added" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
           "403": { "description": "Admin access required" }
         }
       }
@@ -406,6 +2082,7 @@
         ],
         "responses": {
           "204": { "description": "Domain removed" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
           "403": { "description": "Admin access required" }
         }
       }
@@ -420,7 +2097,23 @@
           { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["pending", "approved", "rejected"], "default": "pending" } }
         ],
         "responses": {
-          "200": { "description": "Requests", "content": { "application/json": { "schema": { "type": "object", "properties": { "requests": { "type": "array" } } } } } },
+          "200": {
+            "description": "Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "requests": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/DomainApprovalRequest" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
           "403": { "description": "Admin access required" }
         }
       }
@@ -439,6 +2132,7 @@
         },
         "responses": {
           "200": { "description": "Approved" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
           "403": { "description": "Admin access required" },
           "404": { "description": "Request not found" },
           "409": { "description": "Request already reviewed" }
@@ -456,6 +2150,7 @@
         ],
         "responses": {
           "200": { "description": "Rejected" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
           "403": { "description": "Admin access required" },
           "404": { "description": "Request not found" },
           "409": { "description": "Request already reviewed" }
@@ -512,18 +2207,33 @@
           "start_time_required": { "type": "boolean" },
           "series_id": { "type": ["string", "null"], "format": "uuid" },
           "series_instance_number": { "type": ["integer", "null"] },
-          "series_instance_count": { "type": ["integer", "null"] },
+          "series_instance_count": {
+            "type": ["integer", "null"],
+            "description": "Total instances in the series. Currently always null — not yet computed."
+          },
           "recurrence": {
             "oneOf": [
               { "type": "null" },
               { "type": "object", "properties": { "rrule": { "type": "string" } } }
             ]
           },
-          "first_party": { "type": "boolean", "description": "Whether the event was entered by its originator (venue, host, group) rather than a third party" },
-          "event_image_focal_y": { "type": "number", "description": "Vertical focal point for image cropping (0=top, 1=bottom, 0.5=center)" },
+          "first_party": {
+            "type": "boolean",
+            "description": "Whether the event was entered by its originator (venue, host, group) rather than a third party"
+          },
+          "event_image_focal_y": {
+            "type": ["number", "null"],
+            "description": "Vertical focal point for image cropping (0=top, 1=bottom, 0.5=center)"
+          },
           "runtime_minutes": { "type": ["integer", "null"], "description": "Film-specific: duration in minutes" },
           "content_rating": { "type": ["string", "null"], "description": "Film-specific: e.g. PG-13" },
-          "showtimes": { "oneOf": [{ "type": "null" }, { "type": "array", "items": { "type": "object", "properties": { "at": { "type": "string" } } } }], "description": "Film-specific: multiple screening times" },
+          "showtimes": {
+            "oneOf": [
+              { "type": "null" },
+              { "type": "array", "items": { "type": "object", "properties": { "at": { "type": "string" } } } }
+            ],
+            "description": "Film-specific: multiple screening times"
+          },
           "source": { "$ref": "#/components/schemas/Source" }
         }
       },
@@ -537,11 +2247,169 @@
           "contributor": {
             "oneOf": [
               { "type": "null" },
-              { "type": "object", "properties": { "name": { "type": "string", "description": "App/tool that contributed this data" }, "url": { "type": "string", "format": "uri", "nullable": true, "description": "Contributor website" } } }
+              {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string", "description": "App/tool that contributed this data" },
+                  "url": { "type": ["string", "null"], "format": "uri", "description": "Contributor website" }
+                }
+              }
             ],
             "description": "The app that contributed this data to the commons. Null for portal-submitted events."
           },
           "license": { "type": "string", "example": "CC BY 4.0" }
+        }
+      },
+      "Account": {
+        "type": "object",
+        "description": "A public venue or organizer account",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "slug": { "type": "string" },
+          "business_name": { "type": "string" },
+          "default_venue_name": { "type": ["string", "null"] },
+          "default_address": { "type": ["string", "null"] },
+          "default_latitude": { "type": ["number", "null"] },
+          "default_longitude": { "type": ["number", "null"] },
+          "website": { "type": ["string", "null"] },
+          "phone": { "type": ["string", "null"] },
+          "description": { "type": ["string", "null"] },
+          "logo_url": { "type": ["string", "null"], "format": "uri" },
+          "cover_image_url": { "type": ["string", "null"], "format": "uri" }
+        }
+      },
+      "ServiceAccount": {
+        "type": "object",
+        "description": "A portal account as seen by service-tier callers — includes internal fields",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "email": { "type": "string", "format": "email" },
+          "business_name": { "type": "string" },
+          "auth_user_id": { "type": ["string", "null"] },
+          "status": { "type": "string", "enum": ["active", "suspended", "pending", "rejected"] },
+          "default_venue_name": { "type": ["string", "null"] },
+          "default_place_id": { "type": ["string", "null"] },
+          "default_address": { "type": ["string", "null"] },
+          "default_latitude": { "type": ["number", "null"] },
+          "default_longitude": { "type": ["number", "null"] },
+          "website": { "type": ["string", "null"] },
+          "phone": { "type": ["string", "null"] },
+          "description": { "type": ["string", "null"] },
+          "logo_url": { "type": ["string", "null"], "format": "uri" },
+          "cover_image_url": { "type": ["string", "null"], "format": "uri" },
+          "operating_hours": { "type": ["array", "null"] },
+          "claimed_at": { "type": ["string", "null"], "format": "date-time" },
+          "last_login_at": { "type": ["string", "null"], "format": "date-time" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Group": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "type": { "type": "string", "enum": ["business", "community_group", "nonprofit", "collective", "curator"] },
+          "description": { "type": ["string", "null"] },
+          "website": { "type": ["string", "null"] },
+          "category": { "type": ["string", "null"] },
+          "status": { "type": "string", "enum": ["active", "inactive"] },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Webhook": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "url": { "type": "string", "format": "uri" },
+          "event_types": {
+            "type": "array",
+            "items": { "type": "string", "enum": ["event.created", "event.updated", "event.deleted", "event.series_created"] }
+          },
+          "status": { "type": "string", "enum": ["active", "paused"] },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ApprovedDomain": {
+        "type": "object",
+        "properties": {
+          "domain": { "type": "string", "description": "Lowercase hostname (e.g. example.com)" },
+          "added_by": { "type": ["string", "null"] },
+          "reason": { "type": ["string", "null"] },
+          "added_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "DomainApprovalRequest": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "domain": { "type": "string" },
+          "url": { "type": "string", "format": "uri", "description": "The full URL that triggered the review" },
+          "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+          "reviewed_at": { "type": ["string", "null"], "format": "date-time" },
+          "reason": { "type": ["string", "null"] },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ContributeEventInput": {
+        "type": "object",
+        "description": "Input schema for the Contribute API. Uses Neighborhood API field names (name, start, cost).",
+        "required": ["name", "start", "timezone", "category", "location"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "start": { "type": "string", "format": "date-time", "description": "ISO 8601 with timezone offset" },
+          "end": { "type": "string", "format": "date-time" },
+          "timezone": { "type": "string", "description": "IANA timezone (e.g. America/New_York)" },
+          "category": { "type": "string", "maxLength": 50, "description": "Category slug (kebab or underscore accepted, e.g. live-music or live_music)" },
+          "location": {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+              "address": { "type": "string", "maxLength": 500 },
+              "lat": { "type": "number", "minimum": -90, "maximum": 90 },
+              "lng": { "type": "number", "minimum": -180, "maximum": 180 },
+              "place_id": { "type": "string", "maxLength": 500 }
+            }
+          },
+          "description": { "type": "string", "maxLength": 2000 },
+          "cost": { "type": "string", "maxLength": 100 },
+          "url": { "type": "string", "format": "uri", "maxLength": 2000, "description": "Event URL. Must use an approved domain or will be queued for review." },
+          "image_url": { "type": "string", "format": "uri", "maxLength": 2000, "description": "Image URL — fetched, re-encoded through Sharp, and stored in R2." },
+          "tags": { "type": "array", "items": { "type": "string", "maxLength": 50 }, "maxItems": 15 },
+          "wheelchair_accessible": { "type": "boolean" },
+          "recurrence": { "type": "string", "maxLength": 200, "description": "RRULE string (e.g. FREQ=WEEKLY or FREQ=MONTHLY;BYDAY=2FR;COUNT=12)" },
+          "instance_count": { "type": "integer", "minimum": 0, "maximum": 52 },
+          "venue_id": { "type": "string", "format": "uuid", "description": "Link to an existing venue account" },
+          "external_id": { "type": "string", "maxLength": 500, "description": "External ID for deduplication. Conflict returns 409." }
+        }
+      },
+      "ServiceEventInput": {
+        "type": "object",
+        "description": "Input schema for the Service API. Uses DB-style field names (title, event_date, start_time).",
+        "required": ["account_id", "title", "event_date", "start_time", "event_timezone", "category", "recurrence"],
+        "properties": {
+          "account_id": { "type": "string", "format": "uuid" },
+          "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "event_date": { "type": "string", "format": "date", "description": "YYYY-MM-DD in the event's timezone" },
+          "start_time": { "type": "string", "pattern": "^\\d{2}:\\d{2}$", "description": "HH:MM in 24-hour format" },
+          "end_time": { "type": "string", "pattern": "^\\d{2}:\\d{2}$", "description": "HH:MM in 24-hour format (optional)" },
+          "event_timezone": { "type": "string", "description": "IANA timezone" },
+          "category": { "type": "string" },
+          "recurrence": { "type": "string", "description": "RRULE string or 'none' for one-off events", "example": "none" },
+          "instance_count": { "type": "integer", "minimum": 0, "maximum": 52 },
+          "description": { "type": "string", "maxLength": 2000 },
+          "price": { "type": "string", "maxLength": 100 },
+          "link_url": { "type": "string", "format": "uri", "maxLength": 2000 },
+          "place_name": { "type": "string", "maxLength": 200 },
+          "address": { "type": "string", "maxLength": 500 },
+          "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
+          "longitude": { "type": "number", "minimum": -180, "maximum": 180 },
+          "place_id": { "type": "string", "maxLength": 500 },
+          "tags": { "type": "array", "items": { "type": "string", "maxLength": 100 }, "maxItems": 15 },
+          "wheelchair_accessible": { "type": "boolean" },
+          "first_party": { "type": "boolean" },
+          "status": { "type": "string", "enum": ["published", "pending_review", "draft"] }
         }
       },
       "Error": {
@@ -553,7 +2421,8 @@
             "required": ["code", "message"],
             "properties": {
               "code": { "type": "string" },
-              "message": { "type": "string" }
+              "message": { "type": "string" },
+              "domain": { "type": "string", "description": "Present when code is DOMAIN_PENDING_REVIEW" }
             }
           }
         }
@@ -571,14 +2440,24 @@
       "Unauthorized": {
         "description": "Missing or invalid API key",
         "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      },
+      "ValidationError": {
+        "description": "Request payload or query parameters failed validation",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
       }
     },
     "securitySchemes": {
-      "apiKey": {
+      "browseApiKey": {
         "type": "apiKey",
         "in": "header",
         "name": "X-API-Key",
-        "description": "Optional API key for dedicated rate limit bucket"
+        "description": "Optional for read endpoints (higher rate limit bucket). Required for webhook management."
+      },
+      "contributeApiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "Contributor-tier API key. Register at /api/v1/developers/register/send-otp."
       },
       "serviceApiKey": {
         "type": "apiKey",
