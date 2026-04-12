@@ -28,6 +28,7 @@ import {
 import { createEventSeries, deleteSeriesEvents } from '../lib/event-series.js';
 import { processAndUploadImage, downloadAndAttachImage } from '../lib/image-processing.js';
 import { validateFeedUrl } from '../lib/url-validation.js';
+import { invalidateApprovedDomainsCache } from '../lib/url-sanitizer.js';
 import { nominatimGeocode } from '../lib/geocoding.js';
 import { config } from '../config.js';
 
@@ -1735,6 +1736,172 @@ router.post('/migrate-image-urls', serviceLimiter, async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+// =============================================================================
+// APPROVED DOMAINS — operator-managed allowlist for Contribute API URLs
+// =============================================================================
+//
+// Admin-only. Curator-submitted URLs whose domain isn't on this list are
+// queued in domain_approval_requests and rejected with DOMAIN_PENDING_REVIEW.
+// Operators review the queue and approve domains here.
+
+const domainParam = z.string().min(1).max(253).regex(
+  /^[a-z0-9.-]+$/i,
+  'Domain must be a hostname (no scheme, path, or port).',
+).transform((d) => d.toLowerCase());
+
+const createApprovedDomainSchema = z.object({
+  domain: domainParam,
+  reason: z.string().max(500).optional(),
+});
+
+const reviewRequestSchema = z.object({
+  reason: z.string().max(500).optional(),
+});
+
+router.get('/approved-domains', serviceLimiter, async (req, res, next) => {
+  try {
+    if (!req.apiKeyInfo?.isAdmin) {
+      throw createError('Admin access required', 403, 'FORBIDDEN');
+    }
+    const { data, error } = await supabaseAdmin
+      .from('approved_domains')
+      .select('domain, added_by, reason, added_at')
+      .order('added_at', { ascending: false });
+    if (error) throw createError('Failed to load approved domains', 500, 'SERVER_ERROR');
+    res.json({ approved_domains: data || [] });
+  } catch (err) { next(err); }
+});
+
+router.post('/approved-domains', serviceLimiter, async (req, res, next) => {
+  try {
+    if (!req.apiKeyInfo?.isAdmin) {
+      throw createError('Admin access required', 403, 'FORBIDDEN');
+    }
+    const { domain, reason } = validateRequest(createApprovedDomainSchema, req.body);
+    const addedBy = `service:${req.apiKeyInfo.id}`;
+
+    const { error } = await supabaseAdmin
+      .from('approved_domains')
+      .insert({ domain, reason: reason || null, added_by: addedBy });
+    if (error && error.code !== '23505') {
+      throw createError('Failed to add approved domain', 500, 'SERVER_ERROR');
+    }
+
+    // Mark any pending request for this domain as approved.
+    await supabaseAdmin
+      .from('domain_approval_requests')
+      .update({ status: 'approved', reviewed_at: new Date().toISOString(), reviewed_by: addedBy })
+      .eq('domain', domain)
+      .eq('status', 'pending');
+
+    invalidateApprovedDomainsCache();
+    console.log(`[SERVICE] Approved domain added: ${domain} by ${addedBy}`);
+    res.status(201).json({ approved_domain: { domain, reason: reason || null, added_by: addedBy } });
+  } catch (err) { next(err); }
+});
+
+router.delete('/approved-domains/:domain', serviceLimiter, async (req, res, next) => {
+  try {
+    if (!req.apiKeyInfo?.isAdmin) {
+      throw createError('Admin access required', 403, 'FORBIDDEN');
+    }
+    const domain = domainParam.parse(req.params.domain);
+
+    const { error } = await supabaseAdmin
+      .from('approved_domains')
+      .delete()
+      .eq('domain', domain);
+    if (error) throw createError('Failed to remove approved domain', 500, 'SERVER_ERROR');
+
+    invalidateApprovedDomainsCache();
+    console.log(`[SERVICE] Approved domain removed: ${domain} by service:${req.apiKeyInfo.id}`);
+    res.status(204).end();
+  } catch (err) { next(err); }
+});
+
+router.get('/domain-approval-requests', serviceLimiter, async (req, res, next) => {
+  try {
+    if (!req.apiKeyInfo?.isAdmin) {
+      throw createError('Admin access required', 403, 'FORBIDDEN');
+    }
+    const status = (typeof req.query.status === 'string' && ['pending', 'approved', 'rejected'].includes(req.query.status))
+      ? req.query.status as string
+      : 'pending';
+
+    const { data, error } = await supabaseAdmin
+      .from('domain_approval_requests')
+      .select('id, domain, requested_via_api_key, requested_url, event_context, status, requested_at, reviewed_at, reviewed_by')
+      .eq('status', status)
+      .order('requested_at', { ascending: false })
+      .limit(200);
+    if (error) throw createError('Failed to load approval requests', 500, 'SERVER_ERROR');
+    res.json({ requests: data || [] });
+  } catch (err) { next(err); }
+});
+
+router.post('/domain-approval-requests/:id/approve', serviceLimiter, async (req, res, next) => {
+  try {
+    if (!req.apiKeyInfo?.isAdmin) {
+      throw createError('Admin access required', 403, 'FORBIDDEN');
+    }
+    validateUuidParam(req.params.id, 'request ID');
+    const { reason } = validateRequest(reviewRequestSchema, req.body || {});
+    const reviewedBy = `service:${req.apiKeyInfo.id}`;
+
+    const { data: request, error: fetchError } = await supabaseAdmin
+      .from('domain_approval_requests')
+      .select('id, domain, status')
+      .eq('id', req.params.id)
+      .maybeSingle();
+    if (fetchError || !request) throw createError('Request not found', 404, 'NOT_FOUND');
+    if (request.status !== 'pending') throw createError(`Request already ${request.status}`, 409, 'CONFLICT');
+
+    const domain = request.domain as string;
+    const { error: insertError } = await supabaseAdmin
+      .from('approved_domains')
+      .insert({ domain, reason: reason || null, added_by: reviewedBy });
+    if (insertError && insertError.code !== '23505') {
+      throw createError('Failed to add approved domain', 500, 'SERVER_ERROR');
+    }
+
+    await supabaseAdmin
+      .from('domain_approval_requests')
+      .update({ status: 'approved', reviewed_at: new Date().toISOString(), reviewed_by: reviewedBy })
+      .eq('id', req.params.id);
+
+    invalidateApprovedDomainsCache();
+    console.log(`[SERVICE] Approval request approved: ${domain} (${req.params.id}) by ${reviewedBy}`);
+    res.json({ request: { id: req.params.id, domain, status: 'approved' } });
+  } catch (err) { next(err); }
+});
+
+router.post('/domain-approval-requests/:id/reject', serviceLimiter, async (req, res, next) => {
+  try {
+    if (!req.apiKeyInfo?.isAdmin) {
+      throw createError('Admin access required', 403, 'FORBIDDEN');
+    }
+    validateUuidParam(req.params.id, 'request ID');
+    const reviewedBy = `service:${req.apiKeyInfo.id}`;
+
+    const { data: request, error: fetchError } = await supabaseAdmin
+      .from('domain_approval_requests')
+      .select('id, domain, status')
+      .eq('id', req.params.id)
+      .maybeSingle();
+    if (fetchError || !request) throw createError('Request not found', 404, 'NOT_FOUND');
+    if (request.status !== 'pending') throw createError(`Request already ${request.status}`, 409, 'CONFLICT');
+
+    const { error: updateError } = await supabaseAdmin
+      .from('domain_approval_requests')
+      .update({ status: 'rejected', reviewed_at: new Date().toISOString(), reviewed_by: reviewedBy })
+      .eq('id', req.params.id);
+    if (updateError) throw createError('Failed to reject request', 500, 'SERVER_ERROR');
+
+    console.log(`[SERVICE] Approval request rejected: ${request.domain} (${req.params.id}) by ${reviewedBy}`);
+    res.json({ request: { id: req.params.id, domain: request.domain, status: 'rejected' } });
+  } catch (err) { next(err); }
 });
 
 export default router;

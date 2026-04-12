@@ -114,6 +114,13 @@ const SCHEMA: Record<string, string[]> = {
   api_key_account_links: [
     'api_key_id', 'portal_account_id', 'linked_at',
   ],
+  approved_domains: [
+    'domain', 'added_by', 'reason', 'added_at',
+  ],
+  domain_approval_requests: [
+    'id', 'domain', 'requested_via_api_key', 'requested_url', 'event_context',
+    'status', 'requested_at', 'reviewed_at', 'reviewed_by',
+  ],
   // Ingestion tables (newsletter_sources, newsletter_emails, event_candidates,
   // feed_sources) exist in the database but are no longer referenced by code
   // in this repo. They're managed by external admin tools via the Service API.

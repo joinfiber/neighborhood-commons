@@ -423,7 +423,7 @@ Tier upgrades are manual. Submit good data consistently and it happens.
 | `end` | timestamp | ISO 8601 with offset | `"2026-04-15T22:00:00-04:00"` |
 | `description` | text | Max 2000 characters | `"Weekly jazz quartet."` |
 | `cost` | text | Max 100 characters | `"Free"`, `"$10"`, `"$5-15"` |
-| `url` | URL | Must be from an approved domain (see below) | `"https://example.com/event"` |
+| `url` | URL | Must pass URL normalcy checks; non-allowlisted domains queue for review (see below) | `"https://example.com/event"` |
 | `image_url` | URL | The Commons downloads, re-encodes, and hosts it | `"https://example.com/photo.jpg"` |
 | `location.address` | text | Max 500 chars. Providing this enables geocoding. | `"600 N Broad St, Philadelphia PA"` |
 | `location.lat` | number | -90 to 90 | `39.9654` |
@@ -557,7 +557,14 @@ Group types: `business`, `community_group`, `nonprofit`, `collective`, `curator`
 - **Geocoding:** If you provide `location.address` but no coordinates, the Commons geocodes it automatically (via OpenStreetMap/Nominatim). The resulting lat/lng are stored on the event.
 - **Region resolution:** Coordinates are used to assign the event to a geographic region. Events without a region won't appear in location-filtered feeds — so always provide an address or coordinates.
 - **Image processing:** If you provide `image_url`, the Commons downloads the image, strips metadata, re-encodes it as JPEG (max 1200px wide), and stores it on Cloudflare R2. The response contains the final hosted URL.
-- **URL sanitization:** The `url` field is validated against an approved domain list (major ticketing platforms, social media, venue websites). Tracking parameters (`utm_*`, `fbclid`, etc.) are stripped automatically. Unapproved domains return a 400 error.
+- **URL validation:** The `url` field is checked for normalcy and against an operator-managed allowlist of domains. Tracking parameters (`utm_*`, `fbclid`, etc.) are stripped automatically and `http://` is coerced to `https://`. The following return a `400` and are never accepted:
+  - `INVALID_URL` — malformed URL
+  - `INVALID_SCHEME` — scheme other than http/https
+  - `URL_CREDENTIALS` — embedded `user:pass@`
+  - `IP_LITERAL` — hostname is an IPv4 or IPv6 literal
+  - `BLOCKED_HOSTNAME` — `localhost`, `*.local`, `*.internal`, `*.localhost`
+
+  A non-allowlisted but otherwise valid domain returns `400 DOMAIN_PENDING_REVIEW` with the offending domain in `error.domain`. The Commons logs a review request automatically — operators review the queue and approve domains as appropriate. Once approved, contributors can resubmit the event and it will be accepted. Treat this as a soft, transient failure (similar to a moderation hold), not a permanent rejection.
 - **Deduplication:** If you provide `external_id`, the Commons enforces uniqueness per API key. Submitting the same `external_id` twice returns `409 CONFLICT`.
 - **Tag validation:** Tags are checked against the category's allowed set. Invalid tags for that category are silently removed. You may get fewer tags back than you sent. Custom tags (not in the prescribed list) are accepted as-is.
 
@@ -848,6 +855,12 @@ curl -X POST "https://api.neighborhood-commons.org/api/v1/service/events" \
 | `PATCH` | `/service/events/:id` | Update linked event |
 | `DELETE` | `/service/events/:id` | Delete linked event |
 | `POST` | `/service/events/:id/image` | Upload image for linked event |
+| `GET` | `/service/approved-domains` | List allowlisted contribute-URL domains (admin) |
+| `POST` | `/service/approved-domains` | Add a domain to the allowlist (admin) |
+| `DELETE` | `/service/approved-domains/:domain` | Remove a domain from the allowlist (admin) |
+| `GET` | `/service/domain-approval-requests?status=pending` | Review queue of pending domain requests (admin) |
+| `POST` | `/service/domain-approval-requests/:id/approve` | Approve a request and add the domain to the allowlist (admin) |
+| `POST` | `/service/domain-approval-requests/:id/reject` | Reject a pending request without allowlisting (admin) |
 
 ---
 

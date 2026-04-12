@@ -320,8 +320,7 @@
           }
         }
       }
-    }
-  },
+    },
     "/service/accounts/link": {
       "post": {
         "summary": "Link account to service key",
@@ -367,6 +366,99 @@
         "responses": {
           "200": { "description": "Accounts with event counts", "content": { "application/json": { "schema": { "type": "object", "properties": { "accounts": { "type": "array" }, "total": { "type": "integer" } } } } } },
           "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/service/approved-domains": {
+      "get": {
+        "summary": "List approved domains",
+        "description": "List domains on the Contribute API allowlist. Admin service key required.",
+        "operationId": "serviceListApprovedDomains",
+        "security": [{ "serviceApiKey": [] }],
+        "responses": {
+          "200": { "description": "Allowlisted domains", "content": { "application/json": { "schema": { "type": "object", "properties": { "approved_domains": { "type": "array", "items": { "type": "object", "properties": { "domain": { "type": "string" }, "added_by": { "type": "string", "nullable": true }, "reason": { "type": "string", "nullable": true }, "added_at": { "type": "string", "format": "date-time" } } } } } } } } },
+          "403": { "description": "Admin access required" }
+        }
+      },
+      "post": {
+        "summary": "Add an approved domain",
+        "description": "Add a domain to the Contribute API allowlist. Resolves any pending approval request for the same domain. Admin service key required.",
+        "operationId": "serviceAddApprovedDomain",
+        "security": [{ "serviceApiKey": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "required": ["domain"], "properties": { "domain": { "type": "string", "description": "Lowercase hostname only — no scheme, port, or path." }, "reason": { "type": "string", "maxLength": 500 } } } } }
+        },
+        "responses": {
+          "201": { "description": "Domain added" },
+          "403": { "description": "Admin access required" }
+        }
+      }
+    },
+    "/service/approved-domains/{domain}": {
+      "delete": {
+        "summary": "Remove an approved domain",
+        "description": "Remove a domain from the allowlist. Future Contribute API submissions for this domain will queue for review. Admin service key required.",
+        "operationId": "serviceRemoveApprovedDomain",
+        "security": [{ "serviceApiKey": [] }],
+        "parameters": [
+          { "name": "domain", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "204": { "description": "Domain removed" },
+          "403": { "description": "Admin access required" }
+        }
+      }
+    },
+    "/service/domain-approval-requests": {
+      "get": {
+        "summary": "List domain approval requests",
+        "description": "Review queue of Contribute API URL submissions whose domain is not yet on the allowlist. Admin service key required.",
+        "operationId": "serviceListDomainApprovalRequests",
+        "security": [{ "serviceApiKey": [] }],
+        "parameters": [
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["pending", "approved", "rejected"], "default": "pending" } }
+        ],
+        "responses": {
+          "200": { "description": "Requests", "content": { "application/json": { "schema": { "type": "object", "properties": { "requests": { "type": "array" } } } } } },
+          "403": { "description": "Admin access required" }
+        }
+      }
+    },
+    "/service/domain-approval-requests/{id}/approve": {
+      "post": {
+        "summary": "Approve a domain approval request",
+        "description": "Add the requested domain to the allowlist and mark the request approved. Admin service key required.",
+        "operationId": "serviceApproveDomainRequest",
+        "security": [{ "serviceApiKey": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "content": { "application/json": { "schema": { "type": "object", "properties": { "reason": { "type": "string", "maxLength": 500 } } } } }
+        },
+        "responses": {
+          "200": { "description": "Approved" },
+          "403": { "description": "Admin access required" },
+          "404": { "description": "Request not found" },
+          "409": { "description": "Request already reviewed" }
+        }
+      }
+    },
+    "/service/domain-approval-requests/{id}/reject": {
+      "post": {
+        "summary": "Reject a domain approval request",
+        "description": "Mark the request rejected without allowlisting the domain. Admin service key required.",
+        "operationId": "serviceRejectDomainRequest",
+        "security": [{ "serviceApiKey": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": { "description": "Rejected" },
+          "403": { "description": "Admin access required" },
+          "404": { "description": "Request not found" },
+          "409": { "description": "Request already reviewed" }
         }
       }
     }

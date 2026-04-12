@@ -23,7 +23,7 @@ import { PORTAL_SELECT, fromTimestamptz } from '../lib/event-operations.js';
 import { config } from '../config.js';
 import { downloadAndAttachImage } from '../lib/image-processing.js';
 import { nominatimGeocode } from '../lib/geocoding.js';
-import { sanitizeUrl, checkContributeUrlDomain } from '../lib/url-sanitizer.js';
+import { sanitizeUrl, validateContributeUrl, queueDomainApprovalRequest } from '../lib/url-sanitizer.js';
 import { fromRRule } from '../lib/rrule.js';
 import { createEventSeries } from '../lib/event-series.js';
 import { validateTags } from '../lib/tags.js';
@@ -302,16 +302,24 @@ router.post('/', writeLimiter, async (req, res, next) => {
       : 1;
     await checkContributeRateLimit(apiKeyId, tier, rateLimitCount);
 
-    // Validate event URL domain if provided
+    // Validate event URL: normalcy checks (scheme, credentials, IP literals, etc.)
+    // plus approved-domain check. Non-approved domains are queued for operator
+    // review and the request is rejected with DOMAIN_PENDING_REVIEW so the
+    // caller can present a "pending review" state rather than a hard failure.
     if (event.url) {
-      const domainCheck = checkContributeUrlDomain(event.url);
-      if (!domainCheck.approved) {
-        throw createError(
-          `URL domain "${domainCheck.domain}" is not on the approved list. Contact hi@neighborhood-commons.org to request approval.`,
-          400,
-          'DOMAIN_NOT_APPROVED',
-        );
+      const urlCheck = await validateContributeUrl(event.url);
+      if (!urlCheck.ok) {
+        if (urlCheck.code === 'DOMAIN_PENDING_REVIEW' && urlCheck.domain) {
+          void queueDomainApprovalRequest({
+            domain: urlCheck.domain,
+            apiKeyId,
+            url: event.url,
+            eventContext: { name: event.name, publisher: keyName, start: event.start },
+          });
+        }
+        throw createError(urlCheck.message, 400, urlCheck.code);
       }
+      event.url = urlCheck.url;
     }
 
     // Resolve coordinates (geocode if needed) and find containing region
@@ -452,13 +460,22 @@ router.post('/batch', writeLimiter, async (req, res, next) => {
     for (let i = 0; i < events.length; i++) {
       const event = events[i];
 
-      // Validate event URL domain if provided
+      // Validate event URL (see POST / for full notes on the policy).
       if (event.url) {
-        const domainCheck = checkContributeUrlDomain(event.url);
-        if (!domainCheck.approved) {
-          results.push({ index: i, error: `URL domain "${domainCheck.domain}" not approved` });
+        const urlCheck = await validateContributeUrl(event.url);
+        if (!urlCheck.ok) {
+          if (urlCheck.code === 'DOMAIN_PENDING_REVIEW' && urlCheck.domain) {
+            void queueDomainApprovalRequest({
+              domain: urlCheck.domain,
+              apiKeyId,
+              url: event.url,
+              eventContext: { name: event.name, publisher: keyName, start: event.start },
+            });
+          }
+          results.push({ index: i, error: `${urlCheck.code}: ${urlCheck.message}` });
           continue;
         }
+        event.url = urlCheck.url;
       }
 
       // Parse recurrence if provided
@@ -734,14 +751,22 @@ router.patch('/:id', writeLimiter, async (req, res, next) => {
     if (data.tags !== undefined) update.tags = data.tags;
     if (data.wheelchair_accessible !== undefined) update.wheelchair_accessible = data.wheelchair_accessible;
 
-    // URL validation
+    // URL validation (see POST / for full notes on the policy).
     if (data.url !== undefined) {
       if (data.url) {
-        const domainCheck = checkContributeUrlDomain(data.url);
-        if (!domainCheck.approved) {
-          throw createError(`URL domain "${domainCheck.domain}" is not approved`, 400, 'DOMAIN_NOT_APPROVED');
+        const urlCheck = await validateContributeUrl(data.url);
+        if (!urlCheck.ok) {
+          if (urlCheck.code === 'DOMAIN_PENDING_REVIEW' && urlCheck.domain) {
+            void queueDomainApprovalRequest({
+              domain: urlCheck.domain,
+              apiKeyId,
+              url: data.url,
+              eventContext: { event_id: req.params.id },
+            });
+          }
+          throw createError(urlCheck.message, 400, urlCheck.code);
         }
-        update.link_url = sanitizeUrl(data.url);
+        update.link_url = urlCheck.url;
       } else {
         update.link_url = null;
       }
