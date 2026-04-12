@@ -44,6 +44,7 @@ function makeRow(overrides: Partial<PortalEventRow> = {}): PortalEventRow {
     runtime_minutes: null,
     content_rating: null,
     showtimes: null,
+    first_party: false,
     portal_accounts: { business_name: 'South Jazz Kitchen', wheelchair_accessible: null },
     ...overrides,
   };

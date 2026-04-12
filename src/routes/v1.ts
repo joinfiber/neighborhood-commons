@@ -53,9 +53,205 @@ const listSchema = z.object({
   series_id: z.string().uuid().optional(),
   group_id: z.string().uuid().optional(),
   recurring: z.enum(['true', 'false']).optional(),
+  contributor: z.string().max(200).optional(),
   limit: z.coerce.number().min(1).max(200).default(50),
   offset: z.coerce.number().min(0).default(0),
 });
+
+const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, event_image_focal_y, created_at, creator_account_id, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, runtime_minutes, content_rating, showtimes, first_party, source_method, source_publisher, portal_accounts!events_creator_account_id_fkey(business_name, status, wheelchair_accessible)';
+
+// =============================================================================
+// SHARED QUERY BUILDING
+// =============================================================================
+
+type ListParams = z.infer<typeof listSchema>;
+
+/**
+ * Resolve a contributor slug to account ID(s). Returns null if no match.
+ * Looks up portal_accounts by slug (exact match, case-insensitive).
+ */
+async function resolveContributorAccountIds(slug: string): Promise<string[] | null> {
+  const { data } = await supabaseAdmin
+    .from('portal_accounts')
+    .select('id')
+    .eq('slug', slug.toLowerCase())
+    .eq('status', 'active');
+  if (!data || data.length === 0) return null;
+  return data.map((r: { id: string }) => r.id);
+}
+
+/**
+ * Build and execute an event query with all standard filters applied.
+ * Shared across JSON, iCal, and RSS endpoints.
+ */
+async function queryFilteredEvents(params: ListParams, opts?: {
+  /** Skip the 3h lookback and visibility filter (for feeds with explicit date windows) */
+  skipVisibility?: boolean;
+  /** Override the default cutoff for event_at (ISO string) */
+  cutoffOverride?: string;
+  /** Include total count in response */
+  includeCount?: boolean;
+  /** Override fetch limit (e.g., for series dedup over-fetch) */
+  fetchLimit?: number;
+}): Promise<{ events: Record<string, unknown>[]; count: number | null }> {
+  const includeCount = opts?.includeCount ?? false;
+  const fetchLimit = opts?.fetchLimit ?? params.limit;
+
+  // Default cutoff: 3h lookback for open-window events
+  const lookbackMs = 3 * 60 * 60 * 1000;
+  const defaultCutoff = new Date(Date.now() - lookbackMs).toISOString();
+  const cutoff = opts?.cutoffOverride ?? defaultCutoff;
+
+  // Contributor filter: resolve slug → account IDs before building query
+  let contributorAccountIds: string[] | null = null;
+  if (params.contributor) {
+    contributorAccountIds = await resolveContributorAccountIds(params.contributor);
+    if (!contributorAccountIds) {
+      // No matching account — return empty result
+      return { events: [], count: 0 };
+    }
+  }
+
+  let query = supabaseAdmin
+    .from('events')
+    .select(EVENTS_SELECT, includeCount ? { count: 'exact' } : undefined)
+    .eq('status', 'published')
+    .gte('event_at', cutoff)
+    .order('event_at', { ascending: true })
+    .range(params.offset, params.offset + fetchLimit - 1);
+
+  // Contributor filter
+  if (contributorAccountIds) {
+    if (contributorAccountIds.length === 1) {
+      query = query.eq('creator_account_id', contributorAccountIds[0] as string);
+    } else {
+      query = query.in('creator_account_id', contributorAccountIds);
+    }
+  }
+
+  // Series filter
+  if (params.series_id) {
+    query = query.eq('series_id', params.series_id);
+  }
+
+  // Group filter
+  if (params.group_id) {
+    query = query.eq('group_id', params.group_id);
+  }
+
+  // Recurring filter
+  if (params.recurring === 'true') {
+    query = query.neq('recurrence', 'none');
+  } else if (params.recurring === 'false') {
+    query = query.eq('recurrence', 'none');
+  }
+
+  // Date range filters
+  if (params.start_after) {
+    query = query.gte('event_at', params.start_after + 'T00:00:00Z');
+  }
+  if (params.start_before) {
+    query = query.lte('event_at', params.start_before + 'T23:59:59Z');
+  }
+
+  // Category filter (by slug)
+  if (params.category) {
+    const categoryKey = Object.entries(EVENT_CATEGORIES).find(
+      ([key]) => key.replace(/_/g, '-') === params.category
+    )?.[0];
+    if (categoryKey) {
+      query = query.eq('category', categoryKey);
+    }
+  }
+
+  // Text search
+  if (params.q) {
+    const sanitized = sanitizeSearchInput(params.q);
+    if (sanitized) {
+      query = query.or(`content.ilike.%${sanitized}%,description.ilike.%${sanitized}%`);
+    }
+  }
+
+  // Geo filtering (bounding-box approximation)
+  if (params.near) {
+    const [lat, lng] = params.near.split(',').map(Number);
+    if (lat !== undefined && lng !== undefined && !isNaN(lat) && !isNaN(lng)) {
+      const radiusKm = params.radius_km || 10;
+      const KM_PER_DEGREE_LATITUDE = 111;
+      const latDelta = radiusKm / KM_PER_DEGREE_LATITUDE;
+      const lngDelta = radiusKm / (KM_PER_DEGREE_LATITUDE * Math.cos(lat * Math.PI / 180));
+
+      query = query
+        .not('latitude', 'is', null)
+        .gte('latitude', lat - latDelta)
+        .lte('latitude', lat + latDelta)
+        .gte('longitude', lng - lngDelta)
+        .lte('longitude', lng + lngDelta);
+    }
+  }
+
+  // Tag filtering (AND semantics)
+  if (params.tag) {
+    const tags = Array.isArray(params.tag) ? params.tag : [params.tag];
+    const validTags = tags.filter((t) => (ALL_TAG_SLUGS as string[]).includes(t));
+    if (validTags.length > 0) {
+      query = query.contains('tags', validTags);
+    }
+  }
+
+  const { data: events, count, error } = await query;
+
+  if (error) {
+    console.error('[V1] Events query error:', error.message);
+    throw createError('Failed to fetch events', 500, 'SERVER_ERROR');
+  }
+
+  const rows = (events || []) as unknown as Record<string, unknown>[];
+
+  // Visibility filtering (unless explicitly skipped)
+  if (opts?.skipVisibility) {
+    // Still filter out suspended accounts
+    const active = rows.filter((row) => {
+      const account = row.portal_accounts as Record<string, unknown> | null;
+      return !account || account.status !== 'suspended';
+    });
+    return { events: active, count: count ?? null };
+  }
+
+  const OPEN_WINDOW_DEFAULT_HOURS = 3;
+  const now = new Date();
+  const visible = rows.filter((row) => {
+    const account = row.portal_accounts as Record<string, unknown> | null;
+    if (account && account.status === 'suspended') return false;
+
+    const startTimeRequired = (row.start_time_required as boolean) ?? true;
+    const eventAt = new Date(row.event_at as string);
+    if (startTimeRequired) {
+      return eventAt >= now;
+    }
+    if (row.end_time) {
+      return new Date(row.end_time as string) >= now;
+    }
+    const fallback = new Date(eventAt.getTime() + OPEN_WINDOW_DEFAULT_HOURS * 60 * 60 * 1000);
+    return fallback >= now;
+  });
+
+  return { events: visible, count: count ?? null };
+}
+
+/** Build a human-readable feed title from active filters */
+function buildFeedTitle(params: ListParams): string {
+  const parts: string[] = [];
+  if (params.contributor) parts.push(`by ${params.contributor}`);
+  if (params.category) parts.push(params.category.replace(/-/g, ' '));
+  if (params.tag) {
+    const tags = Array.isArray(params.tag) ? params.tag : [params.tag];
+    parts.push(tags.join(', '));
+  }
+  if (params.q) parts.push(`"${params.q}"`);
+  if (parts.length === 0) return 'Neighborhood Commons Events';
+  return `Neighborhood Commons: ${parts.join(' · ')}`;
+}
 
 /**
  * GET /api/v1/events
@@ -64,139 +260,17 @@ const listSchema = z.object({
 router.get('/', async (req, res, next) => {
   try {
     const params = validateRequest(listSchema, req.query);
-
-    const nowUtc = new Date().toISOString();
     const collapseSeries = params.collapse_series === 'true';
 
     // When collapsing series, over-fetch to compensate for dedup reducing the result set.
-    // Higher multiplier reduces the chance of returning fewer results than requested.
     const fetchLimit = collapseSeries ? params.limit * 5 : params.limit;
 
-    // Lookback window: include events that started up to 3h ago (for open-window
-    // categories like happy hours that remain visible after start). This is much
-    // tighter than the old filter (`event_at >= now OR end_time >= now`) which
-    // included events from days ago if they had a future end_time, causing the
-    // first page of results to be dominated by past events and the JS visibility
-    // filter to strip them all out.
-    const lookbackMs = 3 * 60 * 60 * 1000;
-    const recentCutoff = new Date(Date.now() - lookbackMs).toISOString();
-
-    let query = supabaseAdmin
-      .from('events')
-      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, event_image_focal_y, created_at, creator_account_id, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, runtime_minutes, content_rating, showtimes, source_method, source_publisher, portal_accounts!events_creator_account_id_fkey(business_name, status, wheelchair_accessible)', { count: 'exact' })
-      .eq('status', 'published')
-      // Visibility: 3h lookback catches open-window events (happy hours, etc.)
-      // that started recently but are still active. JS filter applies precise
-      // start_time_required logic after fetch.
-      .gte('event_at', recentCutoff)
-      .order('event_at', { ascending: true })
-      .range(params.offset, params.offset + fetchLimit - 1);
-
-    // Series filter: return only events from a specific series
-    if (params.series_id) {
-      query = query.eq('series_id', params.series_id);
-    }
-
-    // Group filter: return only events from a specific group
-    if (params.group_id) {
-      query = query.eq('group_id', params.group_id);
-    }
-
-    // Recurring filter: recurring=true → only series events, false → only one-offs
-    if (params.recurring === 'true') {
-      query = query.neq('recurrence', 'none');
-    } else if (params.recurring === 'false') {
-      query = query.eq('recurrence', 'none');
-    }
-
-    // Date range filters (compare against event_at, using UTC day boundaries).
-    // Consumers should use ISO 8601 date strings (YYYY-MM-DD). These are interpreted
-    // as UTC boundaries. For timezone-aware filtering, use start_after/start_before
-    // with full ISO 8601 datetime strings including offset.
-    if (params.start_after) {
-      query = query.gte('event_at', params.start_after + 'T00:00:00Z');
-    }
-    if (params.start_before) {
-      query = query.lte('event_at', params.start_before + 'T23:59:59Z');
-    }
-
-    // Category filter (by slug)
-    if (params.category) {
-      const categoryKey = Object.entries(EVENT_CATEGORIES).find(
-        ([key]) => key.replace(/_/g, '-') === params.category
-      )?.[0];
-      if (categoryKey) {
-        query = query.eq('category', categoryKey);
-      }
-    }
-
-    // Text search
-    if (params.q) {
-      const sanitized = sanitizeSearchInput(params.q);
-      if (sanitized) {
-        query = query.or(`content.ilike.%${sanitized}%,description.ilike.%${sanitized}%`);
-      }
-    }
-
-    // Geo filtering (bounding-box approximation)
-    if (params.near) {
-      const [lat, lng] = params.near.split(',').map(Number);
-      if (lat !== undefined && lng !== undefined && !isNaN(lat) && !isNaN(lng)) {
-        const radiusKm = params.radius_km || 10;
-        const KM_PER_DEGREE_LATITUDE = 111; // Approximate km per degree at Earth's surface
-        const latDelta = radiusKm / KM_PER_DEGREE_LATITUDE;
-        const lngDelta = radiusKm / (KM_PER_DEGREE_LATITUDE * Math.cos(lat * Math.PI / 180));
-
-        query = query
-          .not('latitude', 'is', null)
-          .gte('latitude', lat - latDelta)
-          .lte('latitude', lat + latDelta)
-          .gte('longitude', lng - lngDelta)
-          .lte('longitude', lng + lngDelta);
-      }
-    }
-
-    // Tag filtering (AND semantics: event must have ALL specified tags)
-    if (params.tag) {
-      const tags = Array.isArray(params.tag) ? params.tag : [params.tag];
-      const validTags = tags.filter((t) => (ALL_TAG_SLUGS as string[]).includes(t));
-      if (validTags.length > 0) {
-        query = query.contains('tags', validTags);
-      }
-    }
-
-    const { data: events, count, error } = await query;
-
-    if (error) {
-      console.error('[V1] Events list error:', error.message);
-      throw createError('Failed to fetch events', 500, 'SERVER_ERROR');
-    }
-
-    // Visibility filtering: respect start_time_required semantics
-    // - start_time_required=true: visible until start time
-    // - start_time_required=false: visible until end_time (or start + default fallback if no end)
-    const OPEN_WINDOW_DEFAULT_HOURS = 3; // Events without end_time stay visible for this duration after start
-    const now = new Date(nowUtc);
-    const visible = ((events || []) as unknown as Record<string, unknown>[]).filter((row) => {
-      // Exclude events from suspended accounts — their events should not appear in public feeds
-      const account = row.portal_accounts as Record<string, unknown> | null;
-      if (account && account.status === 'suspended') return false;
-
-      const startTimeRequired = (row.start_time_required as boolean) ?? true;
-      const eventAt = new Date(row.event_at as string);
-      if (startTimeRequired) {
-        return eventAt >= now;
-      }
-      // Open-window event: visible until end_time, or start + fallback duration
-      if (row.end_time) {
-        return new Date(row.end_time as string) >= now;
-      }
-      const fallback = new Date(eventAt.getTime() + OPEN_WINDOW_DEFAULT_HOURS * 60 * 60 * 1000);
-      return fallback >= now;
+    const { events: visible, count } = await queryFilteredEvents(params, {
+      includeCount: true,
+      fetchLimit,
     });
 
     // Optionally deduplicate series: keep only the nearest upcoming instance per series_id.
-    // Default returns all instances; consumers opt in with ?collapse_series=true for browse feeds.
     const results = collapseSeries ? deduplicateSeries(visible) : visible;
     const page = results.slice(0, params.limit);
 
@@ -248,7 +322,7 @@ router.get('/:id', async (req, res, next) => {
 
     const { data: event, error } = await supabaseAdmin
       .from('events')
-      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, event_image_focal_y, created_at, creator_account_id, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, runtime_minutes, content_rating, showtimes, source_method, source_publisher, portal_accounts!events_creator_account_id_fkey(business_name, status, wheelchair_accessible)')
+      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, event_image_focal_y, created_at, creator_account_id, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, runtime_minutes, content_rating, showtimes, first_party, source_method, source_publisher, portal_accounts!events_creator_account_id_fkey(business_name, status, wheelchair_accessible)')
       .eq('id', id)
       .eq('status', 'published')
       .maybeSingle();
@@ -419,8 +493,6 @@ function escapeXml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, event_image_focal_y, created_at, creator_account_id, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, runtime_minutes, content_rating, showtimes, source_method, source_publisher, portal_accounts!events_creator_account_id_fkey(business_name, status, wheelchair_accessible)';
-
 /** Deduplicate series events: keep only the nearest upcoming instance per series_id. */
 function deduplicateSeries(events: Record<string, unknown>[]): Record<string, unknown>[] {
   const seenSeries = new Set<string>();
@@ -436,28 +508,45 @@ function deduplicateSeries(events: Record<string, unknown>[]): Record<string, un
   return deduped;
 }
 
+// Schema for feed endpoints: same filters as list, but different defaults.
+// iCal defaults to a 30-day lookback and 90-day lookahead window.
+// RSS defaults to 50 items with standard pagination.
+const feedSchema = listSchema.extend({
+  limit: z.coerce.number().min(1).max(500).default(200),
+});
+
 /**
  * GET /api/v1/events.ics
- * iCalendar feed of upcoming events.
+ * iCalendar feed of upcoming events. Accepts the same query filters as the
+ * JSON events endpoint: contributor, category, tag, q, near, series_id, etc.
+ *
+ * Default window: 30 days ago through 90 days ahead. Override with start_after/start_before.
+ * Always deduplicates series (one VEVENT with RRULE per series).
  */
-export async function icsHandler(_req: import('express').Request, res: import('express').Response, next: import('express').NextFunction): Promise<void> {
+export async function icsHandler(req: import('express').Request, res: import('express').Response, next: import('express').NextFunction): Promise<void> {
   try {
-    const { data: events, error } = await supabaseAdmin
-      .from('events')
-      .select(EVENTS_SELECT)
-      .eq('status', 'published')
-      .gte('event_at', new Date().toISOString())
-      .order('event_at', { ascending: true })
-      .limit(200);
+    const params = validateRequest(feedSchema, req.query);
 
-    if (error) throw createError('Failed to fetch events', 500, 'SERVER_ERROR');
+    // Default time window for iCal: -30 days to +90 days (keeps file size manageable)
+    const now = new Date();
+    if (!params.start_after) {
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      params.start_after = thirtyDaysAgo.toISOString().slice(0, 10);
+    }
+    if (!params.start_before) {
+      const ninetyDaysAhead = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
+      params.start_before = ninetyDaysAhead.toISOString().slice(0, 10);
+    }
 
-    // Filter out events from suspended accounts before dedup
-    const active = ((events || []) as unknown as Record<string, unknown>[]).filter((row) => {
-      const acct = row.portal_accounts as Record<string, unknown> | null;
-      return !acct || acct.status !== 'suspended';
+    // Use the start_after as cutoff instead of the default 3h lookback
+    const cutoff = params.start_after + 'T00:00:00Z';
+
+    const { events } = await queryFilteredEvents(params, {
+      cutoffOverride: cutoff,
+      fetchLimit: params.limit,
     });
-    const deduped = deduplicateSeries(active);
+
+    const deduped = deduplicateSeries(events);
 
     // Collect unique timezones to emit VTIMEZONE blocks (RFC 5545 §3.6.5)
     const timezones = new Set<string>();
@@ -465,17 +554,18 @@ export async function icsHandler(_req: import('express').Request, res: import('e
       timezones.add((row.event_timezone as string) || 'America/New_York');
     }
 
+    const feedTitle = buildFeedTitle(params);
     const lines: string[] = [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
       'PRODID:-//Neighborhood Commons//Events//EN',
       'CALSCALE:GREGORIAN',
       'METHOD:PUBLISH',
-      'X-WR-CALNAME:Neighborhood Commons Events',
+      `X-WR-CALNAME:${escapeICalText(feedTitle)}`,
     ];
 
     // Emit VTIMEZONE for each referenced timezone
-    const year = new Date().getFullYear();
+    const year = now.getFullYear();
     for (const tz of timezones) {
       lines.push(...buildVTimezone(tz, year));
     }
@@ -487,6 +577,7 @@ export async function icsHandler(_req: import('express').Request, res: import('e
 
       lines.push('BEGIN:VEVENT');
       lines.push(`UID:${row.id}@neighborhood-commons.org`);
+      lines.push(`DTSTAMP:${toICalDate(row.created_at as string || now.toISOString(), 'UTC')}Z`);
       lines.push(`DTSTART;TZID=${tz}:${dtStart}`);
       if (dtEnd) lines.push(`DTEND;TZID=${tz}:${dtEnd}`);
       lines.push(`SUMMARY:${escapeICalText(row.content as string)}`);
@@ -506,9 +597,11 @@ export async function icsHandler(_req: import('express').Request, res: import('e
 
     lines.push('END:VCALENDAR');
 
+    // Stable filename reflecting the filter scope
+    const fileSlug = params.contributor || params.category || 'neighborhood-commons';
     res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
-    res.setHeader('Content-Disposition', 'attachment; filename="neighborhood-commons-events.ics"');
-    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileSlug}-events.ics"`);
+    res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=600');
     res.send(lines.join('\r\n'));
   } catch (err) {
     next(err);
@@ -517,33 +610,47 @@ export async function icsHandler(_req: import('express').Request, res: import('e
 
 /**
  * GET /api/v1/events.rss
- * RSS 2.0 feed of upcoming events.
+ * RSS 2.0 feed of upcoming events. Accepts the same query filters as the
+ * JSON events endpoint: contributor, category, tag, q, near, series_id, etc.
+ *
+ * Supports pagination via limit/offset. Default limit: 50.
+ * Always deduplicates series.
  */
-export async function rssHandler(_req: import('express').Request, res: import('express').Response, next: import('express').NextFunction): Promise<void> {
+export async function rssHandler(req: import('express').Request, res: import('express').Response, next: import('express').NextFunction): Promise<void> {
   try {
-    const { data: events, error } = await supabaseAdmin
-      .from('events')
-      .select(EVENTS_SELECT)
-      .eq('status', 'published')
-      .gte('event_at', new Date().toISOString())
-      .order('event_at', { ascending: true })
-      .limit(50);
+    const params = validateRequest(listSchema, req.query);
 
-    if (error) throw createError('Failed to fetch events', 500, 'SERVER_ERROR');
-
-    // Filter out events from suspended accounts
-    const activeEvents = ((events || []) as unknown as Record<string, unknown>[]).filter((row) => {
-      const acct = row.portal_accounts as Record<string, unknown> | null;
-      return !acct || acct.status !== 'suspended';
+    const { events: visible } = await queryFilteredEvents(params, {
+      // Over-fetch to compensate for series dedup
+      fetchLimit: params.limit * 3,
     });
-    const deduped = deduplicateSeries(activeEvents);
-    const baseUrl = 'https://api.neighborhood-commons.org';
 
-    const items = deduped.map((row) => {
+    const deduped = deduplicateSeries(visible);
+    const page = deduped.slice(0, params.limit);
+    const baseUrl = 'https://api.neighborhood-commons.org';
+    const feedTitle = buildFeedTitle(params);
+
+    // Build the self-referencing URL with query params preserved
+    const selfQuery = new URLSearchParams();
+    if (params.contributor) selfQuery.set('contributor', params.contributor);
+    if (params.category) selfQuery.set('category', params.category);
+    if (params.tag) {
+      const tags = Array.isArray(params.tag) ? params.tag : [params.tag];
+      for (const t of tags) selfQuery.set('tag', t);
+    }
+    if (params.q) selfQuery.set('q', params.q);
+    if (params.near) selfQuery.set('near', params.near);
+    if (params.group_id) selfQuery.set('group_id', params.group_id);
+    const selfUrl = `${baseUrl}/api/v1/events.rss${selfQuery.toString() ? '?' + selfQuery.toString() : ''}`;
+
+    const items = page.map((row) => {
       const ev = toNeighborhoodEvent(row as unknown as PortalEventRow);
+      const locationText = ev.location?.name
+        ? (ev.location.address ? `${ev.location.name}, ${ev.location.address}` : ev.location.name)
+        : '';
       return `    <item>
       <title>${escapeXml(ev.name)}</title>
-      <description><![CDATA[${(ev.description || '').replace(/]]>/g, ']]]]><![CDATA[>')}]]></description>
+      <description><![CDATA[${formatRssDescription(ev, locationText)}]]></description>
       <link>${baseUrl}/api/v1/events/${ev.id}</link>
       <guid isPermaLink="false">${ev.id}</guid>
       <pubDate>${new Date(ev.start).toUTCString()}</pubDate>
@@ -554,21 +661,32 @@ export async function rssHandler(_req: import('express').Request, res: import('e
     const rss = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-    <title>Neighborhood Commons Events</title>
+    <title>${escapeXml(feedTitle)}</title>
     <link>${baseUrl}/api/v1/events</link>
     <description>Open neighborhood event data. CC BY 4.0.</description>
     <language>en-us</language>
-    <atom:link href="${baseUrl}/api/v1/events.rss" rel="self" type="application/rss+xml"/>
+    <atom:link href="${escapeXml(selfUrl)}" rel="self" type="application/rss+xml"/>
 ${items}
   </channel>
 </rss>`;
 
     res.setHeader('Content-Type', 'application/rss+xml; charset=utf-8');
-    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=600');
     res.send(rss);
   } catch (err) {
     next(err);
   }
+}
+
+/** Format a richer RSS description with location and time context */
+function formatRssDescription(ev: ReturnType<typeof toNeighborhoodEvent>, locationText: string): string {
+  const parts: string[] = [];
+  if (locationText) parts.push(locationText);
+  if (ev.cost) parts.push(ev.cost);
+  if (ev.description) parts.push(ev.description);
+  const text = parts.join(' — ');
+  // Escape CDATA end sequence
+  return text.replace(/]]>/g, ']]]]><![CDATA[>');
 }
 
 export default router;

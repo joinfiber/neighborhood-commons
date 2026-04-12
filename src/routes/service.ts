@@ -534,6 +534,7 @@ const createEventSchema = z.object({
   image_focal_y: z.number().min(0).max(1).optional(),
   source_method: z.enum(['manual', 'auto']).optional(),
   source_publisher: z.string().max(100).optional(),
+  first_party: z.boolean().optional(),
 });
 
 const updateEventSchema = z.object({
@@ -561,6 +562,7 @@ const updateEventSchema = z.object({
   rsvp_limit: z.number().int().min(1).max(10000).nullable().optional(),
   start_time_required: z.boolean().optional(),
   image_focal_y: z.number().min(0).max(1).optional(),
+  first_party: z.boolean().optional(),
   status: z.enum(['published', 'pending_review', 'suspended', 'unpublished']).optional(),
 });
 
@@ -814,6 +816,7 @@ router.patch('/events/batch', serviceLimiter, async (req, res, next) => {
         price: z.string().max(100).optional().nullable(),
         wheelchair_accessible: z.boolean().nullable().optional(),
         start_time_required: z.boolean().optional(),
+        first_party: z.boolean().optional(),
       }).refine((u) => Object.keys(u).length > 0, { message: 'No fields to update' }),
     });
 
@@ -887,6 +890,7 @@ router.patch('/events/:id', serviceLimiter, async (req, res, next) => {
     if (data.wheelchair_accessible !== undefined) dbUpdate.wheelchair_accessible = data.wheelchair_accessible;
     if (data.rsvp_limit !== undefined) dbUpdate.rsvp_limit = data.rsvp_limit;
     if (data.start_time_required !== undefined) dbUpdate.start_time_required = data.start_time_required;
+    if (data.first_party !== undefined) dbUpdate.first_party = data.first_party;
     if (data.image_focal_y !== undefined) dbUpdate.event_image_focal_y = data.image_focal_y;
 
     if (data.tags !== undefined) {

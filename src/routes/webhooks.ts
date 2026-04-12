@@ -278,6 +278,7 @@ router.post('/:id/test', writeLimiter, async (req, res, next) => {
       runtime_minutes: null,
       content_rating: null,
       showtimes: null,
+      first_party: false,
       recurrence: null,
       source: {
         publisher: 'neighborhood-commons' as const,

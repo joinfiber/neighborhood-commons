@@ -20,7 +20,7 @@ import { sanitizeUrl, checkApprovedDomain } from './url-sanitizer.js';
 // =============================================================================
 
 /** Columns to select when reading portal events from the events table */
-export const PORTAL_SELECT = 'id, user_id, content, description, place_name, place_id, approximate_location, event_at, end_time, event_image_url, event_image_focal_y, link_url, category, custom_category, event_timezone, venue_address, recurrence, price, latitude, longitude, creator_account_id, source, visibility, status, is_business, region_id, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, rsvp_limit, runtime_minutes, content_rating, showtimes, source_method, source_publisher, source_feed_url, source_contributor_url, created_at';
+export const PORTAL_SELECT = 'id, user_id, content, description, place_name, place_id, approximate_location, event_at, end_time, event_image_url, event_image_focal_y, link_url, category, custom_category, event_timezone, venue_address, recurrence, price, latitude, longitude, creator_account_id, source, visibility, status, is_business, region_id, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, rsvp_limit, runtime_minutes, content_rating, showtimes, first_party, source_method, source_publisher, source_feed_url, source_contributor_url, created_at';
 
 /** Sources that represent account-managed events (portal-created, imported, or API-submitted). */
 export const MANAGED_SOURCES = ['portal', 'import', 'api', 'csv'] as const;
@@ -114,6 +114,7 @@ export function toPortalEvent(row: Record<string, unknown>): Record<string, unkn
     status: row.status,
     series_id: row.series_id,
     series_instance_number: row.series_instance_number,
+    first_party: row.first_party ?? false,
     source_publisher: row.source_publisher ?? null,
     source_feed_url: row.source_feed_url ?? null,
     created_at: row.created_at,
@@ -148,6 +149,7 @@ export function portalInputToInsert(
     image_focal_y?: number | undefined;
     source_method?: 'manual' | 'auto' | undefined;
     source_publisher?: string | undefined;
+    first_party?: boolean | undefined;
   },
   accountId: string,
   adminUserId: string,
@@ -195,6 +197,7 @@ export function portalInputToInsert(
     event_image_focal_y: data.image_focal_y ?? 0.5,
     creator_account_id: accountId,
     source: 'portal',
+    first_party: data.first_party ?? false,
     source_method: data.source_method || null,
     source_publisher: data.source_publisher || null,
     visibility: 'public',

@@ -48,6 +48,7 @@ const SCHEMA: Record<string, string[]> = {
     'start_time_required', 'tags', 'wheelchair_accessible', 'rsvp_limit',
     'source_method', 'source_publisher', 'source_feed_url', 'external_id', 'source_contributor_url',
     'runtime_minutes', 'content_rating', 'showtimes',
+    'first_party',
     'group_id',
     'created_at', 'updated_at',
   ],

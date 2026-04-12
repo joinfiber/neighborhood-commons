@@ -173,6 +173,7 @@ router.post('/events', writeLimiter, async (req, res, next) => {
     }
 
     const insertData = portalInputToInsert(data, account.id, adminUserId, account.status);
+    insertData.first_party = true; // Portal events are always entered by the originator
 
     // Recurring events: expand into individual instance rows
     if (data.recurrence !== 'none') {
@@ -851,7 +852,7 @@ router.delete('/events/:id', writeLimiter, async (req, res, next) => {
       location: { name: '', address: null, lat: null, lng: null },
       url: null, images: [], event_image_focal_y: 0.5, organizer: { name: '', phone: null },
       cost: null, series_id: null, series_instance_number: null, series_instance_count: null, start_time_required: true, tags: [], wheelchair_accessible: null,
-      runtime_minutes: null, content_rating: null, showtimes: null, recurrence: null,
+      runtime_minutes: null, content_rating: null, showtimes: null, first_party: false, recurrence: null,
       source: { publisher: 'neighborhood-commons', collected_at: new Date().toISOString(), method: 'portal', contributor: null, license: 'CC BY 4.0' },
     });
 

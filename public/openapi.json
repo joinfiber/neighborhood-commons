@@ -38,6 +38,7 @@
           { "name": "series_id", "in": "query", "schema": { "type": "string", "format": "uuid" }, "description": "Filter to events in a specific series" },
           { "name": "group_id", "in": "query", "schema": { "type": "string", "format": "uuid" }, "description": "Filter to events belonging to a specific group" },
           { "name": "recurring", "in": "query", "schema": { "type": "string", "enum": ["true", "false"] }, "description": "Filter recurring (true) or one-off (false) events" },
+          { "name": "contributor", "in": "query", "schema": { "type": "string" }, "description": "Filter by contributor account slug" },
           { "name": "limit", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 200, "default": 50 }, "description": "Page size" },
           { "name": "offset", "in": "query", "schema": { "type": "integer", "minimum": 0, "default": 0 }, "description": "Page offset" }
         ],
@@ -102,10 +103,23 @@
     "/events.ics": {
       "get": {
         "summary": "iCalendar feed",
+        "description": "iCalendar feed of events. Accepts the same query filters as /events. Default window: 30 days ago to 90 days ahead. Series are deduplicated with RRULE.",
         "operationId": "getIcalFeed",
+        "parameters": [
+          { "name": "contributor", "in": "query", "schema": { "type": "string" }, "description": "Filter by contributor account slug" },
+          { "name": "category", "in": "query", "schema": { "type": "string" }, "description": "Filter by category slug" },
+          { "name": "tag", "in": "query", "schema": { "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }] }, "description": "Filter by tag(s)" },
+          { "name": "q", "in": "query", "schema": { "type": "string" }, "description": "Text search" },
+          { "name": "near", "in": "query", "schema": { "type": "string" }, "description": "Coordinates as lat,lng" },
+          { "name": "radius_km", "in": "query", "schema": { "type": "number" }, "description": "Proximity radius in km" },
+          { "name": "group_id", "in": "query", "schema": { "type": "string", "format": "uuid" }, "description": "Filter by group" },
+          { "name": "start_after", "in": "query", "schema": { "type": "string", "format": "date" }, "description": "Override default 30-day lookback" },
+          { "name": "start_before", "in": "query", "schema": { "type": "string", "format": "date" }, "description": "Override default 90-day lookahead" },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "maximum": 500, "default": 200 }, "description": "Max events" }
+        ],
         "responses": {
           "200": {
-            "description": "iCalendar feed of upcoming events",
+            "description": "iCalendar feed of matching events",
             "content": { "text/calendar": { "schema": { "type": "string" } } }
           }
         }
@@ -114,10 +128,24 @@
     "/events.rss": {
       "get": {
         "summary": "RSS feed",
+        "description": "RSS 2.0 feed of events. Accepts the same query filters as /events. Supports pagination via limit/offset.",
         "operationId": "getRssFeed",
+        "parameters": [
+          { "name": "contributor", "in": "query", "schema": { "type": "string" }, "description": "Filter by contributor account slug" },
+          { "name": "category", "in": "query", "schema": { "type": "string" }, "description": "Filter by category slug" },
+          { "name": "tag", "in": "query", "schema": { "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }] }, "description": "Filter by tag(s)" },
+          { "name": "q", "in": "query", "schema": { "type": "string" }, "description": "Text search" },
+          { "name": "near", "in": "query", "schema": { "type": "string" }, "description": "Coordinates as lat,lng" },
+          { "name": "radius_km", "in": "query", "schema": { "type": "number" }, "description": "Proximity radius in km" },
+          { "name": "group_id", "in": "query", "schema": { "type": "string", "format": "uuid" }, "description": "Filter by group" },
+          { "name": "start_after", "in": "query", "schema": { "type": "string", "format": "date" }, "description": "Events after this date" },
+          { "name": "start_before", "in": "query", "schema": { "type": "string", "format": "date" }, "description": "Events before this date" },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "maximum": 200, "default": 50 }, "description": "Page size" },
+          { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 }, "description": "Page offset" }
+        ],
         "responses": {
           "200": {
-            "description": "RSS 2.0 feed of upcoming events",
+            "description": "RSS 2.0 feed of matching events",
             "content": { "application/rss+xml": { "schema": { "type": "string" } } }
           }
         }
@@ -399,6 +427,7 @@
               { "type": "object", "properties": { "rrule": { "type": "string" } } }
             ]
           },
+          "first_party": { "type": "boolean", "description": "Whether the event was entered by its originator (venue, host, group) rather than a third party" },
           "event_image_focal_y": { "type": "number", "description": "Vertical focal point for image cropping (0=top, 1=bottom, 0.5=center)" },
           "runtime_minutes": { "type": ["integer", "null"], "description": "Film-specific: duration in minutes" },
           "content_rating": { "type": ["string", "null"], "description": "Film-specific: e.g. PG-13" },

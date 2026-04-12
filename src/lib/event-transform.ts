@@ -51,6 +51,8 @@ export interface PortalEventRow {
   runtime_minutes: number | null;
   content_rating: string | null;
   showtimes: Array<{ at: string }> | null;
+  // First-party flag (migration 054)
+  first_party: boolean;
   portal_accounts: { business_name: string; wheelchair_accessible?: boolean | null } | null;
 }
 
@@ -86,6 +88,7 @@ export interface NeighborhoodEvent {
   runtime_minutes: number | null;
   content_rating: string | null;
   showtimes: Array<{ at: string }> | null;
+  first_party: boolean;
   recurrence: { rrule: string } | null;
   source: {
     publisher: string;
@@ -222,6 +225,7 @@ export function toNeighborhoodEvent(row: PortalEventRow): NeighborhoodEvent {
     runtime_minutes: row.runtime_minutes || null,
     content_rating: row.content_rating || null,
     showtimes: row.showtimes || null,
+    first_party: row.first_party,
     recurrence: rrule ? { rrule } : null,
     source: {
       // API/import events: source_publisher is the canonical publisher (the external source).

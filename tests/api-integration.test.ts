@@ -32,7 +32,7 @@ vi.mock('../src/lib/supabase.js', () => {
     const chain: Record<string, unknown> = {};
     const chainMethods = [
       'select', 'eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'or', 'not',
-      'order', 'range', 'limit', 'match', 'ilike', 'like', 'is', 'in',
+      'order', 'range', 'limit', 'match', 'ilike', 'like', 'is', 'in', 'contains',
       'insert', 'update', 'delete', 'upsert', 'maybeSingle', 'single',
     ];
 
@@ -104,6 +104,7 @@ function makeDbRow(overrides: Record<string, unknown> = {}) {
     created_at: '2026-03-10T12:00:00.000Z',
     creator_account_id: 'acc-uuid-1',
     series_id: null,
+    first_party: false,
     portal_accounts: { business_name: 'The Fishtown Taproom' },
     ...overrides,
   };
@@ -374,6 +375,71 @@ describe('event feeds', () => {
     expect(body).toContain('<rss version="2.0"');
     expect(body).toContain('<title>Happy Hour at The Fishtown Taproom</title>');
     expect(body).toContain('Neighborhood Commons Events');
+  });
+
+  it('iCal feed accepts query filters and reflects them in calendar name', async () => {
+    mockResponses.set('events', {
+      data: [makeDbRow()],
+      error: null,
+    });
+
+    const res = await fetch(`${baseUrl}/api/v1/events.ics?category=happy-hour`);
+    expect(res.status).toBe(200);
+
+    const body = await res.text();
+    expect(body).toContain('BEGIN:VCALENDAR');
+    expect(body).toContain('X-WR-CALNAME:Neighborhood Commons: happy hour');
+    expect(body).toContain('DTSTAMP:');
+  });
+
+  it('RSS feed accepts query filters and reflects them in feed title', async () => {
+    mockResponses.set('events', {
+      data: [makeDbRow()],
+      error: null,
+    });
+
+    const res = await fetch(`${baseUrl}/api/v1/events.rss?category=happy-hour`);
+    expect(res.status).toBe(200);
+
+    const body = await res.text();
+    expect(body).toContain('<title>Neighborhood Commons: happy hour</title>');
+  });
+
+  it('iCal feed sets stale-while-revalidate cache header', async () => {
+    mockResponses.set('events', {
+      data: [],
+      error: null,
+    });
+
+    const res = await fetch(`${baseUrl}/api/v1/events.ics`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toContain('stale-while-revalidate');
+  });
+
+  it('RSS feed includes location in description', async () => {
+    mockResponses.set('events', {
+      data: [makeDbRow()],
+      error: null,
+    });
+
+    const res = await fetch(`${baseUrl}/api/v1/events.rss`);
+    const body = await res.text();
+    expect(body).toContain('The Fishtown Taproom');
+  });
+
+  it('contributor filter returns empty feed for unknown slug', async () => {
+    // portal_accounts lookup returns empty
+    mockResponses.set('portal_accounts', {
+      data: [],
+      error: null,
+    });
+
+    const res = await fetch(`${baseUrl}/api/v1/events.rss?contributor=nonexistent`);
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    // Feed should be valid but empty
+    expect(body).toContain('<rss version="2.0"');
+    expect(body).not.toContain('<item>');
   });
 });
 
