@@ -76,6 +76,15 @@ const contributeEventSchema = z.object({
   wheelchair_accessible: z.boolean().optional(),
   custom_category: z.string().max(50).optional(),
 
+  // Arrival semantics: true = come-and-go window (happy hour, open swim, market);
+  // false (default) = arrival at `start` is expected.
+  open_window: z.boolean().optional(),
+
+  // Informational capacity. Commons does NOT track attendance — ticketing
+  // lives in `url`. Use `rsvp` to signal whether RSVP is a thing.
+  capacity: z.number().int().min(1).max(10000).nullable().optional(),
+  rsvp: z.enum(['recommended', 'required']).nullable().optional(),
+
   // Recurrence (RRULE format — e.g. "FREQ=WEEKLY", "FREQ=MONTHLY;BYDAY=2FR;COUNT=12")
   recurrence: z.string().max(200).optional(),
   instance_count: z.number().int().min(0).max(52).optional(),
@@ -241,10 +250,11 @@ function contributeEventToInsert(
     price: event.cost ? stripHtml(event.cost) : null,
     link_url: event.url ? sanitizeUrl(event.url) : null,
     event_image_url: null, // Set async by downloadAndAttachImage if image_url provided
-    start_time_required: true,
+    open_window: event.open_window ?? false,
     tags: event.tags ? validateTags(event.tags, event.category) : [],
     wheelchair_accessible: event.wheelchair_accessible ?? null,
-    rsvp_limit: null,
+    capacity: event.capacity ?? null,
+    rsvp: event.rsvp ?? null,
     event_image_focal_y: 0.5,
     creator_account_id: opts?.venueId || null,
     user_id: null,
@@ -715,6 +725,9 @@ const updateContributeEventSchema = z.object({
   tags: z.array(z.string().max(50)).max(15).optional(),
   wheelchair_accessible: z.boolean().optional().nullable(),
   custom_category: z.string().max(50).optional(),
+  open_window: z.boolean().optional(),
+  capacity: z.number().int().min(1).max(10000).nullable().optional(),
+  rsvp: z.enum(['recommended', 'required']).nullable().optional(),
   venue_id: z.string().uuid().optional(),
 });
 
@@ -753,6 +766,9 @@ router.patch('/:id', writeLimiter, async (req, res, next) => {
     if (data.cost !== undefined) update.price = data.cost ? stripHtml(data.cost) : null;
     if (data.tags !== undefined) update.tags = data.tags;
     if (data.wheelchair_accessible !== undefined) update.wheelchair_accessible = data.wheelchair_accessible;
+    if (data.open_window !== undefined) update.open_window = data.open_window;
+    if (data.capacity !== undefined) update.capacity = data.capacity;
+    if (data.rsvp !== undefined) update.rsvp = data.rsvp;
 
     // URL validation (see POST / for full notes on the policy).
     if (data.url !== undefined) {
@@ -900,6 +916,9 @@ router.patch('/series/:seriesId', writeLimiter, async (req, res, next) => {
     if (data.cost !== undefined) templateUpdate.price = data.cost ? stripHtml(data.cost) : null;
     if (data.tags !== undefined) templateUpdate.tags = data.tags;
     if (data.wheelchair_accessible !== undefined) templateUpdate.wheelchair_accessible = data.wheelchair_accessible;
+    if (data.open_window !== undefined) templateUpdate.open_window = data.open_window;
+    if (data.capacity !== undefined) templateUpdate.capacity = data.capacity;
+    if (data.rsvp !== undefined) templateUpdate.rsvp = data.rsvp;
 
     if (data.url !== undefined) {
       if (data.url) {

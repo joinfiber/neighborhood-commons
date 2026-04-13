@@ -85,7 +85,9 @@ When you read an event from the Commons, this is the shape. Every field is prese
   "series_id": null,
   "series_instance_number": null,
   "series_instance_count": null,
-  "start_time_required": true,
+  "open_window": false,
+  "capacity": null,
+  "rsvp": null,
   "tags": ["all-ages", "free", "themed"],
   "wheelchair_accessible": null,
   "runtime_minutes": null,
@@ -105,13 +107,15 @@ When you read an event from the Commons, this is the shape. Every field is prese
 **Notes on specific fields:**
 
 - **`category`** is always a one-element array. Internal storage uses underscore keys (`live_music`); API responses use kebab-case slugs (`live-music`). Both are accepted on input.
-- **`images`** is always an array. Currently holds zero or one URL. All images are re-encoded through Sharp (metadata stripped, resized to 1200px max, JPEG output) and stored on Cloudflare R2.
+- **`images`** is always an array. Currently holds zero or one URL. All images are re-encoded through Sharp (metadata stripped, resized to 1200px max, WebP output) and stored on Cloudflare R2.
 - **`organizer.phone`** is always `null`. Reserved for future use.
 - **`source.method`** is one of `portal`, `import`, or `api`.
 - **`source.license`** is always `CC BY 4.0`.
 - **`recurrence`** is `null` for one-off events, or `{ "rrule": "FREQ=WEEKLY" }` (iCal RRULE format) for recurring events. Bounded rules include `;COUNT=N`.
 - **`series_id`** links instances of the same recurring event. Each instance is a self-contained event row — consumers never need to expand a series.
-- **`start_time_required`** controls browse visibility. When `true` (default), the event disappears from feeds at start time. When `false`, the event remains visible until `end` (or start + 3 hours if no end time). Use `false` for all-day events, markets, exhibits.
+- **`open_window`** controls browse visibility and arrival semantics. When `false` (default), arrival at `start` is expected and the event disappears from feeds at start time. When `true`, the event is come-and-go and remains visible until `end` (or start + 3 hours if no end time). Use `true` for happy hours, open swims, markets, exhibits.
+- **`capacity`** is informational max attendance. Commons does NOT track signups or enforce caps. Ticketing lives in `url`.
+- **`rsvp`** is `null`, `"recommended"`, or `"required"`. Signal only — Commons does not manage RSVPs.
 - **`runtime_minutes`**, **`content_rating`**, **`showtimes`** are film-specific fields. `null` for all other categories.
 
 ---
@@ -714,8 +718,8 @@ Published events appear in feeds according to these rules:
 1. **Status is `published`** — draft, pending_review, unpublished events are excluded
 2. **Account is not suspended** — events from suspended accounts return 404, not 403
 3. **Time gate:**
-   - `start_time_required = true` (default): visible until start time, hidden after
-   - `start_time_required = false`: visible until end time, or start + 3 hours if no end time
+   - `open_window = false` (default): visible until start time, hidden after
+   - `open_window = true`: visible until end time, or start + 3 hours if no end time
 4. **Region filter:** when a consumer provides coordinates, events are filtered to the matching region
 
 ---

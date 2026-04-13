@@ -301,10 +301,11 @@ router.post('/import/confirm', writeLimiter, async (req, res, next) => {
         recurrence: 'none', // Import creates individual events (RRULE already expanded in preview if needed)
         price: event.cost?.slice(0, 100) || null,
         link_url: event.url?.slice(0, 2000) || null,
-        start_time_required: true,
+        open_window: false,
         tags: [],
         wheelchair_accessible: null,
-        rsvp_limit: null,
+        capacity: null,
+        rsvp: null,
         event_image_focal_y: override.image_focal_y ?? 0.5,
         event_image_url: event.image_url || null,
         creator_account_id: account.id,

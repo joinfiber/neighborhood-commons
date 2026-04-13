@@ -29,7 +29,7 @@ const router: ReturnType<typeof Router> = Router();
 const SITE_NAME = 'Neighborhood Commons';
 const SITE_DOMAIN = config.apiBaseUrl || 'https://api.neighborhood-commons.org';
 
-const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, source_method, source_publisher, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible)';
+const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, series_instance_number, open_window, capacity, rsvp, tags, wheelchair_accessible, source_method, source_publisher, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible)';
 
 // =============================================================================
 // HTML HELPERS

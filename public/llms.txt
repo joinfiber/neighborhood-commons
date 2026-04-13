@@ -59,7 +59,9 @@ That's it. You just pulled 5 events from the Commons. Here's what comes back:
       "series_id": "x9y8z7-...",
       "series_instance_number": 3,
       "series_instance_count": 12,
-      "start_time_required": true,
+      "open_window": false,
+      "capacity": null,
+      "rsvp": null,
       "wheelchair_accessible": null,
       "runtime_minutes": null,
       "content_rating": null,
@@ -192,7 +194,9 @@ Every event response includes every field listed below. If a value doesn't apply
 
 | Field | Type | What it is |
 |-------|------|-----------|
-| `start_time_required` | boolean | When `true` (default): the event disappears from feeds at its start time. When `false`: the event stays visible until `end` (or start + 3 hours if no end). Use `false` for all-day events, markets, exhibits — things people can still show up to. |
+| `open_window` | boolean | `false` (default): arrival at `start` is expected — the event disappears from feeds at start time. `true`: come-and-go window — the event stays visible until `end` (or start + 3 hours if no end). Use `true` for happy hours, open swims, markets, exhibits, drop-in office hours. |
+| `capacity` | integer or null | Informational max attendance. Commons does NOT track signups or enforce the cap. Use this to display "limited capacity" hints; do real ticketing in the consumer app via the `url` field. |
+| `rsvp` | `"recommended"`, `"required"`, or null | Whether RSVP is a thing for this event. Commons does not manage RSVPs. Use this to badge events ("RSVP required"); the actual signup flow lives in the consumer app or in `url`. |
 | `runtime_minutes` | number or null | Film-specific. Duration in minutes. |
 | `content_rating` | text or null | Film-specific. E.g., "PG-13". |
 | `showtimes` | list or null | Film-specific. Multiple screening times for one film. |
@@ -440,6 +444,9 @@ Tier upgrades are manual. Submit good data consistently and it happens.
 | `location.place_id` | text | External place ID | `"ChIJ..."` |
 | `tags` | list of text | Max 15 tags. See tag list below. | `["outdoor", "free"]` |
 | `wheelchair_accessible` | boolean | | `true` |
+| `open_window` | boolean | Default `false`. `true` for come-and-go events (happy hour, open swim, market). Affects feed visibility. | `true` |
+| `capacity` | integer or null | Informational max attendance. Commons does NOT enforce or track signups. Ticketing lives in `url`. | `50` |
+| `rsvp` | string or null | `"recommended"`, `"required"`, or null. Signal only — Commons does not manage RSVPs. | `"required"` |
 | `external_id` | text | Your system's ID for this event. Used for dedup. | `"my-system-12345"` |
 | `venue_id` | UUID | Link to a Commons venue account | `"uuid-here"` |
 | `recurrence` | text | RRULE format (see below) | `"FREQ=WEEKLY;COUNT=12"` |
@@ -584,6 +591,7 @@ Group types: `business`, `community_group`, `nonprofit`, `collective`, `curator`
   - `BLOCKED_HOSTNAME` — `localhost`, `*.local`, `*.internal`, `*.localhost`
 
   A non-allowlisted but otherwise valid domain returns `400 DOMAIN_PENDING_REVIEW` with the offending domain in `error.domain`. The Commons logs a review request automatically — operators review the queue and approve domains as appropriate. Once approved, contributors can resubmit the event and it will be accepted. Treat this as a soft, transient failure (similar to a moderation hold), not a permanent rejection.
+- **Capacity and RSVP:** Commons stores `capacity` (informational max attendance) and `rsvp` (`null` / `"recommended"` / `"required"`) as signals. **Commons does not manage attendance, count signups, or enforce caps.** Consumer apps display these to set expectations; the actual ticketing or signup flow lives in `url`. Use `link_url` for Eventbrite, Partiful, a venue's reservation page, etc. If you need an attendee management system, you're outside Commons' scope — that's app territory.
 - **Deduplication:** If you provide `external_id`, the Commons enforces uniqueness per API key. Submitting the same `external_id` twice returns `409 CONFLICT`.
 - **Tag validation:** Tags are checked against the category's allowed set. Invalid tags for that category are silently removed. You may get fewer tags back than you sent. Custom tags (not in the prescribed list) are accepted as-is.
 

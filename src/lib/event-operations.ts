@@ -20,7 +20,7 @@ import { sanitizeUrl, checkApprovedDomain } from './url-sanitizer.js';
 // =============================================================================
 
 /** Columns to select when reading portal events from the events table */
-export const PORTAL_SELECT = 'id, user_id, content, description, place_name, place_id, approximate_location, event_at, end_time, event_image_url, event_image_focal_y, link_url, category, custom_category, event_timezone, venue_address, recurrence, price, latitude, longitude, creator_account_id, source, visibility, status, is_business, region_id, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, rsvp_limit, runtime_minutes, content_rating, showtimes, first_party, source_method, source_publisher, source_feed_url, source_contributor_url, created_at';
+export const PORTAL_SELECT = 'id, user_id, content, description, place_name, place_id, approximate_location, event_at, end_time, event_image_url, event_image_focal_y, link_url, category, custom_category, event_timezone, venue_address, recurrence, price, latitude, longitude, creator_account_id, source, visibility, status, is_business, region_id, series_id, series_instance_number, open_window, tags, wheelchair_accessible, capacity, rsvp, runtime_minutes, content_rating, showtimes, first_party, source_method, source_publisher, source_feed_url, source_contributor_url, created_at';
 
 /** Sources that represent account-managed events (portal-created, imported, or API-submitted). */
 export const MANAGED_SOURCES = ['portal', 'import', 'api', 'csv'] as const;
@@ -107,10 +107,11 @@ export function toPortalEvent(row: Record<string, unknown>): Record<string, unkn
     ticket_url: row.link_url,
     image_url: resolveEventImageUrl(row.event_image_url as string | null, config.apiBaseUrl),
     image_focal_y: (row.event_image_focal_y as number) ?? 0.5,
-    start_time_required: (row.start_time_required as boolean) ?? true,
+    open_window: (row.open_window as boolean) ?? false,
     tags: (row.tags as string[]) || [],
     wheelchair_accessible: row.wheelchair_accessible ?? null,
-    rsvp_limit: row.rsvp_limit ?? null,
+    capacity: row.capacity ?? null,
+    rsvp: row.rsvp ?? null,
     status: row.status,
     series_id: row.series_id,
     series_instance_number: row.series_instance_number,
@@ -142,10 +143,11 @@ export function portalInputToInsert(
     description?: string | null | undefined;
     price?: string | null | undefined;
     ticket_url?: string | null | undefined;
-    start_time_required?: boolean | undefined;
+    open_window?: boolean | undefined;
     tags?: string[] | undefined;
     wheelchair_accessible?: boolean | null | undefined;
-    rsvp_limit?: number | null | undefined;
+    capacity?: number | null | undefined;
+    rsvp?: 'recommended' | 'required' | null | undefined;
     image_focal_y?: number | undefined;
     source_method?: 'manual' | 'auto' | undefined;
     source_publisher?: string | undefined;
@@ -190,10 +192,11 @@ export function portalInputToInsert(
     recurrence: data.recurrence || 'none',
     price: data.price || null,
     link_url: data.ticket_url ? (checkApprovedDomain(data.ticket_url), sanitizeUrl(data.ticket_url)) : null,
-    start_time_required: data.start_time_required ?? true,
+    open_window: data.open_window ?? false,
     tags: data.tags || [],
     wheelchair_accessible: data.wheelchair_accessible ?? null,
-    rsvp_limit: data.rsvp_limit ?? null,
+    capacity: data.capacity ?? null,
+    rsvp: data.rsvp ?? null,
     event_image_focal_y: data.image_focal_y ?? 0.5,
     creator_account_id: accountId,
     source: 'portal',

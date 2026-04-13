@@ -45,10 +45,11 @@ export interface PortalEvent {
   image_url: string | null;
   image_focal_y: number;
   status: string;
-  start_time_required: boolean;
+  open_window: boolean;
   tags: string[];
   wheelchair_accessible: boolean | null;
-  rsvp_limit: number | null;
+  capacity: number | null;
+  rsvp: 'recommended' | 'required' | null;
   series_id: string | null;
   series_instance_number: number | null;
   created_at: string;
@@ -73,10 +74,11 @@ export interface CreateEventParams {
   price?: string;
   ticket_url?: string;
   image_focal_y?: number;
-  start_time_required?: boolean;
+  open_window?: boolean;
   tags?: string[];
   wheelchair_accessible?: boolean | null;
-  rsvp_limit?: number | null;
+  capacity?: number | null;
+  rsvp?: 'recommended' | 'required' | null;
 }
 
 // =============================================================================
@@ -204,10 +206,11 @@ export interface EventFormData {
   description?: string;
   price?: string;
   ticket_url?: string;
-  start_time_required?: boolean;
+  open_window?: boolean;
   tags?: string[];
   wheelchair_accessible?: boolean | null;
-  rsvp_limit?: number | null;
+  capacity?: number | null;
+  rsvp?: 'recommended' | 'required' | null;
   image?: string | null;
   image_focal_y?: number;
 }

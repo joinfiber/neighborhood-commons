@@ -8,6 +8,15 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-04-13
+
+- BREAKING: Removed `start_time_required` and `rsvp_limit` from the Event schema. Replaced by:
+  - `open_window` (boolean, default `false`) — inverse of the old `start_time_required`. `true` for come-and-go events (happy hour, open swim, market). Controls feed visibility: open-window events stay visible until `end` (or start + 3h).
+  - `capacity` (integer or null) — informational max attendance. Commons does NOT track signups or enforce caps.
+  - `rsvp` (`null` | `"recommended"` | `"required"`) — signal whether RSVP is a thing for this event. Commons does not manage RSVPs.
+  - Migration: `open_window = !start_time_required`, `capacity = rsvp_limit`, `rsvp = null` (set explicitly on events that need it).
+  - Ticketing remains in `link_url` / `url` — that's where Eventbrite, Partiful, venue reservation pages, etc. go.
+
 ## 2026-04-12
 
 - **Contract audit complete.** `public/openapi.json` now documents all 56 public-facing endpoints (previously ~8). It is the authoritative contract — narrative docs (`llms.txt`, `consumer-guide.md`) defer to it when they disagree.

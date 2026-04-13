@@ -166,10 +166,11 @@ export function EditEventScreen({ id, accountWheelchairAccessible, onBack, onUpd
     description: event.description || '',
     price: event.price || '',
     ticket_url: event.ticket_url || '',
-    start_time_required: event.start_time_required,
+    open_window: event.open_window,
     tags: event.tags || [],
     wheelchair_accessible: event.wheelchair_accessible,
-    rsvp_limit: event.rsvp_limit,
+    capacity: event.capacity,
+    rsvp: event.rsvp,
     image_focal_y: event.image_focal_y,
   };
 

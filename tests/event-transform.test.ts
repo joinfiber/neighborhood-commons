@@ -32,7 +32,9 @@ function makeRow(overrides: Partial<PortalEventRow> = {}): PortalEventRow {
     recurrence: 'weekly',
     series_id: null,
     series_instance_number: null,
-    start_time_required: true,
+    open_window: false,
+    capacity: null,
+    rsvp: null,
     tags: ['outdoor', 'free'],
     wheelchair_accessible: null,
     price: 'Free',
@@ -136,14 +138,26 @@ describe('toNeighborhoodEvent', () => {
     expect(event.series_instance_count).toBeNull();
   });
 
-  it('passes through start_time_required (default true)', () => {
+  it('passes through open_window (default false)', () => {
     const event = toNeighborhoodEvent(makeRow());
-    expect(event.start_time_required).toBe(true);
+    expect(event.open_window).toBe(false);
   });
 
-  it('passes through start_time_required = false', () => {
-    const event = toNeighborhoodEvent(makeRow({ start_time_required: false }));
-    expect(event.start_time_required).toBe(false);
+  it('passes through open_window = true', () => {
+    const event = toNeighborhoodEvent(makeRow({ open_window: true }));
+    expect(event.open_window).toBe(true);
+  });
+
+  it('passes through capacity and rsvp signals', () => {
+    const event = toNeighborhoodEvent(makeRow({ capacity: 50, rsvp: 'required' }));
+    expect(event.capacity).toBe(50);
+    expect(event.rsvp).toBe('required');
+  });
+
+  it('defaults capacity and rsvp to null', () => {
+    const event = toNeighborhoodEvent(makeRow());
+    expect(event.capacity).toBeNull();
+    expect(event.rsvp).toBeNull();
   });
 
   it('wraps recurrence as { rrule } object', () => {

@@ -1556,6 +1556,9 @@
                       "description": { "type": ["string", "null"], "maxLength": 2000 },
                       "price": { "type": ["string", "null"], "maxLength": 100 },
                       "wheelchair_accessible": { "type": ["boolean", "null"] },
+                      "open_window": { "type": "boolean" },
+                      "capacity": { "type": ["integer", "null"], "minimum": 1, "maximum": 10000 },
+                      "rsvp": { "type": ["string", "null"], "enum": ["recommended", "required", null] },
                       "status": { "type": "string", "enum": ["published", "pending_review", "draft"] },
                       "first_party": { "type": "boolean" }
                     }
@@ -2204,7 +2207,21 @@
           "cost": { "type": ["string", "null"] },
           "tags": { "type": "array", "items": { "type": "string" } },
           "wheelchair_accessible": { "type": ["boolean", "null"] },
-          "start_time_required": { "type": "boolean" },
+          "open_window": {
+            "type": "boolean",
+            "description": "True for come-and-go events (happy hour, open swim, market). When true, feeds keep the event visible until end_time (or start + 3h if no end). When false, the event disappears from feeds at start time."
+          },
+          "capacity": {
+            "type": ["integer", "null"],
+            "minimum": 1,
+            "maximum": 10000,
+            "description": "Informational max attendance. Commons does NOT track signups or enforce the cap. Ticketing lives in url."
+          },
+          "rsvp": {
+            "type": ["string", "null"],
+            "enum": ["recommended", "required", null],
+            "description": "Whether RSVP is a thing for this event. Commons does not manage RSVPs."
+          },
           "series_id": { "type": ["string", "null"], "format": "uuid" },
           "series_instance_number": { "type": ["integer", "null"] },
           "series_instance_count": {
@@ -2378,6 +2395,9 @@
           "image_url": { "type": "string", "format": "uri", "maxLength": 2000, "description": "Image URL — fetched, re-encoded through Sharp, and stored in R2." },
           "tags": { "type": "array", "items": { "type": "string", "maxLength": 50 }, "maxItems": 15 },
           "wheelchair_accessible": { "type": "boolean" },
+          "open_window": { "type": "boolean", "description": "True for come-and-go events. Default false." },
+          "capacity": { "type": ["integer", "null"], "minimum": 1, "maximum": 10000, "description": "Informational only; Commons does not enforce." },
+          "rsvp": { "type": ["string", "null"], "enum": ["recommended", "required", null], "description": "Whether RSVP is a thing for this event. Commons does not manage RSVPs." },
           "recurrence": { "type": "string", "maxLength": 200, "description": "RRULE string (e.g. FREQ=WEEKLY or FREQ=MONTHLY;BYDAY=2FR;COUNT=12)" },
           "instance_count": { "type": "integer", "minimum": 0, "maximum": 52 },
           "venue_id": { "type": "string", "format": "uuid", "description": "Link to an existing venue account" },
@@ -2408,6 +2428,9 @@
           "place_id": { "type": "string", "maxLength": 500 },
           "tags": { "type": "array", "items": { "type": "string", "maxLength": 100 }, "maxItems": 15 },
           "wheelchair_accessible": { "type": "boolean" },
+          "open_window": { "type": "boolean", "description": "True for come-and-go events. Default false." },
+          "capacity": { "type": ["integer", "null"], "minimum": 1, "maximum": 10000, "description": "Informational only; Commons does not enforce." },
+          "rsvp": { "type": ["string", "null"], "enum": ["recommended", "required", null], "description": "Whether RSVP is a thing for this event. Commons does not manage RSVPs." },
           "first_party": { "type": "boolean" },
           "status": { "type": "string", "enum": ["published", "pending_review", "draft"] }
         }

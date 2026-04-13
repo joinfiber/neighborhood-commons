@@ -36,7 +36,9 @@ export interface PortalEventRow {
   recurrence: string;
   series_id: string | null;
   series_instance_number: number | null;
-  start_time_required: boolean;
+  open_window: boolean;
+  capacity: number | null;
+  rsvp: 'recommended' | 'required' | null;
   tags: string[] | null;
   wheelchair_accessible: boolean | null;
   price: string | null;
@@ -82,7 +84,9 @@ export interface NeighborhoodEvent {
   series_id: string | null;
   series_instance_number: number | null;
   series_instance_count: number | null;
-  start_time_required: boolean;
+  open_window: boolean;
+  capacity: number | null;
+  rsvp: 'recommended' | 'required' | null;
   tags: string[];
   wheelchair_accessible: boolean | null;
   runtime_minutes: number | null;
@@ -219,7 +223,9 @@ export function toNeighborhoodEvent(row: PortalEventRow): NeighborhoodEvent {
     series_id: row.series_id || null,
     series_instance_number: row.series_instance_number || null,
     series_instance_count: null,
-    start_time_required: row.start_time_required ?? true,
+    open_window: row.open_window ?? false,
+    capacity: row.capacity ?? null,
+    rsvp: row.rsvp ?? null,
     tags: row.tags || [],
     wheelchair_accessible: row.wheelchair_accessible ?? row.portal_accounts?.wheelchair_accessible ?? null,
     runtime_minutes: row.runtime_minutes || null,

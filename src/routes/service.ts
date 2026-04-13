@@ -530,8 +530,9 @@ const createEventSchema = z.object({
   ),
   tags: z.array(z.string().max(50)).max(15).optional(),
   wheelchair_accessible: z.boolean().nullable().default(null),
-  rsvp_limit: z.number().int().min(1).max(10000).nullable().default(null),
-  start_time_required: z.boolean().default(true),
+  capacity: z.number().int().min(1).max(10000).nullable().default(null),
+  rsvp: z.enum(['recommended', 'required']).nullable().default(null),
+  open_window: z.boolean().default(false),
   image_focal_y: z.number().min(0).max(1).optional(),
   source_method: z.enum(['manual', 'auto']).optional(),
   source_publisher: z.string().max(100).optional(),
@@ -560,8 +561,9 @@ const updateEventSchema = z.object({
   ),
   tags: z.array(z.string().max(50)).max(15).optional(),
   wheelchair_accessible: z.boolean().nullable().optional(),
-  rsvp_limit: z.number().int().min(1).max(10000).nullable().optional(),
-  start_time_required: z.boolean().optional(),
+  capacity: z.number().int().min(1).max(10000).nullable().optional(),
+  rsvp: z.enum(['recommended', 'required']).nullable().optional(),
+  open_window: z.boolean().optional(),
   image_focal_y: z.number().min(0).max(1).optional(),
   first_party: z.boolean().optional(),
   status: z.enum(['published', 'pending_review', 'suspended', 'unpublished']).optional(),
@@ -816,7 +818,9 @@ router.patch('/events/batch', serviceLimiter, async (req, res, next) => {
         description: z.string().max(2000).optional().nullable(),
         price: z.string().max(100).optional().nullable(),
         wheelchair_accessible: z.boolean().nullable().optional(),
-        start_time_required: z.boolean().optional(),
+        open_window: z.boolean().optional(),
+        capacity: z.number().int().min(1).max(10000).nullable().optional(),
+        rsvp: z.enum(['recommended', 'required']).nullable().optional(),
         first_party: z.boolean().optional(),
       }).refine((u) => Object.keys(u).length > 0, { message: 'No fields to update' }),
     });
@@ -889,8 +893,9 @@ router.patch('/events/:id', serviceLimiter, async (req, res, next) => {
     if (data.custom_category !== undefined) dbUpdate.custom_category = data.custom_category;
     if (data.event_timezone !== undefined) dbUpdate.event_timezone = data.event_timezone;
     if (data.wheelchair_accessible !== undefined) dbUpdate.wheelchair_accessible = data.wheelchair_accessible;
-    if (data.rsvp_limit !== undefined) dbUpdate.rsvp_limit = data.rsvp_limit;
-    if (data.start_time_required !== undefined) dbUpdate.start_time_required = data.start_time_required;
+    if (data.capacity !== undefined) dbUpdate.capacity = data.capacity;
+    if (data.rsvp !== undefined) dbUpdate.rsvp = data.rsvp;
+    if (data.open_window !== undefined) dbUpdate.open_window = data.open_window;
     if (data.first_party !== undefined) dbUpdate.first_party = data.first_party;
     if (data.image_focal_y !== undefined) dbUpdate.event_image_focal_y = data.image_focal_y;
 
@@ -1009,8 +1014,9 @@ router.patch('/events/series/:seriesId', serviceLimiter, async (req, res, next) 
     if (data.custom_category !== undefined) templateUpdate.custom_category = data.custom_category;
     if (data.event_timezone !== undefined) templateUpdate.event_timezone = data.event_timezone;
     if (data.wheelchair_accessible !== undefined) templateUpdate.wheelchair_accessible = data.wheelchair_accessible;
-    if (data.rsvp_limit !== undefined) templateUpdate.rsvp_limit = data.rsvp_limit;
-    if (data.start_time_required !== undefined) templateUpdate.start_time_required = data.start_time_required;
+    if (data.capacity !== undefined) templateUpdate.capacity = data.capacity;
+    if (data.rsvp !== undefined) templateUpdate.rsvp = data.rsvp;
+    if (data.open_window !== undefined) templateUpdate.open_window = data.open_window;
     if (data.image_focal_y !== undefined) templateUpdate.event_image_focal_y = data.image_focal_y;
     if (data.tags !== undefined) {
       const cat = data.category || 'community';

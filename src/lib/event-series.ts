@@ -43,8 +43,8 @@ export async function createEventSeries(
   const templateKeys = [
     'content', 'description', 'place_name', 'venue_address', 'place_id',
     'latitude', 'longitude', 'category', 'custom_category', 'price',
-    'link_url', 'event_image_focal_y', 'start_time_required', 'tags',
-    'wheelchair_accessible', 'rsvp_limit',
+    'link_url', 'event_image_focal_y', 'open_window', 'tags',
+    'wheelchair_accessible', 'capacity', 'rsvp',
   ];
   for (const key of templateKeys) {
     if (key in templateData) baseEventData[key] = templateData[key];
@@ -181,7 +181,7 @@ export async function deleteSeriesEvents(seriesId: string): Promise<number> {
       category: [], place_id: null,
       location: { name: '', address: null, lat: null, lng: null },
       url: null, images: [], event_image_focal_y: 0.5, organizer: { name: '', phone: null },
-      cost: null, series_id: null, series_instance_number: null, series_instance_count: null, start_time_required: true, tags: [], wheelchair_accessible: null,
+      cost: null, series_id: null, series_instance_number: null, series_instance_count: null, open_window: false, capacity: null, rsvp: null, tags: [], wheelchair_accessible: null,
       runtime_minutes: null, content_rating: null, showtimes: null, first_party: false, recurrence: null,
       source: { publisher: 'neighborhood-commons', collected_at: new Date().toISOString(), method: 'portal', contributor: null, license: 'CC BY 4.0' },
     });
@@ -224,8 +224,8 @@ const COLUMN_TO_BASE_KEY: Record<string, string> = {
   place_id: 'place_id', latitude: 'latitude', longitude: 'longitude',
   category: 'category', custom_category: 'custom_category',
   description: 'description', price: 'price', link_url: 'link_url',
-  start_time_required: 'start_time_required', tags: 'tags',
-  wheelchair_accessible: 'wheelchair_accessible', rsvp_limit: 'rsvp_limit',
+  open_window: 'open_window', tags: 'tags',
+  wheelchair_accessible: 'wheelchair_accessible', capacity: 'capacity', rsvp: 'rsvp',
   event_image_focal_y: 'event_image_focal_y',
 };
 

@@ -52,7 +52,9 @@ const createEventSchema = z.object({
     (v) => (typeof v === 'string' && v && !/^https?:\/\//i.test(v) ? `https://${v}` : v),
     z.string().url().max(2000).optional().or(z.literal('')),
   ),
-  rsvp_limit: z.number().int().min(1).max(10000).nullable().default(null),
+  open_window: z.boolean().default(false),
+  capacity: z.number().int().min(1).max(10000).nullable().default(null),
+  rsvp: z.enum(['recommended', 'required']).nullable().default(null),
   image_focal_y: z.number().min(0).max(1).optional(),
 });
 
@@ -83,7 +85,9 @@ const updateEventSchema = z.object({
     (v) => (typeof v === 'string' && v && !/^https?:\/\//i.test(v) ? `https://${v}` : v),
     z.string().url().max(2000).optional().or(z.literal('')).nullable(),
   ),
-  rsvp_limit: z.number().int().min(1).max(10000).nullable().optional(),
+  open_window: z.boolean().optional(),
+  capacity: z.number().int().min(1).max(10000).nullable().optional(),
+  rsvp: z.enum(['recommended', 'required']).nullable().optional(),
   image_focal_y: z.number().min(0).max(1).optional(),
 });
 
@@ -244,7 +248,9 @@ const adminBatchUpdateSchema = z.object({
     custom_category: z.string().max(30).optional().nullable(),
     tags: z.array(z.string().max(50)).max(15).optional(),
     wheelchair_accessible: z.boolean().nullable().optional(),
-    start_time_required: z.boolean().optional(),
+    open_window: z.boolean().optional(),
+    capacity: z.number().int().min(1).max(10000).nullable().optional(),
+    rsvp: z.enum(['recommended', 'required']).nullable().optional(),
     description: z.string().max(2000).optional().nullable(),
     price: z.string().max(100).optional().nullable(),
   }).refine((u) => Object.keys(u).length > 0, { message: 'No fields to update' }),
@@ -274,7 +280,9 @@ router.patch('/events/batch', writeLimiter, async (req, res, next) => {
       dbUpdate.tags = category ? validateTags(updates.tags, category) : updates.tags;
     }
     if (updates.wheelchair_accessible !== undefined) dbUpdate.wheelchair_accessible = updates.wheelchair_accessible;
-    if (updates.start_time_required !== undefined) dbUpdate.start_time_required = updates.start_time_required;
+    if (updates.open_window !== undefined) dbUpdate.open_window = updates.open_window;
+    if (updates.capacity !== undefined) dbUpdate.capacity = updates.capacity;
+    if (updates.rsvp !== undefined) dbUpdate.rsvp = updates.rsvp;
     if (updates.description !== undefined) dbUpdate.description = updates.description || null;
     if (updates.price !== undefined) dbUpdate.price = updates.price || null;
 
@@ -362,6 +370,9 @@ router.patch('/events/series/:seriesId', writeLimiter, async (req, res, next) =>
     }
     if (data.recurrence !== undefined) templateUpdate.recurrence = data.recurrence;
     if (data.image_focal_y !== undefined) templateUpdate.event_image_focal_y = data.image_focal_y;
+    if (data.open_window !== undefined) templateUpdate.open_window = data.open_window;
+    if (data.capacity !== undefined) templateUpdate.capacity = data.capacity;
+    if (data.rsvp !== undefined) templateUpdate.rsvp = data.rsvp;
 
     const hasTimeChange = data.start_time !== undefined || data.end_time !== undefined;
     const hasInstanceCountChange = data.instance_count !== undefined;
@@ -521,6 +532,9 @@ router.patch('/events/:id', writeLimiter, async (req, res, next) => {
       update.link_url = data.ticket_url ? (checkApprovedDomain(data.ticket_url), sanitizeUrl(data.ticket_url)) : null;
     }
     if (data.image_focal_y !== undefined) update.event_image_focal_y = data.image_focal_y;
+    if (data.open_window !== undefined) update.open_window = data.open_window;
+    if (data.capacity !== undefined) update.capacity = data.capacity;
+    if (data.rsvp !== undefined) update.rsvp = data.rsvp;
 
     if (Object.keys(update).length === 0) {
       throw createError('No fields to update', 400, 'VALIDATION_ERROR');
@@ -608,7 +622,7 @@ router.delete('/events/:id', writeLimiter, async (req, res, next) => {
       category: [], place_id: null,
       location: { name: '', address: null, lat: null, lng: null },
       url: null, images: [], event_image_focal_y: 0.5, organizer: { name: '', phone: null },
-      cost: null, series_id: null, series_instance_number: null, series_instance_count: null, start_time_required: true, tags: [], wheelchair_accessible: null,
+      cost: null, series_id: null, series_instance_number: null, series_instance_count: null, open_window: false, capacity: null, rsvp: null, tags: [], wheelchair_accessible: null,
       runtime_minutes: null, content_rating: null, showtimes: null, first_party: false, recurrence: null,
       source: { publisher: 'neighborhood-commons', collected_at: new Date().toISOString(), method: 'portal', contributor: null, license: 'CC BY 4.0' },
     });

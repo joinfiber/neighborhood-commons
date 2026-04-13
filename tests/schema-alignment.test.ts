@@ -45,7 +45,7 @@ const SCHEMA: Record<string, string[]> = {
     'creator_account_id', 'user_id', 'is_business', 'visibility', 'status',
     'broadcast_mode', 'discovery_radius_meters', 'recurrence', 'series_id',
     'series_instance_number', 'becomes_visible_at', 'expires_at', 'ended_at',
-    'start_time_required', 'tags', 'wheelchair_accessible', 'rsvp_limit',
+    'open_window', 'tags', 'wheelchair_accessible', 'capacity', 'rsvp',
     'source_method', 'source_publisher', 'source_feed_url', 'external_id', 'source_contributor_url',
     'runtime_minutes', 'content_rating', 'showtimes',
     'first_party',

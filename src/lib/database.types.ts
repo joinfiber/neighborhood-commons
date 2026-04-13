@@ -54,10 +54,11 @@ export type Database = {
           becomes_visible_at: string | null;
           expires_at: string | null;
           ended_at: string | null;
-          start_time_required: boolean;
+          open_window: boolean;
           tags: string[];
           wheelchair_accessible: boolean | null;
-          rsvp_limit: number | null;
+          capacity: number | null;
+          rsvp: 'recommended' | 'required' | null;
           source_method: string | null;
           source_publisher: string | null;
           source_feed_url: string | null;

@@ -58,7 +58,7 @@ const listSchema = z.object({
   offset: z.coerce.number().min(0).default(0),
 });
 
-const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, event_image_focal_y, created_at, creator_account_id, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, runtime_minutes, content_rating, showtimes, first_party, source_method, source_publisher, portal_accounts!events_creator_account_id_fkey(business_name, status, wheelchair_accessible)';
+const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, event_image_focal_y, created_at, creator_account_id, series_id, series_instance_number, open_window, capacity, rsvp, tags, wheelchair_accessible, runtime_minutes, content_rating, showtimes, first_party, source_method, source_publisher, portal_accounts!events_creator_account_id_fkey(business_name, status, wheelchair_accessible)';
 
 // =============================================================================
 // SHARED QUERY BUILDING
@@ -224,9 +224,9 @@ async function queryFilteredEvents(params: ListParams, opts?: {
     const account = row.portal_accounts as Record<string, unknown> | null;
     if (account && account.status === 'suspended') return false;
 
-    const startTimeRequired = (row.start_time_required as boolean) ?? true;
+    const openWindow = (row.open_window as boolean) ?? false;
     const eventAt = new Date(row.event_at as string);
-    if (startTimeRequired) {
+    if (!openWindow) {
       return eventAt >= now;
     }
     if (row.end_time) {
@@ -351,7 +351,7 @@ router.get('/:id', async (req, res, next) => {
 
     const { data: event, error } = await supabaseAdmin
       .from('events')
-      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, event_image_focal_y, created_at, creator_account_id, series_id, series_instance_number, start_time_required, tags, wheelchair_accessible, runtime_minutes, content_rating, showtimes, first_party, source_method, source_publisher, portal_accounts!events_creator_account_id_fkey(business_name, status, wheelchair_accessible)')
+      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, event_image_focal_y, created_at, creator_account_id, series_id, series_instance_number, open_window, capacity, rsvp, tags, wheelchair_accessible, runtime_minutes, content_rating, showtimes, first_party, source_method, source_publisher, portal_accounts!events_creator_account_id_fkey(business_name, status, wheelchair_accessible)')
       .eq('id', id)
       .eq('status', 'published')
       .maybeSingle();
