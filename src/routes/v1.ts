@@ -274,6 +274,23 @@ router.get('/', async (req, res, next) => {
     const results = collapseSeries ? deduplicateSeries(visible) : visible;
     const page = results.slice(0, params.limit);
 
+    // Hydrate series_instance_count: one grouped count query for all series_ids
+    // in this page, rather than N per-event lookups or always-null.
+    const seriesIds = Array.from(new Set(
+      page.map((e) => (e as unknown as { series_id?: string | null }).series_id).filter(Boolean) as string[],
+    ));
+    const seriesCounts = new Map<string, number>();
+    if (seriesIds.length > 0) {
+      const { data: counts } = await supabaseAdmin
+        .from('events')
+        .select('series_id')
+        .in('series_id', seriesIds);
+      for (const row of counts || []) {
+        const sid = (row as { series_id: string }).series_id;
+        seriesCounts.set(sid, (seriesCounts.get(sid) || 0) + 1);
+      }
+    }
+
     res.set('Cache-Control', 'public, max-age=30');
     res.json({
       meta: {
@@ -284,7 +301,19 @@ router.get('/', async (req, res, next) => {
         spec: 'neighborhood-api-v0.2',
         license: 'CC-BY-4.0',
       },
-      events: page.map((e) => toNeighborhoodEvent(e as unknown as PortalEventRow)),
+      events: page.map((e) => {
+        const transformed = toNeighborhoodEvent(e as unknown as PortalEventRow);
+        const row = e as unknown as { series_id?: string | null; recurrence?: string | null };
+        if (row.series_id && transformed.recurrence) {
+          const ic = seriesCounts.get(row.series_id);
+          if (ic && ic > 0) {
+            transformed.series_instance_count = ic;
+            const rrule = toRRule(row.recurrence as string, ic);
+            if (rrule) transformed.recurrence = { rrule };
+          }
+        }
+        return transformed;
+      }),
     });
   } catch (err) {
     next(err);

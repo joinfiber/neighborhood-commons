@@ -613,7 +613,9 @@ describe('series deduplication', () => {
     // Each instance carries its own recurrence — no join needed
     const seriesEvent = body.events.find((e: Record<string, unknown>) => e.id === 'instance-1');
     expect(seriesEvent).toBeDefined();
-    expect(seriesEvent.recurrence).toEqual({ rrule: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH' });
+    // 3 instances in the mock → series_instance_count hydrates, rrule carries COUNT=3
+    expect(seriesEvent.recurrence).toEqual({ rrule: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH;COUNT=3' });
+    expect(seriesEvent.series_instance_count).toBe(3);
     expect(seriesEvent.series_id).toBe('series-uuid-1');
 
     // The standalone event should be present

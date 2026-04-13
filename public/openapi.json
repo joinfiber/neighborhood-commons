@@ -2209,7 +2209,7 @@
           "series_instance_number": { "type": ["integer", "null"] },
           "series_instance_count": {
             "type": ["integer", "null"],
-            "description": "Total instances in the series. Currently always null — not yet computed."
+            "description": "Total instances in the series. Populated on /events and /events/{id}. Null for one-offs or in contexts where hydration is skipped (webhook payloads)."
           },
           "recurrence": {
             "oneOf": [
