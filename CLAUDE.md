@@ -374,10 +374,30 @@ The test suite is designed around the question: **what would silently break the 
 - **New migration?** Update the `SCHEMA` constant in `schema-alignment.test.ts` first. Add the column there before writing the code that uses it.
 - **New public endpoint?** Add integration tests in `api-integration.test.ts` that verify the response shape, status codes, and error handling.
 - **New portal endpoint?** Add integration tests in `portal-crud.test.ts` — auth enforcement, input validation, and response shape.
-- **Changed auth, RLS, rate limits, or access patterns?** Update this file (CLAUDE.md), `public/llms.txt`, and `docs/consumer-guide.md` in the same commit. The docs are the contract.
-- **New, changed, or removed endpoint?** Update `public/openapi.json` in the same commit. The OpenAPI spec is manually maintained and must stay in sync with the actual API surface — endpoints, parameters, request/response schemas, and auth requirements.
+- **Changed auth, RLS, rate limits, or access patterns?** Update `public/llms.txt` and `docs/consumer-guide.md` in the same commit. The docs are the contract.
+- **New, changed, or removed endpoint, parameter, response field, error code, or auth requirement?** Update `public/openapi.json` in the same commit. No exceptions. See "The Contract" below.
 - **New transform or helper?** Add unit tests in the appropriate test file.
 - **New table?** Add it to `SCHEMA`. The test will catch you if you forget.
+- **Any user-visible change to the API surface?** Add a one-line entry to `CHANGELOG.md` under today's date.
+
+## The Contract
+
+**`public/openapi.json` is the authoritative contract.** Consumer apps (Merrie, Fiber, partner integrations) code against it. Everything else is narrative.
+
+Three docs, in priority order when they disagree:
+1. **`public/openapi.json`** — machine-readable spec, generates clients, wins all conflicts.
+2. **`public/llms.txt`** — narrative developer guide, explains *why* and *how*, must not contradict the spec on matters of fact.
+3. **`docs/consumer-guide.md`** — orientation for new consumers, points at the spec.
+
+**A PR is not shippable if it:**
+- Adds a route that isn't in the spec
+- Changes a Zod schema without updating the matching request/response schema in the spec
+- Adds an error code that isn't in the spec
+- Removes or renames a field without deprecating it in the spec first
+
+If you're not sure whether a change affects the contract: it probably does. Update the spec. The cost of an unnecessary spec update is seconds. The cost of consumer drift is hours of Slack archaeology and blamed outages.
+
+**`CHANGELOG.md` is the consumer-facing notice board.** Every contract-affecting PR adds one line there, today's date, one sentence. Consumers subscribe to that file (or diff it on release) to know what changed. Keep the entries terse and factual; no marketing copy.
 
 ### What Not To Test
 
