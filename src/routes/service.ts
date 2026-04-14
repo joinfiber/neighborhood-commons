@@ -23,7 +23,7 @@ import { toNeighborhoodEvent, type PortalEventRow } from '../lib/event-transform
 import { serviceLimiter } from '../middleware/rate-limit.js';
 import {
   PORTAL_SELECT, MANAGED_SOURCES, toPortalEvent, portalInputToInsert,
-  toTimestamptz, getAdminUserId,
+  fromTimestamptz, getAdminUserId,
 } from '../lib/event-operations.js';
 import { createEventSeries, deleteSeriesEvents, updateSeriesFutureInstances } from '../lib/event-series.js';
 import { processAndUploadImage, downloadAndAttachImage } from '../lib/image-processing.js';
@@ -504,30 +504,42 @@ router.delete('/accounts/:id', serviceLimiter, async (req, res, next) => {
 // EVENTS
 // =============================================================================
 
-const createEventSchema = z.object({
-  account_id: z.string().uuid(),
-  title: z.string().min(1).max(200),
-  venue_name: z.string().min(1).max(200),
+// Friendly-shape Service API input — symmetric with the read schema.
+// See public/openapi.json #/components/schemas/ServiceEventInput (authoritative).
+// Internal DB columns are translated from this shape by friendlyToPortalInput().
+const VALID_TIMEZONES = new Set(Intl.supportedValuesOf('timeZone'));
+
+const locationSchema = z.object({
+  name: z.string().min(1).max(200).trim(),
   address: z.string().max(500).optional(),
+  lat: z.number().min(-90).max(90).optional(),
+  lng: z.number().min(-180).max(180).optional(),
   place_id: z.string().max(500).optional(),
-  latitude: z.number().min(-90).max(90).optional(),
-  longitude: z.number().min(-180).max(180).optional(),
-  event_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  start_time: z.string().regex(/^\d{2}:\d{2}$/),
-  end_time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+});
+
+export const createEventSchema = z.object({
+  account_id: z.string().uuid(),
+  name: z.string().min(1).max(200),
+  start: z.string().datetime({ offset: true }),
+  end: z.string().datetime({ offset: true }).optional(),
+  timezone: z.string().max(50).refine(
+    (tz) => VALID_TIMEZONES.has(tz),
+    { message: 'Invalid timezone. Use IANA format (e.g., America/New_York)' },
+  ),
   category: z.enum(EVENT_CATEGORY_KEYS as [string, ...string[]]),
-  custom_category: z.string().max(30).optional(),
-  recurrence: z.string()
-    .regex(/^(none|daily|weekly|biweekly|monthly|ordinal_weekday:[1-5]:(monday|tuesday|wednesday|thursday|friday|saturday|sunday)|weekly_days:(mon|tue|wed|thu|fri|sat|sun)(,(mon|tue|wed|thu|fri|sat|sun))*)$/)
-    .default('none'),
-  instance_count: z.number().int().min(0).max(260).optional(),
-  event_timezone: z.string().max(50).default('America/New_York'),
+  custom_category: z.string().max(50).optional(),
+  location: locationSchema,
   description: z.string().max(2000).optional(),
-  price: z.string().max(100).optional(),
-  ticket_url: z.preprocess(
+  cost: z.string().max(100).optional(),
+  url: z.preprocess(
     (v) => (typeof v === 'string' && v && !/^https?:\/\//i.test(v) ? `https://${v}` : v),
     z.string().url().max(2000).optional().or(z.literal('')),
   ),
+  image_url: z.string().url().max(2000).optional(),
+  recurrence: z.string()
+    .regex(/^(none|daily|weekly|biweekly|monthly|ordinal_weekday:[1-5]:(monday|tuesday|wednesday|thursday|friday|saturday|sunday)|weekly_days:(mon|tue|wed|thu|fri|sat|sun)(,(mon|tue|wed|thu|fri|sat|sun))*)$/)
+    .optional(),
+  instance_count: z.number().int().min(0).max(260).optional(),
   tags: z.array(z.string().max(50)).max(15).optional(),
   wheelchair_accessible: z.boolean().nullable().default(null),
   capacity: z.number().int().min(1).max(10000).nullable().default(null),
@@ -537,25 +549,25 @@ const createEventSchema = z.object({
   source_method: z.enum(['manual', 'auto']).optional(),
   source_publisher: z.string().max(100).optional(),
   first_party: z.boolean().optional(),
+  venue_id: z.string().uuid().optional(),
+  external_id: z.string().max(500).optional(),
 });
 
 const updateEventSchema = z.object({
   account_id: z.string().uuid().optional(),
-  title: z.string().min(1).max(200).optional(),
-  venue_name: z.string().min(1).max(200).optional(),
-  address: z.string().max(500).optional(),
-  place_id: z.string().max(500).optional(),
-  latitude: z.number().min(-90).max(90).optional().nullable(),
-  longitude: z.number().min(-180).max(180).optional().nullable(),
-  event_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  start_time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
-  end_time: z.string().regex(/^\d{2}:\d{2}$/).optional().nullable(),
+  name: z.string().min(1).max(200).optional(),
+  start: z.string().datetime({ offset: true }).optional(),
+  end: z.string().datetime({ offset: true }).optional().nullable(),
+  timezone: z.string().max(50).refine(
+    (tz) => VALID_TIMEZONES.has(tz),
+    { message: 'Invalid timezone. Use IANA format (e.g., America/New_York)' },
+  ).optional(),
   category: z.enum(EVENT_CATEGORY_KEYS as [string, ...string[]]).optional(),
-  custom_category: z.string().max(30).optional().nullable(),
-  event_timezone: z.string().max(50).optional(),
+  custom_category: z.string().max(50).optional().nullable(),
+  location: locationSchema.partial().optional(),
   description: z.string().max(2000).optional().nullable(),
-  price: z.string().max(100).optional().nullable(),
-  ticket_url: z.preprocess(
+  cost: z.string().max(100).optional().nullable(),
+  url: z.preprocess(
     (v) => (typeof v === 'string' && v && !/^https?:\/\//i.test(v) ? `https://${v}` : v),
     z.string().url().max(2000).optional().or(z.literal('')).nullable(),
   ),
@@ -568,6 +580,54 @@ const updateEventSchema = z.object({
   first_party: z.boolean().optional(),
   status: z.enum(['published', 'pending_review', 'suspended', 'unpublished']).optional(),
 });
+
+type CreateEventInput = z.infer<typeof createEventSchema>;
+
+/**
+ * Decompose a friendly-shape Service input into the portal-style fields
+ * `portalInputToInsert` expects. DB columns are internal; wire shape is friendly.
+ */
+function friendlyToPortalInput(data: CreateEventInput): {
+  portal: Parameters<typeof portalInputToInsert>[0];
+  event_date: string;
+  start_time: string;
+  end_time?: string;
+} {
+  const { date: eventDate, time: startTime } = fromTimestamptz(data.start, data.timezone);
+  const endTime = data.end ? fromTimestamptz(data.end, data.timezone).time : undefined;
+  return {
+    portal: {
+      title: data.name,
+      venue_name: data.location.name,
+      address: data.location.address ?? null,
+      place_id: data.location.place_id ?? null,
+      latitude: data.location.lat ?? null,
+      longitude: data.location.lng ?? null,
+      event_date: eventDate,
+      start_time: startTime,
+      end_time: endTime ?? null,
+      event_timezone: data.timezone,
+      category: data.category,
+      custom_category: data.custom_category ?? null,
+      recurrence: data.recurrence ?? 'none',
+      description: data.description ?? null,
+      price: data.cost ?? null,
+      ticket_url: typeof data.url === 'string' && data.url ? data.url : null,
+      open_window: data.open_window,
+      tags: data.tags,
+      wheelchair_accessible: data.wheelchair_accessible,
+      capacity: data.capacity,
+      rsvp: data.rsvp,
+      image_focal_y: data.image_focal_y,
+      source_method: data.source_method,
+      source_publisher: data.source_publisher,
+      first_party: data.first_party,
+    },
+    event_date: eventDate,
+    start_time: startTime,
+    end_time: endTime,
+  };
+}
 
 /** GET /service/events — Events with pagination, search, and filters */
 const listEventsQuerySchema = z.object({
@@ -685,19 +745,20 @@ router.post('/events', serviceLimiter, async (req, res, next) => {
     const adminUserId = account.auth_user_id || getAdminUserId();
     const validatedTags = data.tags ? validateTags(data.tags, data.category) : [];
 
-    const insert = portalInputToInsert({
-      ...data,
-      title: data.title,
-      tags: validatedTags,
-    }, data.account_id, adminUserId);
+    const { portal, event_date: eventDate, start_time: startTime, end_time: endTime }
+      = friendlyToPortalInput(data);
+    portal.tags = validatedTags;
+
+    const insert = portalInputToInsert(portal, data.account_id, adminUserId);
 
     // Resolve coordinates: explicit > venue account > geocode
-    let lat = data.latitude ?? null;
-    let lng = data.longitude ?? null;
+    let lat = data.location.lat ?? null;
+    let lng = data.location.lng ?? null;
+    const address = data.location.address;
 
     // If no explicit coordinates, inherit from venue account when address matches
     if (lat == null && lng == null && account.default_latitude != null && account.default_longitude != null) {
-      const eventAddr = (data.address || '').toLowerCase().trim();
+      const eventAddr = (address || '').toLowerCase().trim();
       const venueAddr = (account.default_address || '').toLowerCase().trim();
       // Use venue coords if: no event address, or event address matches venue address
       if (!eventAddr || !venueAddr || eventAddr === venueAddr) {
@@ -706,21 +767,21 @@ router.post('/events', serviceLimiter, async (req, res, next) => {
         insert.latitude = lat;
         insert.longitude = lng;
         insert.approximate_location = `POINT(${lng} ${lat})`;
-        console.log(`[SERVICE] Using venue account coordinates for "${data.title}": ${lat}, ${lng}`);
+        console.log(`[SERVICE] Using venue account coordinates for "${data.name}": ${lat}, ${lng}`);
       }
     }
 
     // Geocode only as a last resort — event has an address but no coords from above
-    if (lat == null && lng == null && data.address) {
+    if (lat == null && lng == null && address) {
       try {
-        const coords = await nominatimGeocode(data.address);
+        const coords = await nominatimGeocode(address);
         if (coords) {
           lat = coords.lat;
           lng = coords.lng;
           insert.latitude = lat;
           insert.longitude = lng;
           insert.approximate_location = `POINT(${lng} ${lat})`;
-          console.log(`[SERVICE] Geocoded "${data.address}" → ${lat}, ${lng}`);
+          console.log(`[SERVICE] Geocoded "${address}" → ${lat}, ${lng}`);
         }
       } catch (err) {
         console.error('[SERVICE] Geocode failed:', err instanceof Error ? err.message : err);
@@ -744,19 +805,20 @@ router.post('/events', serviceLimiter, async (req, res, next) => {
       insert.region_id = config.defaultRegionId;
     }
 
-    if (data.recurrence !== 'none') {
+    const recurrence = data.recurrence ?? 'none';
+    if (recurrence !== 'none') {
       // Recurring: create series
       const instances = await createEventSeries(
         insert,
-        data.recurrence,
-        data.event_date,
-        data.start_time,
-        data.end_time,
-        data.event_timezone,
+        recurrence,
+        eventDate,
+        startTime,
+        endTime,
+        data.timezone,
         data.instance_count,
       );
 
-      console.log(`[SERVICE] Series created: ${data.title} (${instances.length} instances)`);
+      console.log(`[SERVICE] Series created: ${data.name} (${instances.length} instances)`);
       res.status(201).json({
         series_count: instances.length,
         series_id: instances[0] ? (await supabaseAdmin.from('events').select('series_id').eq('id', instances[0].id).maybeSingle()).data?.series_id : null,
@@ -789,7 +851,7 @@ router.post('/events', serviceLimiter, async (req, res, next) => {
         }
       })();
 
-      console.log(`[SERVICE] Event created: ${data.title}`);
+      console.log(`[SERVICE] Event created: ${data.name}`);
       res.status(201).json({ event: toPortalEvent(event) });
     }
   } catch (err) {
@@ -864,7 +926,6 @@ router.patch('/events/:id', serviceLimiter, async (req, res, next) => {
 
     if (!existing) throw createError('Event not found', 404, 'NOT_FOUND');
 
-    const tz = data.event_timezone || existing.event_timezone || 'America/New_York';
     const wasPublished = existing.status === 'published';
     const dbUpdate: Record<string, unknown> = {};
 
@@ -880,18 +941,18 @@ router.patch('/events/:id', serviceLimiter, async (req, res, next) => {
     }
 
     if (data.status !== undefined) dbUpdate.status = data.status;
-    if (data.title !== undefined) dbUpdate.content = data.title;
-    if (data.venue_name !== undefined) dbUpdate.place_name = data.venue_name;
-    if (data.address !== undefined) dbUpdate.venue_address = data.address;
-    if (data.place_id !== undefined) dbUpdate.place_id = data.place_id;
-    if (data.latitude !== undefined) dbUpdate.latitude = data.latitude;
-    if (data.longitude !== undefined) dbUpdate.longitude = data.longitude;
+    if (data.name !== undefined) dbUpdate.content = data.name;
+    if (data.location?.name !== undefined) dbUpdate.place_name = data.location.name;
+    if (data.location?.address !== undefined) dbUpdate.venue_address = data.location.address;
+    if (data.location?.place_id !== undefined) dbUpdate.place_id = data.location.place_id;
+    if (data.location?.lat !== undefined) dbUpdate.latitude = data.location.lat;
+    if (data.location?.lng !== undefined) dbUpdate.longitude = data.location.lng;
     if (data.description !== undefined) dbUpdate.description = data.description;
-    if (data.price !== undefined) dbUpdate.price = data.price;
-    if (data.ticket_url !== undefined) dbUpdate.link_url = data.ticket_url || null;
+    if (data.cost !== undefined) dbUpdate.price = data.cost;
+    if (data.url !== undefined) dbUpdate.link_url = data.url || null;
     if (data.category !== undefined) dbUpdate.category = data.category;
     if (data.custom_category !== undefined) dbUpdate.custom_category = data.custom_category;
-    if (data.event_timezone !== undefined) dbUpdate.event_timezone = data.event_timezone;
+    if (data.timezone !== undefined) dbUpdate.event_timezone = data.timezone;
     if (data.wheelchair_accessible !== undefined) dbUpdate.wheelchair_accessible = data.wheelchair_accessible;
     if (data.capacity !== undefined) dbUpdate.capacity = data.capacity;
     if (data.rsvp !== undefined) dbUpdate.rsvp = data.rsvp;
@@ -904,15 +965,11 @@ router.patch('/events/:id', serviceLimiter, async (req, res, next) => {
       dbUpdate.tags = validateTags(data.tags, cat);
     }
 
-    if (data.event_date && data.start_time) {
-      dbUpdate.event_at = toTimestamptz(data.event_date, data.start_time, tz);
+    if (data.start !== undefined) {
+      dbUpdate.event_at = new Date(data.start).toISOString();
     }
-    if (data.end_time !== undefined) {
-      if (data.end_time && data.event_date) {
-        dbUpdate.end_time = toTimestamptz(data.event_date, data.end_time, tz);
-      } else {
-        dbUpdate.end_time = null;
-      }
+    if (data.end !== undefined) {
+      dbUpdate.end_time = data.end ? new Date(data.end).toISOString() : null;
     }
 
     if (Object.keys(dbUpdate).length === 0) throw createError('No fields to update', 400, 'VALIDATION_ERROR');
@@ -993,26 +1050,26 @@ router.patch('/events/series/:seriesId', serviceLimiter, async (req, res, next) 
       await assertLinkedAccount(req, sample.creator_account_id);
     }
 
-    const tz = data.event_timezone || (sample.event_timezone as string) || 'America/New_York';
+    const tz = data.timezone || (sample.event_timezone as string) || 'America/New_York';
 
     const templateUpdate: Record<string, unknown> = {};
-    if (data.title !== undefined) templateUpdate.content = data.title;
-    if (data.venue_name !== undefined) templateUpdate.place_name = data.venue_name;
-    if (data.address !== undefined) templateUpdate.venue_address = data.address;
-    if (data.place_id !== undefined) templateUpdate.place_id = data.place_id;
-    if (data.latitude !== undefined) templateUpdate.latitude = data.latitude;
-    if (data.longitude !== undefined) templateUpdate.longitude = data.longitude;
-    if (data.latitude !== undefined || data.longitude !== undefined) {
-      const lat = data.latitude ?? null;
-      const lng = data.longitude ?? null;
+    if (data.name !== undefined) templateUpdate.content = data.name;
+    if (data.location?.name !== undefined) templateUpdate.place_name = data.location.name;
+    if (data.location?.address !== undefined) templateUpdate.venue_address = data.location.address;
+    if (data.location?.place_id !== undefined) templateUpdate.place_id = data.location.place_id;
+    if (data.location?.lat !== undefined) templateUpdate.latitude = data.location.lat;
+    if (data.location?.lng !== undefined) templateUpdate.longitude = data.location.lng;
+    if (data.location?.lat !== undefined || data.location?.lng !== undefined) {
+      const lat = data.location?.lat ?? null;
+      const lng = data.location?.lng ?? null;
       templateUpdate.approximate_location = lat != null && lng != null ? `POINT(${lng} ${lat})` : null;
     }
     if (data.description !== undefined) templateUpdate.description = data.description;
-    if (data.price !== undefined) templateUpdate.price = data.price;
-    if (data.ticket_url !== undefined) templateUpdate.link_url = data.ticket_url || null;
+    if (data.cost !== undefined) templateUpdate.price = data.cost;
+    if (data.url !== undefined) templateUpdate.link_url = data.url || null;
     if (data.category !== undefined) templateUpdate.category = data.category;
     if (data.custom_category !== undefined) templateUpdate.custom_category = data.custom_category;
-    if (data.event_timezone !== undefined) templateUpdate.event_timezone = data.event_timezone;
+    if (data.timezone !== undefined) templateUpdate.event_timezone = data.timezone;
     if (data.wheelchair_accessible !== undefined) templateUpdate.wheelchair_accessible = data.wheelchair_accessible;
     if (data.capacity !== undefined) templateUpdate.capacity = data.capacity;
     if (data.rsvp !== undefined) templateUpdate.rsvp = data.rsvp;
@@ -1023,9 +1080,14 @@ router.patch('/events/series/:seriesId', serviceLimiter, async (req, res, next) 
       templateUpdate.tags = validateTags(data.tags, cat);
     }
 
-    const hasTimeChange = data.start_time !== undefined || data.end_time !== undefined;
+    // Decompose start/end (ISO 8601) into HH:MM in the series timezone for createEventSeries helpers.
+    const newStartTime = data.start ? fromTimestamptz(data.start, tz).time : undefined;
+    const newEndTime = data.end === null ? null
+      : data.end ? fromTimestamptz(data.end, tz).time
+      : undefined;
+    const hasTimeChange = newStartTime !== undefined || newEndTime !== undefined;
     const timeChange = hasTimeChange
-      ? { startTime: data.start_time, endTime: data.end_time ?? null }
+      ? { startTime: newStartTime, endTime: newEndTime ?? null }
       : undefined;
     const hasInstanceCountChange = data.instance_count !== undefined;
 

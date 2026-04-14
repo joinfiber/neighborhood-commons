@@ -3,7 +3,7 @@
   "info": {
     "title": "Neighborhood Commons API",
     "description": "Open neighborhood event data. Implements the Neighborhood API v0.2 spec. CC BY 4.0.\n\n**This document is the Spec, part of the Commons Contract.** The Contract is three files together: the Spec (this document — machine-readable, authoritative), the Guide (`/llms.txt` — narrative companion), and the Log (`CHANGELOG.md` — dated record of every change). Rule when they disagree: Spec wins. Guide explains. Log dates.",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "license": {
       "name": "CC-BY-4.0",
       "url": "https://creativecommons.org/licenses/by/4.0/"
@@ -1489,7 +1489,7 @@
       },
       "post": {
         "summary": "Create event (service)",
-        "description": "Create a single or recurring event on behalf of a linked account. Uses DB-style field names (title, event_date, start_time). For recurring events, creates a full series and returns series_count and instance_ids.",
+        "description": "Create a single or recurring event on behalf of a linked account. Uses Neighborhood API friendly-shape field names (name, start, timezone, location, url, cost) — symmetric with GET /events responses. Omit recurrence for one-off events. For recurring events, creates a full series and returns series_count and instance_ids.",
         "operationId": "serviceCreateEvent",
         "security": [{ "serviceApiKey": [] }],
         "requestBody": {
@@ -2457,33 +2457,42 @@
       },
       "ServiceEventInput": {
         "type": "object",
-        "description": "Input schema for the Service API. Uses DB-style field names (title, event_date, start_time).",
-        "required": ["account_id", "title", "event_date", "start_time", "event_timezone", "category", "recurrence"],
+        "description": "Input schema for the Service API. Uses Neighborhood API friendly-shape field names (name, start, location, url, cost) — symmetric with the read schema. Recurrence is optional; omit for one-off events.",
+        "required": ["account_id", "name", "start", "timezone", "category", "location"],
         "properties": {
           "account_id": { "type": "string", "format": "uuid" },
-          "title": { "type": "string", "minLength": 1, "maxLength": 200 },
-          "event_date": { "type": "string", "format": "date", "description": "YYYY-MM-DD in the event's timezone" },
-          "start_time": { "type": "string", "pattern": "^\\d{2}:\\d{2}$", "description": "HH:MM in 24-hour format" },
-          "end_time": { "type": "string", "pattern": "^\\d{2}:\\d{2}$", "description": "HH:MM in 24-hour format (optional)" },
-          "event_timezone": { "type": "string", "description": "IANA timezone" },
+          "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "start": { "type": "string", "format": "date-time", "description": "ISO 8601 with timezone offset, e.g. 2026-05-01T19:00:00-04:00" },
+          "end": { "type": "string", "format": "date-time", "description": "ISO 8601 with timezone offset (optional)" },
+          "timezone": { "type": "string", "description": "IANA timezone name (e.g. America/New_York)" },
           "category": { "type": "string" },
-          "recurrence": { "type": "string", "description": "RRULE string or 'none' for one-off events", "example": "none" },
-          "instance_count": { "type": "integer", "minimum": 0, "maximum": 52 },
+          "custom_category": { "type": "string", "maxLength": 50 },
+          "location": {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+              "address": { "type": "string", "maxLength": 500 },
+              "lat": { "type": "number", "minimum": -90, "maximum": 90 },
+              "lng": { "type": "number", "minimum": -180, "maximum": 180 },
+              "place_id": { "type": "string", "maxLength": 500 }
+            }
+          },
           "description": { "type": "string", "maxLength": 2000 },
-          "price": { "type": "string", "maxLength": 100 },
-          "link_url": { "type": "string", "format": "uri", "maxLength": 2000 },
-          "place_name": { "type": "string", "maxLength": 200 },
-          "address": { "type": "string", "maxLength": 500 },
-          "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
-          "longitude": { "type": "number", "minimum": -180, "maximum": 180 },
-          "place_id": { "type": "string", "maxLength": 500 },
+          "cost": { "type": "string", "maxLength": 100 },
+          "url": { "type": "string", "format": "uri", "maxLength": 2000 },
+          "image_url": { "type": "string", "format": "uri", "maxLength": 2000, "description": "Source image URL; fetched, re-encoded through Sharp, and hosted by Commons." },
+          "recurrence": { "type": "string", "description": "RRULE string (e.g. FREQ=WEEKLY;COUNT=12). Omit for one-off events." },
+          "instance_count": { "type": "integer", "minimum": 0, "maximum": 52 },
           "tags": { "type": "array", "items": { "type": "string", "maxLength": 100 }, "maxItems": 15 },
           "wheelchair_accessible": { "type": "boolean" },
           "open_window": { "type": "boolean", "description": "True for come-and-go events. Default false." },
           "capacity": { "type": ["integer", "null"], "minimum": 1, "maximum": 10000, "description": "Informational only; Commons does not enforce." },
           "rsvp": { "type": ["string", "null"], "enum": ["recommended", "required", null], "description": "Whether RSVP is a thing for this event. Commons does not manage RSVPs." },
           "first_party": { "type": "boolean" },
-          "status": { "type": "string", "enum": ["published", "pending_review", "draft"] }
+          "status": { "type": "string", "enum": ["published", "pending_review", "draft"] },
+          "venue_id": { "type": "string", "format": "uuid" },
+          "external_id": { "type": "string", "maxLength": 500 }
         }
       },
       "Error": {

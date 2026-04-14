@@ -869,17 +869,21 @@ curl -X POST "https://api.neighborhood-commons.org/api/v1/service/events" \
   -H "Content-Type: application/json" \
   -d '{
     "account_id": "uuid-from-link-response",
-    "title": "Thursday Jazz Night",
-    "event_date": "2026-04-17",
-    "start_time": "19:00",
-    "end_time": "22:00",
-    "venue_name": "Johnny'\''s Bar",
-    "address": "1234 Frankford Ave, Philadelphia PA",
+    "name": "Thursday Jazz Night",
+    "start": "2026-04-17T19:00:00-04:00",
+    "end": "2026-04-17T22:00:00-04:00",
+    "timezone": "America/New_York",
     "category": "live_music",
+    "location": {
+      "name": "Johnny'\''s Bar",
+      "address": "1234 Frankford Ave, Philadelphia PA"
+    },
     "description": "Weekly jazz trio. BYOB.",
-    "price": "Free"
+    "cost": "Free"
   }'
 ```
+
+The Service API accepts the same **friendly-shape** payload as the Contribute API and the public read schema — `name`, `start`, `timezone`, `location`, `url`, `cost`. `recurrence` is optional; omit it for one-off events. See [`ServiceEventInput`](https://api.neighborhood-commons.org/openapi.json) in the Spec for the authoritative field list. **Spec wins when this Guide and the Spec disagree.**
 
 ### Scoping Rules
 
