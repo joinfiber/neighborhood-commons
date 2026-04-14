@@ -380,24 +380,26 @@ The test suite is designed around the question: **what would silently break the 
 - **New table?** Add it to `SCHEMA`. The test will catch you if you forget.
 - **Any user-visible change to the API surface?** Add a one-line entry to `CHANGELOG.md` under today's date.
 
-## The Contract
+## The Commons Contract
 
-**`public/openapi.json` is the authoritative contract.** Consumer apps (Merrie, Fiber, partner integrations) code against it. Everything else is narrative.
+Three documents together form **the Commons Contract** — the agreement between this repo and every consumer app (Merrie, Fiber, partner integrations). Rule of thumb when they disagree: **Spec wins. Guide explains. Log dates.**
 
-Three docs, in priority order when they disagree:
-1. **`public/openapi.json`** — machine-readable spec, generates clients, wins all conflicts.
-2. **`public/llms.txt`** — narrative developer guide, explains *why* and *how*, must not contradict the spec on matters of fact.
-3. **`docs/consumer-guide.md`** — orientation for new consumers, points at the spec.
+1. **The Spec** — `public/openapi.json` — machine-readable, authoritative. Consumers generate clients from it. Wins every conflict.
+2. **The Guide** — `public/llms.txt` — narrative companion, explains *why* and *how*. Must not contradict the Spec on matters of fact.
+3. **The Log** — `CHANGELOG.md` — dated record of every contract-affecting change. Consumers subscribe to it (or diff it on release) to know what moved.
+
+A fourth doc, `docs/consumer-guide.md`, orients new consumers and points at the Spec. Not part of the Contract proper — it's a welcome mat.
 
 **A PR is not shippable if it:**
-- Adds a route that isn't in the spec
-- Changes a Zod schema without updating the matching request/response schema in the spec
-- Adds an error code that isn't in the spec
-- Removes or renames a field without deprecating it in the spec first
+- Adds a route that isn't in the Spec
+- Changes a Zod schema without updating the matching request/response schema in the Spec
+- Adds an error code that isn't in the Spec
+- Removes or renames a field without deprecating it in the Spec first
+- Changes the contract without adding a dated one-liner to the Log
 
-If you're not sure whether a change affects the contract: it probably does. Update the spec. The cost of an unnecessary spec update is seconds. The cost of consumer drift is hours of Slack archaeology and blamed outages.
+If you're not sure whether a change affects the Contract: it probably does. Update the Spec. The cost of an unnecessary spec update is seconds. The cost of consumer drift is hours of Slack archaeology and blamed outages.
 
-**`CHANGELOG.md` is the consumer-facing notice board.** Every contract-affecting PR adds one line there, today's date, one sentence. Consumers subscribe to that file (or diff it on release) to know what changed. Keep the entries terse and factual; no marketing copy.
+Log entries are terse, factual, dated. No marketing copy. Breaking changes prefixed `BREAKING:`.
 
 ### What Not To Test
 

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Neighborhood Commons API",
-    "description": "Open neighborhood event data. Implements the Neighborhood API v0.2 spec. CC BY 4.0.",
+    "description": "Open neighborhood event data. Implements the Neighborhood API v0.2 spec. CC BY 4.0.\n\n**This document is the Spec, part of the Commons Contract.** The Contract is three files together: the Spec (this document — machine-readable, authoritative), the Guide (`/llms.txt` — narrative companion), and the Log (`CHANGELOG.md` — dated record of every change). Rule when they disagree: Spec wins. Guide explains. Log dates.",
     "version": "0.2.0",
     "license": {
       "name": "CC-BY-4.0",

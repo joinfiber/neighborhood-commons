@@ -1,8 +1,14 @@
 # Changelog
 
-User-visible changes to the Neighborhood Commons API. Most recent at top.
+**This is the Log, part of the Commons Contract.** The Contract is three files together:
 
-Consumers building against the Commons should watch this file (or diff it on each release) to know what changed. For the authoritative schema, see [`public/openapi.json`](public/openapi.json).
+- **The Spec** — [`public/openapi.json`](public/openapi.json) — machine-readable, authoritative.
+- **The Guide** — [`public/llms.txt`](public/llms.txt) — narrative companion.
+- **The Log** — this file — dated record of every contract-affecting change.
+
+Rule when they disagree: Spec wins. Guide explains. Log dates.
+
+Consumers building against the Commons should watch this file (or diff it on each release) to know what changed. Most recent at top.
 
 Format: one line per change, grouped under the date it shipped. Terse and factual. Breaking changes prefixed with `BREAKING:`.
 

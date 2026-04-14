@@ -7,7 +7,13 @@ This document is everything you need to pull event data from the Neighborhood Co
 
 Base URL: `https://api.neighborhood-commons.org`
 
-**The machine-readable contract lives at [`/openapi.json`](https://api.neighborhood-commons.org/openapi.json).** If that spec and this document ever disagree about fields, endpoints, or error codes, **the OpenAPI spec wins** — this doc is a narrative companion, not the source of truth. When consuming Commons data programmatically, generate a client from the spec.
+**This document is the Guide, part of the Commons Contract.** The Contract is three files together:
+
+- **The Spec** — [`/openapi.json`](https://api.neighborhood-commons.org/openapi.json) — machine-readable, authoritative. Generate your client from it.
+- **The Guide** — this file. Narrative companion. Explains *why* and *how*.
+- **The Log** — [`CHANGELOG.md`](https://github.com/joinfiber/neighborhood-commons/blob/master/CHANGELOG.md) — dated record of every change. Watch it.
+
+**Rule when they disagree: Spec wins. Guide explains. Log dates.** If something in this document contradicts the Spec on matters of fact, trust the Spec and open an issue.
 
 ---
 
