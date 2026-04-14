@@ -171,6 +171,12 @@ function mockValidApiKey() {
     data: { id: 'key-uuid-1' },
     error: null,
   });
+  // Contribute keys must be linked to a portal account (the stable owner).
+  // Without this link, requireOwnerAccountId throws 403 KEY_NOT_LINKED.
+  mockResponses.set('api_key_account_links', {
+    data: { portal_account_id: 'account-uuid-1' },
+    error: null,
+  });
 }
 
 // =============================================================================
@@ -205,6 +211,22 @@ describe('Contribute API — auth enforcement', () => {
 
     const body = await res.json();
     expect(body.error.code).toBe('INVALID_API_KEY');
+  });
+
+  it('rejects valid key with no linked account (KEY_NOT_LINKED)', async () => {
+    // Key authenticates but has no row in api_key_account_links — without
+    // a stable owner, ownership checks would silently break. Reject early.
+    mockResponses.set('api_keys', { data: { id: 'key-uuid-1' }, error: null });
+    mockResponses.set('api_key_account_links', { data: null, error: null });
+
+    const res = await fetch(`${baseUrl}/api/v1/contribute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': VALID_API_KEY },
+      body: JSON.stringify(VALID_EVENT),
+    });
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error.code).toBe('KEY_NOT_LINKED');
   });
 });
 
@@ -477,13 +499,43 @@ describe('Contribute API — delete', () => {
     expect(body.error.code).toBe('VALIDATION_ERROR');
   });
 
-  it('returns 404 for event not owned by this API key', async () => {
+  it('returns 404 for event not owned by this account', async () => {
     mockValidApiKey();
     mockResponses.set('events', { data: null, error: null });
 
     const res = await fetch(`${baseUrl}/api/v1/contribute/a1b2c3d4-e5f6-7890-abcd-ef1234567890`, {
       method: 'DELETE',
       headers: { 'X-API-Key': VALID_API_KEY },
+    });
+    expect(res.status).toBe(404);
+  });
+});
+
+// =============================================================================
+// CONTRIBUTE API — OWNERSHIP-BY-ACCOUNT (rotation safety)
+// =============================================================================
+
+describe('Contribute API — ownership by account, not key', () => {
+  // The positive case ("a different key under the same account can edit") is
+  // implicitly covered by every other test in this file: those tests don't
+  // care which key UUID created the event, only that the current key's linked
+  // account matches the event's creator_account_id. The mocks for the existing
+  // create/update tests would have failed if we still gated on key UUID.
+  // What we must explicitly verify: a *different account* cannot edit.
+  it('a key linked to a different account cannot edit the event (404)', async () => {
+    // Different owner — even with a valid key, the creator_account_id filter
+    // rejects. We return null from the events mock to simulate "no row matched".
+    mockResponses.set('api_keys', { data: { id: 'key-uuid-C' }, error: null });
+    mockResponses.set('api_key_account_links', {
+      data: { portal_account_id: 'other-account' },
+      error: null,
+    });
+    mockResponses.set('events', { data: null, error: null });
+
+    const res = await fetch(`${baseUrl}/api/v1/contribute/a1b2c3d4-e5f6-7890-abcd-ef1234567890`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': VALID_API_KEY },
+      body: JSON.stringify({ description: 'malicious edit' }),
     });
     expect(res.status).toBe(404);
   });

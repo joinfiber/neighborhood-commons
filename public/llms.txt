@@ -545,7 +545,7 @@ curl -X PATCH "https://api.neighborhood-commons.org/api/v1/contribute/events/:id
   -d '{ "group_id": "uuid" }'
 ```
 
-You can only edit and delete events you submitted. Ownership is enforced by your API key.
+You can only edit and delete events that belong to **the account your API key is linked to** — not just events the same key created. Ownership is by account, not by key UUID. This means rotating an API key (issue a new one linked to the same account, then revoke the old one) preserves all editorial control. It also means a team with multiple keys (dev + prod) under the same account share an event pool — both can edit each other's events. If a key has no linked account, every PATCH/DELETE returns `403 KEY_NOT_LINKED`. Contact an operator to issue properly-linked keys via `POST /service/api-keys` with an `account_id`.
 
 ### Creating Venues and Groups
 
@@ -770,6 +770,8 @@ Every error response has this shape:
 | `FORBIDDEN` | 403 | Your key doesn't have permission for this action. |
 | `NOT_FOUND` | 404 | That event/account/group doesn't exist. |
 | `NOT_LINKED` | 403 | Your service key is not linked to the target portal account. |
+| `KEY_NOT_LINKED` | 403 | Your contribute API key has no linked owning account. The key cannot create or edit events until an operator links it. |
+| `ACCOUNT_REQUIRED` | 400 | `POST /service/api-keys` was called for a non-service tier without `account_id`. Required to prevent KEY_NOT_LINKED at use time. |
 | `NO_OWNER` | 403 | Operation requires an owning account and none is set (admin access required). |
 | `CONFLICT` | 409 | State conflict — e.g. a domain approval request is already reviewed. |
 | `DUPLICATE` | 409 | You already submitted an event with this `external_id`. |
@@ -913,7 +915,8 @@ curl -X POST "https://api.neighborhood-commons.org/api/v1/service/events" \
 | `DELETE` | `/service/groups/:groupId/venues/:venueId` | Remove a venue from a group |
 | `GET` | `/service/stats` | Platform stats (admin) |
 | `GET` | `/service/api-keys` | List all API keys (admin) |
-| `PATCH` | `/service/api-keys/:id` | Update an API key (admin) |
+| `POST` | `/service/api-keys` | Issue a new API key, linked to an account. Returns the raw key once. (admin) |
+| `PATCH` | `/service/api-keys/:id` | Update an API key — name, status (revoked), tier, etc. (admin) |
 | `GET` | `/service/approved-domains` | List allowlisted contribute-URL domains (admin) |
 | `POST` | `/service/approved-domains` | Add a domain to the allowlist (admin) |
 | `DELETE` | `/service/approved-domains/:domain` | Remove a domain from the allowlist (admin) |

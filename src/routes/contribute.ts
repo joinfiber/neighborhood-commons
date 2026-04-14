@@ -9,7 +9,7 @@
  * Auth: X-API-Key header (required)
  */
 
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import { z } from 'zod';
 import { EVENT_CATEGORY_KEYS } from '../lib/categories.js';
 import { supabaseAdmin } from '../lib/supabase.js';
@@ -150,6 +150,31 @@ async function checkContributeRateLimit(apiKeyId: string, tier: string, batchSiz
 // HELPERS
 // =============================================================================
 
+/**
+ * Resolve the calling key's owning portal_account.
+ *
+ * Contribute API ownership is tied to portal_accounts (the stable owner)
+ * via api_key_account_links — NOT to the API key UUID itself. This way
+ * key rotation preserves editorial control: issue a new key linked to the
+ * same account, revoke the old one, and PATCH/DELETE on existing events
+ * still work.
+ *
+ * Throws 403 KEY_NOT_LINKED when the key has no linked account. POST
+ * /service/api-keys enforces this invariant at issuance for new keys;
+ * legacy keys without a link must be linked via SQL or the runbook.
+ */
+function requireOwnerAccountId(req: Request): string {
+  const accountId = req.apiKeyInfo?.linkedAccountId;
+  if (!accountId) {
+    throw createError(
+      'This API key is not linked to an account. Contact an operator to link it before creating or editing events.',
+      403,
+      'KEY_NOT_LINKED',
+    );
+  }
+  return accountId;
+}
+
 /** Look up the API key's contributor tier, name, and URL */
 async function getKeyInfo(apiKeyId: string): Promise<{ tier: string; name: string; url: string | null }> {
   const { data } = await supabaseAdmin
@@ -222,7 +247,7 @@ function contributeEventToInsert(
   keyUrl: string | null,
   tier: string,
   resolved: { lat: number | null; lng: number | null; regionId: string | null },
-  opts?: { internalRecurrence?: string; venueId?: string },
+  opts?: { internalRecurrence?: string; venueId?: string; ownerAccountId?: string },
 ): Record<string, unknown> {
   const startDate = new Date(event.start);
   const endDate = event.end ? new Date(event.end) : null;
@@ -256,7 +281,7 @@ function contributeEventToInsert(
     capacity: event.capacity ?? null,
     rsvp: event.rsvp ?? null,
     event_image_focal_y: 0.5,
-    creator_account_id: opts?.venueId || null,
+    creator_account_id: opts?.venueId || opts?.ownerAccountId || null,
     user_id: null,
     source: 'api',
     source_method: 'api',
@@ -292,6 +317,7 @@ router.post('/', writeLimiter, async (req, res, next) => {
   try {
     const apiKeyId = req.apiKeyInfo?.id;
     if (!apiKeyId) throw createError('API key required', 401, 'UNAUTHORIZED');
+    const ownerAccountId = requireOwnerAccountId(req);
 
     const { tier, name: keyName, url: keyUrl } = await getKeyInfo(apiKeyId);
     const event = validateRequest(contributeEventSchema, req.body);
@@ -354,6 +380,7 @@ router.post('/', writeLimiter, async (req, res, next) => {
     const insertData = contributeEventToInsert(event, apiKeyId, keyName, keyUrl, tier, resolved, {
       internalRecurrence,
       venueId,
+      ownerAccountId,
     });
 
     // Recurring event: create a series
@@ -463,6 +490,7 @@ router.post('/batch', writeLimiter, async (req, res, next) => {
   try {
     const apiKeyId = req.apiKeyInfo?.id;
     if (!apiKeyId) throw createError('API key required', 401, 'UNAUTHORIZED');
+    const ownerAccountId = requireOwnerAccountId(req);
 
     const { tier, name: keyName, url: keyUrl } = await getKeyInfo(apiKeyId);
     const { events } = validateRequest(contributeBatchSchema, req.body);
@@ -509,6 +537,7 @@ router.post('/batch', writeLimiter, async (req, res, next) => {
       const resolved = await resolveLocationAndRegion(event);
       const insertData = contributeEventToInsert(event, apiKeyId, keyName, keyUrl, tier, resolved, {
         internalRecurrence,
+        ownerAccountId,
       });
 
       // Recurring: create series
@@ -607,16 +636,20 @@ router.get('/mine', async (req, res, next) => {
   try {
     const apiKeyId = req.apiKeyInfo?.id;
     if (!apiKeyId) throw createError('API key required', 401, 'UNAUTHORIZED');
+    const ownerAccountId = requireOwnerAccountId(req);
 
     const statusFilter = req.query.status as string | undefined;
     const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
     const offset = parseInt(req.query.offset as string) || 0;
 
+    // Ownership is by linked account, not key UUID — so this returns events
+    // created by ANY key under the same owner. That's the intent: rotation
+    // shouldn't hide your previous events.
     let query = supabaseAdmin
       .from('events')
       .select('id, content, event_at, end_time, event_timezone, place_name, category, status, external_id, created_at', { count: 'exact' })
       .eq('source_method', 'api')
-      .eq('source_feed_url', `api-key:${apiKeyId}`)
+      .eq('creator_account_id', ownerAccountId)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
@@ -659,19 +692,20 @@ router.delete('/:id', writeLimiter, async (req, res, next) => {
   try {
     const apiKeyId = req.apiKeyInfo?.id;
     if (!apiKeyId) throw createError('API key required', 401, 'UNAUTHORIZED');
+    const ownerAccountId = requireOwnerAccountId(req);
     validateUuidParam(req.params.id, 'event ID');
 
-    // Only allow deletion of events this key created
+    // Ownership: any key under the same linked account can delete
     const { data: event, error: fetchError } = await supabaseAdmin
       .from('events')
-      .select('id, source_feed_url')
+      .select('id')
       .eq('id', req.params.id)
       .eq('source_method', 'api')
-      .eq('source_feed_url', `api-key:${apiKeyId}`)
+      .eq('creator_account_id', ownerAccountId)
       .maybeSingle();
 
     if (fetchError || !event) {
-      throw createError('Event not found or not owned by this API key', 404, 'NOT_FOUND');
+      throw createError('Event not found or not owned by this account', 404, 'NOT_FOUND');
     }
 
     // Fetch full event for webhook before deletion
@@ -687,7 +721,7 @@ router.delete('/:id', writeLimiter, async (req, res, next) => {
       .delete()
       .eq('id', req.params.id)
       .eq('source_method', 'api')
-      .eq('source_feed_url', `api-key:${apiKeyId}`);
+      .eq('creator_account_id', ownerAccountId);
 
     if (deleteError) {
       console.error('[CONTRIBUTE] Delete error:', deleteError.message);
@@ -739,22 +773,23 @@ router.patch('/:id', writeLimiter, async (req, res, next) => {
   try {
     const apiKeyId = req.apiKeyInfo?.id;
     if (!apiKeyId) throw createError('API key required', 401, 'UNAUTHORIZED');
+    const ownerAccountId = requireOwnerAccountId(req);
     validateUuidParam(req.params.id, 'event ID');
 
     const data = validateRequest(updateContributeEventSchema, req.body);
     if (Object.keys(data).length === 0) throw createError('No fields to update', 400, 'VALIDATION_ERROR');
 
-    // Verify ownership
+    // Ownership: any key under the same linked account can edit
     const { data: existing, error: fetchError } = await supabaseAdmin
       .from('events')
       .select('id, event_at, end_time, event_timezone, status')
       .eq('id', req.params.id)
       .eq('source_method', 'api')
-      .eq('source_feed_url', `api-key:${apiKeyId}`)
+      .eq('creator_account_id', ownerAccountId)
       .maybeSingle();
 
     if (fetchError || !existing) {
-      throw createError('Event not found or not owned by this API key', 404, 'NOT_FOUND');
+      throw createError('Event not found or not owned by this account', 404, 'NOT_FOUND');
     }
 
     const update: Record<string, unknown> = {};
@@ -834,7 +869,7 @@ router.patch('/:id', writeLimiter, async (req, res, next) => {
       .update(update)
       .eq('id', req.params.id)
       .eq('source_method', 'api')
-      .eq('source_feed_url', `api-key:${apiKeyId}`);
+      .eq('creator_account_id', ownerAccountId);
 
     if (updateError) {
       console.error('[CONTRIBUTE] Update error:', updateError.message);
@@ -888,23 +923,24 @@ router.patch('/series/:seriesId', writeLimiter, async (req, res, next) => {
   try {
     const apiKeyId = req.apiKeyInfo?.id;
     if (!apiKeyId) throw createError('API key required', 401, 'UNAUTHORIZED');
+    const ownerAccountId = requireOwnerAccountId(req);
     validateUuidParam(req.params.seriesId, 'series ID');
 
     const data = validateRequest(updateSeriesSchema, req.body);
     if (Object.keys(data).length === 0) throw createError('No fields to update', 400, 'VALIDATION_ERROR');
 
-    // Ownership: at least one event in this series was created by this API key.
+    // Ownership: at least one event in this series belongs to this account.
     const { data: owned } = await supabaseAdmin
       .from('events')
       .select('id, event_timezone')
       .eq('series_id', req.params.seriesId)
       .eq('source_method', 'api')
-      .eq('source_feed_url', `api-key:${apiKeyId}`)
+      .eq('creator_account_id', ownerAccountId)
       .limit(1)
       .maybeSingle();
 
     if (!owned) {
-      throw createError('Series not found or not owned by this API key', 404, 'NOT_FOUND');
+      throw createError('Series not found or not owned by this account', 404, 'NOT_FOUND');
     }
 
     // Build template update using the Contribute API's field names → DB columns.
@@ -1426,21 +1462,22 @@ router.patch('/events/:id/group', writeLimiter, async (req, res, next) => {
   try {
     const apiKeyId = req.apiKeyInfo?.id;
     if (!apiKeyId) throw createError('API key required', 401, 'UNAUTHORIZED');
+    const ownerAccountId = requireOwnerAccountId(req);
     validateUuidParam(req.params.id, 'event ID');
 
     const schema = z.object({ group_id: z.string().uuid().nullable() });
     const { group_id } = validateRequest(schema, req.body);
 
-    // Verify ownership
+    // Ownership: any key under the same linked account can edit
     const { data: event } = await supabaseAdmin
       .from('events')
       .select('id')
       .eq('id', req.params.id)
       .eq('source_method', 'api')
-      .eq('source_feed_url', `api-key:${apiKeyId}`)
+      .eq('creator_account_id', ownerAccountId)
       .maybeSingle();
 
-    if (!event) throw createError('Event not found or not owned by this API key', 404, 'NOT_FOUND');
+    if (!event) throw createError('Event not found or not owned by this account', 404, 'NOT_FOUND');
 
     // Verify group exists if linking
     if (group_id) {
@@ -1458,7 +1495,7 @@ router.patch('/events/:id/group', writeLimiter, async (req, res, next) => {
       .update({ group_id })
       .eq('id', req.params.id)
       .eq('source_method', 'api')
-      .eq('source_feed_url', `api-key:${apiKeyId}`);
+      .eq('creator_account_id', ownerAccountId);
 
     if (error) throw createError('Failed to update event group', 500, 'SERVER_ERROR');
 

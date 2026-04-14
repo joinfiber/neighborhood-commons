@@ -28,6 +28,15 @@ declare global {
         id: string;
         tier?: string;
         isAdmin?: boolean;
+        /**
+         * The portal_account this key is linked to via api_key_account_links.
+         * For Contribute keys this is the stable ownership identity — it
+         * survives key rotation. Service keys may link to multiple accounts;
+         * `linkedAccountId` here is the first (or only) linked account, used
+         * by Contribute-style ownership checks. Service-tier code that needs
+         * the full set should query api_key_account_links directly.
+         */
+        linkedAccountId?: string;
       };
     }
   }

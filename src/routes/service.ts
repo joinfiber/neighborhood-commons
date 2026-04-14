@@ -1415,6 +1415,103 @@ router.get('/api-keys', serviceLimiter, async (req, res, next) => {
   }
 });
 
+/**
+ * POST /service/api-keys — Issue a new API key linked to a portal account.
+ *
+ * The new key is the credential; the linked account is the stable owner.
+ * Rotation: call this with the same account_id as the existing key, then
+ * revoke the old key (PATCH .../api-keys/:id with status='revoked') when
+ * ready. Editorial control over the account's events follows the account,
+ * not the key — both old and new keys can edit the same events while
+ * both are active.
+ *
+ * Issuing a Contribute-tier key without account_id is forbidden: that
+ * was the bug that made key rotation silently destroy ownership. Service
+ * keys may be issued without account_id (admin keys span accounts).
+ */
+router.post('/api-keys', serviceLimiter, async (req, res, next) => {
+  try {
+    if (!req.apiKeyInfo?.isAdmin) {
+      throw createError('Admin access required', 403, 'FORBIDDEN');
+    }
+    const schema = z.object({
+      name: z.string().min(1).max(100),
+      contact_email: z.string().email().max(200),
+      contributor_tier: z.enum(['pending', 'verified', 'trusted', 'service']).default('verified'),
+      account_id: z.string().uuid().optional(),
+      url: z.string().url().max(500).optional(),
+      rate_limit_per_hour: z.number().int().min(1).max(100000).default(1000),
+      is_admin: z.boolean().default(false),
+    });
+    const data = validateRequest(schema, req.body);
+
+    // Invariant: Contribute keys (any non-service tier) MUST be linked to an
+    // account at issuance. Otherwise PATCH/DELETE return 403 KEY_NOT_LINKED
+    // and we recreate the rotation bug we just fixed.
+    const isServiceTier = data.contributor_tier === 'service';
+    if (!isServiceTier && !data.account_id) {
+      throw createError(
+        'account_id is required for non-service API keys. Without a linked account, the key cannot edit or delete the events it creates.',
+        400,
+        'ACCOUNT_REQUIRED',
+      );
+    }
+
+    // Verify the account exists if provided
+    if (data.account_id) {
+      const { data: account } = await supabaseAdmin
+        .from('portal_accounts')
+        .select('id, status')
+        .eq('id', data.account_id)
+        .maybeSingle();
+      if (!account) throw createError('Account not found', 404, 'NOT_FOUND');
+    }
+
+    // Generate the raw key + hash. The raw key is returned ONCE in this
+    // response and never recoverable — caller must store it immediately.
+    const { randomBytes, createHash } = await import('crypto');
+    const rawKey = 'nc_' + randomBytes(16).toString('hex');
+    const keyHash = createHash('sha256').update(rawKey).digest('hex');
+    const keyPrefix = rawKey.substring(0, 12);
+
+    const { data: newKey, error: insertError } = await supabaseAdmin
+      .from('api_keys')
+      .insert({
+        key_hash: keyHash,
+        key_prefix: keyPrefix,
+        name: data.name,
+        contact_email: data.contact_email,
+        contributor_tier: data.contributor_tier,
+        url: data.url || null,
+        rate_limit_per_hour: data.rate_limit_per_hour,
+        status: 'active',
+        is_admin: data.is_admin,
+      })
+      .select('id, key_prefix, name, contributor_tier, is_admin, created_at')
+      .single();
+
+    if (insertError || !newKey) throw createError('Failed to create API key', 500, 'SERVER_ERROR');
+
+    if (data.account_id) {
+      const { error: linkError } = await supabaseAdmin
+        .from('api_key_account_links')
+        .insert({ api_key_id: newKey.id, portal_account_id: data.account_id });
+      if (linkError) {
+        // Roll back the key — partial state is worse than failure
+        await supabaseAdmin.from('api_keys').delete().eq('id', newKey.id);
+        throw createError('Failed to link API key to account', 500, 'SERVER_ERROR');
+      }
+    }
+
+    console.log(`[SERVICE] API key ${newKey.id} created (${newKey.contributor_tier}) linked to account ${data.account_id || '<none>'}`);
+    res.status(201).json({
+      api_key: { ...newKey, account_id: data.account_id || null },
+      key: rawKey,
+      warning: 'Store this key immediately — it is not recoverable.',
+    });
+  } catch (err) { next(err); }
+});
+
 /** PATCH /service/api-keys/:id — Update API key tier, name, status, or contact email */
 router.patch('/api-keys/:id', serviceLimiter, async (req, res, next) => {
   try {

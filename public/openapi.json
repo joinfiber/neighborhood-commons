@@ -792,7 +792,7 @@
     "/contribute": {
       "post": {
         "summary": "Contribute an event",
-        "description": "Submit a single event from an external app or data source. Uses Neighborhood API field names (name, start, cost). Events from pending-tier keys go into review queue; verified/trusted keys auto-publish. Supports recurring events via RRULE. Image URLs are downloaded and re-encoded through Sharp.",
+        "description": "Submit a single event from an external app or data source. Uses Neighborhood API field names (name, start, cost). Events from pending-tier keys go into review queue; verified/trusted keys auto-publish. Supports recurring events via RRULE. Image URLs are downloaded and re-encoded through Sharp.\n\n**Ownership.** The created event is owned by the portal_account linked to your API key (NOT by the key itself). PATCH/DELETE on this event will succeed for any active key linked to the same account — rotation does not destroy editorial control. Keys with no linked account cannot create events (403 KEY_NOT_LINKED) — use `POST /service/api-keys` with an `account_id` to issue properly-linked keys.",
         "operationId": "contributeEvent",
         "security": [{ "contributeApiKey": [] }],
         "requestBody": {
@@ -1832,6 +1832,57 @@
           },
           "401": { "$ref": "#/components/responses/Unauthorized" },
           "403": { "description": "Admin access required" }
+        }
+      },
+      "post": {
+        "summary": "Issue API key (service/admin)",
+        "description": "Create a new API key. The key is the credential; the `account_id` it links to is the stable owner of any events it creates. Rotation: issue a new key with the same `account_id` as the old one, then revoke the old key — both keys can edit the same events while both are active. Non-service tiers REQUIRE `account_id` (without a linked account, PATCH/DELETE on created events would fail with KEY_NOT_LINKED). Returns the raw key string ONCE — store it immediately, it is unrecoverable.",
+        "operationId": "serviceCreateApiKey",
+        "security": [{ "serviceApiKey": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": {
+            "type": "object",
+            "required": ["name", "contact_email"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+              "contact_email": { "type": "string", "format": "email", "maxLength": 200 },
+              "contributor_tier": { "type": "string", "enum": ["pending", "verified", "trusted", "service"], "default": "verified" },
+              "account_id": { "type": "string", "format": "uuid", "description": "Required for non-service tiers. The portal_account that owns events created with this key." },
+              "url": { "type": "string", "format": "uri", "maxLength": 500 },
+              "rate_limit_per_hour": { "type": "integer", "minimum": 1, "maximum": 100000, "default": 1000 },
+              "is_admin": { "type": "boolean", "default": false }
+            }
+          } } }
+        },
+        "responses": {
+          "201": {
+            "description": "Key created. The `key` field is the raw secret — store it immediately.",
+            "content": { "application/json": { "schema": {
+              "type": "object",
+              "required": ["api_key", "key"],
+              "properties": {
+                "api_key": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string", "format": "uuid" },
+                    "key_prefix": { "type": "string" },
+                    "name": { "type": "string" },
+                    "contributor_tier": { "type": "string" },
+                    "is_admin": { "type": "boolean" },
+                    "account_id": { "type": ["string", "null"], "format": "uuid" },
+                    "created_at": { "type": "string", "format": "date-time" }
+                  }
+                },
+                "key": { "type": "string", "description": "The raw API key — pass as X-API-Key. Returned ONCE; not recoverable." },
+                "warning": { "type": "string" }
+              }
+            } } }
+          },
+          "400": { "description": "Validation error or ACCOUNT_REQUIRED for non-service tiers without account_id" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "description": "Admin access required" },
+          "404": { "description": "account_id not found" }
         }
       }
     },

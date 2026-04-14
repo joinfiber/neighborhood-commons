@@ -74,7 +74,20 @@ export async function requireApiKey(req: Request, res: Response, next: NextFunct
       return;
     }
 
-    req.apiKeyInfo = { id: keyInfo.id, tier: keyInfo.contributor_tier };
+    // Resolve the key's linked portal account (if any). For Contribute keys
+    // this is the stable ownership identity — survives key rotation.
+    const { data: link } = await supabaseAdmin
+      .from('api_key_account_links')
+      .select('portal_account_id')
+      .eq('api_key_id', keyInfo.id)
+      .limit(1)
+      .maybeSingle();
+
+    req.apiKeyInfo = {
+      id: keyInfo.id,
+      tier: keyInfo.contributor_tier,
+      linkedAccountId: link?.portal_account_id || undefined,
+    };
     next();
   } catch {
     res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'API key validation failed' } });
