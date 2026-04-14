@@ -13,7 +13,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { createEventSchema } from '../src/routes/service.js';
+import { createEventSchema, friendlyToPortalInput } from '../src/routes/service.js';
 
 const ACCOUNT_ID = '11111111-1111-1111-1111-111111111111';
 
@@ -87,6 +87,51 @@ describe('ServiceEventInput — friendly-shape', () => {
       timezone: 'Not/A_Real_Zone',
     });
     expect(result.success).toBe(false);
+  });
+});
+
+describe('friendlyToPortalInput — server-controlled provenance', () => {
+  it('hardcodes source_method="api" regardless of caller input', () => {
+    const parsed = createEventSchema.parse(minimumFriendly());
+    const { portal } = friendlyToPortalInput(parsed, "Johnny's Bar");
+    expect(portal.source_method).toBe('api');
+  });
+
+  it('derives source_publisher from the linked account business_name, not the caller', () => {
+    const parsed = createEventSchema.parse(minimumFriendly());
+    const { portal } = friendlyToPortalInput(parsed, "Johnny's Bar");
+    expect(portal.source_publisher).toBe("Johnny's Bar");
+  });
+
+  it('leaves source_publisher undefined when the account has no business_name', () => {
+    const parsed = createEventSchema.parse(minimumFriendly());
+    const { portal } = friendlyToPortalInput(parsed, null);
+    expect(portal.source_publisher).toBeUndefined();
+  });
+});
+
+describe('ServiceEventInput — source_method hygiene', () => {
+  it('does not accept source_method from the caller (stripped by schema)', () => {
+    const result = createEventSchema.safeParse({
+      ...minimumFriendly(),
+      source_method: 'api',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      // Field must not survive validation — it is NOT caller-overridable.
+      expect('source_method' in result.data).toBe(false);
+    }
+  });
+
+  it('does not accept source_publisher from the caller (stripped by schema)', () => {
+    const result = createEventSchema.safeParse({
+      ...minimumFriendly(),
+      source_publisher: 'attacker-brand',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect('source_publisher' in result.data).toBe(false);
+    }
   });
 });
 

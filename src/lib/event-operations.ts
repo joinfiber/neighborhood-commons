@@ -149,7 +149,7 @@ export function portalInputToInsert(
     capacity?: number | null | undefined;
     rsvp?: 'recommended' | 'required' | null | undefined;
     image_focal_y?: number | undefined;
-    source_method?: 'manual' | 'auto' | undefined;
+    source_method?: 'portal' | 'api' | 'feed' | 'admin' | 'merrie' | undefined;
     source_publisher?: string | undefined;
     first_party?: boolean | undefined;
   },

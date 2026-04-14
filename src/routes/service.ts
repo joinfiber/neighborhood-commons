@@ -546,8 +546,8 @@ export const createEventSchema = z.object({
   rsvp: z.enum(['recommended', 'required']).nullable().default(null),
   open_window: z.boolean().default(false),
   image_focal_y: z.number().min(0).max(1).optional(),
-  source_method: z.enum(['manual', 'auto']).optional(),
-  source_publisher: z.string().max(100).optional(),
+  // source_method is NOT caller-overridable — hardcoded to 'api' on the Service path.
+  // source_publisher is NOT caller-overridable — derived from the linked account's business_name.
   first_party: z.boolean().optional(),
   venue_id: z.string().uuid().optional(),
   external_id: z.string().max(500).optional(),
@@ -587,7 +587,10 @@ type CreateEventInput = z.infer<typeof createEventSchema>;
  * Decompose a friendly-shape Service input into the portal-style fields
  * `portalInputToInsert` expects. DB columns are internal; wire shape is friendly.
  */
-function friendlyToPortalInput(data: CreateEventInput): {
+export function friendlyToPortalInput(
+  data: CreateEventInput,
+  sourcePublisher: string | null,
+): {
   portal: Parameters<typeof portalInputToInsert>[0];
   event_date: string;
   start_time: string;
@@ -619,8 +622,8 @@ function friendlyToPortalInput(data: CreateEventInput): {
       capacity: data.capacity,
       rsvp: data.rsvp,
       image_focal_y: data.image_focal_y,
-      source_method: data.source_method,
-      source_publisher: data.source_publisher,
+      source_method: 'api',
+      source_publisher: sourcePublisher ?? undefined,
       first_party: data.first_party,
     },
     event_date: eventDate,
@@ -736,7 +739,7 @@ router.post('/events', serviceLimiter, async (req, res, next) => {
     // Verify account exists and fetch its venue coordinates
     const { data: account } = await supabaseAdmin
       .from('portal_accounts')
-      .select('id, auth_user_id, default_address, default_latitude, default_longitude')
+      .select('id, auth_user_id, business_name, default_address, default_latitude, default_longitude')
       .eq('id', data.account_id)
       .maybeSingle();
 
@@ -746,7 +749,7 @@ router.post('/events', serviceLimiter, async (req, res, next) => {
     const validatedTags = data.tags ? validateTags(data.tags, data.category) : [];
 
     const { portal, event_date: eventDate, start_time: startTime, end_time: endTime }
-      = friendlyToPortalInput(data);
+      = friendlyToPortalInput(data, (account.business_name as string | null) ?? null);
     portal.tags = validatedTags;
 
     const insert = portalInputToInsert(portal, data.account_id, adminUserId);
