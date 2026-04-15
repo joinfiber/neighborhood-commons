@@ -822,6 +822,17 @@ router.post('/events', serviceLimiter, async (req, res, next) => {
       );
 
       console.log(`[SERVICE] Series created: ${data.name} (${instances.length} instances)`);
+
+      // Attach image to every instance (fire-and-forget — image failure must not fail publish)
+      if (data.image_url) {
+        const imageUrl = data.image_url;
+        for (const inst of instances) {
+          void downloadAndAttachImage(inst.id, imageUrl)
+            .then(() => console.log(`[SERVICE] Image attached to ${inst.id}`))
+            .catch((err) => console.error(`[SERVICE] Image attach failed for ${inst.id}:`, err instanceof Error ? err.message : err));
+        }
+      }
+
       res.status(201).json({
         series_count: instances.length,
         series_id: instances[0] ? (await supabaseAdmin.from('events').select('series_id').eq('id', instances[0].id).maybeSingle()).data?.series_id : null,
@@ -853,6 +864,14 @@ router.post('/events', serviceLimiter, async (req, res, next) => {
           console.error('[SERVICE] Webhook dispatch error:', err instanceof Error ? err.message : err);
         }
       })();
+
+      // Attach image (fire-and-forget — image failure must not fail publish)
+      if (data.image_url) {
+        const imageUrl = data.image_url;
+        void downloadAndAttachImage(event.id, imageUrl)
+          .then(() => console.log(`[SERVICE] Image attached to ${event.id}`))
+          .catch((err) => console.error(`[SERVICE] Image attach failed for ${event.id}:`, err instanceof Error ? err.message : err));
+      }
 
       console.log(`[SERVICE] Event created: ${data.name}`);
       res.status(201).json({ event: toPortalEvent(event) });
