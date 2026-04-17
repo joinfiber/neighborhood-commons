@@ -16,6 +16,7 @@ import { auditPortalAction } from "../../lib/audit.js";
 import { writeLimiter } from "../../middleware/rate-limit.js";
 import { parseIcalFeed, parseEventbritePage, detectFormat, type ImportedEvent } from "../../lib/import-parsers.js";
 import { validateFeedUrl } from "../../lib/url-validation.js";
+import { safeFetch } from "../../lib/safe-fetch.js";
 import { toTimestamptz, getAdminUserId } from "../../lib/event-operations.js";
 import { getPortalAccount, getAuditActor } from "../../lib/portal-helpers.js";
 
@@ -64,7 +65,7 @@ async function safeFetchFeed(url: string): Promise<{ body: string; contentType: 
   const timeout = setTimeout(() => controller.abort(), 10_000);
 
   try {
-    const resp = await fetch(url, {
+    const resp = await safeFetch(url, {
       signal: controller.signal,
       headers: { 'User-Agent': 'NeighborhoodCommons/1.0 (event-import)' },
     });

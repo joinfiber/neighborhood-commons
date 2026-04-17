@@ -22,6 +22,13 @@ const envSchema = z.object({
   // IP Filtering
   IP_FILTER_ENABLED: z.enum(['true', 'false']).default('true'),
 
+  // SSRF hardening — when '1', outbound fetches to user-supplied URLs use
+  // a dispatcher that re-resolves the hostname at connect time and rejects
+  // any resolution landing on a private/reserved IP. Defeats DNS rebinding.
+  // Kept behind a flag for staged rollout: the first deploy after landing
+  // this code runs with it off so any connect-hook bug surfaces as no regression.
+  SSRF_STRICT: z.enum(['0', '1']).default('0'),
+
   // Cloudflare Turnstile CAPTCHA (portal registration)
   TURNSTILE_SECRET_KEY: z.string().min(1).optional(),
   CAPTCHA_ENABLED: z.enum(['true', 'false']).default('false'),
@@ -93,6 +100,7 @@ export const config = {
   security: {
     auditSalt: env.AUDIT_SALT,
     ipFilterEnabled: env.IP_FILTER_ENABLED === 'true',
+    ssrfStrict: env.SSRF_STRICT === '1',
   },
 
   captcha: {

@@ -16,6 +16,7 @@ import { createHmac } from 'crypto';
 import { supabaseAdmin } from './supabase.js';
 import { toNeighborhoodEvent, type NeighborhoodEvent, type PortalEventRow } from './event-transform.js';
 import { validateWebhookUrl } from './url-validation.js';
+import { safeFetch } from './safe-fetch.js';
 import { decryptSecret, isEncryptionConfigured } from './webhook-crypto.js';
 
 const DELIVERY_TIMEOUT_MS = 10_000;
@@ -193,8 +194,9 @@ async function deliverWebhook(
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), DELIVERY_TIMEOUT_MS);
 
-    // redirect: 'error' — webhooks must not redirect (signature verification would fail)
-    const response = await fetch(sub.url, {
+    // redirect: 'error' — webhooks must not redirect (signature verification would fail).
+    // safeFetch additionally routes through the SSRF-strict dispatcher when enabled.
+    const response = await safeFetch(sub.url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -203,7 +205,6 @@ async function deliverWebhook(
         'User-Agent': 'Neighborhood-Commons/1.0',
       },
       body,
-      redirect: 'error',
       signal: controller.signal,
     });
 
@@ -269,7 +270,7 @@ async function deliverRawWebhook(
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), DELIVERY_TIMEOUT_MS);
 
-    const response = await fetch(sub.url, {
+    const response = await safeFetch(sub.url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -278,7 +279,6 @@ async function deliverRawWebhook(
         'User-Agent': 'Neighborhood-Commons/1.0',
       },
       body,
-      redirect: 'error',
       signal: controller.signal,
     });
 

@@ -28,6 +28,7 @@ import {
 import { createEventSeries, deleteSeriesEvents, updateSeriesFutureInstances } from '../lib/event-series.js';
 import { processAndUploadImage, downloadAndAttachImage } from '../lib/image-processing.js';
 import { validateFeedUrl } from '../lib/url-validation.js';
+import { safeFetch } from '../lib/safe-fetch.js';
 import { invalidateApprovedDomainsCache } from '../lib/url-sanitizer.js';
 import { nominatimGeocode } from '../lib/geocoding.js';
 import { config } from '../config.js';
@@ -1289,10 +1290,10 @@ router.post('/accounts/:id/cover-image', imageBodyLimit, serviceLimiter, async (
         throw createError('image_url must be a valid HTTP URL', 400, 'VALIDATION_ERROR');
       }
 
-      // SSRF protection
+      // SSRF protection: upfront hostname/IP check + safeFetch for rebind defense.
       await validateFeedUrl(image_url);
 
-      const response = await fetch(image_url, {
+      const response = await safeFetch(image_url, {
         headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NeighborhoodCommons/1.0)' },
         signal: AbortSignal.timeout(10_000),
       });
@@ -1339,10 +1340,10 @@ router.post('/accounts/:id/logo', imageBodyLimit, serviceLimiter, async (req, re
         throw createError('image_url must be a valid HTTP URL', 400, 'VALIDATION_ERROR');
       }
 
-      // SSRF protection
+      // SSRF protection: upfront hostname/IP check + safeFetch for rebind defense.
       await validateFeedUrl(image_url);
 
-      const response = await fetch(image_url, {
+      const response = await safeFetch(image_url, {
         headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NeighborhoodCommons/1.0)' },
         signal: AbortSignal.timeout(10_000),
       });
@@ -1969,7 +1970,10 @@ router.post('/migrate-image-urls', serviceLimiter, async (req, res, next) => {
         // External URL (Google, gstatic, etc.) — download, re-encode, upload to R2
         if (url.startsWith('http')) {
           try {
-            const response = await fetch(url, {
+            // SSRF protection: these URLs come from portal_accounts rows that
+            // were populated from external sources; treat as untrusted input.
+            await validateFeedUrl(url);
+            const response = await safeFetch(url, {
               headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NeighborhoodCommons/1.0)' },
               signal: AbortSignal.timeout(10_000),
             });
