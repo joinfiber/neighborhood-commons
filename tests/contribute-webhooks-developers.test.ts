@@ -944,3 +944,217 @@ describe('Service API — admin lockdown', () => {
     expect(res.status).not.toBe(403);
   });
 });
+
+// =============================================================================
+// CONTRIBUTE API — GROUP WRITE OWNERSHIP (S1 fix)
+// =============================================================================
+//
+// Before this fix, any pending-tier key (self-service via email OTP) could
+// PATCH any group, add/remove venue links, and rewrite name/website/coords.
+// These tests lock that down: non-service keys must be linked to the owner
+// account; NULL-owned groups are writable only by service-tier.
+// =============================================================================
+
+describe('Contribute API — group write ownership', () => {
+  const TARGET_GROUP_ID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+  const TARGET_VENUE_ID = 'b2c3d4e5-f6a7-8901-bcde-f12345678901';
+
+  it('rejects PATCH /groups/:id when caller is not linked to owner account', async () => {
+    // Calling key linked to account-uuid-1; group owned by account-uuid-2
+    mockResponses.set('api_keys', {
+      data: { id: 'key-uuid-1', contributor_tier: 'pending' },
+      error: null,
+    });
+    mockResponses.set('api_key_account_links', {
+      data: { portal_account_id: 'account-uuid-1' },
+      error: null,
+    });
+    mockResponses.set('groups', {
+      data: { id: TARGET_GROUP_ID, portal_account_id: 'account-uuid-2' },
+      error: null,
+    });
+
+    const res = await fetch(`${baseUrl}/api/v1/contribute/groups/${TARGET_GROUP_ID}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': VALID_API_KEY },
+      body: JSON.stringify({ name: 'LULZ', website: 'http://evil.example' }),
+    });
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error.code).toBe('FORBIDDEN');
+  });
+
+  it('rejects PATCH /groups/:id on operator-owned (NULL) groups from non-service keys', async () => {
+    // Non-service key, group has NULL portal_account_id — only service tier may write
+    mockResponses.set('api_keys', {
+      data: { id: 'key-uuid-1', contributor_tier: 'verified' },
+      error: null,
+    });
+    mockResponses.set('api_key_account_links', {
+      data: { portal_account_id: 'account-uuid-1' },
+      error: null,
+    });
+    mockResponses.set('groups', {
+      data: { id: TARGET_GROUP_ID, portal_account_id: null },
+      error: null,
+    });
+
+    const res = await fetch(`${baseUrl}/api/v1/contribute/groups/${TARGET_GROUP_ID}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': VALID_API_KEY },
+      body: JSON.stringify({ name: 'LULZ' }),
+    });
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error.code).toBe('FORBIDDEN');
+  });
+
+  it('rejects PATCH /groups/:id from unlinked key with KEY_NOT_LINKED', async () => {
+    mockResponses.set('api_keys', {
+      data: { id: 'key-uuid-1', contributor_tier: 'pending' },
+      error: null,
+    });
+    mockResponses.set('api_key_account_links', { data: null, error: null });
+    mockResponses.set('groups', {
+      data: { id: TARGET_GROUP_ID, portal_account_id: 'account-uuid-2' },
+      error: null,
+    });
+
+    const res = await fetch(`${baseUrl}/api/v1/contribute/groups/${TARGET_GROUP_ID}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': VALID_API_KEY },
+      body: JSON.stringify({ name: 'LULZ' }),
+    });
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error.code).toBe('KEY_NOT_LINKED');
+  });
+
+  it('returns 404 when PATCH /groups/:id targets a non-existent group', async () => {
+    mockResponses.set('api_keys', {
+      data: { id: 'key-uuid-1', contributor_tier: 'verified' },
+      error: null,
+    });
+    mockResponses.set('api_key_account_links', {
+      data: { portal_account_id: 'account-uuid-1' },
+      error: null,
+    });
+    mockResponses.set('groups', { data: null, error: null });
+
+    const res = await fetch(`${baseUrl}/api/v1/contribute/groups/${TARGET_GROUP_ID}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': VALID_API_KEY },
+      body: JSON.stringify({ name: 'New name' }),
+    });
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.error.code).toBe('NOT_FOUND');
+  });
+
+  it('allows PATCH /groups/:id when caller is linked to the owner account', async () => {
+    mockResponses.set('api_keys', {
+      data: { id: 'key-uuid-1', contributor_tier: 'verified' },
+      error: null,
+    });
+    mockResponses.set('api_key_account_links', {
+      data: { portal_account_id: 'account-uuid-1' },
+      error: null,
+    });
+    mockResponses.set('groups', {
+      data: { id: TARGET_GROUP_ID, portal_account_id: 'account-uuid-1', name: 'Renamed', slug: 's', type: 'business', status: 'active' },
+      error: null,
+    });
+
+    const res = await fetch(`${baseUrl}/api/v1/contribute/groups/${TARGET_GROUP_ID}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': VALID_API_KEY },
+      body: JSON.stringify({ name: 'Renamed' }),
+    });
+    // Ownership check passes; any downstream mock behavior is fine as long as NOT 403
+    expect(res.status).not.toBe(403);
+  });
+
+  it('allows PATCH /groups/:id from service-tier key on a NULL-owned group', async () => {
+    mockResponses.set('api_keys', {
+      data: { id: 'svc-key-uuid', contributor_tier: 'service' },
+      error: null,
+    });
+    // Service keys may have a link or not — either way ownership check bypasses
+    mockResponses.set('api_key_account_links', { data: null, error: null });
+    mockResponses.set('groups', {
+      data: { id: TARGET_GROUP_ID, portal_account_id: null, name: 'x', slug: 's', type: 'business', status: 'active' },
+      error: null,
+    });
+
+    const res = await fetch(`${baseUrl}/api/v1/contribute/groups/${TARGET_GROUP_ID}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': SERVICE_KEY },
+      body: JSON.stringify({ name: 'Operator-set name' }),
+    });
+    expect(res.status).not.toBe(403);
+  });
+
+  it('rejects POST /groups/:id/venues when caller is not linked to owner account', async () => {
+    mockResponses.set('api_keys', {
+      data: { id: 'key-uuid-1', contributor_tier: 'verified' },
+      error: null,
+    });
+    mockResponses.set('api_key_account_links', {
+      data: { portal_account_id: 'account-uuid-1' },
+      error: null,
+    });
+    mockResponses.set('groups', {
+      data: { id: TARGET_GROUP_ID, portal_account_id: 'account-uuid-2' },
+      error: null,
+    });
+
+    const res = await fetch(`${baseUrl}/api/v1/contribute/groups/${TARGET_GROUP_ID}/venues`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': VALID_API_KEY },
+      body: JSON.stringify({ venue_name: 'Hijacked Venue' }),
+    });
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error.code).toBe('FORBIDDEN');
+  });
+
+  it('rejects DELETE /groups/:groupId/venues/:venueId when caller does not own the group', async () => {
+    mockResponses.set('api_keys', {
+      data: { id: 'key-uuid-1', contributor_tier: 'verified' },
+      error: null,
+    });
+    mockResponses.set('api_key_account_links', {
+      data: { portal_account_id: 'account-uuid-1' },
+      error: null,
+    });
+    mockResponses.set('groups', {
+      data: { id: TARGET_GROUP_ID, portal_account_id: 'account-uuid-2' },
+      error: null,
+    });
+
+    const res = await fetch(
+      `${baseUrl}/api/v1/contribute/groups/${TARGET_GROUP_ID}/venues/${TARGET_VENUE_ID}`,
+      { method: 'DELETE', headers: { 'X-API-Key': VALID_API_KEY } },
+    );
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error.code).toBe('FORBIDDEN');
+  });
+
+  it('rejects POST /groups from a non-service key with no linked account', async () => {
+    mockResponses.set('api_keys', {
+      data: { id: 'key-uuid-1', contributor_tier: 'pending' },
+      error: null,
+    });
+    mockResponses.set('api_key_account_links', { data: null, error: null });
+
+    const res = await fetch(`${baseUrl}/api/v1/contribute/groups`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': VALID_API_KEY },
+      body: JSON.stringify({ name: 'x', slug: 'x', type: 'business', city: 'Philadelphia' }),
+    });
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error.code).toBe('KEY_NOT_LINKED');
+  });
+});
