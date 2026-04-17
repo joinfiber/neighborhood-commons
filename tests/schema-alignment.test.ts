@@ -122,8 +122,7 @@ const SCHEMA: Record<string, string[]> = {
     'status', 'requested_at', 'reviewed_at', 'reviewed_by',
   ],
   // Ingestion tables (newsletter_sources, newsletter_emails, event_candidates,
-  // feed_sources) exist in the database but are no longer referenced by code
-  // in this repo. They're managed by external admin tools via the Service API.
+  // feed_sources) were dropped by migration 060. Ingestion now lives in Fiber.
 };
 
 // ---------------------------------------------------------------------------
@@ -202,7 +201,7 @@ function extractColumnRefs(filePath: string): ColumnRef[] {
     // Match .select('col1, col2, ...') — extract individual column names
     const selectMatch = line.match(/\.select\(['"]([^'"]+)['"]/);
     if (selectMatch) {
-      // Strip joined table references: "region:regions(name, slug)" and "newsletter_emails(subject, ...)" → ""
+      // Strip joined table references: "region:regions(name, slug)" and "group:groups(slug, name)" → ""
       const selectStr = selectMatch[1].replace(/\w+(?::\w+)?\s*\([^)]*\)/g, '');
       for (const part of selectStr.split(',')) {
         const trimmed = part.trim();
