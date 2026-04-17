@@ -31,42 +31,46 @@ import { config } from '../config.js';
 import { isPrivateIPv4, isPrivateIPv6 } from './url-validation.js';
 
 /**
- * Custom DNS lookup used by the SSRF-strict dispatcher. Resolves the hostname
- * normally, then rejects the connection if the resolved IP is private.
- * This runs for every TCP connect undici makes through the Agent.
+ * Custom DNS lookup used by the SSRF-strict dispatcher. Resolves the hostname,
+ * rejects the entire lookup if *any* answer is a private/reserved IP.
  *
- * Signature matches undici's `LookupFunction`. We force `all: false` when
- * delegating to `dns.lookup` so the callback always receives a single address.
+ * Undici calls connect.lookup with `all: true` and expects a `LookupAddress[]`
+ * response. We honor that — and, as belt-and-braces, refuse the whole answer
+ * if even one address in the set is private, since a rebind attacker might
+ * mix a public and a private address in the same response.
  */
+type LookupAddress = { address: string; family: number };
 type LookupCallback = (
   err: NodeJS.ErrnoException | null,
-  address: string,
-  family: number,
+  addresses: LookupAddress[],
 ) => void;
 
 function ssrfSafeLookup(
   hostname: string,
-  options: { family?: number; hints?: number },
+  options: { family?: number; hints?: number; all?: boolean },
   callback: LookupCallback,
 ): void {
-  // `all: false` guarantees dnsLookup's callback receives (err, string, number)
-  dnsLookup(hostname, { family: options.family, hints: options.hints, all: false }, (err, address, family) => {
-    if (err) return callback(err, '', 0);
-    if (family === 4 && isPrivateIPv4(address)) {
-      const e = new Error(
-        `SSRF blocked: ${hostname} resolved to private IPv4 ${address}`,
-      ) as NodeJS.ErrnoException;
-      e.code = 'SSRF_BLOCKED';
-      return callback(e, '', 0);
+  // Always request all addresses, regardless of what undici asks for — the
+  // reject-if-any-private rule demands we see them all.
+  dnsLookup(hostname, { family: options.family, hints: options.hints, all: true }, (err, addresses) => {
+    if (err) return callback(err, []);
+    for (const { address, family } of addresses) {
+      if (family === 4 && isPrivateIPv4(address)) {
+        const e = new Error(
+          `SSRF blocked: ${hostname} resolved to private IPv4 ${address}`,
+        ) as NodeJS.ErrnoException;
+        e.code = 'SSRF_BLOCKED';
+        return callback(e, []);
+      }
+      if (family === 6 && isPrivateIPv6(address)) {
+        const e = new Error(
+          `SSRF blocked: ${hostname} resolved to private IPv6 ${address}`,
+        ) as NodeJS.ErrnoException;
+        e.code = 'SSRF_BLOCKED';
+        return callback(e, []);
+      }
     }
-    if (family === 6 && isPrivateIPv6(address)) {
-      const e = new Error(
-        `SSRF blocked: ${hostname} resolved to private IPv6 ${address}`,
-      ) as NodeJS.ErrnoException;
-      e.code = 'SSRF_BLOCKED';
-      return callback(e, '', 0);
-    }
-    callback(null, address, family);
+    callback(null, addresses);
   });
 }
 
