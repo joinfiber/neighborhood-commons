@@ -1158,3 +1158,122 @@ describe('Contribute API — group write ownership', () => {
     expect(body.error.code).toBe('KEY_NOT_LINKED');
   });
 });
+
+// =============================================================================
+// CONTRIBUTE API — ATOMIC RATE LIMIT (S7, migration 059)
+// =============================================================================
+//
+// The old checkContributeRateLimit was a read-then-write race. It now delegates
+// to reserve_contribute_slot (Postgres RPC) which returns 'ok'|'hourly'|'daily'.
+// These tests lock in the translation layer: each RPC response maps to the
+// correct HTTP status + error code, and errors surface as 500.
+//
+// The atomic-upsert semantics of the SQL itself can only be verified against
+// a real Postgres. This suite covers the handler's interpretation of RPC
+// responses; the SQL correctness is verified manually via migration dry-run
+// and by the RPC's own defensive guards (see migration 059).
+// =============================================================================
+
+describe('Contribute API — atomic rate limit (reserve_contribute_slot)', () => {
+  it('returns 429 HOURLY when the RPC reports hourly limit exceeded', async () => {
+    mockValidApiKey();
+    mockResponses.set('api_keys', {
+      data: { id: 'key-uuid-1', contributor_tier: 'pending', name: 'Rate Tester' },
+      error: null,
+    });
+    mockRpcResponses.set('reserve_contribute_slot', { data: 'hourly', error: null });
+
+    const res = await fetch(`${baseUrl}/api/v1/contribute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': VALID_API_KEY },
+      body: JSON.stringify(VALID_EVENT),
+    });
+    expect(res.status).toBe(429);
+    const body = await res.json();
+    expect(body.error.code).toBe('RATE_LIMIT');
+    expect(body.error.message).toContain('hour');
+  });
+
+  it('returns 429 DAILY when the RPC reports daily limit exceeded', async () => {
+    mockValidApiKey();
+    mockResponses.set('api_keys', {
+      data: { id: 'key-uuid-1', contributor_tier: 'pending', name: 'Rate Tester' },
+      error: null,
+    });
+    mockRpcResponses.set('reserve_contribute_slot', { data: 'daily', error: null });
+
+    const res = await fetch(`${baseUrl}/api/v1/contribute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': VALID_API_KEY },
+      body: JSON.stringify(VALID_EVENT),
+    });
+    expect(res.status).toBe(429);
+    const body = await res.json();
+    expect(body.error.code).toBe('RATE_LIMIT');
+    expect(body.error.message).toContain('day');
+  });
+
+  it('passes through when the RPC reports ok', async () => {
+    mockValidApiKey();
+    mockResponses.set('api_keys', {
+      data: { id: 'key-uuid-1', contributor_tier: 'verified', name: 'Rate Tester' },
+      error: null,
+    });
+    mockRpcResponses.set('reserve_contribute_slot', { data: 'ok', error: null });
+    mockResponses.set('events', {
+      data: { id: 'new-event-uuid', status: 'published' },
+      error: null,
+      count: 0,
+    });
+
+    const res = await fetch(`${baseUrl}/api/v1/contribute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': VALID_API_KEY },
+      body: JSON.stringify(VALID_EVENT),
+    });
+    expect(res.status).toBe(201);
+  });
+
+  it('returns 500 SERVER_ERROR when the RPC itself errors (e.g. migration not run)', async () => {
+    mockValidApiKey();
+    mockResponses.set('api_keys', {
+      data: { id: 'key-uuid-1', contributor_tier: 'pending', name: 'Rate Tester' },
+      error: null,
+    });
+    mockRpcResponses.set('reserve_contribute_slot', {
+      data: null,
+      error: { message: 'function reserve_contribute_slot(text, integer, integer, integer) does not exist' },
+    });
+
+    const res = await fetch(`${baseUrl}/api/v1/contribute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': VALID_API_KEY },
+      body: JSON.stringify(VALID_EVENT),
+    });
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    // Error handler replaces 5xx messages with generic text so we don't
+    // leak the Postgres error to the client.
+    expect(body.error.code).toBe('SERVER_ERROR');
+  });
+
+  it('rejects batch at the handler when RPC reports limit (batch size forwarded as p_count)', async () => {
+    mockValidApiKey();
+    mockResponses.set('api_keys', {
+      data: { id: 'key-uuid-1', contributor_tier: 'pending', name: 'Rate Tester' },
+      error: null,
+    });
+    mockRpcResponses.set('reserve_contribute_slot', { data: 'hourly', error: null });
+
+    const batchOfThree = { events: [VALID_EVENT, VALID_EVENT, VALID_EVENT] };
+
+    const res = await fetch(`${baseUrl}/api/v1/contribute/batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': VALID_API_KEY },
+      body: JSON.stringify(batchOfThree),
+    });
+    expect(res.status).toBe(429);
+    const body = await res.json();
+    expect(body.error.code).toBe('RATE_LIMIT');
+  });
+});
