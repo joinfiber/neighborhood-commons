@@ -18,6 +18,7 @@ import { EVENT_CATEGORIES } from '../lib/categories.js';
 import type { EventCategory } from '../lib/categories.js';
 import { toIso } from '../lib/event-transform.js';
 import { resolveEventImageUrl } from '../lib/helpers.js';
+import { icsEscape, icsSafeUrl } from '../lib/ical.js';
 // Rate limited by global limiter in app.ts — no per-route limiter needed
 
 const router: ReturnType<typeof Router> = Router();
@@ -135,8 +136,6 @@ function singleEventIcs(event: Record<string, unknown>): string {
       return '';
     }
   };
-  const esc = (t: string) => t.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
-
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -147,13 +146,14 @@ function singleEventIcs(event: Record<string, unknown>): string {
     `DTSTART:${fmtDt(event.event_at as string)}`,
   ];
   if (event.end_time) lines.push(`DTEND:${fmtDt(event.end_time as string)}`);
-  lines.push(`SUMMARY:${esc(event.content as string)}`);
-  if (event.description) lines.push(`DESCRIPTION:${esc(event.description as string)}`);
+  lines.push(`SUMMARY:${icsEscape(event.content as string)}`);
+  if (event.description) lines.push(`DESCRIPTION:${icsEscape(event.description as string)}`);
   if (event.place_name) {
     const loc = (event.place_name as string) + ((event.venue_address as string | null) ? ', ' + event.venue_address : '');
-    lines.push(`LOCATION:${esc(loc)}`);
+    lines.push(`LOCATION:${icsEscape(loc)}`);
   }
-  if (event.link_url) lines.push(`URL:${event.link_url}`);
+  const safeUrl = icsSafeUrl(event.link_url as string | null);
+  if (safeUrl) lines.push(`URL:${safeUrl}`);
   lines.push('END:VEVENT', 'END:VCALENDAR');
   return lines.join('\r\n');
 }
@@ -569,8 +569,6 @@ router.get('/venues/:slug/events.ics',async (req, res, next) => {
     const rows = events || [];
     const venueName = account.business_name as string;
 
-    const esc = (t: string) => t.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
-
     const fmtDt = (iso: string) => {
       try {
         return new Date(iso).toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
@@ -585,7 +583,7 @@ router.get('/venues/:slug/events.ics',async (req, res, next) => {
       'PRODID:-//Neighborhood Commons//Events//EN',
       'CALSCALE:GREGORIAN',
       'METHOD:PUBLISH',
-      `X-WR-CALNAME:${esc(venueName)} - ${SITE_NAME}`,
+      `X-WR-CALNAME:${icsEscape(venueName)} - ${SITE_NAME}`,
     ];
 
     for (const row of rows) {
@@ -593,13 +591,14 @@ router.get('/venues/:slug/events.ics',async (req, res, next) => {
       lines.push(`UID:${row.id}@neighborhood-commons.org`);
       lines.push(`DTSTART:${fmtDt(row.event_at as string)}`);
       if (row.end_time) lines.push(`DTEND:${fmtDt(row.end_time as string)}`);
-      lines.push(`SUMMARY:${esc(row.content as string)}`);
-      if (row.description) lines.push(`DESCRIPTION:${esc(row.description as string)}`);
+      lines.push(`SUMMARY:${icsEscape(row.content as string)}`);
+      if (row.description) lines.push(`DESCRIPTION:${icsEscape(row.description as string)}`);
       if (row.place_name) {
         const loc = (row.place_name as string) + ((row.venue_address as string | null) ? ', ' + row.venue_address : '');
-        lines.push(`LOCATION:${esc(loc)}`);
+        lines.push(`LOCATION:${icsEscape(loc)}`);
       }
-      if (row.link_url) lines.push(`URL:${row.link_url}`);
+      const safeUrl = icsSafeUrl(row.link_url as string | null);
+      if (safeUrl) lines.push(`URL:${safeUrl}`);
       if (row.latitude != null && row.longitude != null) {
         lines.push(`GEO:${row.latitude};${row.longitude}`);
       }
