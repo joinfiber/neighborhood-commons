@@ -21,8 +21,9 @@ const BLOCKED_HOSTNAMES = new Set([
 
 /**
  * Check if an IPv4 address is in a private/reserved range.
+ * Exported so safe-fetch can re-validate at connect time (defeats DNS rebinding).
  */
-function isPrivateIPv4(ip: string): boolean {
+export function isPrivateIPv4(ip: string): boolean {
   const parts = ip.split('.').map(Number);
   if (parts.length !== 4 || parts.some((p) => isNaN(p))) return false;
 
@@ -55,8 +56,9 @@ function isPrivateIPv4(ip: string): boolean {
 
 /**
  * Check if an IPv6 address is private/reserved.
+ * Exported so safe-fetch can re-validate at connect time (defeats DNS rebinding).
  */
-function isPrivateIPv6(ip: string): boolean {
+export function isPrivateIPv6(ip: string): boolean {
   const normalized = ip.toLowerCase();
 
   // Loopback ::1

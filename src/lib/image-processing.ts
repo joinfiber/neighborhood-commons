@@ -14,6 +14,7 @@ import { supabaseAdmin } from './supabase.js';
 import { config } from '../config.js';
 import { createError } from '../middleware/error-handler.js';
 import { validateFeedUrl } from './url-validation.js';
+import { safeFetch } from './safe-fetch.js';
 
 export const SUPPORTED_MAGIC_BYTES: Record<string, string> = {
   'ffd8ff': 'image/jpeg',
@@ -81,11 +82,10 @@ export async function downloadAndAttachImage(eventId: string, imageUrl: string):
     return;
   }
 
-  // redirect: 'error' prevents redirect-based SSRF (validated URL redirects to internal IP)
-  const response = await fetch(imageUrl, {
+  // safeFetch: redirect:'error' default + SSRF-strict connect-hook when enabled.
+  const response = await safeFetch(imageUrl, {
     signal: AbortSignal.timeout(10000),
     headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NeighborhoodCommons/1.0)' },
-    redirect: 'error',
   });
 
   if (!response.ok) {

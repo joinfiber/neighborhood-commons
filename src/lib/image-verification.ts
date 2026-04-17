@@ -8,6 +8,7 @@
 
 import { supabaseAdmin } from './supabase.js';
 import { validateFeedUrl } from './url-validation.js';
+import { safeFetch } from './safe-fetch.js';
 
 const BATCH_SIZE = 100;
 const TIMEOUT_MS = 5000;
@@ -48,10 +49,9 @@ export async function verifyEventImages(): Promise<VerifyResult> {
     }
 
     try {
-      const response = await fetch(url, {
+      const response = await safeFetch(url, {
         method: 'HEAD',
         signal: AbortSignal.timeout(TIMEOUT_MS),
-        redirect: 'error',
         headers: { 'User-Agent': 'NeighborhoodCommons/1.0 (image-verify)' },
       });
 
@@ -112,10 +112,9 @@ export async function verifyAccountImages(): Promise<VerifyResult> {
       }
 
       try {
-        const response = await fetch(url, {
+        const response = await safeFetch(url, {
           method: 'HEAD',
           signal: AbortSignal.timeout(TIMEOUT_MS),
-          redirect: 'error',
           headers: { 'User-Agent': 'NeighborhoodCommons/1.0 (image-verify)' },
         });
 
