@@ -175,6 +175,38 @@ function requireOwnerAccountId(req: Request): string {
   return accountId;
 }
 
+/**
+ * Group write access check — matches Contribute ownership doctrine.
+ *
+ * Service-tier keys bypass (platform operators have full CRUD on groups).
+ * Non-service keys must be linked to the group's owner account via
+ * api_key_account_links. Groups with NULL portal_account_id are operator-owned
+ * and writable only by service keys. See migration 058.
+ *
+ * The error message is intentionally uniform for "wrong owner" vs "operator-
+ * owned" to avoid leaking ownership state via 403 vs 404.
+ */
+function requireGroupWriteAccess(req: Request, group: { portal_account_id: string | null }): void {
+  if (req.apiKeyInfo?.tier === 'service') return;
+
+  const linkedAccountId = req.apiKeyInfo?.linkedAccountId;
+  if (!linkedAccountId) {
+    throw createError(
+      'This API key is not linked to an account. Contact an operator to link it before modifying groups.',
+      403,
+      'KEY_NOT_LINKED',
+    );
+  }
+
+  if (group.portal_account_id !== linkedAccountId) {
+    throw createError(
+      'You do not have permission to modify this group',
+      403,
+      'FORBIDDEN',
+    );
+  }
+}
+
 /** Look up the API key's contributor tier, name, and URL */
 async function getKeyInfo(apiKeyId: string): Promise<{ tier: string; name: string; url: string | null }> {
   const { data } = await supabaseAdmin
@@ -1255,6 +1287,20 @@ router.post('/groups', writeLimiter, async (req, res, next) => {
     const apiKeyId = req.apiKeyInfo?.id;
     if (!apiKeyId) throw createError('API key required', 401, 'UNAUTHORIZED');
 
+    // Non-service keys must be linked to an owning account — the new group is
+    // attributed to that account so the same caller can PATCH it later.
+    // Service-tier keys may create unattributed (operator-owned) groups.
+    const isService = req.apiKeyInfo?.tier === 'service';
+    const linkedAccountId = req.apiKeyInfo?.linkedAccountId;
+    if (!isService && !linkedAccountId) {
+      throw createError(
+        'This API key is not linked to an account. Contact an operator to link it before creating groups.',
+        403,
+        'KEY_NOT_LINKED',
+      );
+    }
+    const ownerAccountId = linkedAccountId ?? null;
+
     const data = validateRequest(createGroupSchema, req.body);
 
     // Dedup by slug
@@ -1288,6 +1334,7 @@ router.post('/groups', writeLimiter, async (req, res, next) => {
         source_method: 'api',
         source_publisher: (await getKeyInfo(apiKeyId)).name,
         status: 'active',
+        portal_account_id: ownerAccountId,
       })
       .select('id, name, slug, type, status')
       .single();
@@ -1359,6 +1406,16 @@ router.patch('/groups/:id', writeLimiter, async (req, res, next) => {
     if (!apiKeyId) throw createError('API key required', 401, 'UNAUTHORIZED');
     validateUuidParam(req.params.id, 'group ID');
 
+    // Load ownership before trusting the request body.
+    const { data: existing } = await supabaseAdmin
+      .from('groups')
+      .select('id, portal_account_id')
+      .eq('id', req.params.id)
+      .maybeSingle();
+
+    if (!existing) throw createError('Group not found', 404, 'NOT_FOUND');
+    requireGroupWriteAccess(req, existing);
+
     const data = validateRequest(updateGroupSchema, req.body);
 
     const update: Record<string, unknown> = {};
@@ -1402,6 +1459,15 @@ router.post('/groups/:id/venues', writeLimiter, async (req, res, next) => {
     if (!apiKeyId) throw createError('API key required', 401, 'UNAUTHORIZED');
     validateUuidParam(req.params.id, 'group ID');
 
+    const { data: group } = await supabaseAdmin
+      .from('groups')
+      .select('id, portal_account_id')
+      .eq('id', req.params.id)
+      .maybeSingle();
+
+    if (!group) throw createError('Group not found', 404, 'NOT_FOUND');
+    requireGroupWriteAccess(req, group);
+
     const data = validateRequest(groupVenueSchema, req.body);
 
     const { data: venue, error } = await supabaseAdmin
@@ -1439,6 +1505,15 @@ router.delete('/groups/:groupId/venues/:venueId', writeLimiter, async (req, res,
     if (!apiKeyId) throw createError('API key required', 401, 'UNAUTHORIZED');
     validateUuidParam(req.params.groupId, 'group ID');
     validateUuidParam(req.params.venueId, 'venue ID');
+
+    const { data: group } = await supabaseAdmin
+      .from('groups')
+      .select('id, portal_account_id')
+      .eq('id', req.params.groupId)
+      .maybeSingle();
+
+    if (!group) throw createError('Group not found', 404, 'NOT_FOUND');
+    requireGroupWriteAccess(req, group);
 
     const { error } = await supabaseAdmin
       .from('group_venues')
