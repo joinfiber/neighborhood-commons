@@ -113,37 +113,38 @@ const TIER_LIMITS: Record<string, { hourly: number; daily: number }> = {
   service: { hourly: 2000, daily: 20000 },
 };
 
+/**
+ * Atomic rate-limit reservation (S7). Delegates to the reserve_contribute_slot
+ * Postgres RPC which serializes concurrent callers on the hourly bucket row,
+ * closing the read-then-write race the old event-count-based check had.
+ *
+ * Returns void on success; throws 429 RATE_LIMIT on hourly or daily exceed.
+ * See migration 059 for the full threat model and the 'ok|hourly|daily'
+ * contract of the underlying function.
+ */
 async function checkContributeRateLimit(apiKeyId: string, tier: string, batchSize: number = 1): Promise<void> {
   const limits = TIER_LIMITS[tier] || TIER_LIMITS['pending'];
   const keyFeed = `api-key:${apiKeyId}`;
 
-  const now = new Date();
-  const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000).toISOString();
-  const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabaseAdmin.rpc('reserve_contribute_slot', {
+    p_key_feed: keyFeed,
+    p_count: batchSize,
+    p_hourly_limit: limits.hourly,
+    p_daily_limit: limits.daily,
+  });
 
-  // Hourly check — account for batch size (BUG 6 fix: prevent batch bypass)
-  const { count: hourly } = await supabaseAdmin
-    .from('events')
-    .select('id', { count: 'exact', head: true })
-    .eq('source_method', 'api')
-    .eq('source_feed_url', keyFeed)
-    .gte('created_at', oneHourAgo);
+  if (error) {
+    console.error('[CONTRIBUTE] Rate limit RPC error:', error.message);
+    throw createError('Rate limit check failed', 500, 'SERVER_ERROR');
+  }
 
-  if ((hourly || 0) + batchSize > limits.hourly) {
+  if (data === 'hourly') {
     throw createError(`Contribution limit reached (${limits.hourly}/hour). Try again later.`, 429, 'RATE_LIMIT');
   }
-
-  // Daily check — account for batch size
-  const { count: daily } = await supabaseAdmin
-    .from('events')
-    .select('id', { count: 'exact', head: true })
-    .eq('source_method', 'api')
-    .eq('source_feed_url', keyFeed)
-    .gte('created_at', oneDayAgo);
-
-  if ((daily || 0) + batchSize > limits.daily) {
+  if (data === 'daily') {
     throw createError(`Contribution limit reached (${limits.daily}/day). Try again later.`, 429, 'RATE_LIMIT');
   }
+  // data === 'ok' — reservation succeeded; the caller proceeds with their insert.
 }
 
 // =============================================================================
