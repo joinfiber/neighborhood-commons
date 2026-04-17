@@ -23,7 +23,7 @@ import { toNeighborhoodEvent, type PortalEventRow } from '../lib/event-transform
 import { serviceLimiter } from '../middleware/rate-limit.js';
 import {
   PORTAL_SELECT, MANAGED_SOURCES, toPortalEvent, portalInputToInsert,
-  fromTimestamptz, getAdminUserId,
+  fromTimestamptz, toTimestamptz, getAdminUserId,
 } from '../lib/event-operations.js';
 import { createEventSeries, deleteSeriesEvents, updateSeriesFutureInstances } from '../lib/event-series.js';
 import { processAndUploadImage, downloadAndAttachImage } from '../lib/image-processing.js';
@@ -940,10 +940,11 @@ router.patch('/events/:id', serviceLimiter, async (req, res, next) => {
     await assertLinkedEvent(req, req.params.id);
     const data = validateRequest(updateEventSchema, req.body);
 
-    // Fetch existing event
+    // Fetch existing event — include event_at/end_time so we can preserve
+    // wall-clock semantics on a timezone-only PATCH (S6).
     const { data: existing } = await supabaseAdmin
       .from('events')
-      .select('id, status, event_timezone, creator_account_id')
+      .select('id, status, event_timezone, event_at, end_time, creator_account_id')
       .eq('id', req.params.id)
       .maybeSingle();
 
@@ -975,7 +976,6 @@ router.patch('/events/:id', serviceLimiter, async (req, res, next) => {
     if (data.url !== undefined) dbUpdate.link_url = data.url || null;
     if (data.category !== undefined) dbUpdate.category = data.category;
     if (data.custom_category !== undefined) dbUpdate.custom_category = data.custom_category;
-    if (data.timezone !== undefined) dbUpdate.event_timezone = data.timezone;
     if (data.wheelchair_accessible !== undefined) dbUpdate.wheelchair_accessible = data.wheelchair_accessible;
     if (data.capacity !== undefined) dbUpdate.capacity = data.capacity;
     if (data.rsvp !== undefined) dbUpdate.rsvp = data.rsvp;
@@ -988,11 +988,29 @@ router.patch('/events/:id', serviceLimiter, async (req, res, next) => {
       dbUpdate.tags = validateTags(data.tags, cat);
     }
 
-    if (data.start !== undefined) {
-      dbUpdate.event_at = new Date(data.start).toISOString();
-    }
-    if (data.end !== undefined) {
-      dbUpdate.end_time = data.end ? new Date(data.end).toISOString() : null;
+    // S6: timezone + time coherence. When `start`/`end` are provided, the
+    // caller supplies an ISO-8601 datetime with offset — trust the offset,
+    // store as UTC. When only `timezone` changes, preserve the wall-clock
+    // time (7pm NY → 7pm Chicago, not the UTC instant) by decomposing in
+    // the OLD tz and recomposing in the NEW tz.
+    if (data.start !== undefined || data.end !== undefined || data.timezone !== undefined) {
+      const oldTz = (existing.event_timezone as string) || 'America/New_York';
+      const newTz = data.timezone || oldTz;
+      if (data.timezone !== undefined) dbUpdate.event_timezone = newTz;
+
+      if (data.start !== undefined) {
+        dbUpdate.event_at = new Date(data.start).toISOString();
+      } else if (data.timezone !== undefined && existing.event_at) {
+        const { date, time } = fromTimestamptz(existing.event_at as string, oldTz);
+        dbUpdate.event_at = toTimestamptz(date, time, newTz);
+      }
+
+      if (data.end !== undefined) {
+        dbUpdate.end_time = data.end ? new Date(data.end).toISOString() : null;
+      } else if (data.timezone !== undefined && existing.end_time) {
+        const { date, time } = fromTimestamptz(existing.end_time as string, oldTz);
+        dbUpdate.end_time = toTimestamptz(date, time, newTz);
+      }
     }
 
     if (Object.keys(dbUpdate).length === 0) throw createError('No fields to update', 400, 'VALIDATION_ERROR');

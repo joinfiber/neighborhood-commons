@@ -20,6 +20,7 @@ import { createError } from '../middleware/error-handler.js';
 import { validateRequest, validateUuidParam, sanitizeSearchInput } from '../lib/helpers.js';
 import { toNeighborhoodEvent, toRRule, type PortalEventRow } from '../lib/event-transform.js';
 import { optionalApiKey } from '../middleware/api-key.js';
+import { icsEscape, icsSafeUrl } from '../lib/ical.js';
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -512,10 +513,9 @@ function formatICalLocalDate(date: Date, timezone: string): string {
   return `${dateStr}T${timeStr}`;
 }
 
-/** Escape special characters for iCal text values */
-function escapeICalText(text: string): string {
-  return text.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
-}
+// escapeICalText moved to src/lib/ical.ts (icsEscape) so all three ICS output
+// sites share one escape policy. Kept as a local alias for diff readability.
+const escapeICalText = icsEscape;
 
 /** Escape special characters for XML/RSS */
 function escapeXml(text: string): string {
@@ -615,7 +615,8 @@ export async function icsHandler(req: import('express').Request, res: import('ex
         const location = (row.place_name as string) + ((row.venue_address as string | null) ? ', ' + row.venue_address : '');
         lines.push(`LOCATION:${escapeICalText(location)}`);
       }
-      if (row.link_url) lines.push(`URL:${row.link_url}`);
+      const safeUrl = icsSafeUrl(row.link_url as string | null);
+      if (safeUrl) lines.push(`URL:${safeUrl}`);
       if (row.latitude != null && row.longitude != null) {
         lines.push(`GEO:${row.latitude};${row.longitude}`);
       }

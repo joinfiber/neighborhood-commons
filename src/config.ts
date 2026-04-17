@@ -59,8 +59,14 @@ const envSchema = z.object({
   // API base URL
   API_BASE_URL: z.string().url().optional(),
 
-  // Webhook encryption key (optional — for encrypted signing secrets)
-  WEBHOOK_ENCRYPTION_KEY: z.string().min(32).optional(),
+  // Webhook encryption key — required in production. Without it, signing
+  // secrets would be stored as plaintext and the system would quietly
+  // degrade. config.ts refuses to boot in production if missing (see below).
+  // Generate: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+  WEBHOOK_ENCRYPTION_KEY: z.string().length(64).regex(/^[0-9a-fA-F]+$/).optional(),
+
+  // NODE_ENV — controls production-gated invariants (e.g. WEBHOOK_ENCRYPTION_KEY).
+  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 
   // Google Places API (venue search in portal)
   GOOGLE_PLACES_API_KEY: z.string().min(1).optional(),
@@ -76,6 +82,18 @@ function loadConfig() {
     console.error('Invalid environment variables:');
     console.error(parsed.error.format());
     process.exit(1);
+  }
+
+  // Production invariants — refuse to boot rather than degrade silently.
+  // WEBHOOK_ENCRYPTION_KEY: if absent, webhook signing secrets fall back to
+  // plaintext at rest (see webhook-crypto.ts::isEncryptionConfigured). That
+  // degradation is acceptable for local dev but not production.
+  if (parsed.data.NODE_ENV === 'production') {
+    if (!parsed.data.WEBHOOK_ENCRYPTION_KEY) {
+      console.error('FATAL: WEBHOOK_ENCRYPTION_KEY is required in production.');
+      console.error('Generate: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"');
+      process.exit(1);
+    }
   }
 
   return parsed.data;

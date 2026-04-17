@@ -19,7 +19,7 @@ import { validateRequest, validateUuidParam, sanitizeSearchInput } from '../lib/
 import { writeLimiter } from '../middleware/rate-limit.js';
 import { dispatchWebhooks } from '../lib/webhook-delivery.js';
 import { toNeighborhoodEvent, type PortalEventRow } from '../lib/event-transform.js';
-import { PORTAL_SELECT, fromTimestamptz } from '../lib/event-operations.js';
+import { PORTAL_SELECT, fromTimestamptz, toTimestamptz } from '../lib/event-operations.js';
 import { config } from '../config.js';
 import { downloadAndAttachImage } from '../lib/image-processing.js';
 import { nominatimGeocode } from '../lib/geocoding.js';
@@ -873,14 +873,28 @@ router.patch('/:id', writeLimiter, async (req, res, next) => {
     }
 
     // Timestamp recomposition
-    if (data.start !== undefined || data.timezone !== undefined) {
-      const tz = data.timezone || (existing.event_timezone as string) || 'America/New_York';
-      const startIso = data.start || (existing.event_at as string);
-      update.event_at = new Date(startIso).toISOString();
-      update.event_timezone = tz;
-    }
-    if (data.end !== undefined) {
-      update.end_time = data.end ? new Date(data.end).toISOString() : null;
+    // S6: timezone + time coherence. When `start`/`end` carry an ISO offset,
+    // that offset is authoritative (user picked a wall-clock moment explicitly).
+    // When only `timezone` changes, preserve the wall-clock time by decomposing
+    // in the OLD tz and recomposing in the NEW tz.
+    if (data.start !== undefined || data.end !== undefined || data.timezone !== undefined) {
+      const oldTz = (existing.event_timezone as string) || 'America/New_York';
+      const newTz = data.timezone || oldTz;
+      if (data.timezone !== undefined) update.event_timezone = newTz;
+
+      if (data.start !== undefined) {
+        update.event_at = new Date(data.start).toISOString();
+      } else if (data.timezone !== undefined && existing.event_at) {
+        const { date, time } = fromTimestamptz(existing.event_at as string, oldTz);
+        update.event_at = toTimestamptz(date, time, newTz);
+      }
+
+      if (data.end !== undefined) {
+        update.end_time = data.end ? new Date(data.end).toISOString() : null;
+      } else if (data.timezone !== undefined && existing.end_time) {
+        const { date, time } = fromTimestamptz(existing.end_time as string, oldTz);
+        update.end_time = toTimestamptz(date, time, newTz);
+      }
     }
 
     // Venue linkage
