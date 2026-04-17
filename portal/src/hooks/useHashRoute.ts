@@ -18,7 +18,6 @@ const routes: RoutePattern[] = [
   { pattern: /^#\/profile$/, screen: 'profile', paramNames: [] },
   { pattern: /^#\/upload$/, screen: 'upload', paramNames: [] },
   { pattern: /^#\/events$/, screen: 'events', paramNames: [] },
-  { pattern: /^#\/events\/import$/, screen: 'import-events', paramNames: [] },
   { pattern: /^#\/events\/new$/, screen: 'create-event', paramNames: [] },
   { pattern: /^#\/events\/([^/]+)\/edit$/, screen: 'edit-event', paramNames: ['id'] },
   { pattern: /^#\/$/, screen: 'contributions', paramNames: [] },

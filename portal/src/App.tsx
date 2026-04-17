@@ -7,7 +7,6 @@ import { LoginScreen } from './screens/LoginScreen';
 import { DashboardScreen } from './screens/DashboardScreen';
 import { CreateEventScreen } from './screens/CreateEventScreen';
 import { EditEventScreen } from './screens/EditEventScreen';
-import { ImportEventsScreen } from './screens/ImportEventsScreen';
 import { ContributeScreen } from './screens/ContributeScreen';
 import { ContributionsScreen } from './screens/ContributionsScreen';
 import { DevelopersScreen } from './screens/DevelopersScreen';
@@ -242,18 +241,6 @@ export default function App() {
 
     if (route.screen === 'developers') {
       return <DevelopersScreen />;
-    }
-
-    if (route.screen === 'import-events') {
-      return (
-        <ImportEventsScreen
-          account={account}
-          onDone={(count) => {
-            navigate('#/');
-            setToast({ message: `Imported ${count} event${count !== 1 ? 's' : ''}`, type: 'success' });
-          }}
-        />
-      );
     }
 
     if (route.screen === 'create-event') {
