@@ -22,7 +22,7 @@ const changesLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
   keyGenerator: (req: Request) => req.ip || 'unknown',
-  message: { error: { code: 'RATE_LIMIT', message: 'Too many requests. Use /api/internal/events/sync with a service key for higher limits.' } },
+  message: { error: { code: 'RATE_LIMIT', message: 'Too many requests. Use /api/v1/events with an API key for higher limits.' } },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -38,8 +38,8 @@ const changesSchema = z.object({
 
 /**
  * GET /api/events/changes — Public changes endpoint
- * Lightweight alternative to /api/internal/events/sync for consumers
- * that don't have a service key. Lower rate limit, fewer fields.
+ * Lightweight sync endpoint for consumers that need incremental updates.
+ * Lower rate limit than /api/v1/events; returns only changed event IDs.
  *
  * NOTE: Must be defined BEFORE the redirect to avoid Express matching "changes" as a param.
  */

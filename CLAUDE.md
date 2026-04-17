@@ -435,7 +435,6 @@ RESEND_API_KEY=         # Resend API key for transactional emails
 RESEND_FROM_DOMAIN=     # Sending domain (e.g. neighborhood-commons.org)
 COMMONS_R2_*=           # Cloudflare R2 credentials for image hosting
 CRON_SECRET=            # For cron endpoint auth (min 16 chars)
-COMMONS_SERVICE_KEY=    # For legacy internal sync auth (min 32 chars)
 DEFAULT_REGION_ID=      # UUID of default region for new portal events
 WEBHOOK_ENCRYPTION_KEY= # AES-256-GCM key for webhook signing secrets at rest (64 hex chars / 32 bytes)
                         # Generate: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"

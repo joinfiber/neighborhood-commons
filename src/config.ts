@@ -50,9 +50,6 @@ const envSchema = z.object({
   // Cron secret
   CRON_SECRET: z.string().min(16).optional(),
 
-  // Internal sync auth (service-to-service)
-  COMMONS_SERVICE_KEY: z.string().min(32).optional(),
-
   // CORS
   CORS_ORIGINS: z.string().default('https://neighborhood-commons.org,https://api.neighborhood-commons.org,https://merrie.co'),
 
@@ -151,10 +148,6 @@ export const config = {
 
   cron: {
     secret: env.CRON_SECRET || '',
-  },
-
-  internal: {
-    serviceKey: env.COMMONS_SERVICE_KEY || '',
   },
 
   apiBaseUrl: env.API_BASE_URL

@@ -7,7 +7,8 @@
 
 import path from 'path';
 import { fileURLToPath } from 'url';
-import express, { Express } from 'express';
+import { readFileSync } from 'fs';
+import express, { Express, Request, Response } from 'express';
 import compression from 'compression';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -26,7 +27,6 @@ import v1GroupRoutes, { groupsLimiter } from './routes/v1-groups.js';
 import v1AccountRoutes, { accountsLimiter } from './routes/v1-accounts.js';
 import webhookRoutes from './routes/webhooks.js';
 import metaRoutes from './routes/meta.js';
-import internalRoutes from './routes/internal.js';
 import cronRoutes from './routes/cron.js';
 import placesRoutes from './routes/places.js';
 import developerRoutes from './routes/developers.js';
@@ -36,6 +36,46 @@ import pageRoutes from './routes/pages.js';
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Read the deployed version once at boot so /health can report it.
+const pkg = JSON.parse(readFileSync(path.join(__dirname, '../package.json'), 'utf-8'));
+const API_VERSION: string = pkg.version;
+
+/**
+ * Health check handler — verifies Supabase connectivity, not just process liveness.
+ * Serves at both /health (canonical) and /api/internal/health (backward-compat
+ * alias for any external monitors configured against the legacy path).
+ */
+async function healthHandler(_req: Request, res: Response): Promise<void> {
+  try {
+    const { error } = await supabaseAdmin.from('regions').select('id').limit(1);
+    if (error) {
+      console.error('[HEALTH] DB check failed:', error.message);
+      res.status(503).json({
+        status: 'error',
+        service: 'neighborhood-commons',
+        timestamp: new Date().toISOString(),
+        version: API_VERSION,
+        error: 'Database connection failed',
+      });
+      return;
+    }
+    res.json({
+      status: 'ok',
+      service: 'neighborhood-commons',
+      timestamp: new Date().toISOString(),
+      version: API_VERSION,
+    });
+  } catch {
+    res.status(503).json({
+      status: 'error',
+      service: 'neighborhood-commons',
+      timestamp: new Date().toISOString(),
+      version: API_VERSION,
+      error: 'Health check failed',
+    });
+  }
+}
 
 export function createApp(): Express {
   const app = express();
@@ -112,9 +152,11 @@ export function createApp(): Express {
   app.use(globalLimiter);
 
   // ─── Health check (no auth) ──────────────────────────────────────
-  app.get('/health', (_req, res) => {
-    res.json({ status: 'ok', service: 'neighborhood-commons', timestamp: new Date().toISOString() });
-  });
+  // Both paths served by the same handler for backward compatibility with
+  // external monitors configured against /api/internal/health before the
+  // fifth-auth-model cleanup. The canonical path is /health.
+  app.get('/health', healthHandler);
+  app.get('/api/internal/health', healthHandler);
 
   // ─── AI-readable docs ─────────────────────────────────────────────
   app.get('/llms.txt', (_req, res) => {
@@ -152,9 +194,6 @@ export function createApp(): Express {
   // ─── Webhooks ────────────────────────────────────────────────────
   app.use('/api/v1/webhooks', webhookRoutes);
   app.use('/api/webhooks', webhookRoutes);
-
-  // ─── Internal (service-to-service sync) ──────────────────────────
-  app.use('/api/internal', internalRoutes);
 
   // ─── Cron jobs ───────────────────────────────────────────────────
   app.use('/api/cron', cronRoutes);

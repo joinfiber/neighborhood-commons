@@ -1,17 +1,19 @@
 /**
  * Authentication Middleware — Neighborhood Commons
  *
- * Two auth models:
- * 1. requirePortalAuth — Supabase JWT from portal businesses
+ * Two auth models in this file:
+ * 1. requirePortalAuth  — Supabase JWT from portal operators
  * 2. requireCommonsAdmin — JWT + admin user ID check
- * 3. requireServiceKey — service-to-service auth (internal sync)
+ *
+ * API-key auth (X-API-Key header, contributor-tier scoped) lives in
+ * src/middleware/api-key.ts. CLAUDE.md mandates exactly four auth models
+ * project-wide; there is no service-to-service sync model here anymore.
  */
 
 import { Request, Response, NextFunction } from 'express';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { createUserClient, supabaseAdmin } from '../lib/supabase.js';
 import { config } from '../config.js';
-import { constantTimeCompare } from '../lib/helpers.js';
 
 // Extend Express Request
 declare global {
@@ -108,23 +110,4 @@ export async function requireCommonsAdmin(req: Request, res: Response, next: Nex
   } catch {
     res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Authentication failed' } });
   }
-}
-
-/**
- * Require service key authentication (internal sync endpoint).
- */
-export function requireServiceKey(req: Request, res: Response, next: NextFunction): void {
-  const token = extractToken(req);
-
-  if (!config.internal.serviceKey) {
-    res.status(503).json({ error: { code: 'NOT_CONFIGURED', message: 'Service key not configured' } });
-    return;
-  }
-
-  if (!token || !constantTimeCompare(token, config.internal.serviceKey)) {
-    res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Invalid service key' } });
-    return;
-  }
-
-  next();
 }
