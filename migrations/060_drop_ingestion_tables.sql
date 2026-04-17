@@ -1,0 +1,104 @@
+-- ============================================================================
+-- Migration 060: Drop ingestion tables (thin-spine cut)
+-- ============================================================================
+--
+-- Removes the newsletter + feed ingestion tables introduced by migrations
+-- 025-028, 030, 031. Per the project's thin-spine doctrine (CLAUDE.md), data
+-- ingestion pipelines belong in Fiber, not in Neighborhood Commons. The
+-- Commons stores and serves event data; collection is external.
+--
+-- These tables have had ZERO references from this repo's src/ for some time.
+-- Verified pre-drop:
+--   grep -rE 'newsletter_sources|newsletter_emails|event_candidates|feed_sources' src/
+--   → only matches are in src/lib/database.types.ts (removed in the same PR)
+--
+-- Tables dropped (in dependency order — event_candidates FKs newsletter_emails
+-- and feed_sources, so it's fine to CASCADE from either parent):
+--   - event_candidates      (created 025; columns added by 026, 027, 030, 031)
+--   - newsletter_emails     (created 025)
+--   - newsletter_sources    (created 025)
+--   - feed_sources          (created 028)
+--
+-- ONE-WAY MIGRATION: rows in these tables are lost on apply. Operator must
+-- take a logical dump and archive before running this migration if the data
+-- has any long-term value. The ingestion work it supported will run in Fiber
+-- with its own database going forward.
+--
+-- The CREATE statements are preserved as comments below, so a future operator
+-- can re-read the historical schema without digging through git history.
+
+-- == HISTORICAL SCHEMA (for reference only — do not uncomment) =============
+-- Original definitions from migrations 025, 028, plus columns added by
+-- 026/027/030/031. Any Fiber-side ingestion should start from these shapes.
+--
+-- CREATE TABLE newsletter_sources (
+--   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+--   name text NOT NULL,
+--   sender_email text,
+--   notes text,
+--   auto_approve boolean DEFAULT false,
+--   status text DEFAULT 'active' CHECK (status IN ('active', 'paused', 'retired')),
+--   created_at timestamptz DEFAULT now(),
+--   last_received_at timestamptz
+-- );
+--
+-- CREATE TABLE newsletter_emails (
+--   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+--   source_id uuid REFERENCES newsletter_sources(id) ON DELETE SET NULL,
+--   message_id text,
+--   sender_email text NOT NULL,
+--   subject text NOT NULL,
+--   body_html text,
+--   body_plain text,
+--   received_at timestamptz,
+--   processing_status text DEFAULT 'pending',
+--   processing_error text,
+--   candidate_count int,
+--   llm_response text,
+--   created_at timestamptz DEFAULT now()
+-- );
+--
+-- CREATE TABLE event_candidates (
+--   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+--   email_id uuid REFERENCES newsletter_emails(id) ON DELETE CASCADE,
+--   source_id uuid REFERENCES newsletter_sources(id) ON DELETE SET NULL,
+--   feed_source_id uuid REFERENCES feed_sources(id) ON DELETE SET NULL,
+--   title text NOT NULL,
+--   description text,
+--   start_date date, start_time time, end_time time,
+--   location_name text, location_address text,
+--   location_lat numeric, location_lng numeric,
+--   source_url text,
+--   confidence numeric,
+--   status text DEFAULT 'pending',
+--   matched_event_id uuid REFERENCES events(id) ON DELETE SET NULL,
+--   match_confidence numeric,
+--   review_notes text,
+--   extraction_metadata jsonb,       -- added by 026
+--   candidate_image_url text,        -- added by 027
+--   price text,                      -- added by 030
+--   category text, tags text[],      -- added by 031
+--   created_at timestamptz DEFAULT now(),
+--   reviewed_at timestamptz
+-- );
+--
+-- CREATE TABLE feed_sources (
+--   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+--   name text NOT NULL,
+--   feed_url text NOT NULL,
+--   feed_type text DEFAULT 'ical' CHECK (feed_type IN ('ical', 'rss', 'eventbrite', 'agile_ticketing')),
+--   poll_interval_hours int DEFAULT 24,
+--   status text DEFAULT 'active' CHECK (status IN ('active', 'paused', 'retired')),
+--   default_location text,
+--   default_timezone text DEFAULT 'America/New_York',
+--   notes text,
+--   created_at timestamptz DEFAULT now(),
+--   last_polled_at timestamptz, last_poll_result text, last_poll_error text,
+--   last_event_count int
+-- );
+-- ============================================================================
+
+DROP TABLE IF EXISTS event_candidates CASCADE;
+DROP TABLE IF EXISTS newsletter_emails CASCADE;
+DROP TABLE IF EXISTS newsletter_sources CASCADE;
+DROP TABLE IF EXISTS feed_sources CASCADE;
