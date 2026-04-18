@@ -427,6 +427,7 @@ AUDIT_SALT=             # For audit log hashing (min 16 chars)
 
 Optional:
 ```bash
+NODE_ENV=development    # 'development' | 'test' | 'production'. Production gates boot on WEBHOOK_ENCRYPTION_KEY.
 COMMONS_ADMIN_USER_IDS= # Comma-separated Supabase auth UUIDs for admin access
 GOOGLE_PLACES_API_KEY=  # Venue search in portal
 TURNSTILE_SECRET_KEY=   # Cloudflare Turnstile (captcha)
@@ -436,9 +437,15 @@ RESEND_FROM_DOMAIN=     # Sending domain (e.g. neighborhood-commons.org)
 COMMONS_R2_*=           # Cloudflare R2 credentials for image hosting
 CRON_SECRET=            # For cron endpoint auth (min 16 chars)
 DEFAULT_REGION_ID=      # UUID of default region for new portal events
-WEBHOOK_ENCRYPTION_KEY= # AES-256-GCM key for webhook signing secrets at rest (64 hex chars / 32 bytes)
+IP_FILTER_ENABLED=true  # Block datacenter IP prefixes on public endpoints (default on)
+SSRF_STRICT=0           # '0' (default) or '1'. When '1', outbound fetches to user URLs
+                        # route through an undici connect hook that re-resolves DNS at
+                        # connect time and rejects private IPs — defeats DNS rebinding.
+                        # Staged rollout: ship with flag off, soak, flip on.
+WEBHOOK_ENCRYPTION_KEY= # AES-256-GCM key for webhook signing secrets at rest (64 hex chars / 32 bytes).
                         # Generate: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-                        # Without this, webhook signing secrets are stored in plaintext
+                        # REQUIRED in production — boot fails with a clear error if unset.
+                        # Dev/test may omit it; delivery falls back to the plaintext column.
 CORS_ORIGINS=           # Comma-separated allowed origins (defaults to production domains)
 API_BASE_URL=           # Override auto-detected API base URL
 ```
