@@ -95,9 +95,13 @@ vi.mock('../src/lib/url-validation.js', () => ({
 
 // Mock webhook crypto
 vi.mock('../src/lib/webhook-crypto.js', () => ({
-  encryptSecret: vi.fn((s: string) => `encrypted:${s}`),
-  decryptSecret: vi.fn((s: string) => s.replace('encrypted:', '')),
+  encryptSecret: vi.fn((s: string) => Buffer.from(`encrypted:${s}`)),
+  decryptSecret: vi.fn((data: Buffer | string) => {
+    const s = Buffer.isBuffer(data) ? data.toString() : String(data);
+    return s.replace('encrypted:', '');
+  }),
   isEncryptionConfigured: vi.fn(() => true),
+  bufferToBytea: vi.fn((buf: Buffer) => '\\x' + buf.toString('hex')),
 }));
 
 // ---------------------------------------------------------------------------

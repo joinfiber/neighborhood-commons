@@ -168,3 +168,80 @@ describe('webhook secret encryption (AES-256-GCM)', () => {
     expect(decrypted).toBe(longSecret);
   });
 });
+
+// ---------------------------------------------------------------------------
+// bytea transport encoding (PR 8 bug fix — formerly corrupted every row)
+// ---------------------------------------------------------------------------
+//
+// Previously, `POST /api/v1/webhooks` passed a raw Node Buffer as an RPC
+// parameter. Supabase-js serializes RPC params as JSON, and Buffer's toJSON()
+// returns `{"type":"Buffer","data":[...]}`. That string got stored as bytea
+// bytes, and later decryption failed with "Unsupported state or unable to
+// authenticate data". These tests lock in the `\x<hex>` wire format and the
+// round-trip through decryptSecret's `\x`-parsing branch.
+// ---------------------------------------------------------------------------
+
+describe('bufferToBytea (RPC wire-format for encrypted secrets)', () => {
+  const testKey = 'ab'.repeat(32);
+  let bufferToBytea: (buf: Buffer) => string;
+  let encryptSecret: (plaintext: string) => Buffer;
+  let decryptSecret: (data: Buffer | string) => string;
+
+  beforeAll(async () => {
+    process.env.WEBHOOK_ENCRYPTION_KEY = testKey;
+    const mod = await import('../src/lib/webhook-crypto.js');
+    bufferToBytea = mod.bufferToBytea;
+    encryptSecret = mod.encryptSecret;
+    decryptSecret = mod.decryptSecret;
+  });
+
+  afterAll(() => {
+    delete process.env.WEBHOOK_ENCRYPTION_KEY;
+  });
+
+  it('encodes a Buffer as "\\x<hex>" (Postgres bytea literal)', () => {
+    const buf = Buffer.from([0xde, 0xad, 0xbe, 0xef]);
+    expect(bufferToBytea(buf)).toBe('\\xdeadbeef');
+  });
+
+  it('produces a string, not an object — this is the whole bug', () => {
+    // The pre-fix code passed a raw Buffer which got JSON-stringified as
+    // `{"type":"Buffer","data":[...]}`. The wire format must be a string.
+    const buf = Buffer.from([0x01, 0x02]);
+    const encoded = bufferToBytea(buf);
+    expect(typeof encoded).toBe('string');
+    expect(encoded).not.toContain('Buffer');
+    expect(encoded).not.toContain('"type"');
+    // Serializing it to JSON should produce a plain string, not an object
+    expect(JSON.stringify(encoded)).toBe('"\\\\x0102"');
+  });
+
+  it('round-trips through decryptSecret via the \\x-prefix parse branch', () => {
+    // This is the end-to-end: encrypt → bufferToBytea → (hypothetical
+    // Postgres storage) → decryptSecret given the same `\x<hex>` string.
+    // If this fails, the fix doesn't actually fix anything.
+    const plaintext = 'my-webhook-signing-secret';
+    const encoded = bufferToBytea(encryptSecret(plaintext));
+    // Simulate Supabase-js returning the bytea column on SELECT: it comes
+    // back as a `\x<hex>` string. decryptSecret handles that format.
+    const decrypted = decryptSecret(encoded as unknown as Buffer);
+    expect(decrypted).toBe(plaintext);
+  });
+
+  it('exact regression: a JSON-stringified Buffer would have first byte 0x7b', () => {
+    // This is the signature of the pre-fix bug as observed in prod:
+    // signing_secret_encrypted column stored bytes that began with 0x7b,
+    // the ASCII for `{` — the opening brace of `{"type":"Buffer",...}`.
+    // Our fix produces `\x...` which starts with `\` (0x5c), not `{`.
+    const buf = Buffer.from([0x01, 0x02, 0x03]);
+    const correctEncoding = bufferToBytea(buf);
+    expect(correctEncoding[0]).toBe('\\');
+    expect(correctEncoding.charCodeAt(0)).toBe(0x5c);
+    expect(correctEncoding.charCodeAt(0)).not.toBe(0x7b);
+
+    // Pre-fix behavior for comparison — what Supabase-js would serialize
+    // a raw Buffer as via JSON.stringify (matches prod symptom):
+    const brokenEncoding = JSON.stringify(buf);
+    expect(brokenEncoding.charCodeAt(0)).toBe(0x7b); // '{'
+  });
+});
