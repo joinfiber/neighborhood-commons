@@ -27,9 +27,16 @@ coverage
 
 # Generated files (none currently)
 
-# Internal tools and field data
-scripts/
+# Internal tools and field data.
+# scripts/* (wildcard, not scripts/) so individual files can be un-ignored.
+# git refuses to descend into a fully-ignored directory, so `!scripts/foo`
+# does nothing when paired with `scripts/`. The wildcard keeps git looking
+# inside the folder.
+scripts/*
 field/
+# Public recovery/ops scripts — explicitly un-ignored. Each file here is a
+# one-shot tool documented in a PR and safe to read by any contributor.
+!scripts/reencrypt-webhook-subscriptions.ts
 
 # Internal docs (kept locally, not in public repo)
 ECOSYSTEM.md
