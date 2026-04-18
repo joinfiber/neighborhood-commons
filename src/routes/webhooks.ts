@@ -16,7 +16,7 @@ import { requireApiKey } from '../middleware/api-key.js';
 import { validateRequest, validateUuidParam } from '../lib/helpers.js';
 import { writeLimiter, enumerationLimiter } from '../middleware/rate-limit.js';
 import { validateWebhookUrl } from '../lib/url-validation.js';
-import { encryptSecret, isEncryptionConfigured } from '../lib/webhook-crypto.js';
+import { encryptSecret, isEncryptionConfigured, bufferToBytea } from '../lib/webhook-crypto.js';
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -78,7 +78,10 @@ router.post('/', writeLimiter, async (req, res, next) => {
       p_max_subscriptions: MAX_SUBSCRIPTIONS_PER_KEY,
     };
     if (isEncryptionConfigured()) {
-      rpcParams.p_signing_secret_encrypted = encryptSecret(signingSecret);
+      // bufferToBytea: encode as `\x<hex>` so Supabase-js sends valid bytea
+      // over JSON-RPC. Sending a raw Buffer serializes as
+      // `{"type":"Buffer","data":[...]}` which stores garbage.
+      rpcParams.p_signing_secret_encrypted = bufferToBytea(encryptSecret(signingSecret));
     }
 
     const { data: subscription, error } = await supabaseAdmin

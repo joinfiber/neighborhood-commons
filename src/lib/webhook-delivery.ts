@@ -149,6 +149,50 @@ export async function dispatchSeriesCreatedWebhook(
   }
 }
 
+/**
+ * Resolve the HMAC signing secret for a subscription. Centralizes:
+ *   - the encrypted vs. plaintext branch
+ *   - the decrypt try/catch (previously missing — a throw stranded the
+ *     delivery row in `pending` state indefinitely)
+ *   - marking the delivery row failed with a human-readable error BEFORE
+ *     rethrowing, so the caller just bails out
+ *
+ * Throws after updating the row. Caller should log and return.
+ *
+ * Exported with a `_` prefix for unit tests only; callers should go through
+ * deliverWebhook / deliverRawWebhook.
+ */
+export async function _resolveSigningSecretForTests(sub: WebhookSub, deliveryId: number): Promise<string> {
+  return resolveSigningSecret(sub, deliveryId);
+}
+
+async function resolveSigningSecret(sub: WebhookSub, deliveryId: number): Promise<string> {
+  async function markFailed(reason: string): Promise<void> {
+    await supabaseAdmin
+      .from('webhook_deliveries')
+      .update({ status: 'failed', error_message: reason })
+      .eq('id', deliveryId);
+  }
+
+  if (!isEncryptionConfigured()) {
+    // Dev/test: encryption not configured, use plaintext column
+    return sub.signing_secret;
+  }
+
+  if (!sub.signing_secret_encrypted) {
+    await markFailed('Missing encrypted signing secret');
+    throw new Error(`subscription ${sub.id} missing encrypted secret`);
+  }
+
+  try {
+    return decryptSecret(sub.signing_secret_encrypted as unknown as Buffer);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'decryption failed';
+    await markFailed(`Signing secret decryption failed: ${msg}`);
+    throw err;
+  }
+}
+
 async function deliverWebhook(
   sub: WebhookSub,
   deliveryId: number,
@@ -165,22 +209,19 @@ async function deliverWebhook(
 
   const body = JSON.stringify(payload);
 
-  // SECURITY: Require encrypted secret in production. No plaintext fallback —
-  // if decryption fails, skip delivery rather than risk using a stale/compromised value.
+  // Resolve signing secret. A decryption failure MUST mark the delivery row
+  // as failed — previously decryptSecret threw outside any try/catch, leaving
+  // delivery rows stuck in `pending` forever (observed in prod after the
+  // `\x<hex>` bytea encoding fix in this same PR). Failures log the cause so
+  // an operator can tell key-mismatch from format-mismatch from corrupt-data.
   let secret: string;
-  if (isEncryptionConfigured()) {
-    if (!sub.signing_secret_encrypted) {
-      console.error(`[WEBHOOKS] Subscription ${sub.id} missing encrypted secret — skipping delivery`);
-      await supabaseAdmin
-        .from('webhook_deliveries')
-        .update({ status: 'failed', error_message: 'Missing encrypted signing secret' })
-        .eq('id', deliveryId);
-      return;
-    }
-    secret = decryptSecret(sub.signing_secret_encrypted as unknown as Buffer);
-  } else {
-    // Dev/test: encryption not configured, use plaintext
-    secret = sub.signing_secret;
+  try {
+    secret = await resolveSigningSecret(sub, deliveryId);
+  } catch (err) {
+    // The resolver has already updated the delivery row to failed before
+    // throwing. Just log and bail.
+    console.error(`[WEBHOOKS] Subscription ${sub.id} secret resolution failed:`, err instanceof Error ? err.message : err);
+    return;
   }
 
   const signature = createHmac('sha256', secret)
@@ -248,18 +289,11 @@ async function deliverRawWebhook(
   const eventType = (payload.event_type as string) || 'unknown';
 
   let secret: string;
-  if (isEncryptionConfigured()) {
-    if (!sub.signing_secret_encrypted) {
-      console.error(`[WEBHOOKS] Subscription ${sub.id} missing encrypted secret — skipping delivery`);
-      await supabaseAdmin
-        .from('webhook_deliveries')
-        .update({ status: 'failed', error_message: 'Missing encrypted signing secret' })
-        .eq('id', deliveryId);
-      return;
-    }
-    secret = decryptSecret(sub.signing_secret_encrypted as unknown as Buffer);
-  } else {
-    secret = sub.signing_secret;
+  try {
+    secret = await resolveSigningSecret(sub, deliveryId);
+  } catch (err) {
+    console.error(`[WEBHOOKS] Subscription ${sub.id} secret resolution failed:`, err instanceof Error ? err.message : err);
+    return;
   }
 
   const signature = createHmac('sha256', secret).update(body).digest('hex');

@@ -40,6 +40,24 @@ export function isEncryptionConfigured(): boolean {
 }
 
 /**
+ * Encode a Buffer for transport across the Supabase JS RPC boundary into a
+ * `bytea` column or parameter. Supabase-js serializes RPC parameters as JSON,
+ * and a Node Buffer passed directly becomes `{"type":"Buffer","data":[...]}`
+ * — that string's bytes then get stored as bytea, producing garbage that
+ * looks like `\x7b...` (leading `{`) and fails AES-GCM authentication.
+ *
+ * The correct wire format is Postgres's bytea hex literal: `\x<hex>`. The
+ * server-side decoder (pg parser) converts that to actual bytea bytes.
+ *
+ * This helper pairs with the bytea-parsing logic in decryptSecret, which
+ * already handles both raw Buffers (direct driver use) and `\x`-prefixed
+ * hex strings (what Supabase-js returns on SELECT).
+ */
+export function bufferToBytea(buf: Buffer): string {
+  return '\\x' + buf.toString('hex');
+}
+
+/**
  * Encrypt a signing secret.
  * Returns a Buffer: iv(12) || authTag(16) || ciphertext
  */
