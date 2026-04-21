@@ -117,7 +117,7 @@ Three documents together form the contract between this service and every app th
 
 Rule when they disagree: **Spec wins. Guide explains. Log dates.**
 
-A deeper narrative of the contract — the event shape, category slugs, accessibility fields, recurrence model, and the rules for breaking changes — lives in [docs/commons-contract.md](docs/commons-contract.md). If you're building a consumer app, start there.
+A deeper narrative of the contract — the event shape, category slugs, accessibility fields, recurrence model, and the rules for breaking changes — lives in [`public/llms.txt`](public/llms.txt). If you're building a consumer app, start there.
 
 ## Running your own instance
 
@@ -262,7 +262,7 @@ Code: MIT
 
 - [Neighborhood API spec](https://github.com/The-Relational-Technology-Project/neighborhood-api) — upstream open spec this project implements
 - [The Relational Technology Project](https://relationaltechproject.org) — stewards of the spec
-- [Commons Contract](docs/commons-contract.md) — canonical narrative reference for consumers
+- [OpenAPI spec](https://api.neighborhood-commons.org/openapi.json) — authoritative, machine-readable (the Spec)
+- [The Guide](public/llms.txt) — narrative companion explaining *why* and *how*, also served at [api.neighborhood-commons.org/llms.txt](https://api.neighborhood-commons.org/llms.txt)
+- [CHANGELOG](CHANGELOG.md) — the Log, dated record of every contract-affecting change
 - [API consumer guide](docs/consumer-guide.md) — integration walkthrough
-- [OpenAPI spec](https://api.neighborhood-commons.org/openapi.json) — authoritative, machine-readable
-- [AI-readable docs](https://api.neighborhood-commons.org/llms.txt) — narrative companion

@@ -15,6 +15,14 @@ Base URL: `https://api.neighborhood-commons.org`
 
 **Rule when they disagree: Spec wins. Guide explains. Log dates.** If something in this document contradicts the Spec on matters of fact, trust the Spec and open an issue.
 
+### Design Principles
+
+The Commons is **thin**. It stores events and serves them. Curation, social features, recommendations, user accounts, ingestion pipelines — all of that belongs in the apps that build on top. The Commons is plumbing.
+
+The Commons is **durable**. The shapes in this document don't change with the winds. They change when the culture of events changes — a new category of gathering, a new dimension of accessibility. Those changes are rare and deliberate. If you build against this contract today, it should work next year.
+
+The Commons is **authoritative**. Every event response is self-contained: name, place, time, description, cost, category, image, recurrence. No implicit knowledge, no extra joins, no undocumented carry-forward. A developer who's been shipping for 20 years and another sitting down for a weekend project should both arrive at the same understanding.
+
 ---
 
 ## Part 1: Reading Events (No Setup Required)
@@ -316,6 +324,17 @@ Response:
 5. `deleted_ids` tells you which events to remove from your cache.
 
 Rate limit: 10 requests/minute on this endpoint.
+
+### Visibility Rules
+
+Published events appear in feeds according to these rules. Knowing them up front saves debugging "where did my event go?":
+
+1. **`status = 'published'`** — drafts, `pending_review`, and `unpublished` events are excluded from all public reads. Service API callers with the right scoping can read non-published rows.
+2. **Account is not suspended** — events from suspended accounts return `404`, not `403`. The Commons does not disclose whether a suspended account exists.
+3. **Time gate** — controlled by `open_window`:
+   - `open_window = false` (default): visible until `start`, hidden after.
+   - `open_window = true`: visible until `end`, or `start + 3 hours` if no end time.
+4. **Region filter** — when a consumer provides coordinates (`near=lat,lng` + `radius_km`), results are filtered to events whose resolved `region_id` matches the provided location.
 
 ---
 
