@@ -14,6 +14,12 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-04-21
+
+- `public/openapi.json` `Error.code` is now a typed enum (`ErrorCode` schema) covering all 39 codes thrown across the API. Previously it was `type: string` — consumers couldn't generate discriminated unions. Groups: Auth (13), Validation/Resource (7), URL/Domain (7), Rate Limit (3), CSV/Import (4), Server/Infrastructure (5). OpenAPI `info.version` bumped to `0.5.0`.
+
+---
+
 ## 2026-04-20
 
 - BREAKING: Removed `runtime_minutes`, `content_rating`, and `showtimes` fields from the Event schema and from the `events` table (migration 061). These were added by migration 029 as a parallel data model for film screenings but were never written to — every INSERT set them null. They were also not part of the upstream Neighborhood API spec. Film screenings now use the same primitives as every other event: one row per individual showtime, `category=film`, shared `series_id` across same-film showings on the same day, runtime derivable from `end - start`, rating conveyed as a tag with `rating:` prefix (e.g., `"rating:r"`). Consumer apps that parsed the three fields should stop reading them; nothing needs to change on the write side. OpenAPI `info.version` bumped to `0.4.0`.
