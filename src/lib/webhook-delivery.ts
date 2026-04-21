@@ -15,6 +15,7 @@
 import { createHmac } from 'crypto';
 import { supabaseAdmin } from './supabase.js';
 import { toNeighborhoodEvent, type NeighborhoodEvent, type PortalEventRow } from './event-transform.js';
+import { PORTAL_SELECT } from './event-operations.js';
 import { validateWebhookUrl } from './url-validation.js';
 import { safeFetch } from './safe-fetch.js';
 import { decryptSecret, isEncryptionConfigured } from './webhook-crypto.js';
@@ -22,6 +23,43 @@ import { decryptSecret, isEncryptionConfigured } from './webhook-crypto.js';
 const DELIVERY_TIMEOUT_MS = 10_000;
 const MAX_RETRIES = 3;
 const MAX_CONSECUTIVE_FAILURES = 10;
+
+/**
+ * Fire-and-forget dispatch: re-fetch an event by ID, transform, dispatch.
+ *
+ * Replaces the ~17 identical inline IIFEs that used to live in route
+ * handlers across contribute/admin/service/portal. Each one rebuilt the
+ * same "select the row with business_name join, transform, dispatch"
+ * flow. Centralizing means webhook payload bugs have one place to hide.
+ *
+ * Intentionally void-returning (caller doesn't await): webhook delivery
+ * must not gate the main response path. Errors log but don't throw.
+ *
+ * Pass `onlyPublished: true` to suppress dispatch on events whose row
+ * comes back non-published — matches the historical pattern in series
+ * loops and content-update handlers that don't want to notify
+ * subscribers about pending/draft changes.
+ */
+export function dispatchEventWebhookById(
+  eventType: 'event.created' | 'event.updated' | 'event.deleted' | 'event.series_created',
+  eventId: string,
+  opts: { onlyPublished?: boolean } = {},
+): void {
+  void (async () => {
+    try {
+      const { data: row } = await supabaseAdmin
+        .from('events')
+        .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible)`)
+        .eq('id', eventId)
+        .maybeSingle();
+      if (!row) return;
+      if (opts.onlyPublished && (row as Record<string, unknown>).status !== 'published') return;
+      void dispatchWebhooks(eventType, eventId, toNeighborhoodEvent(row as unknown as PortalEventRow));
+    } catch (err) {
+      console.error(`[WEBHOOKS] dispatchEventWebhookById(${eventType}, ${eventId}) failed:`, err instanceof Error ? err.message : err);
+    }
+  })();
+}
 
 interface WebhookPayload {
   event_type: string;

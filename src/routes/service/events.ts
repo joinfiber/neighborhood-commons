@@ -17,8 +17,7 @@ import { validateTags } from '../../lib/tags.js';
 import { supabaseAdmin } from '../../lib/supabase.js';
 import { createError } from '../../middleware/error-handler.js';
 import { validateRequest, validateUuidParam, sanitizeSearchInput } from '../../lib/helpers.js';
-import { dispatchWebhooks } from '../../lib/webhook-delivery.js';
-import { toNeighborhoodEvent, type PortalEventRow } from '../../lib/event-transform.js';
+import { dispatchEventWebhookById } from '../../lib/webhook-delivery.js';
 import { serviceLimiter } from '../../middleware/rate-limit.js';
 import {
   PORTAL_SELECT, MANAGED_SOURCES, toPortalEvent, portalInputToInsert,
@@ -380,18 +379,7 @@ router.post('/events', serviceLimiter, async (req, res, next) => {
       }
 
       // Dispatch webhook (fire-and-forget)
-      void (async () => {
-        try {
-          const { data: row } = await supabaseAdmin
-            .from('events')
-            .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name)`)
-            .eq('id', event.id)
-            .maybeSingle();
-          if (row) void dispatchWebhooks('event.created', event.id, toNeighborhoodEvent(row as unknown as PortalEventRow));
-        } catch (err) {
-          console.error('[SERVICE] Webhook dispatch error:', err instanceof Error ? err.message : err);
-        }
-      })();
+      dispatchEventWebhookById('event.created', event.id);
 
       // Attach image (fire-and-forget — image failure must not fail publish)
       if (data.image_url) {
@@ -553,18 +541,7 @@ router.patch('/events/:id', serviceLimiter, async (req, res, next) => {
 
     // Dispatch webhook when event transitions to published (e.g. approved from pending_review)
     if (data.status === 'published' && !wasPublished) {
-      (async () => {
-        try {
-          const { data: row } = await supabaseAdmin
-            .from('events')
-            .select(`*, portal_accounts!events_creator_account_id_fkey(business_name)`)
-            .eq('id', updated.id)
-            .maybeSingle();
-          if (row) void dispatchWebhooks('event.created', updated.id, toNeighborhoodEvent(row as unknown as PortalEventRow));
-        } catch (err) {
-          console.error('[SERVICE] Webhook dispatch error:', err instanceof Error ? err.message : err);
-        }
-      })();
+      dispatchEventWebhookById('event.created', updated.id);
     }
 
     res.json({ event: toPortalEvent(updated) });

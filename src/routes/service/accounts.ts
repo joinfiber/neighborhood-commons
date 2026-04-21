@@ -13,8 +13,7 @@ import { supabaseAdmin } from '../../lib/supabase.js';
 import { createError } from '../../middleware/error-handler.js';
 import { validateRequest, validateUuidParam, sanitizeSearchInput } from '../../lib/helpers.js';
 import { serviceLimiter } from '../../middleware/rate-limit.js';
-import { dispatchWebhooks } from '../../lib/webhook-delivery.js';
-import { toNeighborhoodEvent, type PortalEventRow } from '../../lib/event-transform.js';
+import { dispatchEventWebhookById } from '../../lib/webhook-delivery.js';
 import { PORTAL_SELECT, MANAGED_SOURCES, toPortalEvent } from '../../lib/event-operations.js';
 import { assertLinkedAccount } from './helpers.js';
 
@@ -378,20 +377,9 @@ router.patch('/accounts/:id', serviceLimiter, async (req, res, next) => {
 
         // Fire event.updated webhooks (fire-and-forget)
         if (eventsUpdated > 0) {
-          void (async () => {
-            try {
-              for (const eventId of affectedIds) {
-                const { data: row } = await supabaseAdmin
-                  .from('events')
-                  .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name)`)
-                  .eq('id', eventId)
-                  .maybeSingle();
-                if (row) void dispatchWebhooks('event.updated', eventId, toNeighborhoodEvent(row as unknown as PortalEventRow));
-              }
-            } catch (err) {
-              console.error('[SERVICE] Webhook dispatch error during coord propagation:', err instanceof Error ? err.message : err);
-            }
-          })();
+          for (const eventId of affectedIds) {
+            dispatchEventWebhookById('event.updated', eventId);
+          }
         }
       }
     }

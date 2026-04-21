@@ -17,7 +17,7 @@ import { createError } from '../middleware/error-handler.js';
 import { requireApiKey } from '../middleware/api-key.js';
 import { validateRequest, validateUuidParam, sanitizeSearchInput } from '../lib/helpers.js';
 import { writeLimiter } from '../middleware/rate-limit.js';
-import { dispatchWebhooks } from '../lib/webhook-delivery.js';
+import { dispatchEventWebhookById, dispatchWebhooks } from '../lib/webhook-delivery.js';
 import { toNeighborhoodEvent, type PortalEventRow } from '../lib/event-transform.js';
 import { PORTAL_SELECT, fromTimestamptz, toTimestamptz } from '../lib/event-operations.js';
 import { config } from '../config.js';
@@ -485,18 +485,7 @@ router.post('/', writeLimiter, async (req, res, next) => {
 
     // Dispatch webhook with full event data (fire-and-forget)
     if (row.status === 'published') {
-      void (async () => {
-        try {
-          const { data: fullRow } = await supabaseAdmin
-            .from('events')
-            .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name)`)
-            .eq('id', row.id)
-            .maybeSingle();
-          if (fullRow) void dispatchWebhooks('event.created', row.id, toNeighborhoodEvent(fullRow as unknown as PortalEventRow));
-        } catch (err) {
-          console.error('[CONTRIBUTE] Webhook dispatch error:', err instanceof Error ? err.message : err);
-        }
-      })();
+      dispatchEventWebhookById('event.created', row.id);
     }
 
     res.status(201).json({
@@ -626,18 +615,7 @@ router.post('/batch', writeLimiter, async (req, res, next) => {
 
       // Dispatch webhook with full event data (fire-and-forget)
       if (row.status === 'published') {
-        void (async () => {
-          try {
-            const { data: fullRow } = await supabaseAdmin
-              .from('events')
-              .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name)`)
-              .eq('id', row.id)
-              .maybeSingle();
-            if (fullRow) void dispatchWebhooks('event.created', row.id, toNeighborhoodEvent(fullRow as unknown as PortalEventRow));
-          } catch (err) {
-            console.error('[CONTRIBUTE] Webhook dispatch error:', err instanceof Error ? err.message : err);
-          }
-        })();
+        dispatchEventWebhookById('event.created', row.id);
       }
     }
 
@@ -930,18 +908,7 @@ router.patch('/:id', writeLimiter, async (req, res, next) => {
 
     // Dispatch webhook with full event data (fire-and-forget)
     if (existing.status === 'published') {
-      void (async () => {
-        try {
-          const { data: fullRow } = await supabaseAdmin
-            .from('events')
-            .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name)`)
-            .eq('id', req.params.id)
-            .maybeSingle();
-          if (fullRow) void dispatchWebhooks('event.updated', req.params.id as string, toNeighborhoodEvent(fullRow as unknown as PortalEventRow));
-        } catch (err) {
-          console.error('[CONTRIBUTE] Webhook dispatch error:', err instanceof Error ? err.message : err);
-        }
-      })();
+      dispatchEventWebhookById('event.updated', req.params.id as string);
     }
 
     console.log(`[CONTRIBUTE] Event updated: ${req.params.id}`);
@@ -1065,22 +1032,9 @@ router.patch('/series/:seriesId', writeLimiter, async (req, res, next) => {
     }
 
     // Dispatch webhooks for each updated instance (fire-and-forget).
-    void (async () => {
-      try {
-        for (const id of result.updatedIds) {
-          const { data: row } = await supabaseAdmin
-            .from('events')
-            .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name)`)
-            .eq('id', id)
-            .maybeSingle();
-          if (row && (row as Record<string, unknown>).status === 'published') {
-            void dispatchWebhooks('event.updated', id, toNeighborhoodEvent(row as unknown as PortalEventRow));
-          }
-        }
-      } catch (err) {
-        console.error('[CONTRIBUTE] Series webhook dispatch error:', err instanceof Error ? err.message : err);
-      }
-    })();
+    for (const id of result.updatedIds) {
+      dispatchEventWebhookById('event.updated', id, { onlyPublished: true });
+    }
 
     console.log(`[CONTRIBUTE] Series ${req.params.seriesId} updated: ${result.updatedCount} future instances`);
     res.json({

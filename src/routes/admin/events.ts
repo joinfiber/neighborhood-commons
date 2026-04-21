@@ -11,9 +11,8 @@ import { validateTags } from "../../lib/tags.js";
 import { supabaseAdmin } from "../../lib/supabase.js";
 import { createError } from "../../middleware/error-handler.js";
 import { validateRequest, validateUuidParam } from "../../lib/helpers.js";
-import { dispatchWebhooks } from "../../lib/webhook-delivery.js";
+import { dispatchEventWebhookById, dispatchWebhooks } from "../../lib/webhook-delivery.js";
 import { auditPortalAction } from "../../lib/audit.js";
-import { toNeighborhoodEvent, type PortalEventRow } from "../../lib/event-transform.js";
 import { sanitizeUrl, checkApprovedDomain } from "../../lib/url-sanitizer.js";
 import { geocodeEventIfNeeded, geocodeSeriesEvents } from "../../lib/geocoding.js";
 import { writeLimiter, portalLimiter } from "../../middleware/rate-limit.js";
@@ -179,20 +178,7 @@ router.post('/accounts/:id/events', writeLimiter, async (req, res, next) => {
     void geocodeEventIfNeeded(event.id, insertData.venue_address as string | null, insertData.latitude as number | null, insertData.longitude as number | null, account.id);
 
     // Dispatch webhook (fire-and-forget) — admin-created events are always published
-    void (async () => {
-      try {
-        const { data: row } = await supabaseAdmin
-          .from('events')
-          .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name)`)
-          .eq('id', event.id)
-          .maybeSingle();
-        if (row) {
-          void dispatchWebhooks('event.created', event.id, toNeighborhoodEvent(row as unknown as PortalEventRow));
-        }
-      } catch (err) {
-        console.error('[COMMONS-ADMIN] Webhook dispatch error:', err instanceof Error ? err.message : err);
-      }
-    })();
+    dispatchEventWebhookById('event.created', event.id);
 
     res.status(201).json({ event: toPortalEvent(event) });
   } catch (err) {
@@ -306,22 +292,9 @@ router.patch('/events/batch', writeLimiter, async (req, res, next) => {
     }
 
     // Dispatch webhooks (fire-and-forget)
-    void (async () => {
-      try {
-        for (const row of updatedRows) {
-          const { data: full } = await supabaseAdmin
-            .from('events')
-            .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name)`)
-            .eq('id', row.id)
-            .maybeSingle();
-          if (full) {
-            void dispatchWebhooks('event.updated', row.id, toNeighborhoodEvent(full as unknown as PortalEventRow));
-          }
-        }
-      } catch (err) {
-        console.error('[ADMIN] Batch webhook dispatch error:', err instanceof Error ? err.message : err);
-      }
-    })();
+    for (const row of updatedRows) {
+      dispatchEventWebhookById('event.updated', row.id);
+    }
 
     res.json({ updated: updatedRows.length, ids: updatedRows.map((r) => r.id) });
   } catch (err) {
@@ -394,23 +367,10 @@ router.patch('/events/series/:seriesId', writeLimiter, async (req, res, next) =>
       (result.instancesAdded ? `, +${result.instancesAdded} added` : '') +
       (result.instancesRemoved ? `, -${result.instancesRemoved} removed` : ''));
 
-    // Dispatch webhooks (fire-and-forget)
-    void (async () => {
-      try {
-        for (const id of result.updatedIds) {
-          const { data: row } = await supabaseAdmin
-            .from('events')
-            .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name)`)
-            .eq('id', id)
-            .maybeSingle();
-          if (row && (row as Record<string, unknown>).status === 'published') {
-            void dispatchWebhooks('event.updated', id, toNeighborhoodEvent(row as unknown as PortalEventRow));
-          }
-        }
-      } catch (err) {
-        console.error('[COMMONS-ADMIN] Series webhook dispatch error:', err instanceof Error ? err.message : err);
-      }
-    })();
+    // Dispatch webhooks (fire-and-forget) — only for published instances
+    for (const id of result.updatedIds) {
+      dispatchEventWebhookById('event.updated', id, { onlyPublished: true });
+    }
 
     res.json({ updated: result.updatedCount, total: result.totalAfter, added: result.instancesAdded, removed: result.instancesRemoved });
   } catch (err) {
@@ -559,20 +519,7 @@ router.patch('/events/:id', writeLimiter, async (req, res, next) => {
     }
 
     // Dispatch webhook (fire-and-forget)
-    void (async () => {
-      try {
-        const { data: row } = await supabaseAdmin
-          .from('events')
-          .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name)`)
-          .eq('id', event.id)
-          .maybeSingle();
-        if (row) {
-          void dispatchWebhooks('event.updated', event.id, toNeighborhoodEvent(row as unknown as PortalEventRow));
-        }
-      } catch (err) {
-        console.error('[COMMONS-ADMIN] Webhook dispatch error:', err instanceof Error ? err.message : err);
-      }
-    })();
+    dispatchEventWebhookById('event.updated', event.id);
 
     res.json({ event: toPortalEvent(event) });
   } catch (err) {

@@ -16,10 +16,9 @@ import { supabaseAdmin } from '../../lib/supabase.js';
 import { createError } from '../../middleware/error-handler.js';
 import { validateRequest, validateUuidParam } from '../../lib/helpers.js';
 import { validateTags } from '../../lib/tags.js';
-import { dispatchWebhooks } from '../../lib/webhook-delivery.js';
-import { toNeighborhoodEvent, type PortalEventRow } from '../../lib/event-transform.js';
+import { dispatchEventWebhookById } from '../../lib/webhook-delivery.js';
 import { serviceLimiter } from '../../middleware/rate-limit.js';
-import { PORTAL_SELECT, fromTimestamptz } from '../../lib/event-operations.js';
+import { fromTimestamptz } from '../../lib/event-operations.js';
 import { deleteSeriesEvents, updateSeriesFutureInstances } from '../../lib/event-series.js';
 import { assertLinkedAccount, assertLinkedEvent } from './helpers.js';
 import { updateEventSchema } from './events.js';
@@ -106,22 +105,9 @@ router.patch('/events/series/:seriesId', serviceLimiter, async (req, res, next) 
       timezone: tz,
     });
 
-    void (async () => {
-      try {
-        for (const id of result.updatedIds) {
-          const { data: row } = await supabaseAdmin
-            .from('events')
-            .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name)`)
-            .eq('id', id)
-            .maybeSingle();
-          if (row && (row as Record<string, unknown>).status === 'published') {
-            void dispatchWebhooks('event.updated', id, toNeighborhoodEvent(row as unknown as PortalEventRow));
-          }
-        }
-      } catch (err) {
-        console.error('[SERVICE] Series webhook dispatch error:', err instanceof Error ? err.message : err);
-      }
-    })();
+    for (const id of result.updatedIds) {
+      dispatchEventWebhookById('event.updated', id, { onlyPublished: true });
+    }
 
     console.log(`[SERVICE] Series ${req.params.seriesId} updated: ${result.updatedCount} future instances`);
     res.json({
