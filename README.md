@@ -10,14 +10,14 @@ This is infrastructure designed to be cloned and run by any city. The data is th
 
 ## What's here
 
-- **Public API** — Neighborhood API spec compliant. No auth required to read. `GET /api/v1/events`
-- **Contributor Portal** — React SPA where contributors upload CSV data, map columns, preview, and submit. Also supports API key registration and individual event management.
+- **Public API** — Neighborhood API spec compliant. No auth required to read. `GET /api/v1/events`, `/api/v1/groups`, `/api/v1/accounts`, plus `/api/v1/events/{id}`.
+- **Portal** — React SPA where venue operators and organizers sign up, post events, and manage their own listings. Also hosts the CSV contribution path for developers uploading bulk data, and self-service API key registration.
 - **Service API** — Full CRUD for trusted external tools (admin dashboards, import scripts, partner apps). Authenticated via service-tier API keys.
 - **Feeds** — iCal (`.ics`) and RSS (`.rss`) for calendar apps and feed readers.
 - **Webhooks** — Real-time push notifications for downstream consumers.
 - **Self-service API keys** — Developers register via email OTP, get a key, start building.
 
-Admin tooling, data ingestion, and curation happen in external tools that connect via the Service API. The commons stays thin.
+Admin tooling, ingestion pipelines, and editorial curation all happen in external tools that connect via the Service API. The commons stays thin — it stores events and serves them.
 
 ## Quick start
 
@@ -106,6 +106,18 @@ curl https://api.neighborhood-commons.org/.well-known/neighborhood
 Every event response includes provenance (`source.publisher`, `source.license`) and conforms to the Neighborhood API event schema. Data is licensed CC BY 4.0.
 
 See [docs/consumer-guide.md](docs/consumer-guide.md) for the full integration guide.
+
+## The Commons Contract
+
+Three documents together form the contract between this service and every app that consumes it:
+
+- **The Spec** — [`public/openapi.json`](public/openapi.json) — machine-readable, authoritative. Consumers generate clients from it. Wins every conflict.
+- **The Guide** — [`public/llms.txt`](public/llms.txt) — narrative companion. Explains *why* and *how*.
+- **The Log** — [`CHANGELOG.md`](CHANGELOG.md) — dated record of every contract-affecting change. Consumers subscribe to it (or diff it on release) to know what moved.
+
+Rule when they disagree: **Spec wins. Guide explains. Log dates.**
+
+A deeper narrative of the contract — the event shape, category slugs, accessibility fields, recurrence model, and the rules for breaking changes — lives in [docs/commons-contract.md](docs/commons-contract.md). If you're building a consumer app, start there.
 
 ## Running your own instance
 
@@ -248,7 +260,9 @@ Code: MIT
 
 ## Links
 
-- [Neighborhood API spec](https://github.com/The-Relational-Technology-Project/neighborhood-api)
-- [The Relational Technology Project](https://relationaltechproject.org)
-- [API consumer guide](docs/consumer-guide.md)
-- [AI-readable docs](https://api.neighborhood-commons.org/llms.txt)
+- [Neighborhood API spec](https://github.com/The-Relational-Technology-Project/neighborhood-api) — upstream open spec this project implements
+- [The Relational Technology Project](https://relationaltechproject.org) — stewards of the spec
+- [Commons Contract](docs/commons-contract.md) — canonical narrative reference for consumers
+- [API consumer guide](docs/consumer-guide.md) — integration walkthrough
+- [OpenAPI spec](https://api.neighborhood-commons.org/openapi.json) — authoritative, machine-readable
+- [AI-readable docs](https://api.neighborhood-commons.org/llms.txt) — narrative companion
