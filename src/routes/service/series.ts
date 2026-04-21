@@ -77,6 +77,13 @@ router.patch('/events/series/:seriesId', serviceLimiter, async (req, res, next) 
     if (data.rsvp !== undefined) templateUpdate.rsvp = data.rsvp;
     if (data.open_window !== undefined) templateUpdate.open_window = data.open_window;
     if (data.image_focal_y !== undefined) templateUpdate.event_image_focal_y = data.image_focal_y;
+    if (data.contributor !== undefined) {
+      templateUpdate.source_contributor_name = data.contributor?.name ?? null;
+      templateUpdate.source_contributor_url =
+        data.contributor && typeof data.contributor.url === 'string' && data.contributor.url
+          ? data.contributor.url
+          : null;
+    }
     if (data.tags !== undefined) {
       const cat = data.category || 'community';
       templateUpdate.tags = validateTags(data.tags, cat);

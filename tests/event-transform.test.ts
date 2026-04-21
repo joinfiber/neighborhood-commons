@@ -43,6 +43,8 @@ function makeRow(overrides: Partial<PortalEventRow> = {}): PortalEventRow {
     created_at: '2026-03-10T12:00:00.000Z',
     source_method: null,
     source_publisher: null,
+    source_contributor_url: null,
+    source_contributor_name: null,
     first_party: false,
     portal_accounts: { business_name: 'South Jazz Kitchen', wheelchair_accessible: null },
     ...overrides,
@@ -181,6 +183,75 @@ describe('toNeighborhoodEvent', () => {
   it('falls back to "Neighborhood Commons" for publisher when no account', () => {
     const event = toNeighborhoodEvent(makeRow({ portal_accounts: null }));
     expect(event.source.publisher).toBe('Neighborhood Commons');
+  });
+
+  // -------------------------------------------------------------------------
+  // source.contributor — migration 062 override + legacy fallback chain
+  // -------------------------------------------------------------------------
+
+  describe('source.contributor', () => {
+    it('uses source_contributor_name override when set', () => {
+      const event = toNeighborhoodEvent(makeRow({
+        source_method: 'api',
+        source_publisher: 'monday-night-rides',
+        source_contributor_name: 'Go There',
+        source_contributor_url: 'https://gothere.bike',
+      }));
+      expect(event.source.contributor).toEqual({
+        name: 'Go There',
+        url: 'https://gothere.bike',
+      });
+      expect(event.source.publisher).toBe('monday-night-rides');
+    });
+
+    it('contributor override accepts null url', () => {
+      const event = toNeighborhoodEvent(makeRow({
+        source_method: 'api',
+        source_publisher: 'monday-night-rides',
+        source_contributor_name: 'Go There',
+        source_contributor_url: null,
+      }));
+      expect(event.source.contributor).toEqual({ name: 'Go There', url: null });
+    });
+
+    it('falls back to legacy derivation when override is null and source_method is api', () => {
+      const event = toNeighborhoodEvent(makeRow({
+        source_method: 'api',
+        source_publisher: 'Merrie',
+        source_contributor_url: 'https://merrie.co',
+        source_contributor_name: null,
+      }));
+      // Unchanged behavior for contribute.ts callers that set source_publisher
+      // to the app name.
+      expect(event.source.contributor).toEqual({ name: 'Merrie', url: 'https://merrie.co' });
+    });
+
+    it('returns null contributor on portal events without override', () => {
+      const event = toNeighborhoodEvent(makeRow());
+      expect(event.source.contributor).toBeNull();
+    });
+
+    it('returns null contributor on import events without override', () => {
+      const event = toNeighborhoodEvent(makeRow({
+        source_method: 'import',
+        source_publisher: 'philly-gov-feed',
+      }));
+      expect(event.source.contributor).toBeNull();
+    });
+
+    it('override fires even on non-api source_method', () => {
+      // Portal events can carry a contributor override too — the column
+      // is independent of source_method.
+      const event = toNeighborhoodEvent(makeRow({
+        source_method: null,
+        source_contributor_name: 'Go There',
+        source_contributor_url: 'https://gothere.bike',
+      }));
+      expect(event.source.contributor).toEqual({
+        name: 'Go There',
+        url: 'https://gothere.bike',
+      });
+    });
   });
 
   it('maps price → cost', () => {

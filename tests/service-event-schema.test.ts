@@ -88,6 +88,57 @@ describe('ServiceEventInput — friendly-shape', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  // -------------------------------------------------------------------------
+  // contributor — per-event attribution (migration 062)
+  // -------------------------------------------------------------------------
+
+  it('accepts contributor: { name } without url', () => {
+    const result = createEventSchema.safeParse({
+      ...minimumFriendly(),
+      contributor: { name: 'Go There' },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts contributor with a full url', () => {
+    const result = createEventSchema.safeParse({
+      ...minimumFriendly(),
+      contributor: { name: 'Go There', url: 'https://gothere.bike' },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.contributor).toEqual({
+        name: 'Go There',
+        url: 'https://gothere.bike',
+      });
+    }
+  });
+
+  it('coerces a contributor.url without a scheme to https://', () => {
+    const result = createEventSchema.safeParse({
+      ...minimumFriendly(),
+      contributor: { name: 'Go There', url: 'gothere.bike' },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.contributor?.url).toBe('https://gothere.bike');
+    }
+  });
+
+  it('rejects contributor with empty name', () => {
+    const result = createEventSchema.safeParse({
+      ...minimumFriendly(),
+      contributor: { name: '' },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('omitting contributor is valid (additive field)', () => {
+    const result = createEventSchema.safeParse(minimumFriendly());
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.contributor).toBeUndefined();
+  });
 });
 
 describe('friendlyToPortalInput — server-controlled provenance', () => {
@@ -107,6 +158,25 @@ describe('friendlyToPortalInput — server-controlled provenance', () => {
     const parsed = createEventSchema.parse(minimumFriendly());
     const { portal } = friendlyToPortalInput(parsed, null);
     expect(portal.source_publisher).toBeUndefined();
+  });
+
+  it('threads contributor into source_contributor_name / source_contributor_url', () => {
+    const parsed = createEventSchema.parse({
+      ...minimumFriendly(),
+      contributor: { name: 'Go There', url: 'https://gothere.bike' },
+    });
+    const { portal } = friendlyToPortalInput(parsed, 'monday-night-rides');
+    expect(portal.source_contributor_name).toBe('Go There');
+    expect(portal.source_contributor_url).toBe('https://gothere.bike');
+    // Publisher is unaffected — still derived from business_name
+    expect(portal.source_publisher).toBe('monday-night-rides');
+  });
+
+  it('nulls both contributor columns when contributor is omitted', () => {
+    const parsed = createEventSchema.parse(minimumFriendly());
+    const { portal } = friendlyToPortalInput(parsed, "Johnny's Bar");
+    expect(portal.source_contributor_name).toBeNull();
+    expect(portal.source_contributor_url).toBeNull();
   });
 });
 

@@ -45,6 +45,10 @@ export async function createEventSeries(
     'latitude', 'longitude', 'category', 'custom_category', 'price',
     'link_url', 'event_image_focal_y', 'open_window', 'tags',
     'wheelchair_accessible', 'capacity', 'rsvp',
+    // Contributor override (migration 062) must propagate to all future
+    // instances — the auto-extend cron reads base_event_data to regenerate
+    // them weeks later.
+    'source_contributor_name', 'source_contributor_url',
   ];
   for (const key of templateKeys) {
     if (key in templateData) baseEventData[key] = templateData[key];
@@ -227,6 +231,8 @@ const COLUMN_TO_BASE_KEY: Record<string, string> = {
   open_window: 'open_window', tags: 'tags',
   wheelchair_accessible: 'wheelchair_accessible', capacity: 'capacity', rsvp: 'rsvp',
   event_image_focal_y: 'event_image_focal_y',
+  source_contributor_name: 'source_contributor_name',
+  source_contributor_url: 'source_contributor_url',
 };
 
 /**

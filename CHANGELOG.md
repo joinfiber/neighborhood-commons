@@ -27,8 +27,7 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 ## 2026-04-20
 
 - BREAKING: Removed `runtime_minutes`, `content_rating`, and `showtimes` fields from the Event schema and from the `events` table (migration 061). These were added by migration 029 as a parallel data model for film screenings but were never written to — every INSERT set them null. They were also not part of the upstream Neighborhood API spec. Film screenings now use the same primitives as every other event: one row per individual showtime, `category=film`, shared `series_id` across same-film showings on the same day, runtime derivable from `end - start`, rating conveyed as a tag with `rating:` prefix (e.g., `"rating:r"`). Consumer apps that parsed the three fields should stop reading them; nothing needs to change on the write side. OpenAPI `info.version` bumped to `0.4.0`.
-
----
+- Added: `ServiceEventInput` accepts an optional `contributor: { name, url? }` (migration 062 adds `events.source_contributor_name`; `source_contributor_url` already existed). Decouples per-event attribution from `source.publisher` so a Service-API caller can publish as e.g. "Go There" while organizer/publisher stay on the linked account's `business_name`. Surfaces as `source.contributor` on every read path (GET, ICS/RSS propagation via the event shape, webhooks, series template). Purely additive: existing callers who omit `contributor` keep the legacy derivation — on `source_method='api'` events without a new override, `source.contributor` still derives from `source_publisher` as before. Passing `contributor: null` on PATCH clears the override. Propagates through `base_event_data` so auto-extended series instances inherit it.
 
 ## 2026-04-17
 

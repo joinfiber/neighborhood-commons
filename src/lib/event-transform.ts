@@ -45,10 +45,11 @@ export interface PortalEventRow {
   link_url: string | null;
   event_image_url: string | null;
   created_at: string;
-  // Contributor tracking (migration 020, 045)
+  // Contributor tracking (migration 020, 045, 062)
   source_method: string | null;
   source_publisher: string | null;
   source_contributor_url: string | null;
+  source_contributor_name: string | null;
   // First-party flag (migration 054)
   first_party: boolean;
   portal_accounts: { business_name: string; wheelchair_accessible?: boolean | null } | null;
@@ -231,9 +232,17 @@ export function toNeighborhoodEvent(row: PortalEventRow): NeighborhoodEvent {
         : (row.portal_accounts?.business_name || row.source_publisher || 'Neighborhood Commons'),
       collected_at: row.created_at,
       method: (row.source_method || 'portal') as 'portal' | 'import' | 'api',
-      contributor: row.source_method === 'api' && row.source_publisher
-        ? { name: row.source_publisher, url: row.source_contributor_url || null }
-        : null,
+      // Contributor fallback chain (migration 062):
+      //   1. Explicit per-event override via source_contributor_name
+      //      (Service API `contributor: { name, url }` input)
+      //   2. Legacy derivation: source_publisher on api-method events
+      //      (contribute.ts path, where source_publisher was the app name)
+      //   3. null
+      contributor: row.source_contributor_name
+        ? { name: row.source_contributor_name, url: row.source_contributor_url || null }
+        : (row.source_method === 'api' && row.source_publisher
+            ? { name: row.source_publisher, url: row.source_contributor_url || null }
+            : null),
       license: 'CC BY 4.0',
     },
   };
