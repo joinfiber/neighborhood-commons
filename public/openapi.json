@@ -3,7 +3,7 @@
   "info": {
     "title": "Neighborhood Commons API",
     "description": "Open neighborhood event data. Implements the Neighborhood API v0.2 spec. CC BY 4.0.\n\n**This document is the Spec, part of the Commons Contract.** The Contract is three files together: the Spec (this document — machine-readable, authoritative), the Guide (`/llms.txt` — narrative companion), and the Log (`CHANGELOG.md` — dated record of every change). Rule when they disagree: Spec wins. Guide explains. Log dates.",
-    "version": "0.4.0",
+    "version": "0.5.0",
     "license": {
       "name": "CC-BY-4.0",
       "url": "https://creativecommons.org/licenses/by/4.0/"
@@ -2486,6 +2486,51 @@
           "external_id": { "type": "string", "maxLength": 500 }
         }
       },
+      "ErrorCode": {
+        "type": "string",
+        "description": "Machine-readable error identifier. Groups:\n\n- **Auth**: `ACCESS_DENIED`, `ACCOUNT_DISABLED`, `ACCOUNT_REQUIRED`, `API_KEY_REQUIRED`, `CAPTCHA_FAILED`, `FORBIDDEN`, `INSUFFICIENT_TIER`, `INVALID_API_KEY`, `INVALID_OTP`, `KEY_NOT_LINKED`, `NOT_LINKED`, `NO_OWNER`, `UNAUTHORIZED`\n- **Validation / resource**: `ALREADY_EXISTS`, `BATCH_ALREADY_SUBMITTED`, `CONFLICT`, `DUPLICATE`, `INVALID_STATE`, `NOT_FOUND`, `VALIDATION_ERROR`\n- **URL / domain**: `BLOCKED_HOSTNAME`, `DOMAIN_PENDING_REVIEW`, `INVALID_SCHEME`, `INVALID_URL`, `INVALID_WEBHOOK_URL`, `IP_LITERAL`, `URL_CREDENTIALS`\n- **Rate limit / quota**: `PAYLOAD_TOO_LARGE`, `RATE_LIMIT`, `SUBSCRIPTION_LIMIT`\n- **CSV / import**: `CSV_EMPTY`, `CSV_INVALID`, `CSV_TOO_LARGE`, `NO_VALID_ROWS`\n- **Server / infrastructure**: `DATABASE_ERROR`, `INTERNAL_ERROR`, `SERVER_ERROR`, `SERVICE_UNAVAILABLE`, `UPSTREAM_ERROR`",
+        "enum": [
+          "ACCESS_DENIED",
+          "ACCOUNT_DISABLED",
+          "ACCOUNT_REQUIRED",
+          "ALREADY_EXISTS",
+          "API_KEY_REQUIRED",
+          "BATCH_ALREADY_SUBMITTED",
+          "BLOCKED_HOSTNAME",
+          "CAPTCHA_FAILED",
+          "CONFLICT",
+          "CSV_EMPTY",
+          "CSV_INVALID",
+          "CSV_TOO_LARGE",
+          "DATABASE_ERROR",
+          "DOMAIN_PENDING_REVIEW",
+          "DUPLICATE",
+          "FORBIDDEN",
+          "INSUFFICIENT_TIER",
+          "INTERNAL_ERROR",
+          "INVALID_API_KEY",
+          "INVALID_OTP",
+          "INVALID_SCHEME",
+          "INVALID_STATE",
+          "INVALID_URL",
+          "INVALID_WEBHOOK_URL",
+          "IP_LITERAL",
+          "KEY_NOT_LINKED",
+          "NO_OWNER",
+          "NO_VALID_ROWS",
+          "NOT_FOUND",
+          "NOT_LINKED",
+          "PAYLOAD_TOO_LARGE",
+          "RATE_LIMIT",
+          "SERVER_ERROR",
+          "SERVICE_UNAVAILABLE",
+          "SUBSCRIPTION_LIMIT",
+          "UNAUTHORIZED",
+          "UPSTREAM_ERROR",
+          "URL_CREDENTIALS",
+          "VALIDATION_ERROR"
+        ]
+      },
       "Error": {
         "type": "object",
         "required": ["error"],
@@ -2494,7 +2539,7 @@
             "type": "object",
             "required": ["code", "message"],
             "properties": {
-              "code": { "type": "string" },
+              "code": { "$ref": "#/components/schemas/ErrorCode" },
               "message": { "type": "string" },
               "domain": { "type": "string", "description": "Present when code is DOMAIN_PENDING_REVIEW" }
             }
