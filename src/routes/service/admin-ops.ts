@@ -1,0 +1,577 @@
+/**
+ * Service API — Admin-gated operations
+ *
+ * All routes here require the calling service key to have is_admin=true.
+ * Segregated in one file so the `isAdmin` gate is easy to audit and so
+ * the non-admin files stay free of the pattern. This is the known
+ * "fifth auth model" deviation from CLAUDE.md's four-auth-model rule —
+ * accepted for now because Studio and Merrie talk to these paths with
+ * admin service keys. A future PR can move these to `/api/admin/*`
+ * (requireCommonsAdmin, JWT) once we coordinate with those consumers.
+ *
+ * Endpoints:
+ *   - GET  /service/stats
+ *   - GET  /service/api-keys
+ *   - POST /service/api-keys
+ *   - PATCH /service/api-keys/:id
+ *   - POST /service/migrate-image-urls
+ *   - GET/POST/DELETE /service/approved-domains
+ *   - GET /service/domain-approval-requests
+ *   - POST /service/domain-approval-requests/:id/{approve,reject}
+ */
+
+import { Router } from 'express';
+import { z } from 'zod';
+import { supabaseAdmin } from '../../lib/supabase.js';
+import { createError } from '../../middleware/error-handler.js';
+import { validateRequest, validateUuidParam } from '../../lib/helpers.js';
+import { serviceLimiter } from '../../middleware/rate-limit.js';
+import { MANAGED_SOURCES } from '../../lib/event-operations.js';
+import { processAndUploadImage } from '../../lib/image-processing.js';
+import { validateFeedUrl } from '../../lib/url-validation.js';
+import { safeFetch } from '../../lib/safe-fetch.js';
+import { invalidateApprovedDomainsCache } from '../../lib/url-sanitizer.js';
+import { config } from '../../config.js';
+
+const router: ReturnType<typeof Router> = Router();
+
+// =============================================================================
+// STATS
+// =============================================================================
+
+/** GET /service/stats — Platform statistics + category distribution */
+router.get('/stats', serviceLimiter, async (req, res, next) => {
+  try {
+    if (!req.apiKeyInfo?.isAdmin) {
+      throw createError('Admin access required', 403, 'FORBIDDEN');
+    }
+    // Run account and event counts in parallel
+    const [accountCounts, oneOffCount, seriesCount, categoryRows] = await Promise.all([
+      // Account counts: use head:true to avoid fetching rows
+      supabaseAdmin.from('portal_accounts').select('id', { count: 'exact', head: true }),
+
+      // One-off events
+      supabaseAdmin.from('events')
+        .select('id', { count: 'exact', head: true })
+        .in('source', [...MANAGED_SOURCES])
+        .is('series_id', null),
+
+      // Series (representative instance: 0 = ongoing, 1 = first of bounded)
+      supabaseAdmin.from('events')
+        .select('id', { count: 'exact', head: true })
+        .in('source', [...MANAGED_SOURCES])
+        .not('series_id', 'is', null)
+        .or('series_instance_number.eq.0,series_instance_number.eq.1'),
+
+      // Category distribution — only fetch unique events (one-offs + first instances)
+      // Use minimal select to reduce payload
+      supabaseAdmin.from('events')
+        .select('category')
+        .in('source', [...MANAGED_SOURCES])
+        .or('series_id.is.null,series_instance_number.eq.0,series_instance_number.eq.1')
+        .limit(10000),
+    ]);
+
+    // Account breakdowns need status/claimed_at — separate lightweight query
+    const { data: accountStatuses } = await supabaseAdmin
+      .from('portal_accounts')
+      .select('status, claimed_at')
+      .limit(10000);
+
+    const totalAccounts = accountCounts.count || 0;
+    const claimedAccounts = accountStatuses?.filter((a) => a.claimed_at).length || 0;
+    const pendingAccounts = accountStatuses?.filter((a) => a.status === 'pending').length || 0;
+
+    const totalEvents = (oneOffCount.count || 0) + (seriesCount.count || 0);
+
+    const category_distribution: Record<string, number> = {};
+    if (categoryRows.data) {
+      for (const row of categoryRows.data) {
+        const cat = (row as Record<string, unknown>).category as string || 'uncategorized';
+        category_distribution[cat] = (category_distribution[cat] || 0) + 1;
+      }
+    }
+
+    res.json({
+      stats: {
+        total_accounts: totalAccounts,
+        claimed_accounts: claimedAccounts,
+        pending_accounts: pendingAccounts,
+        total_events: totalEvents,
+        category_distribution,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================================================
+// API KEYS
+// =============================================================================
+
+/** GET /service/api-keys — List all API keys with event stats */
+router.get('/api-keys', serviceLimiter, async (req, res, next) => {
+  try {
+    if (!req.apiKeyInfo?.isAdmin) {
+      throw createError('Admin access required', 403, 'FORBIDDEN');
+    }
+    const { data: keys, error } = await supabaseAdmin
+      .from('api_keys')
+      .select('id, key_prefix, name, url, contact_email, rate_limit_per_hour, status, contributor_tier, last_used_at, created_at')
+      .order('created_at', { ascending: false });
+
+    if (error) throw createError('Failed to list API keys', 500, 'SERVER_ERROR');
+
+    // Fetch event counts and last submission per API key
+    const keyIds = (keys || []).map((k) => k.id);
+    const eventStats: Record<string, { event_count: number; last_submitted_at: string | null; pending_count: number }> = {};
+
+    if (keyIds.length > 0) {
+      // Fetch counts per key — use minimal select, the new compound index handles this efficiently
+      const sourceFeedUrls = keyIds.map((id) => `api-key:${id}`);
+      const { data: stats } = await supabaseAdmin
+        .from('events')
+        .select('source_feed_url, status, created_at')
+        .in('source_feed_url', sourceFeedUrls)
+        .eq('source_method', 'api')
+        .order('created_at', { ascending: false });
+
+      if (stats) {
+        for (const row of stats) {
+          const keyId = row.source_feed_url?.replace('api-key:', '');
+          if (!keyId) continue;
+          if (!eventStats[keyId]) eventStats[keyId] = { event_count: 0, last_submitted_at: null, pending_count: 0 };
+          eventStats[keyId].event_count++;
+          if (row.status === 'pending_review') eventStats[keyId].pending_count++;
+          if (!eventStats[keyId].last_submitted_at) {
+            eventStats[keyId].last_submitted_at = row.created_at;
+          }
+        }
+      }
+    }
+
+    const enrichedKeys = (keys || []).map((k) => ({
+      ...k,
+      event_count: eventStats[k.id]?.event_count ?? 0,
+      pending_count: eventStats[k.id]?.pending_count ?? 0,
+      last_submitted_at: eventStats[k.id]?.last_submitted_at ?? null,
+    }));
+
+    res.json({ api_keys: enrichedKeys });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /service/api-keys — Issue a new API key linked to a portal account.
+ *
+ * The new key is the credential; the linked account is the stable owner.
+ * Rotation: call this with the same account_id as the existing key, then
+ * revoke the old key (PATCH .../api-keys/:id with status='revoked') when
+ * ready. Editorial control over the account's events follows the account,
+ * not the key — both old and new keys can edit the same events while
+ * both are active.
+ *
+ * Issuing a Contribute-tier key without account_id is forbidden: that
+ * was the bug that made key rotation silently destroy ownership. Service
+ * keys may be issued without account_id (admin keys span accounts).
+ */
+router.post('/api-keys', serviceLimiter, async (req, res, next) => {
+  try {
+    if (!req.apiKeyInfo?.isAdmin) {
+      throw createError('Admin access required', 403, 'FORBIDDEN');
+    }
+    const schema = z.object({
+      name: z.string().min(1).max(100),
+      contact_email: z.string().email().max(200),
+      contributor_tier: z.enum(['pending', 'verified', 'trusted', 'service']).default('verified'),
+      account_id: z.string().uuid().optional(),
+      url: z.string().url().max(500).optional(),
+      rate_limit_per_hour: z.number().int().min(1).max(100000).default(1000),
+      is_admin: z.boolean().default(false),
+    });
+    const data = validateRequest(schema, req.body);
+
+    // Invariant: Contribute keys (any non-service tier) MUST be linked to an
+    // account at issuance. Otherwise PATCH/DELETE return 403 KEY_NOT_LINKED
+    // and we recreate the rotation bug we just fixed.
+    const isServiceTier = data.contributor_tier === 'service';
+    if (!isServiceTier && !data.account_id) {
+      throw createError(
+        'account_id is required for non-service API keys. Without a linked account, the key cannot edit or delete the events it creates.',
+        400,
+        'ACCOUNT_REQUIRED',
+      );
+    }
+
+    // Verify the account exists if provided
+    if (data.account_id) {
+      const { data: account } = await supabaseAdmin
+        .from('portal_accounts')
+        .select('id, status')
+        .eq('id', data.account_id)
+        .maybeSingle();
+      if (!account) throw createError('Account not found', 404, 'NOT_FOUND');
+    }
+
+    // Generate the raw key + hash. The raw key is returned ONCE in this
+    // response and never recoverable — caller must store it immediately.
+    const { randomBytes, createHash } = await import('crypto');
+    const rawKey = 'nc_' + randomBytes(16).toString('hex');
+    const keyHash = createHash('sha256').update(rawKey).digest('hex');
+    const keyPrefix = rawKey.substring(0, 12);
+
+    const { data: newKey, error: insertError } = await supabaseAdmin
+      .from('api_keys')
+      .insert({
+        key_hash: keyHash,
+        key_prefix: keyPrefix,
+        name: data.name,
+        contact_email: data.contact_email,
+        contributor_tier: data.contributor_tier,
+        url: data.url || null,
+        rate_limit_per_hour: data.rate_limit_per_hour,
+        status: 'active',
+        is_admin: data.is_admin,
+      })
+      .select('id, key_prefix, name, contributor_tier, is_admin, created_at')
+      .single();
+
+    if (insertError || !newKey) throw createError('Failed to create API key', 500, 'SERVER_ERROR');
+
+    if (data.account_id) {
+      const { error: linkError } = await supabaseAdmin
+        .from('api_key_account_links')
+        .insert({ api_key_id: newKey.id, portal_account_id: data.account_id });
+      if (linkError) {
+        // Roll back the key — partial state is worse than failure
+        await supabaseAdmin.from('api_keys').delete().eq('id', newKey.id);
+        throw createError('Failed to link API key to account', 500, 'SERVER_ERROR');
+      }
+    }
+
+    console.log(`[SERVICE] API key ${newKey.id} created (${newKey.contributor_tier}) linked to account ${data.account_id || '<none>'}`);
+    res.status(201).json({
+      api_key: { ...newKey, account_id: data.account_id || null },
+      key: rawKey,
+      warning: 'Store this key immediately — it is not recoverable.',
+    });
+  } catch (err) { next(err); }
+});
+
+/** PATCH /service/api-keys/:id — Update API key tier, name, status, or contact email */
+router.patch('/api-keys/:id', serviceLimiter, async (req, res, next) => {
+  try {
+    if (!req.apiKeyInfo?.isAdmin) {
+      throw createError('Admin access required', 403, 'FORBIDDEN');
+    }
+    validateUuidParam(req.params.id, 'API key ID');
+    const schema = z.object({
+      name: z.string().min(1).max(100).optional(),
+      url: z.string().url().max(500).optional().nullable(),
+      status: z.enum(['active', 'revoked']).optional(),
+      contributor_tier: z.enum(['pending', 'verified', 'trusted']).optional(),
+      contact_email: z.string().email().max(200).optional(),
+    });
+    const updates = validateRequest(schema, req.body);
+
+    if (Object.keys(updates).length === 0) throw createError('No fields to update', 400, 'VALIDATION_ERROR');
+
+    const { data: apiKey, error } = await supabaseAdmin
+      .from('api_keys')
+      .update(updates)
+      .eq('id', req.params.id)
+      .select('id, key_prefix, name, url, contact_email, rate_limit_per_hour, status, contributor_tier, last_used_at, created_at')
+      .single();
+
+    if (error) throw createError('Failed to update API key', 500, 'SERVER_ERROR');
+
+    console.log(`[SERVICE] API key ${req.params.id} updated: ${Object.keys(updates).join(', ')}`);
+    res.json({ api_key: apiKey });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================================================
+// IMAGE URL MIGRATION
+// =============================================================================
+
+/**
+ * POST /service/migrate-image-urls — Rewrite all image URLs to direct R2 public URLs.
+ * Converts portal proxy URLs and re-hosts external URLs (Google, gstatic, etc.)
+ * One-time migration endpoint. Requires R2_PUBLIC_URL to be configured.
+ */
+router.post('/migrate-image-urls', serviceLimiter, async (req, res, next) => {
+  try {
+    if (!req.apiKeyInfo?.isAdmin) {
+      throw createError('Admin access required', 403, 'FORBIDDEN');
+    }
+    if (!config.r2.publicUrl) {
+      throw createError('R2_PUBLIC_URL not configured', 400, 'VALIDATION_ERROR');
+    }
+
+    const r2Base = config.r2.publicUrl;
+    const results = { accounts: { logo: 0, cover: 0, rehosted: 0 }, events: 0, errors: [] as string[] };
+
+    // --- Migrate portal_accounts ---
+    const { data: accounts } = await supabaseAdmin
+      .from('portal_accounts')
+      .select('id, logo_url, cover_image_url')
+      .or('logo_url.not.is.null,cover_image_url.not.is.null');
+
+    for (const account of accounts || []) {
+      const update: Record<string, string | null> = {};
+
+      for (const [field, r2Type] of [['logo_url', 'logo'], ['cover_image_url', 'cover']] as const) {
+        const url = account[field] as string | null;
+        if (!url) continue;
+
+        // Already an R2 public URL — skip
+        if (url.startsWith(r2Base)) continue;
+
+        // Portal proxy URL — rewrite to direct R2 URL
+        const portalMatch = url.match(/\/api\/portal\/accounts\/([^/]+)\/(logo|cover)$/);
+        if (portalMatch) {
+          // The R2 key is portal-events/accounts/{id}/{type}/image
+          update[field] = `${r2Base}/portal-events/accounts/${portalMatch[1]}/${portalMatch[2]}/image`;
+          if (r2Type === 'logo') results.accounts.logo++;
+          else results.accounts.cover++;
+          continue;
+        }
+
+        // External URL (Google, gstatic, etc.) — download, re-encode, upload to R2
+        if (url.startsWith('http')) {
+          try {
+            // SSRF protection: these URLs come from portal_accounts rows that
+            // were populated from external sources; treat as untrusted input.
+            await validateFeedUrl(url);
+            const response = await safeFetch(url, {
+              headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NeighborhoodCommons/1.0)' },
+              signal: AbortSignal.timeout(10_000),
+            });
+            if (!response.ok) {
+              results.errors.push(`${account.id}/${r2Type}: download failed (${response.status})`);
+              continue;
+            }
+            const buffer = Buffer.from(await response.arrayBuffer());
+            const base64 = buffer.toString('base64');
+            const newUrl = await processAndUploadImage(`accounts/${account.id}/${r2Type}`, base64);
+            update[field] = newUrl;
+            results.accounts.rehosted++;
+            console.log(`[SERVICE] Re-hosted ${r2Type} for account ${account.id}: ${url} → ${newUrl}`);
+          } catch (err) {
+            results.errors.push(`${account.id}/${r2Type}: ${err instanceof Error ? err.message : 'unknown'}`);
+          }
+          continue;
+        }
+      }
+
+      if (Object.keys(update).length > 0) {
+        await supabaseAdmin.from('portal_accounts').update(update).eq('id', account.id);
+      }
+    }
+
+    // --- Migrate events ---
+    const { data: events } = await supabaseAdmin
+      .from('events')
+      .select('id, event_image_url')
+      .not('event_image_url', 'is', null);
+
+    for (const event of events || []) {
+      const url = event.event_image_url as string;
+      if (!url || url.startsWith(r2Base)) continue;
+
+      // Portal proxy URL — rewrite to direct R2 URL
+      const eventMatch = url.match(/\/api\/portal\/events\/([^/]+)\/image$/);
+      if (eventMatch) {
+        const newUrl = `${r2Base}/portal-events/${eventMatch[1]}/image`;
+        await supabaseAdmin.from('events').update({ event_image_url: newUrl }).eq('id', event.id);
+        results.events++;
+        continue;
+      }
+
+      // Raw R2 key stored directly
+      if (url.startsWith('portal-events/')) {
+        const newUrl = `${r2Base}/${url}`;
+        await supabaseAdmin.from('events').update({ event_image_url: newUrl }).eq('id', event.id);
+        results.events++;
+      }
+    }
+
+    console.log(`[SERVICE] Image URL migration complete:`, JSON.stringify(results));
+    res.json({ migration: results });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================================================
+// APPROVED DOMAINS — operator-managed allowlist for Contribute API URLs
+// =============================================================================
+//
+// Admin-only. Curator-submitted URLs whose domain isn't on this list are
+// queued in domain_approval_requests and rejected with DOMAIN_PENDING_REVIEW.
+// Operators review the queue and approve domains here.
+
+const domainParam = z.string().min(1).max(253).regex(
+  /^[a-z0-9.-]+$/i,
+  'Domain must be a hostname (no scheme, path, or port).',
+).transform((d) => d.toLowerCase());
+
+const createApprovedDomainSchema = z.object({
+  domain: domainParam,
+  reason: z.string().max(500).optional(),
+});
+
+const reviewRequestSchema = z.object({
+  reason: z.string().max(500).optional(),
+});
+
+router.get('/approved-domains', serviceLimiter, async (req, res, next) => {
+  try {
+    if (!req.apiKeyInfo?.isAdmin) {
+      throw createError('Admin access required', 403, 'FORBIDDEN');
+    }
+    const { data, error } = await supabaseAdmin
+      .from('approved_domains')
+      .select('domain, added_by, reason, added_at')
+      .order('added_at', { ascending: false });
+    if (error) throw createError('Failed to load approved domains', 500, 'SERVER_ERROR');
+    res.json({ approved_domains: data || [] });
+  } catch (err) { next(err); }
+});
+
+router.post('/approved-domains', serviceLimiter, async (req, res, next) => {
+  try {
+    if (!req.apiKeyInfo?.isAdmin) {
+      throw createError('Admin access required', 403, 'FORBIDDEN');
+    }
+    const { domain, reason } = validateRequest(createApprovedDomainSchema, req.body);
+    const addedBy = `service:${req.apiKeyInfo.id}`;
+
+    const { error } = await supabaseAdmin
+      .from('approved_domains')
+      .insert({ domain, reason: reason || null, added_by: addedBy });
+    if (error && error.code !== '23505') {
+      throw createError('Failed to add approved domain', 500, 'SERVER_ERROR');
+    }
+
+    // Mark any pending request for this domain as approved.
+    await supabaseAdmin
+      .from('domain_approval_requests')
+      .update({ status: 'approved', reviewed_at: new Date().toISOString(), reviewed_by: addedBy })
+      .eq('domain', domain)
+      .eq('status', 'pending');
+
+    invalidateApprovedDomainsCache();
+    console.log(`[SERVICE] Approved domain added: ${domain} by ${addedBy}`);
+    res.status(201).json({ approved_domain: { domain, reason: reason || null, added_by: addedBy } });
+  } catch (err) { next(err); }
+});
+
+router.delete('/approved-domains/:domain', serviceLimiter, async (req, res, next) => {
+  try {
+    if (!req.apiKeyInfo?.isAdmin) {
+      throw createError('Admin access required', 403, 'FORBIDDEN');
+    }
+    const domain = domainParam.parse(req.params.domain);
+
+    const { error } = await supabaseAdmin
+      .from('approved_domains')
+      .delete()
+      .eq('domain', domain);
+    if (error) throw createError('Failed to remove approved domain', 500, 'SERVER_ERROR');
+
+    invalidateApprovedDomainsCache();
+    console.log(`[SERVICE] Approved domain removed: ${domain} by service:${req.apiKeyInfo.id}`);
+    res.status(204).end();
+  } catch (err) { next(err); }
+});
+
+router.get('/domain-approval-requests', serviceLimiter, async (req, res, next) => {
+  try {
+    if (!req.apiKeyInfo?.isAdmin) {
+      throw createError('Admin access required', 403, 'FORBIDDEN');
+    }
+    const status = (typeof req.query.status === 'string' && ['pending', 'approved', 'rejected'].includes(req.query.status))
+      ? req.query.status as string
+      : 'pending';
+
+    const { data, error } = await supabaseAdmin
+      .from('domain_approval_requests')
+      .select('id, domain, requested_via_api_key, requested_url, event_context, status, requested_at, reviewed_at, reviewed_by')
+      .eq('status', status)
+      .order('requested_at', { ascending: false })
+      .limit(200);
+    if (error) throw createError('Failed to load approval requests', 500, 'SERVER_ERROR');
+    res.json({ requests: data || [] });
+  } catch (err) { next(err); }
+});
+
+router.post('/domain-approval-requests/:id/approve', serviceLimiter, async (req, res, next) => {
+  try {
+    if (!req.apiKeyInfo?.isAdmin) {
+      throw createError('Admin access required', 403, 'FORBIDDEN');
+    }
+    validateUuidParam(req.params.id, 'request ID');
+    const { reason } = validateRequest(reviewRequestSchema, req.body || {});
+    const reviewedBy = `service:${req.apiKeyInfo.id}`;
+
+    const { data: request, error: fetchError } = await supabaseAdmin
+      .from('domain_approval_requests')
+      .select('id, domain, status')
+      .eq('id', req.params.id)
+      .maybeSingle();
+    if (fetchError || !request) throw createError('Request not found', 404, 'NOT_FOUND');
+    if (request.status !== 'pending') throw createError(`Request already ${request.status}`, 409, 'CONFLICT');
+
+    const domain = request.domain as string;
+    const { error: insertError } = await supabaseAdmin
+      .from('approved_domains')
+      .insert({ domain, reason: reason || null, added_by: reviewedBy });
+    if (insertError && insertError.code !== '23505') {
+      throw createError('Failed to add approved domain', 500, 'SERVER_ERROR');
+    }
+
+    await supabaseAdmin
+      .from('domain_approval_requests')
+      .update({ status: 'approved', reviewed_at: new Date().toISOString(), reviewed_by: reviewedBy })
+      .eq('id', req.params.id);
+
+    invalidateApprovedDomainsCache();
+    console.log(`[SERVICE] Approval request approved: ${domain} (${req.params.id}) by ${reviewedBy}`);
+    res.json({ request: { id: req.params.id, domain, status: 'approved' } });
+  } catch (err) { next(err); }
+});
+
+router.post('/domain-approval-requests/:id/reject', serviceLimiter, async (req, res, next) => {
+  try {
+    if (!req.apiKeyInfo?.isAdmin) {
+      throw createError('Admin access required', 403, 'FORBIDDEN');
+    }
+    validateUuidParam(req.params.id, 'request ID');
+    const reviewedBy = `service:${req.apiKeyInfo.id}`;
+
+    const { data: request, error: fetchError } = await supabaseAdmin
+      .from('domain_approval_requests')
+      .select('id, domain, status')
+      .eq('id', req.params.id)
+      .maybeSingle();
+    if (fetchError || !request) throw createError('Request not found', 404, 'NOT_FOUND');
+    if (request.status !== 'pending') throw createError(`Request already ${request.status}`, 409, 'CONFLICT');
+
+    const { error: updateError } = await supabaseAdmin
+      .from('domain_approval_requests')
+      .update({ status: 'rejected', reviewed_at: new Date().toISOString(), reviewed_by: reviewedBy })
+      .eq('id', req.params.id);
+    if (updateError) throw createError('Failed to reject request', 500, 'SERVER_ERROR');
+
+    console.log(`[SERVICE] Approval request rejected: ${request.domain} (${req.params.id}) by ${reviewedBy}`);
+    res.json({ request: { id: req.params.id, domain: request.domain, status: 'rejected' } });
+  } catch (err) { next(err); }
+});
+
+export default router;

@@ -13,7 +13,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { createEventSchema, friendlyToPortalInput } from '../src/routes/service.js';
+import { createEventSchema, friendlyToPortalInput } from '../src/routes/service/events.js';
 
 const ACCOUNT_ID = '11111111-1111-1111-1111-111111111111';
 
