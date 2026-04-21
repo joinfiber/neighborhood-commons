@@ -54,7 +54,7 @@ const listSchema = z.object({
 // ---------------------------------------------------------------------------
 
 // Full PortalEventRow select — matches v1.ts, feeds toNeighborhoodEvent()
-const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, event_image_focal_y, created_at, creator_account_id, series_id, series_instance_number, open_window, capacity, rsvp, tags, wheelchair_accessible, runtime_minutes, content_rating, showtimes, source_method, source_publisher, source_contributor_url, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible)';
+const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, event_image_focal_y, created_at, creator_account_id, series_id, series_instance_number, open_window, capacity, rsvp, tags, wheelchair_accessible, source_method, source_publisher, source_contributor_url, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible)';
 
 /** Classify transformed events into regular programming (recurring) vs upcoming (one-off) */
 function classifyEvents(events: NeighborhoodEvent[]) {

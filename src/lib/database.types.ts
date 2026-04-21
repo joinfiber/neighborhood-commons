@@ -63,9 +63,6 @@ export type Database = {
           source_publisher: string | null;
           source_feed_url: string | null;
           external_id: string | null;
-          runtime_minutes: number | null;
-          content_rating: string | null;
-          showtimes: unknown | null;
           created_at: string;
           updated_at: string;
         };

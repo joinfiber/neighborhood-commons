@@ -47,7 +47,6 @@ const SCHEMA: Record<string, string[]> = {
     'series_instance_number', 'becomes_visible_at', 'expires_at', 'ended_at',
     'open_window', 'tags', 'wheelchair_accessible', 'capacity', 'rsvp',
     'source_method', 'source_publisher', 'source_feed_url', 'external_id', 'source_contributor_url',
-    'runtime_minutes', 'content_rating', 'showtimes',
     'first_party',
     'group_id',
     'created_at', 'updated_at',

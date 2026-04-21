@@ -858,7 +858,7 @@ router.delete('/events/:id', writeLimiter, async (req, res, next) => {
       location: { name: '', address: null, lat: null, lng: null },
       url: null, images: [], event_image_focal_y: 0.5, organizer: { name: '', phone: null },
       cost: null, series_id: null, series_instance_number: null, series_instance_count: null, open_window: false, capacity: null, rsvp: null, tags: [], wheelchair_accessible: null,
-      runtime_minutes: null, content_rating: null, showtimes: null, first_party: false, recurrence: null,
+      first_party: false, recurrence: null,
       source: { publisher: 'neighborhood-commons', collected_at: new Date().toISOString(), method: 'portal', contributor: null, license: 'CC BY 4.0' },
     });
 

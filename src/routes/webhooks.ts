@@ -280,9 +280,6 @@ router.post('/:id/test', writeLimiter, async (req, res, next) => {
       rsvp: null,
       tags: [],
       wheelchair_accessible: null,
-      runtime_minutes: null,
-      content_rating: null,
-      showtimes: null,
       first_party: false,
       recurrence: null,
       source: {

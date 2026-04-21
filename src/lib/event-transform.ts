@@ -49,10 +49,6 @@ export interface PortalEventRow {
   source_method: string | null;
   source_publisher: string | null;
   source_contributor_url: string | null;
-  // Movie showtimes (migration 029)
-  runtime_minutes: number | null;
-  content_rating: string | null;
-  showtimes: Array<{ at: string }> | null;
   // First-party flag (migration 054)
   first_party: boolean;
   portal_accounts: { business_name: string; wheelchair_accessible?: boolean | null } | null;
@@ -89,9 +85,6 @@ export interface NeighborhoodEvent {
   rsvp: 'recommended' | 'required' | null;
   tags: string[];
   wheelchair_accessible: boolean | null;
-  runtime_minutes: number | null;
-  content_rating: string | null;
-  showtimes: Array<{ at: string }> | null;
   first_party: boolean;
   recurrence: { rrule: string } | null;
   source: {
@@ -228,9 +221,6 @@ export function toNeighborhoodEvent(row: PortalEventRow): NeighborhoodEvent {
     rsvp: row.rsvp ?? null,
     tags: row.tags || [],
     wheelchair_accessible: row.wheelchair_accessible ?? row.portal_accounts?.wheelchair_accessible ?? null,
-    runtime_minutes: row.runtime_minutes || null,
-    content_rating: row.content_rating || null,
-    showtimes: row.showtimes || null,
     first_party: row.first_party,
     recurrence: rrule ? { rrule } : null,
     source: {

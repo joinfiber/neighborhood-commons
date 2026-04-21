@@ -90,9 +90,6 @@ When you read an event from the Commons, this is the shape. Every field is prese
   "rsvp": null,
   "tags": ["all-ages", "free", "themed"],
   "wheelchair_accessible": null,
-  "runtime_minutes": null,
-  "content_rating": null,
-  "showtimes": null,
   "recurrence": null,
   "source": {
     "publisher": "Tattooed Moms",
@@ -116,7 +113,7 @@ When you read an event from the Commons, this is the shape. Every field is prese
 - **`open_window`** controls browse visibility and arrival semantics. When `false` (default), arrival at `start` is expected and the event disappears from feeds at start time. When `true`, the event is come-and-go and remains visible until `end` (or start + 3 hours if no end time). Use `true` for happy hours, open swims, markets, exhibits.
 - **`capacity`** is informational max attendance. Commons does NOT track signups or enforce caps. Ticketing lives in `url`.
 - **`rsvp`** is `null`, `"recommended"`, or `"required"`. Signal only — Commons does not manage RSVPs.
-- **`runtime_minutes`**, **`content_rating`**, **`showtimes`** are film-specific fields. `null` for all other categories.
+- **Film screenings** use the same primitives as every other event — one row per individual showtime, shared `series_id` across same-film showings on the same day, runtime derivable from `end - start`, rating conveyed as a tag with `rating:` prefix (e.g. `"rating:r"`). Query by `category=film`. There are no Commons-specific runtime/rating/showtimes fields.
 
 ---
 
