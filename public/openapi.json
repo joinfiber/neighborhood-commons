@@ -2521,6 +2521,15 @@
           "capacity": { "type": ["integer", "null"], "minimum": 1, "maximum": 10000, "description": "Informational only; Commons does not enforce." },
           "rsvp": { "type": ["string", "null"], "enum": ["recommended", "required", null], "description": "Whether RSVP is a thing for this event. Commons does not manage RSVPs." },
           "first_party": { "type": "boolean" },
+          "contributor": {
+            "type": "object",
+            "required": ["name"],
+            "description": "Per-event attribution for the app/tool that publishes this event, distinct from the account-derived source.publisher. Surfaces on the read path as source.contributor. Omit to fall back to legacy derivation (source.publisher on api-method events). Send null on PATCH to clear an existing override.",
+            "properties": {
+              "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+              "url": { "type": "string", "format": "uri", "maxLength": 2000 }
+            }
+          },
           "status": { "type": "string", "enum": ["published", "pending_review", "draft"] },
           "venue_id": { "type": "string", "format": "uuid" },
           "external_id": { "type": "string", "maxLength": 500 }

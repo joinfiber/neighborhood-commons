@@ -44,6 +44,20 @@ export const locationSchema = z.object({
   place_id: z.string().max(500).optional(),
 });
 
+// Per-event contributor override (migration 062). Decoupled from
+// source_publisher so a Service-API caller can attribute an event to an
+// app/tool (e.g. "Go There") without moving the subscribable publisher
+// off the linked account's business_name. Omitted → contributor falls
+// back to the legacy source_publisher-on-api derivation in
+// event-transform.ts.
+const contributorSchema = z.object({
+  name: z.string().min(1).max(200).trim(),
+  url: z.preprocess(
+    (v) => (typeof v === 'string' && v && !/^https?:\/\//i.test(v) ? `https://${v}` : v),
+    z.string().url().max(2000).optional().or(z.literal('')),
+  ),
+});
+
 export const createEventSchema = z.object({
   account_id: z.string().uuid(),
   name: z.string().min(1).max(200),
@@ -75,6 +89,9 @@ export const createEventSchema = z.object({
   image_focal_y: z.number().min(0).max(1).optional(),
   // source_method is NOT caller-overridable — hardcoded to 'api' on the Service path.
   // source_publisher is NOT caller-overridable — derived from the linked account's business_name.
+  // contributor IS caller-overridable (migration 062) — per-event "who ran this"
+  // attribution, distinct from the subscribable publisher. Optional.
+  contributor: contributorSchema.optional(),
   first_party: z.boolean().optional(),
   venue_id: z.string().uuid().optional(),
   external_id: z.string().max(500).optional(),
@@ -104,6 +121,9 @@ export const updateEventSchema = z.object({
   rsvp: z.enum(['recommended', 'required']).nullable().optional(),
   open_window: z.boolean().optional(),
   image_focal_y: z.number().min(0).max(1).optional(),
+  // Pass `contributor: null` to clear an existing override and fall back to
+  // the legacy source_publisher-on-api derivation.
+  contributor: contributorSchema.nullable().optional(),
   first_party: z.boolean().optional(),
   status: z.enum(['published', 'pending_review', 'suspended', 'unpublished']).optional(),
 });
@@ -151,6 +171,11 @@ export function friendlyToPortalInput(
       image_focal_y: data.image_focal_y,
       source_method: 'api',
       source_publisher: sourcePublisher ?? undefined,
+      source_contributor_name: data.contributor?.name ?? null,
+      source_contributor_url:
+        data.contributor && typeof data.contributor.url === 'string' && data.contributor.url
+          ? data.contributor.url
+          : null,
       first_party: data.first_party,
     },
     event_date: eventDate,
@@ -497,6 +522,14 @@ router.patch('/events/:id', serviceLimiter, async (req, res, next) => {
     if (data.open_window !== undefined) dbUpdate.open_window = data.open_window;
     if (data.first_party !== undefined) dbUpdate.first_party = data.first_party;
     if (data.image_focal_y !== undefined) dbUpdate.event_image_focal_y = data.image_focal_y;
+    if (data.contributor !== undefined) {
+      // null clears the override and falls back to the legacy derivation.
+      dbUpdate.source_contributor_name = data.contributor?.name ?? null;
+      dbUpdate.source_contributor_url =
+        data.contributor && typeof data.contributor.url === 'string' && data.contributor.url
+          ? data.contributor.url
+          : null;
+    }
 
     if (data.tags !== undefined) {
       const cat = data.category || 'community';
