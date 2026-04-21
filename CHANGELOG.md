@@ -16,6 +16,7 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ## 2026-04-21
 
+- Folded `docs/commons-contract.md` into `public/llms.txt` and deleted it. The three-document Commons Contract (Spec / Guide / Log) is now literal — one Spec (`openapi.json`), one Guide (`llms.txt`), one Log (this file), no competing fourth. Unique content preserved: the "thin / durable / authoritative" design-principles framing moved to the llms.txt intro; the explicit visibility rules (status gate, suspended-account-returns-404, open_window time gate, region filter) moved to Part 2. README links updated to point at the Guide directly.
 - `public/openapi.json` `Error.code` is now a typed enum (`ErrorCode` schema) covering all 39 codes thrown across the API. Previously it was `type: string` — consumers couldn't generate discriminated unions. Groups: Auth (13), Validation/Resource (7), URL/Domain (7), Rate Limit (3), CSV/Import (4), Server/Infrastructure (5). OpenAPI `info.version` bumped to `0.5.0`.
 
 ---
