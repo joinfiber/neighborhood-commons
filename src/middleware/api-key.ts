@@ -7,11 +7,15 @@
  *
  * Keys exist as an upgrade path for consumers who need higher limits,
  * not as a gate on public data.
+ *
+ * Errors flow through next(createError(...)) so the global error handler
+ * produces the canonical `{ error: { code, message } }` shape in one place.
  */
 
 import { createHash } from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 import { supabaseAdmin } from '../lib/supabase.js';
+import { createError } from './error-handler.js';
 
 /** Hash an incoming raw API key to match the stored key_hash column. */
 function hashApiKey(rawKey: string): string {
@@ -53,11 +57,10 @@ export async function optionalApiKey(req: Request, _res: Response, next: NextFun
  * Required API key validation. Rejects requests without a valid key.
  * Used for webhook subscription management.
  */
-export async function requireApiKey(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function requireApiKey(req: Request, _res: Response, next: NextFunction): Promise<void> {
   const apiKey = req.headers['x-api-key'];
   if (!apiKey || typeof apiKey !== 'string') {
-    res.status(401).json({ error: { code: 'API_KEY_REQUIRED', message: 'X-API-Key header is required' } });
-    return;
+    return next(createError('X-API-Key header is required', 401, 'API_KEY_REQUIRED'));
   }
 
   try {
@@ -70,8 +73,7 @@ export async function requireApiKey(req: Request, res: Response, next: NextFunct
       .maybeSingle();
 
     if (!keyInfo) {
-      res.status(401).json({ error: { code: 'INVALID_API_KEY', message: 'Invalid or inactive API key' } });
-      return;
+      return next(createError('Invalid or inactive API key', 401, 'INVALID_API_KEY'));
     }
 
     // Resolve the key's linked portal account (if any). For Contribute keys
@@ -90,7 +92,7 @@ export async function requireApiKey(req: Request, res: Response, next: NextFunct
     };
     next();
   } catch {
-    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'API key validation failed' } });
+    return next(createError('API key validation failed', 500, 'INTERNAL_ERROR'));
   }
 }
 
@@ -98,11 +100,10 @@ export async function requireApiKey(req: Request, res: Response, next: NextFunct
  * Require a service-tier API key. Full CRUD access to accounts and events.
  * Service keys are issued manually by the platform operator.
  */
-export async function requireServiceApiKey(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function requireServiceApiKey(req: Request, _res: Response, next: NextFunction): Promise<void> {
   const apiKey = req.headers['x-api-key'];
   if (!apiKey || typeof apiKey !== 'string') {
-    res.status(401).json({ error: { code: 'API_KEY_REQUIRED', message: 'X-API-Key header is required' } });
-    return;
+    return next(createError('X-API-Key header is required', 401, 'API_KEY_REQUIRED'));
   }
 
   try {
@@ -115,18 +116,16 @@ export async function requireServiceApiKey(req: Request, res: Response, next: Ne
       .maybeSingle();
 
     if (!keyInfo) {
-      res.status(401).json({ error: { code: 'INVALID_API_KEY', message: 'Invalid or inactive API key' } });
-      return;
+      return next(createError('Invalid or inactive API key', 401, 'INVALID_API_KEY'));
     }
 
     if (keyInfo.contributor_tier !== 'service') {
-      res.status(403).json({ error: { code: 'INSUFFICIENT_TIER', message: 'This endpoint requires a service-tier API key' } });
-      return;
+      return next(createError('This endpoint requires a service-tier API key', 403, 'INSUFFICIENT_TIER'));
     }
 
     req.apiKeyInfo = { id: keyInfo.id, tier: keyInfo.contributor_tier, isAdmin: keyInfo.is_admin === true };
     next();
   } catch {
-    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'API key validation failed' } });
+    return next(createError('API key validation failed', 500, 'INTERNAL_ERROR'));
   }
 }

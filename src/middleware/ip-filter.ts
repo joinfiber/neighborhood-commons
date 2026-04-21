@@ -8,6 +8,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { config } from '../config.js';
+import { createError } from './error-handler.js';
 
 // Known datacenter IP ranges (AWS, GCP, Azure common prefixes)
 // This is a simplified check — for production, use a maintained IP range database
@@ -22,7 +23,7 @@ function isDatacenterIp(ip: string | undefined): boolean {
   return DATACENTER_PREFIXES.some(prefix => ip.startsWith(prefix));
 }
 
-export function blockDatacenterIps(req: Request, res: Response, next: NextFunction): void {
+export function blockDatacenterIps(req: Request, _res: Response, next: NextFunction): void {
   if (!config.security.ipFilterEnabled) {
     next();
     return;
@@ -30,10 +31,7 @@ export function blockDatacenterIps(req: Request, res: Response, next: NextFuncti
 
   if (isDatacenterIp(req.ip)) {
     console.warn(`[IP-FILTER] Blocked datacenter IP: ${req.ip?.substring(0, 10)}*** on ${req.path}`);
-    res.status(403).json({
-      error: { code: 'ACCESS_DENIED', message: 'Access denied' },
-    });
-    return;
+    return next(createError('Access denied', 403, 'ACCESS_DENIED'));
   }
 
   next();

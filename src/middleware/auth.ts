@@ -14,6 +14,7 @@ import { Request, Response, NextFunction } from 'express';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { createUserClient, supabaseAdmin } from '../lib/supabase.js';
 import { config } from '../config.js';
+import { createError } from './error-handler.js';
 
 // Extend Express Request
 declare global {
@@ -57,26 +58,24 @@ function extractToken(req: Request): string | null {
  * Require portal business authentication.
  * Validates Supabase JWT and attaches user + supabaseClient to request.
  */
-export async function requirePortalAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function requirePortalAuth(req: Request, _res: Response, next: NextFunction): Promise<void> {
   try {
     const token = extractToken(req);
     if (!token) {
-      res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Missing authorization token' } });
-      return;
+      return next(createError('Missing authorization token', 401, 'UNAUTHORIZED'));
     }
 
     const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
 
     if (error || !user) {
-      res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Invalid or expired token' } });
-      return;
+      return next(createError('Invalid or expired token', 401, 'UNAUTHORIZED'));
     }
 
     req.user = { id: user.id, email: user.email };
     req.supabaseClient = createUserClient(token);
     next();
   } catch {
-    res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Authentication failed' } });
+    return next(createError('Authentication failed', 401, 'UNAUTHORIZED'));
   }
 }
 
@@ -84,30 +83,27 @@ export async function requirePortalAuth(req: Request, res: Response, next: NextF
  * Require Commons Admin authentication.
  * Validates JWT + checks user ID against COMMONS_ADMIN_USER_IDS.
  */
-export async function requireCommonsAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function requireCommonsAdmin(req: Request, _res: Response, next: NextFunction): Promise<void> {
   try {
     const token = extractToken(req);
     if (!token) {
-      res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Missing authorization token' } });
-      return;
+      return next(createError('Missing authorization token', 401, 'UNAUTHORIZED'));
     }
 
     const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
 
     if (error || !user) {
-      res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Invalid or expired token' } });
-      return;
+      return next(createError('Invalid or expired token', 401, 'UNAUTHORIZED'));
     }
 
     if (!config.admin.userIds.includes(user.id)) {
-      res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Not a commons admin' } });
-      return;
+      return next(createError('Not a commons admin', 403, 'FORBIDDEN'));
     }
 
     req.user = { id: user.id, email: user.email };
     req.supabaseClient = createUserClient(token);
     next();
   } catch {
-    res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Authentication failed' } });
+    return next(createError('Authentication failed', 401, 'UNAUTHORIZED'));
   }
 }

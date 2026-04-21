@@ -2071,6 +2071,46 @@
         }
       }
     },
+    "/service/migrate-image-urls": {
+      "post": {
+        "summary": "One-time image URL migration",
+        "description": "Rewrites image URLs across portal_accounts and events to direct R2 public URLs. Converts portal proxy paths and re-hosts external URLs (Google Places, gstatic, etc.) through the Sharp pipeline. Admin service key required. Requires `R2_PUBLIC_URL` to be configured on the server. Idempotent — safe to re-run.",
+        "operationId": "serviceMigrateImageUrls",
+        "security": [{ "serviceApiKey": [] }],
+        "responses": {
+          "200": {
+            "description": "Migration complete with per-category counts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "migration": {
+                      "type": "object",
+                      "properties": {
+                        "accounts": {
+                          "type": "object",
+                          "properties": {
+                            "logo": { "type": "integer" },
+                            "cover": { "type": "integer" },
+                            "rehosted": { "type": "integer" }
+                          }
+                        },
+                        "events": { "type": "integer" },
+                        "errors": { "type": "array", "items": { "type": "string" } }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "R2_PUBLIC_URL not configured", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "description": "Non-admin service key", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
     "/service/approved-domains": {
       "get": {
         "summary": "List approved domains",
