@@ -3,7 +3,7 @@
   "info": {
     "title": "Neighborhood Commons API",
     "description": "Open neighborhood event data. Implements the Neighborhood API v0.2 spec. CC BY 4.0.\n\n**This document is the Spec, part of the Commons Contract.** The Contract is three files together: the Spec (this document — machine-readable, authoritative), the Guide (`/llms.txt` — narrative companion), and the Log (`CHANGELOG.md` — dated record of every change). Rule when they disagree: Spec wins. Guide explains. Log dates.",
-    "version": "0.3.0",
+    "version": "0.4.0",
     "license": {
       "name": "CC-BY-4.0",
       "url": "https://creativecommons.org/licenses/by/4.0/"
@@ -2292,15 +2292,6 @@
           "event_image_focal_y": {
             "type": ["number", "null"],
             "description": "Vertical focal point for image cropping (0=top, 1=bottom, 0.5=center)"
-          },
-          "runtime_minutes": { "type": ["integer", "null"], "description": "Film-specific: duration in minutes" },
-          "content_rating": { "type": ["string", "null"], "description": "Film-specific: e.g. PG-13" },
-          "showtimes": {
-            "oneOf": [
-              { "type": "null" },
-              { "type": "array", "items": { "type": "object", "properties": { "at": { "type": "string" } } } }
-            ],
-            "description": "Film-specific: multiple screening times"
           },
           "source": { "$ref": "#/components/schemas/Source" }
         }

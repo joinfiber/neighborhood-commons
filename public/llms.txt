@@ -69,9 +69,6 @@ That's it. You just pulled 5 events from the Commons. Here's what comes back:
       "capacity": null,
       "rsvp": null,
       "wheelchair_accessible": null,
-      "runtime_minutes": null,
-      "content_rating": null,
-      "showtimes": null,
       "recurrence": { "rrule": "FREQ=WEEKLY;COUNT=12" },
       "source": {
         "publisher": "Tattooed Moms",
@@ -203,9 +200,8 @@ Every event response includes every field listed below. If a value doesn't apply
 | `open_window` | boolean | `false` (default): arrival at `start` is expected — the event disappears from feeds at start time. `true`: come-and-go window — the event stays visible until `end` (or start + 3 hours if no end). Use `true` for happy hours, open swims, markets, exhibits, drop-in office hours. |
 | `capacity` | integer or null | Informational max attendance. Commons does NOT track signups or enforce the cap. Use this to display "limited capacity" hints; do real ticketing in the consumer app via the `url` field. |
 | `rsvp` | `"recommended"`, `"required"`, or null | Whether RSVP is a thing for this event. Commons does not manage RSVPs. Use this to badge events ("RSVP required"); the actual signup flow lives in the consumer app or in `url`. |
-| `runtime_minutes` | number or null | Film-specific. Duration in minutes. |
-| `content_rating` | text or null | Film-specific. E.g., "PG-13". |
-| `showtimes` | list or null | Film-specific. Multiple screening times for one film. |
+
+**Modeling film screenings.** Film is a first-class category (`category: "film"`). Each individual screening is one event row — multiple showtimes of the same film on the same day are multiple event rows, ideally sharing a `series_id` so a client can group them. Runtime is expressed by setting `end` explicitly at ingest (`end - start` = duration). Content rating (PG-13, R, etc.) is conveyed as a tag with a `rating:` prefix (e.g., `"tags": ["rating:r"]`). There are no Commons-specific runtime/rating/showtimes fields — film events use the same primitives as every other event type.
 
 **Where it came from:**
 
