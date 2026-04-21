@@ -81,6 +81,7 @@ vi.mock('../src/lib/supabase.js', () => {
 // Mock webhook dispatch (fire-and-forget, shouldn't affect CRUD tests)
 vi.mock('../src/lib/webhook-delivery.js', () => ({
   dispatchWebhooks: vi.fn(),
+  dispatchEventWebhookById: vi.fn(),
   dispatchSeriesCreatedWebhook: vi.fn(),
 }));
 

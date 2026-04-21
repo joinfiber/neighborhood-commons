@@ -83,6 +83,7 @@ vi.mock('../src/lib/supabase.js', () => {
 // Mock webhook delivery (fire-and-forget, don't need real delivery)
 vi.mock('../src/lib/webhook-delivery.js', () => ({
   dispatchWebhooks: vi.fn(),
+  dispatchEventWebhookById: vi.fn(),
   dispatchSeriesCreatedWebhook: vi.fn(),
   deliverTestWebhook: vi.fn(),
 }));
