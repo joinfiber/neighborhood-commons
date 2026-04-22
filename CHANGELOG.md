@@ -14,6 +14,16 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-04-22
+
+- New: Official SDK published as `neighborhood-commons@0.0.1` on npm. Generated from `public/openapi.json` via `openapi-typescript` + `openapi-fetch`. Lives in this repo at `/sdk` and regenerates with every spec change. Install: `npm install neighborhood-commons`. The SDK is the chosen forcing function for consumer alignment — drift becomes a TypeScript compile error rather than a documentation argument. Existing consumers (Merrie, Go There, Fiber API, Studio) can migrate incrementally; root `package.json` was renamed from `neighborhood-commons` to `neighborhood-commons-server` to free the unscoped name for the SDK.
+- New: `tmdb_id` field on Event schema (forward-declared) for clustering film-category events across theaters and dates. Sets the convention for consumers: `?category=film` + group-by `tmdb_id` → one card per film with showtimes nested. Server-side population (DB column, validation, passthrough) lands in a follow-up release; until then, every event returns `tmdb_id: null`. Documented in `public/llms.txt` Part 2. The existing same-day same-film `series_id` model (per the 2026-04-20 entry) remains unchanged — `tmdb_id` is orthogonal, providing the cross-theater/cross-date dimension `series_id` does not cover.
+- New: `ServiceEvent` schema in `public/openapi.json`, documenting the actual response shape returned by `GET /service/events/{id}` and `PATCH /service/events/{id}`. Previously these responses were typed as `{ event: object }` with no further detail, forcing consumers (notably Go There) into runtime narrowing and `as any` casts. The schema reflects the existing `toPortalEvent` transform in `src/lib/event-operations.ts` — DB-flavored field names like `title`/`event_date`/`venue_name` (distinct from the public `Event` shape's `name`/`start`/`location.name`). No server-side change; this documents reality.
+- `ServiceAccount` schema now declares `id`, `email`, `business_name`, `status`, `created_at`, `updated_at` as required. These fields were always returned non-null in practice but the spec marked them all optional, forcing consumers into runtime narrowing (e.g., Go There's `CommonsAccountRaw & { id: string }` workaround). No server-side change; this documents reality.
+- OpenAPI document version (`public/openapi.json` → `info.version`) bumped to `0.6.0`. All changes above are non-breaking — consumers gain typed access to existing realities without any required code change.
+
+---
+
 ## 2026-04-21
 
 - Added `POST /service/migrate-image-urls` to `public/openapi.json` (the one-time image URL migration endpoint). Previously served but undocumented; now matches the Spec. Caught by the new contract-drift CI guard (see below).

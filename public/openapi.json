@@ -3,7 +3,7 @@
   "info": {
     "title": "Neighborhood Commons API",
     "description": "Open neighborhood event data. Implements the Neighborhood API v0.2 spec. CC BY 4.0.\n\n**This document is the Spec, part of the Commons Contract.** The Contract is three files together: the Spec (this document — machine-readable, authoritative), the Guide (`/llms.txt` — narrative companion), and the Log (`CHANGELOG.md` — dated record of every change). Rule when they disagree: Spec wins. Guide explains. Log dates.",
-    "version": "0.5.0",
+    "version": "0.6.0",
     "license": {
       "name": "CC-BY-4.0",
       "url": "https://creativecommons.org/licenses/by/4.0/"
@@ -1599,7 +1599,7 @@
         "responses": {
           "200": {
             "description": "Event with account",
-            "content": { "application/json": { "schema": { "type": "object", "properties": { "event": { "type": "object" }, "account": { "type": ["object", "null"] } } } } }
+            "content": { "application/json": { "schema": { "type": "object", "required": ["event"], "properties": { "event": { "$ref": "#/components/schemas/ServiceEvent" }, "account": { "oneOf": [{ "$ref": "#/components/schemas/ServiceAccount" }, { "type": "null" }] } } } } }
           },
           "401": { "$ref": "#/components/responses/Unauthorized" },
           "404": { "$ref": "#/components/responses/NotFound" }
@@ -1622,7 +1622,7 @@
         "responses": {
           "200": {
             "description": "Event updated",
-            "content": { "application/json": { "schema": { "type": "object", "properties": { "event": { "type": "object" } } } } }
+            "content": { "application/json": { "schema": { "type": "object", "required": ["event"], "properties": { "event": { "$ref": "#/components/schemas/ServiceEvent" } } } } }
           },
           "401": { "$ref": "#/components/responses/Unauthorized" },
           "403": { "description": "NOT_LINKED" },
@@ -2333,6 +2333,11 @@
             "type": ["number", "null"],
             "description": "Vertical focal point for image cropping (0=top, 1=bottom, 0.5=center)"
           },
+          "tmdb_id": {
+            "type": ["string", "null"],
+            "description": "TMDB film ID (themoviedb.org), used to cluster film-category events across theaters and dates. Recommended when category includes 'film'. Format: numeric string (e.g. '1064713' for Anora). Consumers fetch metadata at https://api.themoviedb.org/3/movie/{tmdb_id}. Films not in TMDB leave this null and appear individually instead of clustering. Forward-declared in spec v0.6.0; server-side population lands in a follow-up release.",
+            "example": "1064713"
+          },
           "source": { "$ref": "#/components/schemas/Source" }
         }
       },
@@ -2377,9 +2382,49 @@
           "cover_image_url": { "type": ["string", "null"], "format": "uri" }
         }
       },
+      "ServiceEvent": {
+        "type": "object",
+        "description": "Event response shape for service-tier and portal endpoints. Uses DB-flavored field names (title, event_date, start_time, etc.) — distinct from the public read Event shape. Returned by GET /service/events/{id}, PATCH /service/events/{id}, and the portal API.",
+        "required": ["id", "title", "event_timezone", "status", "created_at"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "portal_account_id": { "type": ["string", "null"], "format": "uuid" },
+          "title": { "type": "string", "description": "Equivalent to `name` in the public Event shape" },
+          "description": { "type": ["string", "null"] },
+          "venue_name": { "type": ["string", "null"], "description": "Equivalent to `location.name` in the public Event shape" },
+          "address": { "type": ["string", "null"] },
+          "place_id": { "type": ["string", "null"] },
+          "latitude": { "type": ["number", "null"] },
+          "longitude": { "type": ["number", "null"] },
+          "event_date": { "type": ["string", "null"], "format": "date", "description": "Local date (YYYY-MM-DD) in event_timezone" },
+          "start_time": { "type": ["string", "null"], "description": "Local time (HH:MM:SS) in event_timezone" },
+          "end_time": { "type": ["string", "null"], "description": "Local time (HH:MM:SS) in event_timezone" },
+          "event_timezone": { "type": "string", "description": "IANA timezone name" },
+          "category": { "type": ["string", "null"], "description": "Single category slug (the public Event shape wraps this in an array)" },
+          "custom_category": { "type": ["string", "null"] },
+          "recurrence": { "type": ["string", "null"], "description": "iCal RRULE string, or null for one-offs" },
+          "price": { "type": ["string", "null"], "description": "Equivalent to `cost` in the public Event shape" },
+          "ticket_url": { "type": ["string", "null"], "format": "uri", "description": "Equivalent to `url` in the public Event shape" },
+          "image_url": { "type": ["string", "null"], "format": "uri" },
+          "image_focal_y": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.5 },
+          "open_window": { "type": "boolean", "default": false },
+          "tags": { "type": "array", "items": { "type": "string" } },
+          "wheelchair_accessible": { "type": ["boolean", "null"] },
+          "capacity": { "type": ["integer", "null"] },
+          "rsvp": { "type": ["string", "null"], "enum": ["recommended", "required", null] },
+          "status": { "type": "string" },
+          "series_id": { "type": ["string", "null"], "format": "uuid" },
+          "series_instance_number": { "type": ["integer", "null"] },
+          "first_party": { "type": "boolean", "default": false },
+          "source_publisher": { "type": ["string", "null"] },
+          "source_feed_url": { "type": ["string", "null"] },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
       "ServiceAccount": {
         "type": "object",
         "description": "A portal account as seen by service-tier callers — includes internal fields",
+        "required": ["id", "email", "business_name", "status", "created_at", "updated_at"],
         "properties": {
           "id": { "type": "string", "format": "uuid" },
           "email": { "type": "string", "format": "email" },
