@@ -1,6 +1,6 @@
 {
   "name": "neighborhood-commons",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Official SDK for the Neighborhood Commons API — typed client generated from the OpenAPI spec.",
   "type": "module",
   "main": "./dist/index.js",
