@@ -1254,7 +1254,7 @@ export interface components {
             /** @description Vertical focal point for image cropping (0=top, 1=bottom, 0.5=center) */
             event_image_focal_y?: number | null;
             /**
-             * @description TMDB film ID (themoviedb.org), used to cluster film-category events across theaters and dates. Recommended when category includes 'film'. Format: numeric string (e.g. '1064713' for Anora). Consumers fetch metadata at https://api.themoviedb.org/3/movie/{tmdb_id}. Films not in TMDB leave this null and appear individually instead of clustering. Forward-declared in spec v0.6.0; server-side population lands in a follow-up release.
+             * @description TMDB film ID (themoviedb.org), used to cluster film-category events across theaters and dates. Recommended when category includes 'film'. Format: numeric string (e.g. '1064713' for Anora). Consumers fetch metadata at https://api.themoviedb.org/3/movie/{tmdb_id}. Films not in TMDB leave this null and appear individually instead of clustering. Filterable on `GET /events?tmdb_id={id}`.
              * @example 1064713
              */
             tmdb_id?: string | null;
@@ -1355,6 +1355,8 @@ export interface components {
             first_party: boolean;
             source_publisher?: string | null;
             source_feed_url?: string | null;
+            /** @description TMDB film ID for clustering film-category events. See Event.tmdb_id. */
+            tmdb_id?: string | null;
             /** Format: date-time */
             created_at: string;
         };
@@ -1545,11 +1547,19 @@ export interface components {
              */
             rsvp?: "recommended" | "required" | null;
             first_party?: boolean;
+            /** @description Per-event attribution for the app/tool that publishes this event, distinct from the account-derived source.publisher. Surfaces on the read path as source.contributor. Omit to fall back to legacy derivation (source.publisher on api-method events). Send null on PATCH to clear an existing override. */
+            contributor?: {
+                name: string;
+                /** Format: uri */
+                url?: string;
+            };
             /** @enum {string} */
             status?: "published" | "pending_review" | "draft";
             /** Format: uuid */
             venue_id?: string;
             external_id?: string;
+            /** @description TMDB film ID for clustering film-category events. Send numeric string (e.g. '1064713') when category includes 'film'. See Event.tmdb_id for the read-side semantics. */
+            tmdb_id?: string | null;
         };
         /**
          * @description Machine-readable error identifier. Groups:
@@ -1644,6 +1654,8 @@ export interface operations {
                 recurring?: "true" | "false";
                 /** @description Filter by contributor account slug */
                 contributor?: string;
+                /** @description Filter to all showings of a film (clusters film-category events across theaters and dates). Pair with `?category=film` for clean results. */
+                tmdb_id?: string;
                 /** @description Page size */
                 limit?: number;
                 /** @description Page offset */
