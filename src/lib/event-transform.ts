@@ -52,6 +52,8 @@ export interface PortalEventRow {
   source_contributor_name: string | null;
   // First-party flag (migration 054)
   first_party: boolean;
+  // TMDB film ID for cross-theater clustering (migration 063)
+  tmdb_id: string | null;
   portal_accounts: { business_name: string; wheelchair_accessible?: boolean | null } | null;
 }
 
@@ -87,6 +89,7 @@ export interface NeighborhoodEvent {
   tags: string[];
   wheelchair_accessible: boolean | null;
   first_party: boolean;
+  tmdb_id: string | null;
   recurrence: { rrule: string } | null;
   source: {
     publisher: string;
@@ -223,6 +226,7 @@ export function toNeighborhoodEvent(row: PortalEventRow): NeighborhoodEvent {
     tags: row.tags || [],
     wheelchair_accessible: row.wheelchair_accessible ?? row.portal_accounts?.wheelchair_accessible ?? null,
     first_party: row.first_party,
+    tmdb_id: row.tmdb_id ?? null,
     recurrence: rrule ? { rrule } : null,
     source: {
       // API/import events: source_publisher is the canonical publisher (the external source).

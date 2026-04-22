@@ -50,6 +50,7 @@ const SCHEMA: Record<string, string[]> = {
     'source_contributor_url', 'source_contributor_name',
     'first_party',
     'group_id',
+    'tmdb_id',
     'created_at', 'updated_at',
   ],
   groups: [

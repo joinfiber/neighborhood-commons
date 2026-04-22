@@ -3,7 +3,7 @@
   "info": {
     "title": "Neighborhood Commons API",
     "description": "Open neighborhood event data. Implements the Neighborhood API v0.2 spec. CC BY 4.0.\n\n**This document is the Spec, part of the Commons Contract.** The Contract is three files together: the Spec (this document — machine-readable, authoritative), the Guide (`/llms.txt` — narrative companion), and the Log (`CHANGELOG.md` — dated record of every change). Rule when they disagree: Spec wins. Guide explains. Log dates.",
-    "version": "0.6.0",
+    "version": "0.7.0",
     "license": {
       "name": "CC-BY-4.0",
       "url": "https://creativecommons.org/licenses/by/4.0/"
@@ -39,6 +39,7 @@
           { "name": "group_id", "in": "query", "schema": { "type": "string", "format": "uuid" }, "description": "Filter to events belonging to a specific group" },
           { "name": "recurring", "in": "query", "schema": { "type": "string", "enum": ["true", "false"] }, "description": "Filter recurring (true) or one-off (false) events" },
           { "name": "contributor", "in": "query", "schema": { "type": "string" }, "description": "Filter by contributor account slug" },
+          { "name": "tmdb_id", "in": "query", "schema": { "type": "string", "maxLength": 50 }, "description": "Filter to all showings of a film (clusters film-category events across theaters and dates). Pair with `?category=film` for clean results." },
           { "name": "limit", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 200, "default": 50 }, "description": "Page size" },
           { "name": "offset", "in": "query", "schema": { "type": "integer", "minimum": 0, "default": 0 }, "description": "Page offset" }
         ],
@@ -2335,7 +2336,7 @@
           },
           "tmdb_id": {
             "type": ["string", "null"],
-            "description": "TMDB film ID (themoviedb.org), used to cluster film-category events across theaters and dates. Recommended when category includes 'film'. Format: numeric string (e.g. '1064713' for Anora). Consumers fetch metadata at https://api.themoviedb.org/3/movie/{tmdb_id}. Films not in TMDB leave this null and appear individually instead of clustering. Forward-declared in spec v0.6.0; server-side population lands in a follow-up release.",
+            "description": "TMDB film ID (themoviedb.org), used to cluster film-category events across theaters and dates. Recommended when category includes 'film'. Format: numeric string (e.g. '1064713' for Anora). Consumers fetch metadata at https://api.themoviedb.org/3/movie/{tmdb_id}. Films not in TMDB leave this null and appear individually instead of clustering. Filterable on `GET /events?tmdb_id={id}`.",
             "example": "1064713"
           },
           "source": { "$ref": "#/components/schemas/Source" }
@@ -2418,6 +2419,7 @@
           "first_party": { "type": "boolean", "default": false },
           "source_publisher": { "type": ["string", "null"] },
           "source_feed_url": { "type": ["string", "null"] },
+          "tmdb_id": { "type": ["string", "null"], "description": "TMDB film ID for clustering film-category events. See Event.tmdb_id." },
           "created_at": { "type": "string", "format": "date-time" }
         }
       },
@@ -2577,7 +2579,8 @@
           },
           "status": { "type": "string", "enum": ["published", "pending_review", "draft"] },
           "venue_id": { "type": "string", "format": "uuid" },
-          "external_id": { "type": "string", "maxLength": 500 }
+          "external_id": { "type": "string", "maxLength": 500 },
+          "tmdb_id": { "type": ["string", "null"], "maxLength": 50, "description": "TMDB film ID for clustering film-category events. Send numeric string (e.g. '1064713') when category includes 'film'. See Event.tmdb_id for the read-side semantics." }
         }
       },
       "ErrorCode": {
