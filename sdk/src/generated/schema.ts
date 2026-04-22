@@ -1253,6 +1253,11 @@ export interface components {
             first_party?: boolean;
             /** @description Vertical focal point for image cropping (0=top, 1=bottom, 0.5=center) */
             event_image_focal_y?: number | null;
+            /**
+             * @description TMDB film ID (themoviedb.org), used to cluster film-category events across theaters and dates. Recommended when category includes 'film'. Format: numeric string (e.g. '1064713' for Anora). Consumers fetch metadata at https://api.themoviedb.org/3/movie/{tmdb_id}. Films not in TMDB leave this null and appear individually instead of clustering. Forward-declared in spec v0.6.0; server-side population lands in a follow-up release.
+             * @example 1064713
+             */
+            tmdb_id?: string | null;
             source: components["schemas"]["Source"];
         };
         Source: {
@@ -1293,16 +1298,76 @@ export interface components {
             /** Format: uri */
             cover_image_url?: string | null;
         };
+        /** @description Event response shape for service-tier and portal endpoints. Uses DB-flavored field names (title, event_date, start_time, etc.) — distinct from the public read Event shape. Returned by GET /service/events/{id}, PATCH /service/events/{id}, and the portal API. */
+        ServiceEvent: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            portal_account_id?: string | null;
+            /** @description Equivalent to `name` in the public Event shape */
+            title: string;
+            description?: string | null;
+            /** @description Equivalent to `location.name` in the public Event shape */
+            venue_name?: string | null;
+            address?: string | null;
+            place_id?: string | null;
+            latitude?: number | null;
+            longitude?: number | null;
+            /**
+             * Format: date
+             * @description Local date (YYYY-MM-DD) in event_timezone
+             */
+            event_date?: string | null;
+            /** @description Local time (HH:MM:SS) in event_timezone */
+            start_time?: string | null;
+            /** @description Local time (HH:MM:SS) in event_timezone */
+            end_time?: string | null;
+            /** @description IANA timezone name */
+            event_timezone: string;
+            /** @description Single category slug (the public Event shape wraps this in an array) */
+            category?: string | null;
+            custom_category?: string | null;
+            /** @description iCal RRULE string, or null for one-offs */
+            recurrence?: string | null;
+            /** @description Equivalent to `cost` in the public Event shape */
+            price?: string | null;
+            /**
+             * Format: uri
+             * @description Equivalent to `url` in the public Event shape
+             */
+            ticket_url?: string | null;
+            /** Format: uri */
+            image_url?: string | null;
+            /** @default 0.5 */
+            image_focal_y: number;
+            /** @default false */
+            open_window: boolean;
+            tags?: string[];
+            wheelchair_accessible?: boolean | null;
+            capacity?: number | null;
+            /** @enum {string|null} */
+            rsvp?: "recommended" | "required" | null;
+            status: string;
+            /** Format: uuid */
+            series_id?: string | null;
+            series_instance_number?: number | null;
+            /** @default false */
+            first_party: boolean;
+            source_publisher?: string | null;
+            source_feed_url?: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
         /** @description A portal account as seen by service-tier callers — includes internal fields */
         ServiceAccount: {
             /** Format: uuid */
-            id?: string;
+            id: string;
             /** Format: email */
-            email?: string;
-            business_name?: string;
+            email: string;
+            business_name: string;
             auth_user_id?: string | null;
             /** @enum {string} */
-            status?: "active" | "suspended" | "pending" | "rejected";
+            status: "active" | "suspended" | "pending" | "rejected";
             default_venue_name?: string | null;
             default_place_id?: string | null;
             default_address?: string | null;
@@ -1321,9 +1386,9 @@ export interface components {
             /** Format: date-time */
             last_login_at?: string | null;
             /** Format: date-time */
-            created_at?: string;
+            created_at: string;
             /** Format: date-time */
-            updated_at?: string;
+            updated_at: string;
         };
         Group: {
             /** Format: uuid */
@@ -3445,8 +3510,8 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        event?: Record<string, never>;
-                        account?: Record<string, never> | null;
+                        event: components["schemas"]["ServiceEvent"];
+                        account?: components["schemas"]["ServiceAccount"] | null;
                     };
                 };
             };
@@ -3505,7 +3570,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        event?: Record<string, never>;
+                        event: components["schemas"]["ServiceEvent"];
                     };
                 };
             };
