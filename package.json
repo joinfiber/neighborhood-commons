@@ -1,7 +1,7 @@
 {
-  "name": "neighborhood-commons",
+  "name": "neighborhood-commons-server",
   "version": "0.2.0",
-  "description": "Open neighborhood event data infrastructure. Public API, self-service portal, and contribution pipeline for local events.",
+  "description": "Open neighborhood event data infrastructure. Public API, self-service portal, and contribution pipeline for local events. (The SDK consumers install lives in /sdk and is published as `neighborhood-commons`.)",
   "type": "module",
   "main": "dist/index.js",
   "license": "MIT",

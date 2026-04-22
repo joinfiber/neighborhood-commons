@@ -1,0 +1,49 @@
+{
+  "name": "neighborhood-commons",
+  "version": "0.0.1",
+  "description": "Official SDK for the Neighborhood Commons API \u00e2\u20ac\u201d typed client generated from the OpenAPI spec.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "generate": "openapi-typescript ../public/openapi.json -o src/generated/schema.ts",
+    "build": "npm run generate && tsc",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/joinfiber/neighborhood-commons.git",
+    "directory": "sdk"
+  },
+  "homepage": "https://api.neighborhood-commons.org",
+  "license": "MIT",
+  "keywords": [
+    "neighborhood-commons",
+    "neighborhood-api",
+    "events",
+    "sdk",
+    "typescript",
+    "openapi"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "openapi-fetch": "^0.14.0"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.5.0",
+    "typescript": "^5.9.3"
+  }
+}
