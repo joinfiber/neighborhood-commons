@@ -95,6 +95,7 @@ export const createEventSchema = z.object({
   first_party: z.boolean().optional(),
   venue_id: z.string().uuid().optional(),
   external_id: z.string().max(500).optional(),
+  tmdb_id: z.string().max(50).optional(),
 });
 
 export const updateEventSchema = z.object({
@@ -126,6 +127,7 @@ export const updateEventSchema = z.object({
   contributor: contributorSchema.nullable().optional(),
   first_party: z.boolean().optional(),
   status: z.enum(['published', 'pending_review', 'suspended', 'unpublished']).optional(),
+  tmdb_id: z.string().max(50).nullable().optional(),
 });
 
 type CreateEventInput = z.infer<typeof createEventSchema>;
@@ -177,6 +179,7 @@ export function friendlyToPortalInput(
           ? data.contributor.url
           : null,
       first_party: data.first_party,
+      tmdb_id: data.tmdb_id ?? null,
     },
     event_date: eventDate,
     start_time: startTime,
@@ -530,6 +533,7 @@ router.patch('/events/:id', serviceLimiter, async (req, res, next) => {
           ? data.contributor.url
           : null;
     }
+    if (data.tmdb_id !== undefined) dbUpdate.tmdb_id = data.tmdb_id;
 
     if (data.tags !== undefined) {
       const cat = data.category || 'community';

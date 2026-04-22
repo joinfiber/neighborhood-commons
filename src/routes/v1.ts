@@ -55,11 +55,12 @@ const listSchema = z.object({
   group_id: z.string().uuid().optional(),
   recurring: z.enum(['true', 'false']).optional(),
   contributor: z.string().max(200).optional(),
+  tmdb_id: z.string().max(50).optional(),
   limit: z.coerce.number().min(1).max(200).default(50),
   offset: z.coerce.number().min(0).default(0),
 });
 
-const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, event_image_focal_y, created_at, creator_account_id, series_id, series_instance_number, open_window, capacity, rsvp, tags, wheelchair_accessible, first_party, source_method, source_publisher, source_contributor_name, source_contributor_url, portal_accounts!events_creator_account_id_fkey(business_name, status, wheelchair_accessible)';
+const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, event_image_focal_y, created_at, creator_account_id, series_id, series_instance_number, open_window, capacity, rsvp, tags, wheelchair_accessible, first_party, source_method, source_publisher, source_contributor_name, source_contributor_url, tmdb_id, portal_accounts!events_creator_account_id_fkey(business_name, status, wheelchair_accessible)';
 
 // =============================================================================
 // SHARED QUERY BUILDING
@@ -145,6 +146,11 @@ async function queryFilteredEvents(params: ListParams, opts?: {
     query = query.neq('recurrence', 'none');
   } else if (params.recurring === 'false') {
     query = query.eq('recurrence', 'none');
+  }
+
+  // TMDB film filter (cluster all showings of a single film across theaters/dates)
+  if (params.tmdb_id) {
+    query = query.eq('tmdb_id', params.tmdb_id);
   }
 
   // Date range filters
