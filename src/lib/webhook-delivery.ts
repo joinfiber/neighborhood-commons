@@ -79,6 +79,23 @@ export interface SeriesCreatedPayload {
   delivery_id: string;
 }
 
+export type ImageProcessedErrorCode =
+  | 'URL_BLOCKED'
+  | 'DOWNLOAD_FAILED'
+  | 'INVALID_FORMAT'
+  | 'ENCODE_FAILED'
+  | 'UPLOAD_FAILED';
+
+export interface ImageProcessedPayload {
+  event_type: 'event.image_processed';
+  event_id: string;
+  status: 'succeeded' | 'failed';
+  image_url: string | null;
+  error_code: ImageProcessedErrorCode | null;
+  timestamp: string;
+  delivery_id: string;
+}
+
 interface WebhookSub {
   id: string;
   url: string;
@@ -184,6 +201,65 @@ export async function dispatchSeriesCreatedWebhook(
     }
   } catch (err) {
     console.error('[WEBHOOKS] Series created dispatch error:', err instanceof Error ? err.message : err);
+  }
+}
+
+/**
+ * Dispatch a single event.image_processed webhook for an async image
+ * pipeline outcome. Fires once per event regardless of whether the
+ * download/encode/upload succeeded or permanently failed — consumers
+ * polling `images[]` need a stop signal in both directions.
+ *
+ * Uses deliverRawWebhook so the payload shape stays focused (no full
+ * event mirror): consumers fetch the event by ID if they need more.
+ */
+export async function dispatchImageProcessedWebhook(
+  eventId: string,
+  status: 'succeeded' | 'failed',
+  imageUrl: string | null,
+  errorCode: ImageProcessedErrorCode | null,
+): Promise<void> {
+  try {
+    const { data: subs } = await supabaseAdmin
+      .from('webhook_subscriptions')
+      .select('id, url, signing_secret, signing_secret_encrypted, event_types')
+      .eq('status', 'active')
+      .limit(10000);
+
+    if (!subs || subs.length === 0) return;
+
+    const matching = subs.filter((s) =>
+      (s.event_types as string[]).includes('event.image_processed')
+    );
+
+    for (const sub of matching) {
+      const { data: delivery } = await supabaseAdmin
+        .from('webhook_deliveries')
+        .insert({
+          subscription_id: sub.id,
+          event_type: 'event.image_processed',
+          event_id: eventId,
+          status: 'pending',
+        })
+        .select('id')
+        .single();
+
+      if (!delivery) continue;
+
+      const payload: ImageProcessedPayload = {
+        event_type: 'event.image_processed',
+        event_id: eventId,
+        status,
+        image_url: imageUrl,
+        error_code: errorCode,
+        timestamp: new Date().toISOString(),
+        delivery_id: String(delivery.id),
+      };
+
+      void deliverRawWebhook(sub as WebhookSub, delivery.id, payload as unknown as Record<string, unknown>);
+    }
+  } catch (err) {
+    console.error('[WEBHOOKS] Image processed dispatch error:', err instanceof Error ? err.message : err);
   }
 }
 

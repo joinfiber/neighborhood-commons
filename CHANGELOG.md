@@ -14,6 +14,16 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-04-23
+
+- New: `event.image_processed` webhook event_type. Fires once per event when the async image download + R2 re-encode pipeline reaches a terminal state (success or permanent failure), so consumers polling `images[]` get a stop signal in either direction. Payload shape is intentionally focused — `{ event_type, event_id, status, image_url, error_code, timestamp, delivery_id }` — not a mirror of `event.updated`. Failure `error_code` values: `URL_BLOCKED`, `DOWNLOAD_FAILED`, `INVALID_FORMAT`, `ENCODE_FAILED`, `UPLOAD_FAILED`. Opt-in: NOT included in the default `event_types` for new subscriptions because the payload differs from the standard `{ event_type, event, ... }` shape — existing subscribers who don't explicitly opt in keep receiving exactly what they receive today. Documented in `public/llms.txt` Part 4.
+- New: `event_id` query parameter on `GET /api/v1/webhooks/{id}/deliveries`. Lets a writer or consumer confirm a specific event reached a specific subscriber without paginating the full delivery history. Combine with `status=delivered` to answer "did this event land?" in one call. Same auth model and rate limit (`enumerationLimiter`, 5/min) as the existing endpoint.
+- Documented: `GET /api/v1/webhooks/{id}/deliveries` parameters and response shape now match what the server actually returns (`status` and `offset` query params surfaced; response includes `event_id`, `error_message`, `attempt`, `next_retry_at`, and the `meta` pagination block). The endpoint behavior is unchanged — this corrects pre-existing spec-vs-server drift.
+- OpenAPI document version (`public/openapi.json` → `info.version`) bumped to `0.8.0`. All changes above are non-breaking — `event.image_processed` requires explicit subscription, the `event_id` filter is optional, and the response shape clarifications match what every existing caller already sees on the wire.
+- SDK published as `neighborhood-commons@0.0.4` regenerated against spec `0.8.0`. Per `sdk/RELEASING.md`, tag `sdk-v0.0.4` after merge to trigger publish.
+
+---
+
 ## 2026-04-22
 
 - New: `tmdb_id` server-side implementation. The forward-declared field from earlier today (see below) is now a real DB column on `events` (migration 063, with a partial index on non-null values), accepted as input via `ServiceEventInput.tmdb_id` (POST/PATCH `/service/events`), passed through on every read response (`Event.tmdb_id` on the public `/events` shape, `ServiceEvent.tmdb_id` on the service shape), and filterable via `GET /events?tmdb_id={id}` for server-side film clustering. Consumers can now publish the same film at three theaters with a shared `tmdb_id` and cluster client-side, OR query `?tmdb_id={id}` directly for "every showing of one film." `public/llms.txt` clustering paragraph updated to reflect availability. OpenAPI document version bumped to `0.7.0`. Non-breaking — `tmdb_id` is optional and nullable on every surface; existing consumers keep working.

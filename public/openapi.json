@@ -3,7 +3,7 @@
   "info": {
     "title": "Neighborhood Commons API",
     "description": "Open neighborhood event data. Implements the Neighborhood API v0.2 spec. CC BY 4.0.\n\n**This document is the Spec, part of the Commons Contract.** The Contract is three files together: the Spec (this document — machine-readable, authoritative), the Guide (`/llms.txt` — narrative companion), and the Log (`CHANGELOG.md` — dated record of every change). Rule when they disagree: Spec wins. Guide explains. Log dates.",
-    "version": "0.7.0",
+    "version": "0.8.0",
     "license": {
       "name": "CC-BY-4.0",
       "url": "https://creativecommons.org/licenses/by/4.0/"
@@ -423,7 +423,7 @@
     "/webhooks": {
       "post": {
         "summary": "Create webhook subscription",
-        "description": "Subscribe to event changes (create/update/delete/series_created). Returns the signing secret once — store it securely. Webhooks are signed with HMAC-SHA256. Max 5 subscriptions per API key.",
+        "description": "Subscribe to event changes. Returns the signing secret once — store it securely. Webhooks are signed with HMAC-SHA256. Max 5 subscriptions per API key.\n\n**Event types:** `event.created`, `event.updated`, `event.deleted`, `event.series_created`, `event.image_processed`. The default subscribes to the first four; `event.image_processed` is opt-in (different payload shape — see Guide for details).",
         "operationId": "createWebhook",
         "security": [{ "browseApiKey": [] }],
         "requestBody": {
@@ -443,10 +443,10 @@
                     "type": "array",
                     "items": {
                       "type": "string",
-                      "enum": ["event.created", "event.updated", "event.deleted", "event.series_created"]
+                      "enum": ["event.created", "event.updated", "event.deleted", "event.series_created", "event.image_processed"]
                     },
                     "default": ["event.created", "event.updated", "event.deleted", "event.series_created"],
-                    "description": "Event types to subscribe to. Defaults to all."
+                    "description": "Event types to subscribe to. Defaults to all event.* types except `event.image_processed`, which has a different payload shape and must be opted into explicitly."
                   }
                 }
               }
@@ -529,7 +529,7 @@
                   "url": { "type": "string", "format": "uri", "description": "New HTTPS endpoint URL" },
                   "event_types": {
                     "type": "array",
-                    "items": { "type": "string", "enum": ["event.created", "event.updated", "event.deleted", "event.series_created"] }
+                    "items": { "type": "string", "enum": ["event.created", "event.updated", "event.deleted", "event.series_created", "event.image_processed"] }
                   },
                   "status": { "type": "string", "enum": ["active", "paused"] }
                 }
@@ -601,12 +601,15 @@
     "/webhooks/{id}/deliveries": {
       "get": {
         "summary": "List webhook deliveries",
-        "description": "Recent delivery attempts for a webhook subscription, newest first.",
+        "description": "Recent delivery attempts for a webhook subscription, newest first. Filter by `status` and/or `event_id` to confirm a specific event reached this subscriber — useful for reconciling missed deliveries without a full re-scan.",
         "operationId": "listWebhookDeliveries",
         "security": [{ "browseApiKey": [] }],
         "parameters": [
           { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
-          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 100 } }
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["pending", "delivered", "failed", "retrying"] }, "description": "Filter to a single delivery state." },
+          { "name": "event_id", "in": "query", "schema": { "type": "string", "format": "uuid" }, "description": "Filter to deliveries for a specific event UUID. Combine with `status=delivered` to confirm a specific event landed." },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 25, "minimum": 1, "maximum": 100 } },
+          { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0, "minimum": 0 } }
         ],
         "responses": {
           "200": {
@@ -621,15 +624,24 @@
                       "items": {
                         "type": "object",
                         "properties": {
-                          "id": { "type": "string", "format": "uuid" },
-                          "event_type": { "type": "string" },
-                          "status": { "type": "string", "enum": ["delivered", "failed", "pending"] },
-                          "status_code": { "type": ["integer", "null"] },
-                          "error": { "type": ["string", "null"] },
-                          "attempt_count": { "type": "integer" },
-                          "delivered_at": { "type": ["string", "null"], "format": "date-time" },
+                          "id": { "type": "integer", "description": "Auto-incrementing delivery row ID." },
+                          "event_type": { "type": "string", "description": "The event_type that triggered this delivery (e.g. `event.created`, `event.image_processed`)." },
+                          "event_id": { "type": "string", "format": "uuid", "description": "The event UUID this delivery is for." },
+                          "status": { "type": "string", "enum": ["pending", "delivered", "failed", "retrying"] },
+                          "status_code": { "type": ["integer", "null"], "description": "HTTP status code returned by the subscriber endpoint, or null if no response was received." },
+                          "error_message": { "type": ["string", "null"], "description": "Failure reason (truncated to 500 chars). Null on success." },
+                          "attempt": { "type": "integer", "description": "Attempt number, 1-indexed. Max 3." },
+                          "next_retry_at": { "type": ["string", "null"], "format": "date-time", "description": "When the next retry will fire. Null on terminal states." },
                           "created_at": { "type": "string", "format": "date-time" }
                         }
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "total": { "type": "integer" },
+                        "limit": { "type": "integer" },
+                        "offset": { "type": "integer" }
                       }
                     }
                   }
@@ -2470,7 +2482,7 @@
           "url": { "type": "string", "format": "uri" },
           "event_types": {
             "type": "array",
-            "items": { "type": "string", "enum": ["event.created", "event.updated", "event.deleted", "event.series_created"] }
+            "items": { "type": "string", "enum": ["event.created", "event.updated", "event.deleted", "event.series_created", "event.image_processed"] }
           },
           "status": { "type": "string", "enum": ["active", "paused"] },
           "created_at": { "type": "string", "format": "date-time" }

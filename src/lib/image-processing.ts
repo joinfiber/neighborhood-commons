@@ -15,6 +15,7 @@ import { config } from '../config.js';
 import { createError } from '../middleware/error-handler.js';
 import { validateFeedUrl } from './url-validation.js';
 import { safeFetch } from './safe-fetch.js';
+import { dispatchImageProcessedWebhook, type ImageProcessedErrorCode } from './webhook-delivery.js';
 
 export const SUPPORTED_MAGIC_BYTES: Record<string, string> = {
   'ffd8ff': 'image/jpeg',
@@ -72,29 +73,49 @@ export async function processAndUploadImage(entityId: string, base64: string, se
 /**
  * Download an image from a URL, re-encode through Sharp, upload to R2,
  * and set event_image_url. Used when approving newsletter/feed candidates.
+ *
+ * Emits an `event.image_processed` webhook on every terminal outcome
+ * (success or permanent failure) so consumers polling `images[]` get a
+ * stop signal in both directions.
  */
 export async function downloadAndAttachImage(eventId: string, imageUrl: string): Promise<void> {
+  function emitFailure(code: ImageProcessedErrorCode): void {
+    void dispatchImageProcessedWebhook(eventId, 'failed', null, code);
+  }
+
   // SSRF protection: validate URL resolves to a public IP before fetching
   try {
     await validateFeedUrl(imageUrl);
   } catch (err) {
     console.log(`[IMAGES] URL blocked by SSRF check: ${imageUrl} — ${err instanceof Error ? err.message : err}`);
+    emitFailure('URL_BLOCKED');
     return;
   }
 
   // safeFetch: redirect:'error' default + SSRF-strict connect-hook when enabled.
-  const response = await safeFetch(imageUrl, {
-    signal: AbortSignal.timeout(10000),
-    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NeighborhoodCommons/1.0)' },
-  });
+  let response: Response;
+  try {
+    response = await safeFetch(imageUrl, {
+      signal: AbortSignal.timeout(10000),
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NeighborhoodCommons/1.0)' },
+    });
+  } catch (err) {
+    console.log(`[IMAGES] Fetch threw for ${imageUrl}: ${err instanceof Error ? err.message : err}`);
+    emitFailure('DOWNLOAD_FAILED');
+    return;
+  }
 
   if (!response.ok) {
     console.log(`[IMAGES] Download HTTP ${response.status} for ${imageUrl}`);
+    emitFailure('DOWNLOAD_FAILED');
     return;
   }
 
   const buffer = Buffer.from(await response.arrayBuffer());
-  if (buffer.length < 8) return;
+  if (buffer.length < 8) {
+    emitFailure('INVALID_FORMAT');
+    return;
+  }
 
   // Magic byte check
   const hex = buffer.subarray(0, 4).toString('hex').toLowerCase();
@@ -104,20 +125,29 @@ export async function downloadAndAttachImage(eventId: string, imageUrl: string):
   }
   if (!valid) {
     console.log(`[IMAGES] Unsupported format from ${imageUrl}`);
+    emitFailure('INVALID_FORMAT');
     return;
   }
 
   // Re-encode through Sharp (strips metadata, kills polyglot payloads)
-  const processed = await sharp(buffer)
-    .rotate()
-    .resize(1200, 1200, { fit: 'inside', withoutEnlargement: true })
-    .jpeg({ quality: 90 })
-    .toBuffer();
+  let processed: Buffer;
+  try {
+    processed = await sharp(buffer)
+      .rotate()
+      .resize(1200, 1200, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 90 })
+      .toBuffer();
+  } catch (err) {
+    console.error(`[IMAGES] Sharp encode failed for event ${eventId}: ${err instanceof Error ? err.message : err}`);
+    emitFailure('ENCODE_FAILED');
+    return;
+  }
 
   const r2Key = `portal-events/${eventId}/image`;
   const result = await uploadToR2(r2Key, new Uint8Array(processed), 'image/jpeg');
   if (!result.success) {
     console.error(`[IMAGES] R2 upload failed for event ${eventId}`);
+    emitFailure('UPLOAD_FAILED');
     return;
   }
 
@@ -130,4 +160,5 @@ export async function downloadAndAttachImage(eventId: string, imageUrl: string):
     .eq('id', eventId);
 
   console.log(`[IMAGES] Attached image to event ${eventId}`);
+  void dispatchImageProcessedWebhook(eventId, 'succeeded', finalUrl, null);
 }

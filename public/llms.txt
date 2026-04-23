@@ -605,7 +605,7 @@ Group types: `business`, `community_group`, `nonprofit`, `collective`, `curator`
 
 - **Geocoding:** If you provide `location.address` but no coordinates, the Commons geocodes it automatically (via OpenStreetMap/Nominatim). The resulting lat/lng are stored on the event.
 - **Region resolution:** Coordinates are used to assign the event to a geographic region. Events without a region won't appear in location-filtered feeds — so always provide an address or coordinates.
-- **Image processing:** If you provide `image_url`, the Commons downloads the image, strips metadata, re-encodes it as WebP (max 1200px wide), and stores it on Cloudflare R2. The response contains the final hosted URL. Processing is asynchronous — POST/PATCH returns before the image is fetched.
+- **Image processing:** If you provide `image_url`, the Commons downloads the image, strips metadata, re-encodes it as WebP (max 1200px wide), and stores it on Cloudflare R2. The response contains the final hosted URL. Processing is asynchronous — POST/PATCH returns before the image is fetched. To know when async processing finishes (or permanently fails), subscribe to the `event.image_processed` webhook (see Part 4) — it fires once per event for both succeeded and failed outcomes, so consumers polling `images[]` get a stop signal in either direction.
 - **URL validation:** The `url` field is checked for normalcy and against an operator-managed allowlist of domains. Tracking parameters (`utm_*`, `fbclid`, etc.) are stripped automatically and `http://` is coerced to `https://`. The following return a `400` and are never accepted:
   - `INVALID_URL` — malformed URL
   - `INVALID_SCHEME` — scheme other than http/https
@@ -660,6 +660,23 @@ The response includes a `signing_secret` — **save it immediately.** It is show
 | `event.updated` | An existing event is modified |
 | `event.deleted` | An event is removed |
 | `event.series_created` | A new recurring series is created (one webhook for the whole series, includes all instance IDs) |
+| `event.image_processed` | The async image download + R2 re-encode finished for an event (success or permanent failure). Opt-in: not included in the default `event_types` because the payload shape is different from the others (see below). |
+
+**`event.image_processed` payload** — distinct from the standard `{ event_type, event, timestamp, delivery_id }` shape. Fires once per event regardless of outcome:
+
+```json
+{
+  "event_type": "event.image_processed",
+  "event_id": "4d1ecb4c-ee6e-4199-9ad0-587efbd9c65b",
+  "status": "succeeded",
+  "image_url": "https://images.neighborhood-commons.org/portal-events/4d1.../image",
+  "error_code": null,
+  "timestamp": "2026-04-23T14:22:01Z",
+  "delivery_id": "8421"
+}
+```
+
+On failure: `status: "failed"`, `image_url: null`, and `error_code` is one of `URL_BLOCKED` (SSRF/validation rejected the URL), `DOWNLOAD_FAILED` (HTTP error or fetch threw), `INVALID_FORMAT` (not JPEG/PNG/WebP, or file truncated), `ENCODE_FAILED` (Sharp re-encode threw), or `UPLOAD_FAILED` (R2 rejected the upload). The full event row is not included — fetch `GET /events/{event_id}` if you need the rest.
 
 ### Verifying Webhook Signatures
 
@@ -700,6 +717,10 @@ curl -X POST "https://api.neighborhood-commons.org/api/v1/webhooks/:id/test" \
 
 # View delivery history
 curl "https://api.neighborhood-commons.org/api/v1/webhooks/:id/deliveries" \
+  -H "X-API-Key: nc_yourkey..."
+
+# Confirm a specific event reached this subscriber
+curl "https://api.neighborhood-commons.org/api/v1/webhooks/:id/deliveries?event_id=4d1ecb4c-ee6e-4199-9ad0-587efbd9c65b&status=delivered" \
   -H "X-API-Key: nc_yourkey..."
 
 # Update a webhook
