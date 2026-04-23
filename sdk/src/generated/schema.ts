@@ -293,7 +293,9 @@ export interface paths {
         put?: never;
         /**
          * Create webhook subscription
-         * @description Subscribe to event changes (create/update/delete/series_created). Returns the signing secret once — store it securely. Webhooks are signed with HMAC-SHA256. Max 5 subscriptions per API key.
+         * @description Subscribe to event changes. Returns the signing secret once — store it securely. Webhooks are signed with HMAC-SHA256. Max 5 subscriptions per API key.
+         *
+         *     **Event types:** `event.created`, `event.updated`, `event.deleted`, `event.series_created`, `event.image_processed`. The default subscribes to the first four; `event.image_processed` is opt-in (different payload shape — see Guide for details).
          */
         post: operations["createWebhook"];
         delete?: never;
@@ -355,7 +357,7 @@ export interface paths {
         };
         /**
          * List webhook deliveries
-         * @description Recent delivery attempts for a webhook subscription, newest first.
+         * @description Recent delivery attempts for a webhook subscription, newest first. Filter by `status` and/or `event_id` to confirm a specific event reached this subscriber — useful for reconciling missed deliveries without a full re-scan.
          */
         get: operations["listWebhookDeliveries"];
         put?: never;
@@ -1411,7 +1413,7 @@ export interface components {
             id?: string;
             /** Format: uri */
             url?: string;
-            event_types?: ("event.created" | "event.updated" | "event.deleted" | "event.series_created")[];
+            event_types?: ("event.created" | "event.updated" | "event.deleted" | "event.series_created" | "event.image_processed")[];
             /** @enum {string} */
             status?: "active" | "paused";
             /** Format: date-time */
@@ -2133,7 +2135,7 @@ export interface operations {
                      */
                     url: string;
                     /**
-                     * @description Event types to subscribe to. Defaults to all.
+                     * @description Event types to subscribe to. Defaults to all event.* types except `event.image_processed`, which has a different payload shape and must be opted into explicitly.
                      * @default [
                      *       "event.created",
                      *       "event.updated",
@@ -2141,7 +2143,7 @@ export interface operations {
                      *       "event.series_created"
                      *     ]
                      */
-                    event_types?: ("event.created" | "event.updated" | "event.deleted" | "event.series_created")[];
+                    event_types?: ("event.created" | "event.updated" | "event.deleted" | "event.series_created" | "event.image_processed")[];
                 };
             };
         };
@@ -2228,7 +2230,7 @@ export interface operations {
                      * @description New HTTPS endpoint URL
                      */
                     url?: string;
-                    event_types?: ("event.created" | "event.updated" | "event.deleted" | "event.series_created")[];
+                    event_types?: ("event.created" | "event.updated" | "event.deleted" | "event.series_created" | "event.image_processed")[];
                     /** @enum {string} */
                     status?: "active" | "paused";
                 };
@@ -2308,7 +2310,12 @@ export interface operations {
     listWebhookDeliveries: {
         parameters: {
             query?: {
+                /** @description Filter to a single delivery state. */
+                status?: "pending" | "delivered" | "failed" | "retrying";
+                /** @description Filter to deliveries for a specific event UUID. Combine with `status=delivered` to confirm a specific event landed. */
+                event_id?: string;
                 limit?: number;
+                offset?: number;
             };
             header?: never;
             path: {
@@ -2326,19 +2333,36 @@ export interface operations {
                 content: {
                     "application/json": {
                         deliveries?: {
-                            /** Format: uuid */
-                            id?: string;
+                            /** @description Auto-incrementing delivery row ID. */
+                            id?: number;
+                            /** @description The event_type that triggered this delivery (e.g. `event.created`, `event.image_processed`). */
                             event_type?: string;
+                            /**
+                             * Format: uuid
+                             * @description The event UUID this delivery is for.
+                             */
+                            event_id?: string;
                             /** @enum {string} */
-                            status?: "delivered" | "failed" | "pending";
+                            status?: "pending" | "delivered" | "failed" | "retrying";
+                            /** @description HTTP status code returned by the subscriber endpoint, or null if no response was received. */
                             status_code?: number | null;
-                            error?: string | null;
-                            attempt_count?: number;
-                            /** Format: date-time */
-                            delivered_at?: string | null;
+                            /** @description Failure reason (truncated to 500 chars). Null on success. */
+                            error_message?: string | null;
+                            /** @description Attempt number, 1-indexed. Max 3. */
+                            attempt?: number;
+                            /**
+                             * Format: date-time
+                             * @description When the next retry will fire. Null on terminal states.
+                             */
+                            next_retry_at?: string | null;
                             /** Format: date-time */
                             created_at?: string;
                         }[];
+                        meta?: {
+                            total?: number;
+                            limit?: number;
+                            offset?: number;
+                        };
                     };
                 };
             };

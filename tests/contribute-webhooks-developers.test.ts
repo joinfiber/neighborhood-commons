@@ -748,6 +748,108 @@ describe('Webhooks — delivery history', () => {
     });
     expect(res.status).toBe(404);
   });
+
+  it('rejects malformed event_id query param (UUID validation)', async () => {
+    // The query schema validates event_id as a UUID before the ownership
+    // check, so a bad event_id surfaces as 400 even on an owned webhook.
+    mockValidApiKey();
+    mockResponses.set('webhook_subscriptions', { data: { id: 'wh-uuid-1' }, error: null });
+
+    const res = await fetch(
+      `${baseUrl}/api/v1/webhooks/a1b2c3d4-e5f6-7890-abcd-ef1234567890/deliveries?event_id=not-a-uuid`,
+      { headers: { 'X-API-Key': VALID_API_KEY } },
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('accepts well-formed event_id query param and returns the deliveries shape', async () => {
+    // Confirms the new filter parameter is wired through and the response
+    // surfaces the documented fields (deliveries[] + meta).
+    mockValidApiKey();
+    mockResponses.set('webhook_subscriptions', { data: { id: 'wh-uuid-1' }, error: null });
+    mockResponses.set('webhook_deliveries', {
+      data: [
+        {
+          id: 42,
+          event_type: 'event.created',
+          event_id: '4d1ecb4c-ee6e-4199-9ad0-587efbd9c65b',
+          status: 'delivered',
+          status_code: 200,
+          error_message: null,
+          attempt: 1,
+          next_retry_at: null,
+          created_at: new Date().toISOString(),
+        },
+      ],
+      error: null,
+      count: 1,
+    });
+
+    const res = await fetch(
+      `${baseUrl}/api/v1/webhooks/a1b2c3d4-e5f6-7890-abcd-ef1234567890/deliveries?event_id=4d1ecb4c-ee6e-4199-9ad0-587efbd9c65b&status=delivered`,
+      { headers: { 'X-API-Key': VALID_API_KEY } },
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(Array.isArray(body.deliveries)).toBe(true);
+    expect(body.deliveries[0].event_id).toBe('4d1ecb4c-ee6e-4199-9ad0-587efbd9c65b');
+    expect(body.meta).toEqual({ total: 1, limit: 25, offset: 0 });
+  });
+});
+
+// =============================================================================
+// WEBHOOKS — event.image_processed event_type
+// =============================================================================
+//
+// Two surface checks: (1) the new event_type is accepted on subscription
+// create, and (2) it is NOT included by default — opt-in only, because
+// the payload shape differs from the standard {event_type, event, ...}
+// and existing subscribers shouldn't suddenly receive a new shape.
+// The actual webhook emission from downloadAndAttachImage is unit-tested
+// elsewhere; here we only verify subscription accepts the value.
+// =============================================================================
+
+describe('Webhooks — event.image_processed subscription', () => {
+  it('accepts event.image_processed in event_types on subscription create', async () => {
+    mockValidApiKey();
+    mockRpcResponses.set('create_webhook_subscription', {
+      data: {
+        id: 'wh-uuid-img',
+        url: 'https://example.com/webhook',
+        event_types: ['event.image_processed'],
+        status: 'active',
+        created_at: new Date().toISOString(),
+      },
+      error: null,
+    });
+
+    const res = await fetch(`${baseUrl}/api/v1/webhooks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': VALID_API_KEY },
+      body: JSON.stringify({
+        url: 'https://example.com/webhook',
+        event_types: ['event.image_processed'],
+      }),
+    });
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.subscription.event_types).toContain('event.image_processed');
+  });
+
+  it('rejects unknown event_type values', async () => {
+    mockValidApiKey();
+    const res = await fetch(`${baseUrl}/api/v1/webhooks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': VALID_API_KEY },
+      body: JSON.stringify({
+        url: 'https://example.com/webhook',
+        event_types: ['event.totally_made_up'],
+      }),
+    });
+    expect(res.status).toBe(400);
+  });
 });
 
 // =============================================================================

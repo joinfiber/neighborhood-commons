@@ -25,7 +25,24 @@ router.use(requireApiKey);
 
 const MAX_SUBSCRIPTIONS_PER_KEY = 5;
 
-const EVENT_TYPES = ['event.created', 'event.updated', 'event.deleted', 'event.series_created'] as const;
+const EVENT_TYPES = [
+  'event.created',
+  'event.updated',
+  'event.deleted',
+  'event.series_created',
+  'event.image_processed',
+] as const;
+
+// Event types included when a caller creates a subscription without specifying
+// `event_types`. Excludes `event.image_processed` so existing consumers who
+// rely on the default don't suddenly receive a new payload shape they aren't
+// prepared to handle. Subscribers who want it must opt in explicitly.
+const DEFAULT_EVENT_TYPES = [
+  'event.created',
+  'event.updated',
+  'event.deleted',
+  'event.series_created',
+] as const;
 
 // =============================================================================
 // SCHEMAS
@@ -33,12 +50,12 @@ const EVENT_TYPES = ['event.created', 'event.updated', 'event.deleted', 'event.s
 
 const createWebhookSchema = z.object({
   url: z.string().url().max(2000).refine((u) => u.startsWith('https://'), 'URL must use HTTPS'),
-  event_types: z.array(z.enum(EVENT_TYPES)).min(1).max(4).default([...EVENT_TYPES]),
+  event_types: z.array(z.enum(EVENT_TYPES)).min(1).max(EVENT_TYPES.length).default([...DEFAULT_EVENT_TYPES]),
 });
 
 const updateWebhookSchema = z.object({
   url: z.string().url().max(2000).refine((u) => u.startsWith('https://'), 'URL must use HTTPS').optional(),
-  event_types: z.array(z.enum(EVENT_TYPES)).min(1).max(4).optional(),
+  event_types: z.array(z.enum(EVENT_TYPES)).min(1).max(EVENT_TYPES.length).optional(),
   status: z.enum(['active', 'paused']).optional(),
 });
 
@@ -306,6 +323,7 @@ router.post('/:id/test', writeLimiter, async (req, res, next) => {
 
 const deliveryQuerySchema = z.object({
   status: z.enum(['pending', 'delivered', 'failed', 'retrying']).optional(),
+  event_id: z.string().uuid().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(25),
   offset: z.coerce.number().int().min(0).default(0),
 });
@@ -319,7 +337,7 @@ router.get('/:id/deliveries', enumerationLimiter, async (req, res, next) => {
     validateUuidParam(req.params.id, 'id');
     const id = req.params.id;
     const apiKeyId = req.apiKeyInfo!.id;
-    const { status, limit, offset } = validateRequest(deliveryQuerySchema, req.query);
+    const { status, event_id, limit, offset } = validateRequest(deliveryQuerySchema, req.query);
 
     // Verify subscription ownership
     const { data: sub } = await supabaseAdmin
@@ -343,6 +361,10 @@ router.get('/:id/deliveries', enumerationLimiter, async (req, res, next) => {
 
     if (status) {
       query = query.eq('status', status);
+    }
+
+    if (event_id) {
+      query = query.eq('event_id', event_id);
     }
 
     const { data: deliveries, count, error } = await query;
