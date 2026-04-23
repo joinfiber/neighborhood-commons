@@ -401,6 +401,16 @@ If you're not sure whether a change affects the Contract: it probably does. Upda
 
 Log entries are terse, factual, dated. No marketing copy. Breaking changes prefixed `BREAKING:`.
 
+### The SDK and additive-only stability
+
+The Spec is realized as a TypeScript SDK published on npm as `neighborhood-commons` (source lives in `/sdk`). The SDK is generated from `public/openapi.json` via `openapi-typescript` and republished by CI on tagged releases (`sdk-v*` tags trigger `.github/workflows/sdk-publish.yml`). It is the forcing function that turns spec drift into a TypeScript compile error in every consumer.
+
+**The SDK is intentionally thin.** It exports generated types and a minimal `createCommonsClient()` wrapper around `openapi-fetch`. Resist the urge to add convenience helpers, retry logic, caching, or "smart" defaults. Every wrapper feature widens the implicit contract beyond what the Spec actually says — and would make the SDK a second source of truth that drifts from `openapi.json`. The bar for adding wrapper logic is "consumers genuinely cannot easily do this themselves." Almost nothing meets that bar.
+
+**The Spec is additive-only by intent.** It grows but essentially never shrinks. New fields are rare and considered. Breaking changes are vanishingly rare — measured in years, not months. See `sdk/RELEASING.md` for the discipline. The deepest value the Commons offers is *time*: the certainty that what works today works in 18 months. That promise is more valuable than any individual feature addition.
+
+When you're tempted to "just tweak" the Spec, you're tempted to drift the ecosystem. Don't. Default to "no" on additions, "wait" on breaking changes. The SDK release process exists to make casual changes visibly expensive.
+
 ### What Not To Test
 
 Don't test Express routing mechanics, Supabase client internals, or Zod schema parsing. Don't write tests that just assert the code does what you can see it does. Tests should catch bugs that would otherwise reach production silently.

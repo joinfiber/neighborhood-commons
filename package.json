@@ -27,7 +27,8 @@
     "lint": "eslint src/",
     "test": "vitest",
     "test:run": "vitest run",
-    "db:types": "supabase gen types typescript --project-id $SUPABASE_PROJECT_ID > src/lib/database.types.ts"
+    "db:types": "supabase gen types typescript --project-id $SUPABASE_PROJECT_ID > src/lib/database.types.ts",
+    "sdk:health": "tsx scripts/sdk-health.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.98.0",
@@ -46,6 +47,7 @@
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
     "@types/node": "^22.0.0",
+    "openapi-typescript": "^7.5.0",
     "tsx": "^4.19.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
