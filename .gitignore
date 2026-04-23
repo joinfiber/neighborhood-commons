@@ -37,6 +37,7 @@ field/
 # Public recovery/ops scripts — explicitly un-ignored. Each file here is a
 # one-shot tool documented in a PR and safe to read by any contributor.
 !scripts/reencrypt-webhook-subscriptions.ts
+!scripts/sdk-health.ts
 
 # Internal docs (kept locally, not in public repo)
 ECOSYSTEM.md

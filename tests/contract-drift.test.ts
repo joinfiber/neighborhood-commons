@@ -23,6 +23,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { execSync } from 'child_process';
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { resolve, join } from 'path';
 
@@ -180,5 +181,47 @@ describe('contract drift: in-contract routes documented in openapi.json', () => 
       violations,
       `In-contract routes missing from openapi.json:\n${violations.map(v => '  ' + v).join('\n')}\n\nFix: add the route to public/openapi.json → paths, or — if it's truly out-of-contract — move the handler to a non-listed route file (portal/*, admin/*, etc.) and remove it from IN_CONTRACT_ROUTES in this test.\n`,
     ).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 4. SDK schema is in sync with the spec
+// ---------------------------------------------------------------------------
+//
+// `sdk/src/generated/schema.ts` is committed to the repo and published to
+// npm as the `neighborhood-commons` package. It MUST be the exact output of
+// running openapi-typescript against the current public/openapi.json. A
+// spec edit without a matching SDK regen is silent drift — consumers on
+// `npm update` would still see the old types until someone notices.
+//
+// This test re-runs openapi-typescript against the spec and compares the
+// fresh output against the committed file. Any difference fails the build
+// with a one-line fix: cd sdk && npm run generate.
+
+describe('SDK schema regeneration', () => {
+  it('sdk/src/generated/schema.ts is up-to-date with public/openapi.json', () => {
+    const sdkSchemaPath = join(repoRoot, 'sdk', 'src', 'generated', 'schema.ts');
+    const committed = readFileSync(sdkSchemaPath, 'utf-8');
+
+    let regenerated: string;
+    try {
+      regenerated = execSync(
+        `npx --no-install openapi-typescript "${openapiPath}"`,
+        { encoding: 'utf-8', cwd: repoRoot, stdio: ['ignore', 'pipe', 'pipe'] },
+      );
+    } catch (err) {
+      throw new Error(
+        `Failed to run openapi-typescript. Ensure the devDep is installed (run \`npm ci\`).\n${(err as Error).message}`,
+      );
+    }
+
+    // Normalize line endings — committed file may have CRLF on Windows
+    // checkouts, while openapi-typescript writes LF.
+    const normalize = (s: string): string => s.replace(/\r\n/g, '\n').trim();
+
+    expect(
+      normalize(regenerated),
+      `\nSDK schema is stale relative to public/openapi.json.\n\nFix: cd sdk && npm run generate, then commit the updated sdk/src/generated/schema.ts in the same PR as the spec change.\n\nThis guard exists because consumer apps depend on the npm-published SDK; a spec edit without a regen is silent drift that surfaces only when someone notices.\n`,
+    ).toBe(normalize(committed));
   });
 });
