@@ -1,17 +1,24 @@
 name: SDK Publish
 
-# Tag-triggered SDK publish to npm.
+# Tag-triggered SDK publish to npm via Trusted Publishing (OIDC).
 #
 # To release: bump sdk/package.json version, commit, then:
 #   git tag sdk-v0.1.0 && git push origin sdk-v0.1.0
 #
 # This workflow regenerates types from the spec on master, builds the SDK,
-# and publishes to npm with provenance. The version published is whatever
-# is in sdk/package.json at the tagged commit — keep them in sync.
+# and publishes to npm with provenance + OIDC attestation. The version
+# published is whatever is in sdk/package.json at the tagged commit —
+# keep them in sync.
 #
-# Setup once: add NPM_TOKEN as a repo secret. Use an Automation token
-# (Settings → Access Tokens → Generate New Token → Automation), which
-# bypasses 2FA for CI publishing.
+# Setup once: configure a Trusted Publisher on npm. npmjs.com → the
+# `neighborhood-commons` package → Settings → Publishing access →
+# Trusted Publishers → Add → GitHub Actions:
+#   Repository:        joinfiber/neighborhood-commons
+#   Workflow filename: sdk-publish.yml   (basename only, no path)
+#   Environment:       (leave blank)
+# No long-lived secrets are stored in this repo for publishing — the
+# npm CLI exchanges a GitHub-signed OIDC token for a short-lived
+# publish credential at run time.
 
 on:
   push:
@@ -24,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write  # required for npm provenance
+      id-token: write  # required for npm provenance + OIDC Trusted Publishing
     steps:
       - uses: actions/checkout@v4
 
@@ -32,6 +39,12 @@ jobs:
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
+
+      # Node 20 ships with npm 10.x. npm Trusted Publishing (OIDC) requires
+      # 11.5.1 or later — without this upgrade, the publish step falls back
+      # to looking for NODE_AUTH_TOKEN and fails ENEEDAUTH.
+      - name: Upgrade npm to a Trusted-Publishing-capable version
+        run: npm install -g npm@latest
 
       - name: Install SDK dependencies
         run: npm ci
@@ -41,8 +54,10 @@ jobs:
         run: npm run build
         working-directory: ./sdk
 
-      - name: Publish to npm with provenance
+      # No NODE_AUTH_TOKEN env var — npm CLI auto-detects the GitHub Actions
+      # OIDC environment via id-token: write and exchanges it with npmjs for
+      # a short-lived publish credential. Provenance attestation is signed
+      # against the same OIDC identity.
+      - name: Publish to npm (Trusted Publishing + provenance)
         run: npm publish --provenance --access public
         working-directory: ./sdk
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
