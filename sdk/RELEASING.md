@@ -32,8 +32,25 @@ Every release should be measured against this principle:
    git tag sdk-v0.1.0
    git push origin sdk-v0.1.0
    ```
-5. The GitHub Actions workflow (`.github/workflows/sdk-publish.yml`) regenerates the SDK from the master `openapi.json`, builds, and publishes to npm with provenance.
+5. The GitHub Actions workflow (`.github/workflows/sdk-publish.yml`) regenerates the SDK from the master `openapi.json`, builds, and publishes to npm with provenance + OIDC attestation.
 6. Verify: `npm view neighborhood-commons` should show the new version within a minute.
+
+### One-time publishing setup (Trusted Publishing / OIDC)
+
+The publish workflow uses **npm Trusted Publishing** — the npm CLI exchanges a GitHub-signed OIDC token for a short-lived publish credential at run time. No long-lived `NPM_TOKEN` secret is stored in this repo.
+
+If you're setting this up for a fresh fork or after rotating ownership of the npm package:
+
+1. npmjs.com → the `neighborhood-commons` package → **Settings** → **Publishing access** → **Trusted Publishers** → **Add**.
+2. Publisher: **GitHub Actions**.
+3. Repository: `joinfiber/neighborhood-commons` (or your fork's `owner/repo`).
+4. Workflow filename: **`sdk-publish.yml`** (basename only — npm rejects full paths).
+5. Environment: leave blank.
+6. Save.
+
+After this is configured, every tag matching `sdk-v*` pushed to the repo will publish automatically. The first tagged release after switching from PAT-based auth to Trusted Publishing may need a re-tag if the workflow file at the tag commit still references `NODE_AUTH_TOKEN` — tag-triggered workflows use the workflow file *at the tagged SHA*, not master HEAD.
+
+Why OIDC instead of an `NPM_TOKEN` Automation token: the token is short-lived and bound to this specific workflow + commit, so a leaked log or compromised dependency cannot be used to publish. npm itself recommends Trusted Publishing for CI/CD over long-lived tokens.
 
 ## Adding a field — the disciplined process
 
