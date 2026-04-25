@@ -2159,6 +2159,73 @@
             "$ref": "#/components/responses/NotFound"
           }
         }
+      },
+      "delete": {
+        "summary": "Delete event image (service)",
+        "description": "Remove the image associated with an event. Idempotent. Clears event_image_url and resets event_image_focal_y to its default. When the stored value is a Commons-hosted R2 object (its URL carries the deterministic key portal-events/{id}/image), the underlying R2 object is also deleted. External image URLs are left untouched upstream — only the DB reference is cleared.",
+        "operationId": "serviceDeleteEventImage",
+        "security": [
+          {
+            "serviceApiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Image cleared",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deleted": {
+                      "type": "boolean"
+                    },
+                    "r2_deleted": {
+                      "type": "boolean",
+                      "description": "True when the R2 object was deleted; false for external image URLs or when the event had no image."
+                    },
+                    "external": {
+                      "type": "boolean",
+                      "description": "True when the cleared reference pointed at an external URL (not an R2-hosted object)."
+                    },
+                    "skipped": {
+                      "type": "string",
+                      "enum": [
+                        "no_image"
+                      ],
+                      "description": "Present when the event had no image; the response is otherwise a successful no-op."
+                    }
+                  },
+                  "required": [
+                    "deleted",
+                    "r2_deleted",
+                    "external"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "description": "NOT_LINKED"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
       }
     },
     "/service/stats": {

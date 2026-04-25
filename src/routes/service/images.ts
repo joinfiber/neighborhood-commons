@@ -18,6 +18,7 @@ import { createError } from '../../middleware/error-handler.js';
 import { validateUuidParam, resolveEventImageUrl } from '../../lib/helpers.js';
 import { serviceLimiter } from '../../middleware/rate-limit.js';
 import { processAndUploadImage, downloadAndAttachImage } from '../../lib/image-processing.js';
+import { deleteFromR2 } from '../../lib/cloudflare.js';
 import { config } from '../../config.js';
 import { assertLinkedEvent } from './helpers.js';
 
@@ -118,6 +119,64 @@ router.post('/events/:id/image', imageBodyLimit, serviceLimiter, async (req, res
     } else {
       throw createError('Provide "image" (base64), "image_url" (URL), or a multipart file upload', 400, 'VALIDATION_ERROR');
     }
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * DELETE /service/events/:id/image — Remove event image
+ *
+ * Idempotent. Clears event_image_url and resets event_image_focal_y to its
+ * default. When the stored value is a Commons-hosted R2 object (its URL
+ * carries our deterministic key portal-events/{id}/image), the underlying R2
+ * object is deleted too. External image URLs (DICE, Eventbrite, etc.) are
+ * left untouched upstream — only the DB reference is cleared.
+ */
+router.delete('/events/:id/image', serviceLimiter, async (req, res, next) => {
+  try {
+    validateUuidParam(req.params.id, 'event ID');
+    await assertLinkedEvent(req, req.params.id);
+    const eventId = req.params.id;
+
+    const { data: event } = await supabaseAdmin
+      .from('events')
+      .select('event_image_url')
+      .eq('id', eventId)
+      .maybeSingle();
+
+    if (!event) throw createError('Event not found', 404, 'NOT_FOUND');
+
+    const stored = (event.event_image_url ?? null) as string | null;
+    if (!stored) {
+      res.json({ deleted: true, r2_deleted: false, external: false, skipped: 'no_image' });
+      return;
+    }
+
+    // Commons-hosted images carry our deterministic R2 key in the URL; only
+    // those get the object deleted. deleteFromR2 takes the KEY, not the URL.
+    const r2Key = `portal-events/${eventId}/image`;
+    let r2Deleted = false;
+    let external = false;
+
+    if (stored.includes(r2Key)) {
+      const result = await deleteFromR2(r2Key);
+      r2Deleted = result.success;
+      if (!result.success) {
+        console.error('[IMAGES] R2 delete failed for', r2Key, '-', result.error);
+      }
+    } else {
+      external = true;
+    }
+
+    const { error } = await supabaseAdmin
+      .from('events')
+      .update({ event_image_url: null, event_image_focal_y: 0.5 })
+      .eq('id', eventId);
+
+    if (error) throw createError('Failed to clear image reference', 500, 'SERVER_ERROR');
+
+    res.json({ deleted: true, r2_deleted: r2Deleted, external });
   } catch (err) {
     next(err);
   }
