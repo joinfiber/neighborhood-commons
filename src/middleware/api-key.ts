@@ -110,7 +110,7 @@ export async function requireServiceApiKey(req: Request, _res: Response, next: N
     const keyHash = hashApiKey(apiKey);
     const { data: keyInfo } = await supabaseAdmin
       .from('api_keys')
-      .select('id, contributor_tier, is_admin')
+      .select('id, contributor_tier, is_admin, brand_config, verification_authority')
       .eq('key_hash', keyHash)
       .eq('status', 'active')
       .maybeSingle();
@@ -123,7 +123,15 @@ export async function requireServiceApiKey(req: Request, _res: Response, next: N
       return next(createError('This endpoint requires a service-tier API key', 403, 'INSUFFICIENT_TIER'));
     }
 
-    req.apiKeyInfo = { id: keyInfo.id, tier: keyInfo.contributor_tier, isAdmin: keyInfo.is_admin === true };
+    req.apiKeyInfo = {
+      id: keyInfo.id,
+      tier: keyInfo.contributor_tier,
+      isAdmin: keyInfo.is_admin === true,
+      brandConfig: (keyInfo.brand_config as Record<string, unknown> | null) || undefined,
+      verificationAuthority: Array.isArray(keyInfo.verification_authority)
+        ? (keyInfo.verification_authority as string[])
+        : undefined,
+    };
     next();
   } catch {
     return next(createError('API key validation failed', 500, 'INTERNAL_ERROR'));

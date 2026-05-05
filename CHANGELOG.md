@@ -14,6 +14,80 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-05-05 — 1.0.0
+
+The pre-1.0 consolidation. The Commons spec moves from "open events API" to **typed substrate for neighborhood-scale public facts**. Schema.org-aligned types, Commons-orchestrated verification, public reputation graph, opt-in filter primitives. Pre-1.0 was the breaking-changes window; 1.0.0 commits to additive-only stability — future minor versions add types/fields/endpoints without breaking existing consumers, and breaking changes require 2.0.0 with strong justification.
+
+OpenAPI `info.version` bumped to `1.0.0`. SDK regenerates and gets a major version bump.
+
+### New types (Schema.org-aligned)
+
+- Added: `Place` (Schema.org `Place`). Physical locations deduplicated by `googlePlaceId`. Structured address (`PostalAddress` with `streetAddress`, `addressLocality`, `addressRegion`, `postalCode`, `addressCountry`) and `geo` (`GeoCoordinates` with `latitude`, `longitude`). Read: `GET /v1/places`, `GET /v1/places/:id`. Service write: `POST /v1/service/places` (idempotent on `googlePlaceId`).
+- Added: `Organization` (Schema.org `Organization`, with `LocalBusiness` semantics via `primary_place_id`). One unified type with `kind` discriminator: `local_business`, `business`, `community_group`, `nonprofit`, `curator`, `collective`. Heavy verification rigor for `local_business`/`business`/`nonprofit`; light for the rest. Properties: `legalName`, `url`, `logo`, `image`, `telephone`, `email`, `sameAs`, `keywords`, `openingHoursSpecification`, `location`. Read: `GET /v1/organizations`, `GET /v1/organizations/:idOrSlug`. Service write: `POST /v1/service/organizations`, `PATCH /v1/service/organizations/:id`, `POST /v1/service/organizations/link`, `POST /v1/service/organizations/:id/logo`, `POST /v1/service/organizations/:id/image`.
+- Added: `Person` (Schema.org `Person`). Individuals — DJs, performers, curators, individual organizers. Light verification (email loop, any domain). Properties: `givenName`, `familyName`, `alternateName`, `description`, `image`, `url`, `sameAs`, `jobTitle`. Read: `GET /v1/persons`, `GET /v1/persons/:idOrSlug`. Service write: `POST /v1/service/persons`, `PATCH /v1/service/persons/:id`.
+- Added: `Broadcast` — ephemeral signal from a verified Organization, pinned to a Place. Max 24h lifetime. No Schema.org analog (`SpecialAnnouncement` checked and rejected as a bad fit for ephemeral commercial signals); conventions borrowed (`datePosted`, `expires`). Verification gate is consumer-app editorial, not a Commons-side write check. Read: `GET /v1/broadcasts`, `GET /v1/broadcasts/:id`. Service write: `POST /v1/service/broadcasts`, `POST /v1/service/broadcasts/:id/retract`.
+- Added: `List` (Schema.org `ItemList`). Curatorial selections by an Organization or Person. Polymorphic items (events, organizations, places) via `itemListElement` array of `ListItem` objects with `position`, `item`, `curatorNote`. Read: `GET /v1/lists`, `GET /v1/lists/:idOrSlug`. Service write: `POST /v1/service/lists`, `PATCH /v1/service/lists/:id`, `POST /v1/service/lists/:id/items`, `DELETE /v1/service/lists/:id/items/:position`.
+- Added: `Event.performer` array via new `event_performers` join table. Each performer is a Person or Organization (xor) with optional `performerRole` and `position`. Mirrors Schema.org's `Event.performer` distinction from `Event.organizer`.
+
+### Verification system
+
+- Added: identifier-based verification attached to typed targets (Organization or Person). `account_verified_identifiers` table is the source of truth — presence of any active row means `verified=true`. The identifier set itself enables cross-app portability.
+- Added: `GET /v1/service/verifications/path` — Commons routing authority. Apps query with `(target_type, target_id, identifier_type, identifier_value)`; Commons returns which submission endpoint to call. Apps follow; submission endpoints reject mismatches in both directions.
+- Added: `POST /v1/service/verifications/challenges` + `POST /v1/service/verifications/challenges/:id/confirm` — auto-track via email-loop. Code stored hashed, never raw. Rejects personal-email domains (gmail/yahoo/etc.) when target is a heavy-rigor Organization, redirecting to manual review.
+- Added: `POST /v1/service/verifications/manual` — slow-track for manual review. Required structured evidence (`phone`, `verifiedVia`, `reviewerAttestation`, `reviewerAccountId`, `businessAddressObserved`, `idDocumentObserved`). Apps with `verification_authority` for the matching method auto-approve on submit; others queue.
+- Added: `GET/POST /v1/service/verifications/pending`, `/approve`, `/reject` (admin-tier). Manual review queue endpoints. Approval criteria documented in `docs/verification-policy.md`.
+- Added: `POST /v1/service/disputes` — minimum-viable dispute recording. Stores claims for operator review; no automated action in 1.0.0.
+- Added: `api_keys.brand_config` (jsonb) — per-app verification email sender identity. Operator sets at issuance. Per-app domains must be verified in the shared Resend account.
+- Added: `api_keys.verification_authority` (jsonb array) — methods this key may auto-approve, e.g. `["manual_review:in_person", "manual_review:video_call"]`. Operator-granted after onboarding review.
+- Added: `account_verified_identifiers.approved_by_app` (snapshot, stable across key rotation) — drives the public reputation graph.
+
+### Reputation graph
+
+- Added: `GET /v1/verifiers` — public read of the verifier registry. Returns per-app counts (approval, active, revoked) and methods used. Anyone reading the Commons can compose `verified_by` filters that match their trust policy.
+- Added: `GET /v1/verifiers/:appName/recent_approvals` — public spot-check of recent approvals issued by a specific verifier. Maximum sunlight — auditable by any consumer.
+- Added: `verification.verifiedByApp` exposed publicly on Organization/Person reads. The reputation graph is intentionally transparent — sloppy verification creates a market consequence (filtered out by other apps), which is the discipline mechanism.
+
+### Read filters — opt-in not firehose
+
+- Added: `?verified=true`, `?verified_by=app1,app2`, `?not_verified_by=app-x`, `?created_by_contributor=AppName` filter parameters on `GET /v1/organizations`, `/persons`, `/broadcasts`, `/events`. Composable. There is no default firehose: apps construct their consumed view via filters they explicitly choose. App C trusts a different verifier set than App B; both express that as filter parameters.
+
+### BREAKING removals
+
+- BREAKING: Removed `/v1/groups`, `/v1/groups/:id`, `/v1/service/groups/*`, `/v1/contribute/groups/*`. Replaced by `/v1/organizations` (`kind` filter for subtype). The legacy `groups` table stays readable in the database through 1.0.0 and gets dropped in v1.1.0.
+- BREAKING: Removed `/v1/accounts`, `/v1/accounts/:idOrSlug`, `/v1/service/accounts/*`. Account-as-business-profile endpoints are replaced by `Organization` reads/writes. `portal_accounts` table narrows to its actual job (auth identity) in v1.1.0; for now it retains business-profile columns for backward-compat read paths.
+- BREAKING: **Contribute tier eliminated.** Removed `/v1/contribute/*` (all 11 paths) and `/v1/developers/register/send-otp`, `/verify-otp`, `/me`, `/keys/rotate` (developer self-service registration). The `contributeApiKey` security scheme is gone. Schema `ContributeEventInput` removed. Two effective tiers remain: Browse (read, no auth or basic API key) and Service (write, operator-issued service key with `is_admin` variant). Apps with bulk-contribution use cases push through a service-tier app (Merrie, Holler, Studio) or apply for their own service key. The contribute-tier OTP path was a half-measure — neither low-friction enough to compete with reading nor high-friction enough to enforce app-level accountability.
+- BREAKING: Renamed `PATCH /v1/service/events/:id/group` → `PATCH /v1/service/events/:id/organizer`. Body shape changed: `{ group_id }` → `{ organizerOrganizationId, organizerPersonId }`. The "group" assignment was always logically about who organized the event; the new name and shape are honest about that.
+- BREAKING: `Group` schema removed; `Account` schema removed; `ServiceAccount` schema removed; `ContributeEventInput` schema removed. Generated SDK clients lose these types and must regenerate to pick up the replacement `Organization` type.
+- Added: 5 new ErrorCodes — `IDENTIFIER_DISPUTED`, `IMPOSTER_SIGNALS`, `INSUFFICIENT_EVIDENCE`, `OUT_OF_POLICY`, `WRONG_METHOD` — covering verification flow rejections and Commons-routed-path mismatches.
+
+### Database migrations (064 through 074)
+
+- 064: `places` table.
+- 065: `organizations` + `organization_places` tables.
+- 066: `persons` table.
+- 067: `events.location_place_id`, `events.organizer_org_id`, `events.organizer_person_id` (nullable FKs; CHECK constraint deferred to a future migration after backfill is verified).
+- 068: `event_performers` table.
+- 069: `broadcasts` table + `expire_broadcasts()` cron function.
+- 070: `lists` + `list_items` tables.
+- 071: `account_verified_identifiers`, `verification_challenges`, `verification_pending_reviews` tables + `cleanup_expired_challenges()` cron function.
+- 072: `api_keys.brand_config`, `api_keys.verification_authority`, `api_keys.is_admin` columns. Non-service-tier keys deactivated.
+- 073: `api_key_organization_links` table — replaces the `api_key_account_links` pattern.
+- 074: backfill — populates new tables from `groups`, `portal_accounts`, `group_venues`, `api_key_account_links`, and event references. Atomic transaction; idempotent; prints stats via `RAISE NOTICE`.
+
+Legacy tables (`groups`, `group_venues`, `api_key_account_links`, `developer_otps`) and legacy columns on `portal_accounts` are NOT dropped in 1.0.0. They become dead-code-readable until v1.1.0 removes them after operational confidence accumulates. This decoupling — API-layer consolidation now, DB-layer cleanup later — preserves reversibility for weeks.
+
+### SDK
+
+- The published `neighborhood-commons` npm package gets a major-version bump aligned to spec 1.0.0. Generated TS types for all new resources. Verification helpers (`commons.verifications.path`, `commons.verifications.challenges`, etc.) become first-class methods. Reputation-graph helpers. Typed filter parameters. Removed types: `Group`, `Account`, `ServiceAccount`, `ContributeEventInput`. Removed namespace: `commons.contribute`.
+- SDK release runbook (operator only): after this branch merges to `master`, edit `sdk/package.json` to set `"version": "1.0.0"`, commit on master, then `git tag sdk-v1.0.0 && git push origin sdk-v1.0.0`. The `sdk-publish.yml` GitHub Actions workflow regenerates types from `public/openapi.json` on master, builds, and publishes to npm with provenance + OIDC attestation. Verify with `npm view neighborhood-commons` after the workflow finishes (~1 min).
+
+### Documentation
+
+- Added: `docs/verification-policy.md` — Commons-defined approval criteria, evidence schemas, app-onboarding requirements for earning `verification_authority`. Reviewers are bound by the documented floor.
+- Updated: `public/llms.txt` — narrative companion rewritten to lead with the substrate framing. Events are 1.0.0's first slice; future slices (Notice, Plan, Asset, Offer, Job — the Craigslist-shaped expansion) come additively as consumer apps need them.
+
+---
+
 ## 2026-04-23
 
 - New: `event.image_processed` webhook event_type. Fires once per event when the async image download + R2 re-encode pipeline reaches a terminal state (success or permanent failure), so consumers polling `images[]` get a stop signal in either direction. Payload shape is intentionally focused — `{ event_type, event_id, status, image_url, error_code, timestamp, delivery_id }` — not a mirror of `event.updated`. Failure `error_code` values: `URL_BLOCKED`, `DOWNLOAD_FAILED`, `INVALID_FORMAT`, `ENCODE_FAILED`, `UPLOAD_FAILED`. Opt-in: NOT included in the default `event_types` for new subscriptions because the payload differs from the standard `{ event_type, event, ... }` shape — existing subscribers who don't explicitly opt in keep receiving exactly what they receive today. Documented in `public/llms.txt` Part 4.

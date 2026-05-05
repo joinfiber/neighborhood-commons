@@ -38,6 +38,8 @@ field/
 # one-shot tool documented in a PR and safe to read by any contributor.
 !scripts/reencrypt-webhook-subscriptions.ts
 !scripts/sdk-health.ts
+!scripts/check-migration-1.0.0.sql
+!scripts/smoke-test-1.0.0.sh
 
 # Internal docs (kept locally, not in public repo)
 ECOSYSTEM.md
