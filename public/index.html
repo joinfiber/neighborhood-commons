@@ -200,6 +200,101 @@
     .nc-hero-curls .nc-curl-prompt { color: #7a948a; }
     .nc-hero-curls .nc-curl-string { color: #d4b886; }
 
+    /* Imagination block — concrete-ish app vignettes. Keeps the sentence
+       structure parallel so the eye scans them fast, and uses --nc-text
+       (not --nc-muted) so they pop slightly more than ordinary body copy.
+       This is the "what could you build with this?" beat. */
+    .nc-imagine {
+      margin: 28px 0 0;
+      padding: 22px 26px;
+      border-left: 3px solid #c08a3e;
+      background: #faf8f4;
+      border-radius: 0 6px 6px 0;
+    }
+    .nc-imagine-eyebrow {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px; font-weight: 500;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      color: #c08a3e;
+      margin: 0 0 12px;
+    }
+    .nc-imagine ul {
+      list-style: none; padding: 0; margin: 0;
+      display: grid; grid-template-columns: 1fr; gap: 10px;
+      max-width: 60ch;
+    }
+    .nc-imagine li {
+      font-size: 0.98rem; line-height: 1.55;
+      color: var(--nc-text);
+    }
+    .nc-imagine li::before {
+      content: '→'; color: #c08a3e;
+      margin-right: 12px; font-family: 'DM Mono', monospace;
+      font-size: 0.85rem;
+    }
+
+    /* Atom inventory — names the substrate plainly after the imagination
+       block has done the motivating work. */
+    .nc-atoms {
+      margin: 22px 0 0; max-width: 60ch;
+      font-size: 0.92rem; color: var(--nc-muted);
+      font-family: 'DM Mono', monospace;
+      letter-spacing: 0.02em;
+    }
+    .nc-atoms strong { color: var(--nc-text); font-weight: 500; }
+
+    /* Tease — points at the docs below the fold. Small, confident,
+       not begging for attention. */
+    .nc-hero-tease {
+      margin: 36px 0 0;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.82rem; letter-spacing: 0.02em;
+      color: var(--nc-muted);
+      max-width: 60ch;
+    }
+    .nc-hero-tease strong { color: var(--nc-text); font-weight: 500; }
+    .nc-hero-tease::before {
+      content: '⏷  ';
+      color: #c08a3e;
+      font-weight: 600;
+    }
+
+    /* Thesis section — the strategic frame. Sits between pillars and the
+       divider. Heaviest above-the-fold element after the h1, on purpose:
+       this is the closing argument to a developer scrolling toward the
+       docs, and (implicitly) the public-good framing for grant readers. */
+    .nc-thesis {
+      max-width: 880px; margin: 56px auto 0;
+      padding: 56px 32px;
+      border-top: 1px solid var(--nc-border);
+      border-bottom: 1px solid var(--nc-border);
+    }
+    .nc-thesis-eyebrow {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px; font-weight: 500;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      color: #c08a3e;
+      margin: 0 0 24px;
+    }
+    .nc-thesis h2 {
+      font-family: 'DM Serif Display', Georgia, serif;
+      font-size: clamp(1.75rem, 3.6vw, 2.5rem);
+      font-weight: 400; line-height: 1.15;
+      letter-spacing: -0.015em;
+      margin: 0 0 28px;
+      color: var(--nc-text);
+      max-width: 24ch;
+    }
+    .nc-thesis h2 em { font-style: italic; }
+    .nc-thesis p {
+      font-size: 1.05rem; line-height: 1.7;
+      color: var(--nc-muted);
+      max-width: 60ch;
+      margin: 0 0 18px;
+    }
+    .nc-thesis p:last-child { margin: 0; }
+    .nc-thesis strong { color: var(--nc-text); font-weight: 500; }
+
     .nc-hero-ctas {
       display: flex; gap: 28px; flex-wrap: wrap;
       align-items: center;
@@ -611,8 +706,24 @@
       <div class="nc-eyebrow">Open neighborhood data infrastructure</div>
       <h1>An open layer for <em>everything</em> that happens in a neighborhood.</h1>
       <p class="nc-lede">
-        Six typed atoms — <strong>events</strong>, <strong>organizations</strong>, <strong>places</strong>, <strong>persons</strong>, <strong>broadcasts</strong>, <strong>curated lists</strong> — that any app can read, mix, and remix. Schema.org-aligned. Verified contributors. Public reputation graph. Read free, no key required.
+        Build the neighborhood app you've always wanted to use. The Commons is the typed substrate underneath — open, verified, free to read, designed to compose into anything a neighborhood needs to know about itself.
       </p>
+
+      <div class="nc-imagine">
+        <div class="nc-imagine-eyebrow">Imagine building</div>
+        <ul>
+          <li>A guide that surfaces only the events from curators you trust.</li>
+          <li>A live feed of what businesses are broadcasting on the next block over.</li>
+          <li>A real-estate explorer that maps the rhythm of a Tuesday night.</li>
+          <li>A civic dashboard tracking the vitality of a single district.</li>
+          <li>An assistant that knows what's happening here, right now, and who's behind it.</li>
+        </ul>
+      </div>
+
+      <p class="nc-atoms">
+        Six typed atoms: <strong>events</strong> · <strong>organizations</strong> · <strong>places</strong> · <strong>persons</strong> · <strong>broadcasts</strong> · <strong>lists</strong>. Schema.org-aligned. Read free, no key required.
+      </p>
+
       {{statsLine}}
 
       <div class="nc-specimen">
@@ -629,9 +740,13 @@
 <span class="nc-curl-prompt">$</span> curl <span class="nc-curl-string">"{{baseUrl}}/api/v1/broadcasts?near=39.97,-75.14&amp;radius_km=1"</span></div>
       </div>
 
+      <p class="nc-hero-tease">
+        <strong>The complete integration guide is below.</strong> Every type, every endpoint, the verification system, webhooks, error codes — one page, top to bottom. Reach the API with curl, fetch, the typed TypeScript SDK, or your AI assistant pointed at the spec.
+      </p>
+
       <div class="nc-hero-ctas">
         <a href="#quickstart" class="nc-btn nc-btn-primary">Quick Start</a>
-        <a href="#writing" class="nc-link-arrow">Apply for a service key<span class="nc-arrow">→</span></a>
+        <a href="#writing" class="nc-link-arrow">Self-issue a service key<span class="nc-arrow">→</span></a>
       </div>
     </section>
 
@@ -640,7 +755,7 @@
         <div class="nc-pillar">
           <span class="nc-pillar-num">01 — Open</span>
           <h3>Read free.</h3>
-          <p>Every endpoint is open. No API key required for reads. The 1.0 spec is committed to additive-only stability — what works today works in 18 months.</p>
+          <p>Every read is open. No API key, no rate sheet, no portal. The 1.0 spec commits to additive-only stability — code you write today still works in 18 months.</p>
         </div>
         <div class="nc-pillar">
           <span class="nc-pillar-num">02 — Composable</span>
@@ -650,9 +765,21 @@
         <div class="nc-pillar">
           <span class="nc-pillar-num">03 — Trusted</span>
           <h3>Verify once. Recognized everywhere.</h3>
-          <p>When a business gets verified through one app, every other app can honor that verification — or filter it out. The reputation graph is public; verifiers earn or lose trust on the quality of their approvals.</p>
+          <p>When a business gets verified through one app, every other app can honor that verification — or filter it out. The reputation graph is public. Verifiers earn or lose trust on the quality of their work.</p>
         </div>
       </div>
+    </section>
+
+    <!-- Thesis — the strategic frame. Cooperate on the data; compete on the
+         experience. This is the developer pitch (you compete on craft, not
+         on owning records) and the public-good framing (infrastructure for
+         an ecosystem, not a captive platform) at the same time. -->
+    <section class="nc-thesis">
+      <div class="nc-thesis-eyebrow">The deal</div>
+      <h2>Cooperate on data. Compete on <em>experience</em>.</h2>
+      <p>The Commons is the public floor — typed atoms, verification work, reputation graph. That floor is shared, free to read, and durable. Your app is what stands on it.</p>
+      <p>Apps don't fragment the data; they enrich it. <strong>You compete on editorial</strong> — what to surface, how to curate, who you build for, what users can do once they're inside your app. <strong>You don't compete on owning the record</strong> of what a neighborhood is, or who the verified actors in it are.</p>
+      <p>This is infrastructure for an ecosystem, not a platform with a captive market. Every additional app makes the data more useful. Every verification one app does makes every other app's job a little easier. The growth dynamic is shared rather than zero-sum.</p>
     </section>
 
     <!-- Section divider between marketing and reference -->
@@ -1343,7 +1470,32 @@ app.post('/webhooks/commons', express.raw({ type: 'application/json' }), (req, r
         <h2 id="sdk"><span class="nc-section-num">7</span>SDK &amp; spec</h2>
         <p>The official SDK is a typed TypeScript client generated from <a href="/openapi.json">openapi.json</a>. Install:</p>
         <pre>npm install neighborhood-commons</pre>
-        <p>The SDK exposes both unauthenticated read methods and authenticated service-tier write methods. If you'd rather generate your own client in a different language, run an OpenAPI generator against <a href="/openapi.json">/openapi.json</a> directly.</p>
+        <p>The SDK is intentionally thin: generated types and a typed <code>fetch</code> wrapper. ~50 lines of runtime, zero opinions beyond the spec. Anything more would be a second source of truth that drifts.</p>
+
+        <h3>What it gets you in 2026</h3>
+        <ul>
+          <li><strong>Version pinning.</strong> <code>neighborhood-commons@1.0.0</code> is a real artifact in <code>package.json</code>. Six months from now you know exactly which spec version your code targets. AI-generated code has no version semantics unless you write them down — the SDK writes them down for you.</li>
+          <li><strong>CI determinism.</strong> Two engineers, same build. Your build today and your build in six months produce identical output if you don't bump the dep.</li>
+          <li><strong>A canonical reference your AI assistant can anchor on.</strong> "Match the SDK pattern" is a higher-quality prompt than "implement this from scratch." The SDK's value proposition has shifted — it's less an ergonomic wrapper, more a stable reference document for whatever's editing your code.</li>
+          <li><strong>An audit trail.</strong> Diffing two SDK versions shows exactly what moved in the API.</li>
+        </ul>
+
+        <h3>What it does not get you</h3>
+        <ul>
+          <li>No abstractions beyond the spec. No retry logic, no caching, no auth dance, no smart defaults. The SDK and <code>curl</code> hit the same endpoints with the same headers.</li>
+          <li>It is not required. For TypeScript prototypes, AI assistants pointed at <code>/openapi.json</code> generate working calls without the SDK in the loop. For production codebases — multiple contributors, CI, deliberate upgrade paths — the npm package earns its keep.</li>
+        </ul>
+
+        <h3>Other languages</h3>
+        <p>If you're not in TypeScript, generate your own client from the spec:</p>
+        <pre># TypeScript types only (matches what we publish)
+$ npx openapi-typescript {{baseUrl}}/openapi.json -o ./types.ts
+
+# Full clients in any language
+$ openapi-generator-cli generate -i {{baseUrl}}/openapi.json -g python  -o ./client
+$ openapi-generator-cli generate -i {{baseUrl}}/openapi.json -g go      -o ./client
+$ openapi-generator-cli generate -i {{baseUrl}}/openapi.json -g rust    -o ./client</pre>
+        <p>The spec is the contract. Whatever you generate from it is as canonical as what we publish.</p>
 
         <!-- ─── 8. Reference ─── -->
         <h2 id="reference"><span class="nc-section-num">8</span>Reference</h2>
