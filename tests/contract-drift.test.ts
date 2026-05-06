@@ -128,21 +128,42 @@ describe('contract drift: in-contract routes documented in openapi.json', () => 
   // redirects + /events/changes (which lives outside /v1 via a per-path
   // server override in the spec) — also omitted.
   //
+  // 1.0.0 transition: v1-groups.ts, v1-accounts.ts, developers.ts,
+  // contribute.ts, service/accounts.ts, service/groups.ts host route
+  // handlers that 1.0.0 removed from the spec. They keep serving traffic
+  // until consumer apps (Merrie, Holler, Studio) migrate to the new
+  // endpoints. They're omitted from this list temporarily; once consumer
+  // apps have migrated, those route files get deleted and this comment
+  // can be deleted with them. New in-contract route files (1.0.0+) are
+  // listed below.
+  //
   // If you add a new in-contract route file, register it here.
   const IN_CONTRACT_ROUTES: Record<string, string> = {
     'v1.ts': '/events',
-    'v1-groups.ts': '/groups',
-    'v1-accounts.ts': '/accounts',
     'webhooks.ts': '/webhooks',
     'meta.ts': '/meta',
-    'developers.ts': '/developers',
-    'contribute.ts': '/contribute',
-    'service/accounts.ts': '/service',
+    // 1.0.0 type system
+    'v1-places.ts': '/places',
+    'v1-organizations.ts': '/organizations',
+    'v1-persons.ts': '/persons',
+    'v1-broadcasts.ts': '/broadcasts',
+    'v1-lists.ts': '/lists',
+    'v1-verifiers.ts': '/verifiers',
+    // Service-tier write paths.
+    // service/images.ts hosts the legacy /service/accounts/:id/{cover-image,logo}
+    // upload paths that 1.0.0 removed from the spec; omitted from this list
+    // until consumer apps migrate to /service/organizations/:id/{logo,image}.
     'service/events.ts': '/service',
     'service/series.ts': '/service',
-    'service/images.ts': '/service',
-    'service/groups.ts': '/service',
     'service/admin-ops.ts': '/service',
+    // 1.0.0 type-system service routes
+    'service/places.ts': '/service',
+    'service/organizations.ts': '/service',
+    'service/persons.ts': '/service',
+    'service/broadcasts.ts': '/service',
+    'service/lists.ts': '/service',
+    'service/verifications.ts': '/service',
+    'service/disputes.ts': '/service',
   };
 
   it('every in-contract router.METHOD call is in openapi.json paths', () => {

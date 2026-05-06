@@ -32,6 +32,8 @@ const SCHEMA: Record<string, string[]> = {
     'id', 'name', 'rate_limit_per_hour', 'created_at',
     'key_hash', 'key_prefix', 'contact_email', 'status', 'last_used_at', 'contributor_tier',
     'url', 'is_admin',
+    // Added in migration 072 (1.0.0 verification system)
+    'brand_config', 'verification_authority',
   ],
   audit_logs: [
     'id', 'action', 'actor_hash', 'resource_id', 'metadata', 'endpoint',
@@ -51,6 +53,8 @@ const SCHEMA: Record<string, string[]> = {
     'first_party',
     'group_id',
     'tmdb_id',
+    // Added in migration 067 (1.0.0 organizer + place FKs)
+    'location_place_id', 'organizer_org_id', 'organizer_person_id',
     'created_at', 'updated_at',
   ],
   groups: [
@@ -114,6 +118,70 @@ const SCHEMA: Record<string, string[]> = {
   ],
   api_key_account_links: [
     'api_key_id', 'portal_account_id', 'linked_at',
+  ],
+  // ----- 1.0.0 type system additions (migrations 064-073) -----
+  places: [
+    'id', 'google_place_id', 'name',
+    'street_address', 'address_locality', 'address_region', 'postal_code', 'address_country',
+    'latitude', 'longitude', 'region_id',
+    'created_at', 'updated_at',
+  ],
+  organizations: [
+    'id', 'slug', 'name', 'legal_name', 'kind',
+    'description', 'url', 'logo_url', 'image_url', 'telephone', 'email',
+    'same_as', 'keywords', 'opening_hours_specification',
+    'primary_place_id', 'owner_account_id',
+    'created_at', 'updated_at',
+  ],
+  organization_places: [
+    'organization_id', 'place_id', 'is_primary', 'relationship', 'created_at',
+  ],
+  persons: [
+    'id', 'slug', 'name', 'given_name', 'family_name', 'alternate_name',
+    'description', 'image_url', 'url', 'same_as', 'job_title',
+    'owner_account_id', 'created_at', 'updated_at',
+  ],
+  event_performers: [
+    'id', 'event_id', 'person_id', 'organization_id',
+    'performer_role', 'position', 'created_at',
+  ],
+  broadcasts: [
+    'id', 'organization_id', 'place_id', 'message',
+    'expires_at', 'status', 'retracted_at', 'source', 'created_at',
+  ],
+  lists: [
+    'id', 'slug', 'name', 'description',
+    'curator_org_id', 'curator_person_id',
+    'created_at', 'updated_at',
+  ],
+  list_items: [
+    'id', 'list_id', 'position',
+    'event_id', 'organization_id', 'place_id',
+    'curator_note', 'added_at',
+  ],
+  account_verified_identifiers: [
+    'id', 'target_type', 'target_id',
+    'identifier_type', 'identifier_value', 'identifier_domain',
+    'method', 'verified_at', 'evidence',
+    'approved_by_app', 'approved_by_key',
+    'status', 'revoked_at', 'revoked_reason',
+    'created_at',
+  ],
+  verification_challenges: [
+    'id', 'target_type', 'target_id',
+    'identifier_type', 'identifier_value',
+    'code_hash', 'expires_at', 'consumed_at', 'attempts',
+    'brand_key_id', 'created_at',
+  ],
+  verification_pending_reviews: [
+    'id', 'target_type', 'target_id',
+    'identifier_type', 'identifier_value',
+    'method', 'submitted_by_key', 'evidence',
+    'status', 'reviewed_by_key', 'reviewed_at', 'decision_reason',
+    'created_at',
+  ],
+  api_key_organization_links: [
+    'api_key_id', 'organization_id', 'created_at',
   ],
   approved_domains: [
     'domain', 'added_by', 'reason', 'added_at',

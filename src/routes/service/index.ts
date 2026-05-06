@@ -30,6 +30,14 @@ import seriesRoutes from './series.js';
 import imagesRoutes from './images.js';
 import groupsRoutes from './groups.js';
 import adminOpsRoutes from './admin-ops.js';
+// 1.0.0 type-system service routes
+import placesRoutes from './places.js';
+import organizationsRoutes from './organizations.js';
+import personsRoutes from './persons.js';
+import broadcastsRoutes from './broadcasts.js';
+import listsRoutes from './lists.js';
+import verificationsRoutes from './verifications.js';
+import disputesRoutes from './disputes.js';
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -38,6 +46,14 @@ router.use(requireServiceApiKey);
 
 // Sub-routers — mounted at root; each defines its own paths.
 // Order: series before events so /events/series/:seriesId matches before /events/:id.
+// Verifications mounted early so /verifications/* matches before any wildcard.
+router.use(verificationsRoutes);
+router.use(disputesRoutes);
+router.use(placesRoutes);
+router.use(organizationsRoutes);
+router.use(personsRoutes);
+router.use(broadcastsRoutes);
+router.use(listsRoutes);
 router.use(seriesRoutes);
 router.use(accountsRoutes);
 router.use(eventsRoutes);

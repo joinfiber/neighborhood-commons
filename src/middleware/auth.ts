@@ -40,6 +40,23 @@ declare global {
          * the full set should query api_key_account_links directly.
          */
         linkedAccountId?: string;
+        /**
+         * App branding for verification emails (1.0.0+).
+         * Set by operator at issuance via api_keys.brand_config.
+         * Per-app domains must be verified in the shared Resend account.
+         */
+        brandConfig?: {
+          app_name?: string;
+          from_email?: string;
+          from_name?: string;
+          subjects?: Record<string, string>;
+        };
+        /**
+         * Methods this key may auto-approve manual verifications for, e.g.
+         * ["manual_review:in_person"]. Empty/null means submissions queue
+         * for admin review. Granted by operator after onboarding review.
+         */
+        verificationAuthority?: string[];
       };
     }
   }

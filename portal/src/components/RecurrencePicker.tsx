@@ -218,7 +218,7 @@ export function RecurrencePicker({ value, onChange, eventDate, instanceCount, on
       )}
       {duration === 0 && (
         <div style={{ marginTop: '4px', fontSize: '11px', color: colors.dim }}>
-          Creates 6 months of events, auto-renews
+          Creates 6 weeks of events, auto-extends
         </div>
       )}
     </div>

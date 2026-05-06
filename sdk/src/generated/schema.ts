@@ -198,86 +198,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/accounts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Search venue accounts
-         * @description List and search venue/business accounts. Use ?include=events for each account's regular programming and upcoming events.
-         */
-        get: operations["listAccounts"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/accounts/{idOrSlug}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Single venue account
-         * @description Get an account by UUID or slug. Returns the account with regular_programming (recurring series, deduplicated) and upcoming_events (one-off future events).
-         */
-        get: operations["getAccount"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/groups": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List groups
-         * @description Search and filter groups (businesses, community groups, nonprofits, collectives, curators).
-         */
-        get: operations["listGroups"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/groups/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Single group
-         * @description Get a group by UUID with its venues and next 5 upcoming events.
-         */
-        get: operations["getGroup"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/webhooks": {
         parameters: {
             query?: never;
@@ -362,423 +282,6 @@ export interface paths {
         get: operations["listWebhookDeliveries"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/developers/register/send-otp": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Send OTP for developer registration
-         * @description Send a one-time password to the provided email address to begin API key registration. The OTP expires in 10 minutes.
-         */
-        post: operations["sendDeveloperOtp"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/developers/register/verify-otp": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Verify OTP and issue API key
-         * @description Verify the OTP received by email. On success, issues an API key (pending tier). The key appears in the response once — store it securely.
-         */
-        post: operations["verifyDeveloperOtp"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/developers/me": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get API key info
-         * @description Returns metadata about the calling API key — name, tier, rate limits.
-         */
-        get: operations["getDeveloperMe"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/developers/keys/rotate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Rotate API key
-         * @description Rotate the calling API key. Requires OTP verification — send OTP first via /developers/register/send-otp. The old key is immediately revoked. The new key appears once in the response.
-         */
-        post: operations["rotateDeveloperKey"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/contribute": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Contribute an event
-         * @description Submit a single event from an external app or data source. Uses Neighborhood API field names (name, start, cost). Events from pending-tier keys go into review queue; verified/trusted keys auto-publish. Supports recurring events via RRULE. Image URLs are downloaded and re-encoded through Sharp.
-         *
-         *     **Ownership.** The created event is owned by the portal_account linked to your API key (NOT by the key itself). PATCH/DELETE on this event will succeed for any active key linked to the same account — rotation does not destroy editorial control. Keys with no linked account cannot create events (403 KEY_NOT_LINKED) — use `POST /service/api-keys` with an `account_id` to issue properly-linked keys.
-         */
-        post: operations["contributeEvent"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/contribute/batch": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Contribute events in batch
-         * @description Submit up to 50 events at once. All events are validated before any are inserted; partial success is allowed (failures are returned per-event, successes are inserted). The full batch counts against rate limits atomically.
-         */
-        post: operations["contributeEventBatch"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/contribute/mine": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List contributed events
-         * @description List events contributed by the calling API key.
-         */
-        get: operations["listContributedEvents"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/contribute/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete a contributed event
-         * @description Delete an event previously contributed by this API key.
-         */
-        delete: operations["deleteContributedEvent"];
-        options?: never;
-        head?: never;
-        /**
-         * Update a contributed event
-         * @description Update an event previously contributed by this API key. Uses Neighborhood API field names.
-         */
-        patch: operations["updateContributedEvent"];
-        trace?: never;
-    };
-    "/contribute/series/{seriesId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Update a contributed series
-         * @description Update all future instances of a recurring series contributed by this API key.
-         */
-        patch: operations["updateContributedSeries"];
-        trace?: never;
-    };
-    "/contribute/venues": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List venues
-         * @description List venue accounts associated with this API key.
-         */
-        get: operations["contributeListVenues"];
-        put?: never;
-        /**
-         * Create a venue
-         * @description Register a venue account associated with this API key.
-         */
-        post: operations["contributeCreateVenue"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/contribute/groups": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List groups (contribute)
-         * @description List groups associated with this API key.
-         */
-        get: operations["contributeListGroups"];
-        put?: never;
-        /**
-         * Create a group
-         * @description Create a group (community group, collective, nonprofit, etc.) associated with this API key.
-         */
-        post: operations["contributeCreateGroup"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/contribute/groups/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Update a group */
-        patch: operations["contributeUpdateGroup"];
-        trace?: never;
-    };
-    "/contribute/groups/{id}/venues": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Add venue to group */
-        post: operations["contributeAddVenueToGroup"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/contribute/groups/{groupId}/venues/{venueId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Remove venue from group */
-        delete: operations["contributeRemoveVenueFromGroup"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/contribute/events/{id}/group": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Assign event to group
-         * @description Assign or remove a group from an event contributed by this API key.
-         */
-        patch: operations["contributeAssignEventGroup"];
-        trace?: never;
-    };
-    "/service/accounts/link": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Link account to service key
-         * @description Find-or-create a portal account by email and link it to the calling service key. This is how consumer apps establish a relationship with a venue operator. The service key can then CRUD events for linked accounts only.
-         */
-        post: operations["linkAccount"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/service/accounts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List all accounts (service)
-         * @description List all portal accounts with event counts. Supports search and email lookup. Service-tier API key required.
-         */
-        get: operations["serviceListAccounts"];
-        put?: never;
-        /**
-         * Create account (service)
-         * @description Create a new portal account. Service-tier API key required.
-         */
-        post: operations["serviceCreateAccount"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/service/accounts/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get account (service)
-         * @description Get a portal account by UUID with its events.
-         */
-        get: operations["serviceGetAccount"];
-        put?: never;
-        post?: never;
-        /**
-         * Delete account (service)
-         * @description Delete a portal account and all associated events. Admin keys only.
-         */
-        delete: operations["serviceDeleteAccount"];
-        options?: never;
-        head?: never;
-        /**
-         * Update account (service)
-         * @description Update a portal account. Scoped to accounts linked to this service key (admin keys bypass scoping). Coordinate changes propagate to all events owned by this account.
-         */
-        patch: operations["serviceUpdateAccount"];
-        trace?: never;
-    };
-    "/service/accounts/{id}/cover-image": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Upload account cover image
-         * @description Upload a cover image for a portal account. Image is re-encoded through Sharp (JPEG/PNG/WebP only, max 12MB). Returns the CDN URL.
-         */
-        post: operations["serviceUploadAccountCoverImage"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/service/accounts/{id}/logo": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Upload account logo
-         * @description Upload a logo for a portal account. Image is re-encoded through Sharp (JPEG/PNG/WebP only, max 12MB). Returns the CDN URL.
-         */
-        post: operations["serviceUploadAccountLogo"];
         delete?: never;
         options?: never;
         head?: never;
@@ -901,26 +404,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/service/events/{id}/group": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Assign event to group (service)
-         * @description Assign or remove a group from an event. Scoped to accounts linked to this service key.
-         */
-        patch: operations["serviceAssignEventGroup"];
-        trace?: never;
-    };
     "/service/stats": {
         parameters: {
             query?: never;
@@ -983,83 +466,6 @@ export interface paths {
          * @description Update an API key's name, URL, status, contributor_tier, or contact_email. Admin service key required.
          */
         patch: operations["serviceUpdateApiKey"];
-        trace?: never;
-    };
-    "/service/groups": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List groups (service)
-         * @description List all groups. Service-tier API key required.
-         */
-        get: operations["serviceListGroups"];
-        put?: never;
-        /**
-         * Create group (service)
-         * @description Create a new group. Service-tier API key required.
-         */
-        post: operations["serviceCreateGroup"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/service/groups/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get group (service) */
-        get: operations["serviceGetGroup"];
-        put?: never;
-        post?: never;
-        /** Delete group (service) */
-        delete: operations["serviceDeleteGroup"];
-        options?: never;
-        head?: never;
-        /** Update group (service) */
-        patch: operations["serviceUpdateGroup"];
-        trace?: never;
-    };
-    "/service/groups/{id}/venues": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Add venue to group (service) */
-        post: operations["serviceAddVenueToGroup"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/service/groups/{groupId}/venues/{venueId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Remove venue from group (service) */
-        delete: operations["serviceRemoveVenueFromGroup"];
-        options?: never;
-        head?: never;
-        patch?: never;
         trace?: never;
     };
     "/service/migrate-image-urls": {
@@ -1186,6 +592,678 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/places": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List places
+         * @description Public read of Place records (physical locations). Filter by region, geo proximity, or text search. No firehose: at least one structural filter recommended.
+         */
+        get: operations["listPlaces"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/places/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a single place */
+        get: operations["getPlace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/organizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List organizations
+         * @description Public read of Organization records. Filters compose for opt-in consumption: `kind` for subtype, `verified` and `verified_by` for trust, `near`/`radius_km` for proximity, `created_by_contributor` for app-source slicing.
+         */
+        get: operations["listOrganizations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/organizations/{idOrSlug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a single organization */
+        get: operations["getOrganization"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/persons": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List persons
+         * @description Public read of Person records (DJs, performers, curators, individual organizers).
+         */
+        get: operations["listPersons"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/persons/{idOrSlug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a single person */
+        get: operations["getPerson"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/broadcasts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List broadcasts
+         * @description Public read of active Broadcast records (ephemeral signals from organizations, pinned to places). Returns active-only by default; `near`+`radius_km` is the typical proximity filter. Apps surface broadcasts editorially — verification is a filter, not a Commons-side gate.
+         */
+        get: operations["listBroadcasts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/broadcasts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a single broadcast */
+        get: operations["getBroadcast"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/lists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List curated lists
+         * @description Public read of List records (curatorial selections of events, organizations, or places).
+         */
+        get: operations["listLists"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/lists/{idOrSlug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a single list */
+        get: operations["getList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/verifiers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Reputation graph — list verifiers
+         * @description Public read of the verifier registry. Each entry summarizes one app's verification track record (count, active, revoked, methods). Apps reading the Commons can use this to compose verified_by filters that match their trust policy.
+         */
+        get: operations["listVerifiers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/verifiers/{appName}/recent_approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Recent approvals by a verifier
+         * @description Public spot-check of recent approvals issued by a specific verifier app. Maximum sunlight on the reputation graph — anyone can audit who's being verified by whom.
+         */
+        get: operations["listVerifierRecentApprovals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/service/verifications/path": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Discover the required verification path
+         * @description Routing authority. Given a target and identifier, the Commons returns which submission endpoint to call next. Apps must call this first and follow the result — submission endpoints reject mismatches.
+         */
+        get: operations["serviceVerificationPath"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/service/verifications/challenges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue a verification challenge (auto-track)
+         * @description Auto-track verification path: send a one-time code to the identifier (email). Used for business-domain emails on heavy-rigor org targets, or any email on light-rigor targets (groups, persons). Personal-email domains for heavy-rigor targets are rejected here with WRONG_METHOD — call /service/verifications/manual instead.
+         */
+        post: operations["serviceCreateVerificationChallenge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/service/verifications/challenges/{id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm a verification challenge
+         * @description Submit the one-time code received via email. On match: an entry is added to the target's verified identifiers. On miss: attempt counter increments; challenge expires after configured limit.
+         */
+        post: operations["serviceConfirmVerificationChallenge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/service/verifications/manual": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit manual-review verification evidence
+         * @description Manual-review path: app submits structured evidence for human review. Required evidence schema is Commons-defined and validated at submit. Apps with `verification_authority` for the matching method auto-approve on submit; others queue for admin review.
+         *
+         *     For heavy-rigor org targets, this is the path for personal-email domains. For light-rigor targets, this path is rarely used (challenges suffice).
+         */
+        post: operations["serviceSubmitManualVerification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/service/verifications/pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List pending verification reviews
+         * @description Admin-tier read of the manual review queue. Only callers whose service key has `is_admin=true` (or has `verification_authority` covering the relevant method) see results.
+         */
+        get: operations["serviceListPendingVerifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/service/verifications/pending/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve a pending verification review
+         * @description Admin or authorized-app action. Inserts the verified identifier and marks the review approved. Approval criteria documented in `docs/verification-policy.md` — reviewer is bound by Commons-defined floor.
+         */
+        post: operations["serviceApprovePendingVerification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/service/verifications/pending/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject a pending verification review
+         * @description Admin or authorized-app action. Records the rejection with a Commons-defined reason code. Rejection is a permanent record but doesn't prevent future fresh submissions for the same identifier.
+         */
+        post: operations["serviceRejectPendingVerification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/service/disputes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record a dispute
+         * @description v1 minimum: stores a dispute claim against a verified target or identifier for operator review. No automated action. Acts as the entry point for "this verification is wrong" feedback into the system.
+         */
+        post: operations["serviceCreateDispute"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/service/places": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create or look up a place
+         * @description Idempotent on `googlePlaceId`: if a Place with that external ID exists, returns it instead of creating a duplicate. Without a googlePlaceId, creates a new Place row from the provided fields.
+         */
+        post: operations["serviceCreatePlace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/service/organizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create an organization */
+        post: operations["serviceCreateOrganization"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/service/organizations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update an organization
+         * @description Service-tier callers can update organizations linked to their key (via api_key_account_links). Admin keys bypass the scoping check.
+         */
+        patch: operations["serviceUpdateOrganization"];
+        trace?: never;
+    };
+    "/service/persons": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a person */
+        post: operations["serviceCreatePerson"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/service/persons/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update a person */
+        patch: operations["serviceUpdatePerson"];
+        trace?: never;
+    };
+    "/service/broadcasts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a broadcast
+         * @description Create an ephemeral signal pinned to a Place. The Organization must be linked to the calling key (via api_key_account_links) unless the key has admin privileges. Verification is NOT required at create time — apps filter on verified status when surfacing.
+         */
+        post: operations["serviceCreateBroadcast"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/service/broadcasts/{id}/retract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retract an active broadcast
+         * @description Marks the broadcast retracted. Status changes to `retracted` and `retracted_at` is set. Idempotent.
+         */
+        post: operations["serviceRetractBroadcast"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/service/lists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a list */
+        post: operations["serviceCreateList"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/service/lists/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update a list (metadata only)
+         * @description Updates list name/description/slug. Items are managed via /service/lists/{id}/items endpoints.
+         */
+        patch: operations["serviceUpdateList"];
+        trace?: never;
+    };
+    "/service/lists/{id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add an item to a list
+         * @description Adds an event, organization, or place to the list at the specified position. If position conflicts with existing items, behavior is configurable (default: shift existing items down).
+         */
+        post: operations["serviceAddListItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/service/lists/{id}/items/{position}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove an item from a list */
+        delete: operations["serviceRemoveListItem"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/service/organizations/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Link an existing organization to this service key
+         * @description Establishes a relationship between the calling service key and an existing Organization. After linking, the key may write to that organization's data (events, broadcasts, identifier verifications, lists curated by it). Idempotent: calling on an already-linked organization returns 200 with the existing link.
+         */
+        post: operations["serviceLinkOrganization"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/service/organizations/{id}/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload organization logo
+         * @description Multipart upload. Validates magic bytes, re-encodes through Sharp, stores in R2. Updates organization.logo to the new URL.
+         */
+        post: operations["serviceUploadOrganizationLogo"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/service/organizations/{id}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload organization hero image
+         * @description Multipart upload of a hero/cover image. Same pipeline as logo upload. Updates organization.image.
+         */
+        post: operations["serviceUploadOrganizationImage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/service/events/{id}/organizer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Assign organizer to event
+         * @description Set or remove the organizer of an event. Organizer is exactly one of an Organization or a Person. Pass nulls for both to clear (rare — events generally must have an organizer). Scoped to events whose current organizer is linked to the calling key.
+         */
+        patch: operations["serviceAssignEventOrganizer"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1282,24 +1360,6 @@ export interface components {
             /** @example CC BY 4.0 */
             license: string;
         };
-        /** @description A public venue or organizer account */
-        Account: {
-            /** Format: uuid */
-            id?: string;
-            slug?: string;
-            business_name?: string;
-            default_venue_name?: string | null;
-            default_address?: string | null;
-            default_latitude?: number | null;
-            default_longitude?: number | null;
-            website?: string | null;
-            phone?: string | null;
-            description?: string | null;
-            /** Format: uri */
-            logo_url?: string | null;
-            /** Format: uri */
-            cover_image_url?: string | null;
-        };
         /** @description Event response shape for service-tier and portal endpoints. Uses DB-flavored field names (title, event_date, start_time, etc.) — distinct from the public read Event shape. Returned by GET /service/events/{id}, PATCH /service/events/{id}, and the portal API. */
         ServiceEvent: {
             /** Format: uuid */
@@ -1362,7 +1422,7 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
-        /** @description A portal account as seen by service-tier callers — includes internal fields */
+        /** @description A portal account as seen by service-tier callers — includes internal fields. Retained in 1.0.0 because GET /service/events/{id} still returns the linked account; the dedicated /v1/service/accounts/* paths are removed. */
         ServiceAccount: {
             /** Format: uuid */
             id: string;
@@ -1393,20 +1453,6 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             updated_at: string;
-        };
-        Group: {
-            /** Format: uuid */
-            id?: string;
-            name?: string;
-            /** @enum {string} */
-            type?: "business" | "community_group" | "nonprofit" | "collective" | "curator";
-            description?: string | null;
-            website?: string | null;
-            category?: string | null;
-            /** @enum {string} */
-            status?: "active" | "inactive";
-            /** Format: date-time */
-            created_at?: string;
         };
         Webhook: {
             /** Format: uuid */
@@ -1443,61 +1489,6 @@ export interface components {
             reason?: string | null;
             /** Format: date-time */
             created_at?: string;
-        };
-        /** @description Input schema for the Contribute API. Uses Neighborhood API field names (name, start, cost). */
-        ContributeEventInput: {
-            name: string;
-            /**
-             * Format: date-time
-             * @description ISO 8601 with timezone offset
-             */
-            start: string;
-            /** Format: date-time */
-            end?: string;
-            /** @description IANA timezone (e.g. America/New_York) */
-            timezone: string;
-            /** @description Category slug (kebab or underscore accepted, e.g. live-music or live_music) */
-            category: string;
-            location: {
-                name: string;
-                address?: string;
-                lat?: number;
-                lng?: number;
-                place_id?: string;
-            };
-            description?: string;
-            cost?: string;
-            /**
-             * Format: uri
-             * @description Event URL. Must use an approved domain or will be queued for review.
-             */
-            url?: string;
-            /**
-             * Format: uri
-             * @description Image URL — fetched, re-encoded through Sharp, and stored in R2.
-             */
-            image_url?: string;
-            tags?: string[];
-            wheelchair_accessible?: boolean;
-            /** @description True for come-and-go events. Default false. */
-            open_window?: boolean;
-            /** @description Informational only; Commons does not enforce. */
-            capacity?: number | null;
-            /**
-             * @description Whether RSVP is a thing for this event. Commons does not manage RSVPs.
-             * @enum {string|null}
-             */
-            rsvp?: "recommended" | "required" | null;
-            /** @description RRULE string (e.g. FREQ=WEEKLY or FREQ=MONTHLY;BYDAY=2FR;COUNT=12) */
-            recurrence?: string;
-            instance_count?: number;
-            /**
-             * Format: uuid
-             * @description Link to an existing venue account
-             */
-            venue_id?: string;
-            /** @description External ID for deduplication. Conflict returns 409. */
-            external_id?: string;
         };
         /** @description Input schema for the Service API. Uses Neighborhood API friendly-shape field names (name, start, location, url, cost) — symmetric with the read schema. Recurrence is optional; omit for one-off events. */
         ServiceEventInput: {
@@ -1571,10 +1562,11 @@ export interface components {
          *     - **URL / domain**: `BLOCKED_HOSTNAME`, `DOMAIN_PENDING_REVIEW`, `INVALID_SCHEME`, `INVALID_URL`, `INVALID_WEBHOOK_URL`, `IP_LITERAL`, `URL_CREDENTIALS`
          *     - **Rate limit / quota**: `PAYLOAD_TOO_LARGE`, `RATE_LIMIT`, `SUBSCRIPTION_LIMIT`
          *     - **CSV / import**: `CSV_EMPTY`, `CSV_INVALID`, `CSV_TOO_LARGE`, `NO_VALID_ROWS`
+         *     - **Verification**: `IDENTIFIER_DISPUTED`, `IMPOSTER_SIGNALS`, `INSUFFICIENT_EVIDENCE`, `OUT_OF_POLICY`, `WRONG_METHOD`
          *     - **Server / infrastructure**: `DATABASE_ERROR`, `INTERNAL_ERROR`, `SERVER_ERROR`, `SERVICE_UNAVAILABLE`, `UPSTREAM_ERROR`
          * @enum {string}
          */
-        ErrorCode: "ACCESS_DENIED" | "ACCOUNT_DISABLED" | "ACCOUNT_REQUIRED" | "ALREADY_EXISTS" | "API_KEY_REQUIRED" | "BATCH_ALREADY_SUBMITTED" | "BLOCKED_HOSTNAME" | "CAPTCHA_FAILED" | "CONFLICT" | "CSV_EMPTY" | "CSV_INVALID" | "CSV_TOO_LARGE" | "DATABASE_ERROR" | "DOMAIN_PENDING_REVIEW" | "DUPLICATE" | "FORBIDDEN" | "INSUFFICIENT_TIER" | "INTERNAL_ERROR" | "INVALID_API_KEY" | "INVALID_OTP" | "INVALID_SCHEME" | "INVALID_STATE" | "INVALID_URL" | "INVALID_WEBHOOK_URL" | "IP_LITERAL" | "KEY_NOT_LINKED" | "NO_OWNER" | "NO_VALID_ROWS" | "NOT_FOUND" | "NOT_LINKED" | "PAYLOAD_TOO_LARGE" | "RATE_LIMIT" | "SERVER_ERROR" | "SERVICE_UNAVAILABLE" | "SUBSCRIPTION_LIMIT" | "UNAUTHORIZED" | "UPSTREAM_ERROR" | "URL_CREDENTIALS" | "VALIDATION_ERROR";
+        ErrorCode: "ACCESS_DENIED" | "ACCOUNT_DISABLED" | "ACCOUNT_REQUIRED" | "ALREADY_EXISTS" | "API_KEY_REQUIRED" | "BATCH_ALREADY_SUBMITTED" | "BLOCKED_HOSTNAME" | "CAPTCHA_FAILED" | "CONFLICT" | "CSV_EMPTY" | "CSV_INVALID" | "CSV_TOO_LARGE" | "DATABASE_ERROR" | "DOMAIN_PENDING_REVIEW" | "DUPLICATE" | "FORBIDDEN" | "IDENTIFIER_DISPUTED" | "IMPOSTER_SIGNALS" | "INSUFFICIENT_EVIDENCE" | "INSUFFICIENT_TIER" | "INTERNAL_ERROR" | "INVALID_API_KEY" | "INVALID_OTP" | "INVALID_SCHEME" | "INVALID_STATE" | "INVALID_URL" | "INVALID_WEBHOOK_URL" | "IP_LITERAL" | "KEY_NOT_LINKED" | "NO_OWNER" | "NO_VALID_ROWS" | "NOT_FOUND" | "NOT_LINKED" | "OUT_OF_POLICY" | "PAYLOAD_TOO_LARGE" | "RATE_LIMIT" | "SERVER_ERROR" | "SERVICE_UNAVAILABLE" | "SUBSCRIPTION_LIMIT" | "UNAUTHORIZED" | "UPSTREAM_ERROR" | "URL_CREDENTIALS" | "VALIDATION_ERROR" | "WRONG_METHOD";
         Error: {
             error: {
                 code: components["schemas"]["ErrorCode"];
@@ -1582,6 +1574,415 @@ export interface components {
                 /** @description Present when code is DOMAIN_PENDING_REVIEW */
                 domain?: string;
             };
+        };
+        /** @description Schema.org PostalAddress. Used to represent structured addresses on Place and related types. */
+        PostalAddress: {
+            streetAddress?: string | null;
+            /** @description City / locality, e.g. "Philadelphia" */
+            addressLocality?: string | null;
+            /** @description State or region. US: 2-letter code (e.g. "PA") */
+            addressRegion?: string | null;
+            postalCode?: string | null;
+            /**
+             * @description ISO 3166-1 alpha-2 code
+             * @default US
+             */
+            addressCountry: string;
+        };
+        /** @description Schema.org GeoCoordinates. */
+        GeoCoordinates: {
+            latitude: number;
+            longitude: number;
+        };
+        /** @description Schema.org PropertyValue used in identifier arrays. Carries external IDs (e.g., googlePlaceId) alongside our internal UUIDs. */
+        IdentifierValue: {
+            /** @example googlePlaceId */
+            propertyID: string;
+            value: string;
+        };
+        /** @description Schema.org OpeningHoursSpecification entry. One per day-range. Times are 24h HH:MM in the entity's local timezone. */
+        OpeningHoursEntry: {
+            /** @description Single day or array of days. Schema.org-canonical: full names. */
+            dayOfWeek?: string | ("Monday" | "Tuesday" | "Wednesday" | "Thursday" | "Friday" | "Saturday" | "Sunday")[];
+            /** @description 24h time, e.g. "09:00" */
+            opens?: string;
+            /** @description 24h time, e.g. "17:00" */
+            closes?: string;
+        };
+        /** @description Schema.org Place. A physical location. Identity is the address; verification is implicit via googlePlaceId resolution. */
+        Place: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            address?: components["schemas"]["PostalAddress"] | null;
+            geo: components["schemas"]["GeoCoordinates"];
+            /** @description External IDs. Common entry: { propertyID: "googlePlaceId", value: "ChIJ..." } */
+            identifier?: components["schemas"]["IdentifierValue"][];
+            /** @description Slug of the region this place falls within, if any */
+            region_slug?: string | null;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: date-time */
+            updated_at?: string;
+        };
+        /** @description Input for /service/places. Idempotent on googlePlaceId: if a Place with that ID already exists, returns it instead of creating a duplicate. */
+        PlaceInput: {
+            name: string;
+            /** @description If provided, lookup-or-create idempotently */
+            googlePlaceId?: string;
+            address?: components["schemas"]["PostalAddress"];
+            geo: components["schemas"]["GeoCoordinates"];
+        };
+        /** @description Verification block exposed on verified Organization or Person responses. Public read includes method, verification time, and approving app — the reputation graph is intentionally transparent. */
+        Verification: {
+            /** @enum {string} */
+            method: "domain_email_loop" | "manual_review";
+            /**
+             * @description Present for manual_review only.
+             * @enum {string|null}
+             */
+            verifiedVia?: "in_person" | "video_call" | null;
+            /** Format: date-time */
+            verifiedAt: string;
+            /** @description Stable app name (snapshot at approval time, immune to key rotation). */
+            verifiedByApp: string;
+        };
+        /** @description A specific verified identifier on a target. Service-tier responses include full value; public responses may mask. */
+        VerifiedIdentifier: {
+            /** @enum {string} */
+            identifierType: "email";
+            /** @description Full value for service-tier reads; null or partial for public reads. */
+            identifierValue?: string | null;
+            identifierDomain?: string | null;
+            /** @enum {string} */
+            method: "domain_email_loop" | "manual_review";
+            /** Format: date-time */
+            verifiedAt: string;
+            verifiedByApp: string;
+            /** @enum {string} */
+            status?: "active" | "revoked";
+        };
+        /** @description Schema.org Organization. Discriminated by `kind`: `local_business` and `business` are heavy-verification subtypes; `community_group`, `nonprofit`, `curator`, `collective` use light verification (control of identifier). */
+        Organization: {
+            /** Format: uuid */
+            id: string;
+            slug: string;
+            name: string;
+            /** @description Official registered name. Optional, primarily for verified businesses. */
+            legalName?: string | null;
+            /** @enum {string} */
+            kind: "local_business" | "business" | "community_group" | "nonprofit" | "curator" | "collective";
+            /**
+             * Format: uri
+             * @description Schema.org type URL aligned with kind (e.g., https://schema.org/LocalBusiness, https://schema.org/NGO, https://schema.org/Organization).
+             */
+            additionalType?: string;
+            description?: string | null;
+            /** Format: uri */
+            url?: string | null;
+            /** Format: uri */
+            logo?: string | null;
+            /** Format: uri */
+            image?: string | null;
+            telephone?: string | null;
+            /** Format: email */
+            email?: string | null;
+            /** @description URLs that unambiguously identify this organization (Wikipedia, Wikidata, social profiles). */
+            sameAs?: string[];
+            keywords?: string[];
+            openingHoursSpecification?: components["schemas"]["OpeningHoursEntry"][] | null;
+            /** @description The Place this Organization primarily operates at. Null for organizations without a fixed location (touring, online-only). */
+            location?: components["schemas"]["Place"] | null;
+            verified?: boolean;
+            verification?: components["schemas"]["Verification"] | null;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: date-time */
+            updated_at?: string;
+        };
+        OrganizationInput: {
+            name: string;
+            /** @description Optional; auto-generated from name if omitted. */
+            slug?: string;
+            legalName?: string;
+            /** @enum {string} */
+            kind: "local_business" | "business" | "community_group" | "nonprofit" | "curator" | "collective";
+            description?: string;
+            /** Format: uri */
+            url?: string;
+            /** Format: uri */
+            logo?: string;
+            /** Format: uri */
+            image?: string;
+            telephone?: string;
+            /** Format: email */
+            email?: string;
+            sameAs?: string[];
+            keywords?: string[];
+            openingHoursSpecification?: components["schemas"]["OpeningHoursEntry"][];
+            /**
+             * Format: uuid
+             * @description Reference to a Place row. Required for kind=local_business; optional otherwise.
+             */
+            primaryPlaceId?: string;
+        };
+        /** @description Schema.org Person. Used for individuals — DJs, performers, curators, individual organizers. Light verification (control of email). */
+        Person: {
+            /** Format: uuid */
+            id: string;
+            slug: string;
+            name: string;
+            givenName?: string | null;
+            familyName?: string | null;
+            /** @description Stage names, aliases */
+            alternateName?: string | null;
+            description?: string | null;
+            /** Format: uri */
+            image?: string | null;
+            /** Format: uri */
+            url?: string | null;
+            sameAs?: string[];
+            jobTitle?: string | null;
+            verified?: boolean;
+            verification?: components["schemas"]["Verification"] | null;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: date-time */
+            updated_at?: string;
+        };
+        PersonInput: {
+            name: string;
+            slug?: string;
+            givenName?: string;
+            familyName?: string;
+            alternateName?: string;
+            description?: string;
+            /** Format: uri */
+            image?: string;
+            /** Format: uri */
+            url?: string;
+            sameAs?: string[];
+            jobTitle?: string;
+        };
+        /** @description Ephemeral real-time signal from an Organization, pinned to a Place. Maximum lifetime 24h. No direct Schema.org analog; conventions borrowed from SpecialAnnouncement (`datePosted`, `expires`). */
+        Broadcast: {
+            /** Format: uuid */
+            id: string;
+            message: string;
+            /** Format: date-time */
+            datePosted: string;
+            /** Format: date-time */
+            expires: string;
+            /** @enum {string} */
+            status?: "active" | "expired" | "retracted";
+            organization: components["schemas"]["Organization"];
+            location: components["schemas"]["Place"];
+            source: components["schemas"]["Source"];
+        };
+        BroadcastInput: {
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            placeId: string;
+            message: string;
+            /**
+             * Format: date-time
+             * @description Must be in the future and within 24h of now.
+             */
+            expires: string;
+        };
+        /** @description Schema.org ListItem. Used inside ItemList.itemListElement to pair an item reference with its position and an optional curator note. */
+        ListItem: {
+            position: number;
+            /** @description The referenced entity. The shape matches the corresponding type's schema; consumers can discriminate on the schema or by looking at fields. */
+            item: components["schemas"]["Event"] | components["schemas"]["Organization"] | components["schemas"]["Place"];
+            /** @description Curator's optional commentary on this item. */
+            curatorNote?: string | null;
+        };
+        /** @description Schema.org ItemList. A curatorial selection by an Organization or Person — "this weekend's picks," "best park benches in Fishtown," etc. */
+        List: {
+            /** Format: uuid */
+            id: string;
+            slug: string;
+            name: string;
+            description?: string | null;
+            /** @description The Person or Organization that maintains this list. */
+            curator: components["schemas"]["Person"] | components["schemas"]["Organization"];
+            /**
+             * @default Ascending
+             * @enum {string}
+             */
+            itemListOrder: "Ascending" | "Descending" | "Unordered";
+            numberOfItems?: number;
+            itemListElement: components["schemas"]["ListItem"][];
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: date-time */
+            updated_at?: string;
+        };
+        ListInput: {
+            name: string;
+            slug?: string;
+            description?: string;
+            curator: {
+                /** @enum {string} */
+                type: "organization" | "person";
+                /** Format: uuid */
+                id: string;
+            };
+        };
+        ListItemInput: {
+            position: number;
+            /** @enum {string} */
+            itemType: "event" | "organization" | "place";
+            /** Format: uuid */
+            itemId: string;
+            curatorNote?: string;
+        };
+        /** @description Reputation-graph entry. One per app that has ever issued a verification. */
+        Verifier: {
+            appName: string;
+            /** Format: date-time */
+            firstApprovalAt?: string | null;
+            /** @description Total approvals issued by this app, ever. */
+            approvalCount: number;
+            /** @description Approvals still active (not revoked). */
+            activeCount: number;
+            revokedCount: number;
+            /** @description Methods this app has approved with (e.g. "manual_review:in_person"). */
+            methods?: string[];
+        };
+        /** @description An approval by a verifier, surfaced for spot-checking on the reputation graph. */
+        VerifierApproval: {
+            /** Format: date-time */
+            verifiedAt?: string;
+            method?: string;
+            /** @enum {string} */
+            targetType?: "organization" | "person";
+            /** Format: uuid */
+            targetId?: string;
+            targetName?: string;
+            /** @enum {string} */
+            status?: "active" | "revoked";
+        };
+        VerificationPathRequest: {
+            /** @enum {string} */
+            targetType: "organization" | "person";
+            /** Format: uuid */
+            targetId: string;
+            /** @enum {string} */
+            identifierType: "email";
+            identifierValue: string;
+        };
+        /** @description Result of /service/verifications/path. The Commons dictates which submission endpoint to call next; apps follow. */
+        VerificationPathResponse: {
+            /** @description True if this exact (target, identifier) pair is already verified. */
+            alreadyVerified: boolean;
+            /** @enum {string|null} */
+            requiredMethod?: "domain_email_loop" | "manual_review" | null;
+            /** @description Path of the submission endpoint to call next. */
+            endpoint?: string | null;
+            /** @description Routing reason, e.g. 'business_email_domain', 'personal_email_domain', 'already_verified'. */
+            reason?: string | null;
+            /** @description Populated when alreadyVerified=true. */
+            existingIdentifier?: components["schemas"]["VerifiedIdentifier"] | null;
+        };
+        VerificationChallengeInput: {
+            /** @enum {string} */
+            targetType: "organization" | "person";
+            /** Format: uuid */
+            targetId: string;
+            /** @enum {string} */
+            identifierType: "email";
+            /** Format: email */
+            identifierValue: string;
+        };
+        VerificationChallengeResponse: {
+            /** Format: uuid */
+            challengeId: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        VerificationConfirmInput: {
+            /** @description One-time code delivered via verification email. */
+            code: string;
+        };
+        /** @description Result of a verification submission. Status `verified` means the row landed in account_verified_identifiers; `pending` means manual review queued; `rejected` means the submission failed policy. */
+        VerificationOutcome: {
+            /** @enum {string} */
+            status: "verified" | "pending" | "rejected";
+            /** Format: date-time */
+            verifiedAt?: string | null;
+            method?: string | null;
+            identifier?: components["schemas"]["VerifiedIdentifier"] | null;
+            /**
+             * Format: uuid
+             * @description Set when status=pending; reference for tracking.
+             */
+            reviewId?: string | null;
+            /** @description Set when status=rejected. */
+            reason?: string | null;
+        };
+        /** @description Submission for the manual-review path. Evidence is structured and required fields enforced at submit. Apps with verification_authority for the matching method auto-approve; others queue. */
+        VerificationManualInput: {
+            /** @enum {string} */
+            targetType: "organization" | "person";
+            /** Format: uuid */
+            targetId: string;
+            /** @enum {string} */
+            identifierType: "email";
+            /** Format: email */
+            identifierValue: string;
+            evidence: {
+                phone: string;
+                /** @enum {string} */
+                verifiedVia: "in_person" | "video_call";
+                reviewerAttestation: string;
+                /** @description Identifier of the human reviewer who attests. */
+                reviewerAccountId: string;
+                businessAddressObserved: boolean;
+                idDocumentObserved: boolean;
+                supportingNotes?: string;
+            };
+        };
+        /** @description An item in the verification review queue (admin-tier endpoints). */
+        PendingReview: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            targetType: "organization" | "person";
+            /** Format: uuid */
+            targetId: string;
+            identifierType: string;
+            identifierValue: string;
+            method: string;
+            submittedByApp: string;
+            evidence: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            createdAt: string;
+        };
+        VerificationRejectInput: {
+            /** @enum {string} */
+            reason: "INSUFFICIENT_EVIDENCE" | "IDENTIFIER_DISPUTED" | "IMPOSTER_SIGNALS" | "OUT_OF_POLICY";
+            note?: string;
+        };
+        /** @description Records a dispute against a verified target, identifier, or other data record. v1 stores for operator review only — no automated action. */
+        DisputeInput: {
+            /** @enum {string} */
+            targetType: "organization" | "person" | "verified_identifier";
+            /** Format: uuid */
+            targetId: string;
+            reason: string;
+            /** @description Optional email or phone for follow-up. */
+            submitterContact?: string;
+        };
+        DisputeResponse: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            status: "recorded";
         };
     };
     responses: {
@@ -1970,131 +2371,6 @@ export interface operations {
             };
         };
     };
-    listAccounts: {
-        parameters: {
-            query?: {
-                /** @description Text search on business name, venue name, address */
-                q?: string;
-                /** @description Include regular_programming and upcoming_events per account */
-                include?: "events";
-                /** @description Page size (max 50 when include=events) */
-                limit?: number;
-                /** @description Pagination offset */
-                offset?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Paginated list of accounts */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        accounts?: components["schemas"]["Account"][];
-                        pagination?: {
-                            total?: number;
-                            limit?: number;
-                            offset?: number;
-                        };
-                    };
-                };
-            };
-        };
-    };
-    getAccount: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Account UUID or URL-safe slug (e.g. johnny-brendas) */
-                idOrSlug: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Account with events */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        account?: components["schemas"]["Account"];
-                    };
-                };
-            };
-            404: components["responses"]["NotFound"];
-        };
-    };
-    listGroups: {
-        parameters: {
-            query?: {
-                /** @description Filter by group type */
-                type?: "business" | "community_group" | "nonprofit" | "collective" | "curator";
-                /** @description Filter by category tag */
-                category?: string;
-                /** @description Filter by neighborhood name */
-                neighborhood?: string;
-                /** @description Geographic center (lat,lng) */
-                near?: string;
-                /** @description Search radius in km */
-                radius_km?: number;
-                /** @description Text search on name, description */
-                q?: string;
-                limit?: number;
-                offset?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Paginated list of groups */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        groups?: components["schemas"]["Group"][];
-                        pagination?: Record<string, never>;
-                    };
-                };
-            };
-        };
-    };
-    getGroup: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Group with venues and events */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        group?: components["schemas"]["Group"];
-                    };
-                };
-            };
-            404: components["responses"]["NotFound"];
-        };
-    };
     listWebhooks: {
         parameters: {
             query?: never;
@@ -2376,1017 +2652,6 @@ export interface operations {
             };
             404: components["responses"]["NotFound"];
             429: components["responses"]["RateLimited"];
-        };
-    };
-    sendDeveloperOtp: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** Format: email */
-                    email: string;
-                };
-            };
-        };
-        responses: {
-            /** @description OTP sent */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            429: components["responses"]["RateLimited"];
-        };
-    };
-    verifyDeveloperOtp: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** Format: email */
-                    email: string;
-                    /** @description 8-digit OTP from email */
-                    token: string;
-                    /** @description Name of your app or tool */
-                    name: string;
-                    /**
-                     * Format: uri
-                     * @description Your app or website URL (optional)
-                     */
-                    url?: string;
-                };
-            };
-        };
-        responses: {
-            /** @description API key issued. The key is shown only once. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** @description Full API key — store this securely, it cannot be recovered. */
-                        api_key?: string;
-                        /** @description First 8 characters, for display purposes. */
-                        key_prefix?: string;
-                        /**
-                         * @description Initial tier is pending.
-                         * @enum {string}
-                         */
-                        tier?: "pending" | "verified" | "trusted";
-                    };
-                };
-            };
-            /** @description Invalid or expired OTP */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            429: components["responses"]["RateLimited"];
-        };
-    };
-    getDeveloperMe: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description API key metadata */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        key?: {
-                            key_prefix?: string;
-                            name?: string;
-                            url?: string | null;
-                            /** @enum {string} */
-                            tier?: "pending" | "verified" | "trusted" | "service";
-                            rate_limit_per_hour?: number;
-                            /** @enum {string} */
-                            status?: "active" | "revoked";
-                            /** Format: date-time */
-                            created_at?: string;
-                            /** Format: date-time */
-                            last_used_at?: string | null;
-                        };
-                    };
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-        };
-    };
-    rotateDeveloperKey: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** Format: email */
-                    email: string;
-                    token: string;
-                };
-            };
-        };
-        responses: {
-            /** @description New API key issued. Old key is revoked immediately. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** @description New full API key — store securely, shown once. */
-                        api_key?: string;
-                        key_prefix?: string;
-                    };
-                };
-            };
-            /** @description Invalid or expired OTP */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            401: components["responses"]["Unauthorized"];
-            429: components["responses"]["RateLimited"];
-        };
-    };
-    contributeEvent: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ContributeEventInput"];
-            };
-        };
-        responses: {
-            /** @description Event created (or queued for review). For recurring events, returns series info. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        event?: {
-                            /** Format: uuid */
-                            id?: string;
-                            /** @enum {string} */
-                            status?: "published" | "pending_review";
-                            source?: {
-                                publisher?: string;
-                                /** @example api */
-                                method?: string;
-                            };
-                        } | {
-                            /** Format: uuid */
-                            series_id?: string | null;
-                            instance_count?: number;
-                            instance_ids?: string[];
-                            status?: string;
-                            source?: Record<string, never>;
-                        };
-                    };
-                };
-            };
-            /** @description Validation error or URL not approved. URL error codes: INVALID_URL, INVALID_SCHEME, URL_CREDENTIALS, IP_LITERAL, BLOCKED_HOSTNAME, DOMAIN_PENDING_REVIEW (includes `domain` field in error object when status is pending review). */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            /** @description Duplicate event (external_id already exists for this API key) */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Contribution rate limit exceeded (hourly or daily, per API key tier) */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    contributeEventBatch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    events: components["schemas"]["ContributeEventInput"][];
-                };
-            };
-        };
-        responses: {
-            /** @description Batch processed. Check results for per-event outcomes. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        results?: {
-                            index?: number;
-                            ok?: boolean;
-                            /** Format: uuid */
-                            id?: string | null;
-                            status?: string | null;
-                            error?: string | null;
-                        }[];
-                        succeeded?: number;
-                        failed?: number;
-                    };
-                };
-            };
-            /** @description Validation error */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            429: components["responses"]["RateLimited"];
-        };
-    };
-    listContributedEvents: {
-        parameters: {
-            query?: {
-                limit?: number;
-                offset?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Paginated list of contributed events */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        events?: components["schemas"]["Event"][];
-                        total?: number;
-                    };
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-        };
-    };
-    deleteContributedEvent: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Deleted */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            401: components["responses"]["Unauthorized"];
-            /** @description Event belongs to a different API key */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            404: components["responses"]["NotFound"];
-            429: components["responses"]["RateLimited"];
-        };
-    };
-    updateContributedEvent: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ContributeEventInput"];
-            };
-        };
-        responses: {
-            /** @description Updated event */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        event?: components["schemas"]["Event"];
-                    };
-                };
-            };
-            /** @description Validation error */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            /** @description Event belongs to a different API key */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            404: components["responses"]["NotFound"];
-            429: components["responses"]["RateLimited"];
-        };
-    };
-    updateContributedSeries: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                seriesId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ContributeEventInput"];
-            };
-        };
-        responses: {
-            /** @description Series updated */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        updated_count?: number;
-                    };
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            /** @description Series belongs to a different API key */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            404: components["responses"]["NotFound"];
-            429: components["responses"]["RateLimited"];
-        };
-    };
-    contributeListVenues: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Venues */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        venues?: unknown[];
-                    };
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-        };
-    };
-    contributeCreateVenue: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    business_name: string;
-                    address?: string;
-                    lat?: number;
-                    lng?: number;
-                    place_id?: string;
-                    /** Format: uri */
-                    website?: string;
-                    phone?: string;
-                };
-            };
-        };
-        responses: {
-            /** @description Venue created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        venue?: Record<string, never>;
-                    };
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            429: components["responses"]["RateLimited"];
-        };
-    };
-    contributeListGroups: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Groups */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        groups?: components["schemas"]["Group"][];
-                    };
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-        };
-    };
-    contributeCreateGroup: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    name: string;
-                    /** @enum {string} */
-                    type: "business" | "community_group" | "nonprofit" | "collective" | "curator";
-                    description?: string;
-                    /** Format: uri */
-                    website?: string;
-                    category?: string;
-                };
-            };
-        };
-        responses: {
-            /** @description Group created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        group?: components["schemas"]["Group"];
-                    };
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            429: components["responses"]["RateLimited"];
-        };
-    };
-    contributeUpdateGroup: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    name?: string;
-                    description?: string;
-                    /** Format: uri */
-                    website?: string;
-                    category?: string;
-                };
-            };
-        };
-        responses: {
-            /** @description Group updated */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        group?: components["schemas"]["Group"];
-                    };
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            /** @description Group belongs to a different API key */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            404: components["responses"]["NotFound"];
-        };
-    };
-    contributeAddVenueToGroup: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** Format: uuid */
-                    venue_id: string;
-                };
-            };
-        };
-        responses: {
-            /** @description Venue added to group */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-        };
-    };
-    contributeRemoveVenueFromGroup: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                groupId: string;
-                venueId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Venue removed from group */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-        };
-    };
-    contributeAssignEventGroup: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /**
-                     * Format: uuid
-                     * @description Set to null to remove the group association
-                     */
-                    group_id?: string | null;
-                };
-            };
-        };
-        responses: {
-            /** @description Event group updated */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            401: components["responses"]["Unauthorized"];
-            /** @description Event belongs to a different API key */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            404: components["responses"]["NotFound"];
-        };
-    };
-    linkAccount: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** Format: email */
-                    email: string;
-                    business_name: string;
-                    /** @description Consumer app identifier (e.g. 'merrie') */
-                    claimed_by?: string;
-                };
-            };
-        };
-        responses: {
-            /** @description Existing account found and linked */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        account?: components["schemas"]["ServiceAccount"];
-                        created?: boolean;
-                        linked?: boolean;
-                    };
-                };
-            };
-            /** @description New account created and linked */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        account?: components["schemas"]["ServiceAccount"];
-                        created?: boolean;
-                        linked?: boolean;
-                    };
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            /** @description API key is not service-tier */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    serviceListAccounts: {
-        parameters: {
-            query?: {
-                /** @description Case-insensitive exact email lookup */
-                email?: string;
-                /** @description Text search on business name or address */
-                search?: string;
-                limit?: number;
-                offset?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Accounts with event counts */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        accounts?: components["schemas"]["ServiceAccount"][];
-                        total?: number;
-                    };
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-        };
-    };
-    serviceCreateAccount: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** Format: email */
-                    email: string;
-                    business_name: string;
-                    phone?: string;
-                    /** Format: uri */
-                    website?: string;
-                    default_venue_name?: string;
-                    default_place_id?: string;
-                    default_address?: string;
-                    default_latitude?: number;
-                    default_longitude?: number;
-                };
-            };
-        };
-        responses: {
-            /** @description Account created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        account?: components["schemas"]["ServiceAccount"];
-                    };
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            /** @description Account with this email already exists */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    serviceGetAccount: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Account with events */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        account?: components["schemas"]["ServiceAccount"];
-                        events?: unknown[];
-                    };
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-        };
-    };
-    serviceDeleteAccount: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Account deleted */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            401: components["responses"]["Unauthorized"];
-            /** @description Admin access required */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            404: components["responses"]["NotFound"];
-        };
-    };
-    serviceUpdateAccount: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    business_name?: string;
-                    phone?: string;
-                    /** Format: uri */
-                    website?: string;
-                    default_venue_name?: string;
-                    default_place_id?: string;
-                    default_address?: string;
-                    default_latitude?: number;
-                    default_longitude?: number;
-                    /** @enum {string} */
-                    status?: "active" | "suspended" | "pending" | "rejected";
-                    description?: string | null;
-                };
-            };
-        };
-        responses: {
-            /** @description Account updated */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        account?: components["schemas"]["ServiceAccount"];
-                    };
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            /** @description Service key is not linked to this account (NOT_LINKED) */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            404: components["responses"]["NotFound"];
-        };
-    };
-    serviceUploadAccountCoverImage: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** @description Base64-encoded image data */
-                    image: string;
-                    /** @enum {string} */
-                    content_type?: "image/jpeg" | "image/png" | "image/webp";
-                };
-            };
-        };
-        responses: {
-            /** @description Image uploaded */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** Format: uri */
-                        cover_image_url?: string;
-                    };
-                };
-            };
-            /** @description Invalid image */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            401: components["responses"]["Unauthorized"];
-            /** @description NOT_LINKED or admin required */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    serviceUploadAccountLogo: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** @description Base64-encoded image data */
-                    image: string;
-                    /** @enum {string} */
-                    content_type?: "image/jpeg" | "image/png" | "image/webp";
-                };
-            };
-        };
-        responses: {
-            /** @description Logo uploaded */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** Format: uri */
-                        logo_url?: string;
-                    };
-                };
-            };
-            /** @description Invalid image */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            401: components["responses"]["Unauthorized"];
-            /** @description NOT_LINKED or admin required */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
         };
     };
     serviceListEvents: {
@@ -3739,45 +3004,6 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
-    serviceAssignEventGroup: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /**
-                     * Format: uuid
-                     * @description Set to null to remove the group association
-                     */
-                    group_id?: string | null;
-                };
-            };
-        };
-        responses: {
-            /** @description Event group updated */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            401: components["responses"]["Unauthorized"];
-            /** @description NOT_LINKED */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            404: components["responses"]["NotFound"];
-        };
-    };
     serviceGetStats: {
         parameters: {
             query?: never;
@@ -3997,205 +3223,6 @@ export interface operations {
                 };
                 content?: never;
             };
-            404: components["responses"]["NotFound"];
-        };
-    };
-    serviceListGroups: {
-        parameters: {
-            query?: {
-                limit?: number;
-                offset?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Groups */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        groups?: components["schemas"]["Group"][];
-                    };
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-        };
-    };
-    serviceCreateGroup: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    name: string;
-                    /** @enum {string} */
-                    type: "business" | "community_group" | "nonprofit" | "collective" | "curator";
-                    description?: string;
-                    /** Format: uri */
-                    website?: string;
-                    category?: string;
-                };
-            };
-        };
-        responses: {
-            /** @description Group created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        group?: components["schemas"]["Group"];
-                    };
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-        };
-    };
-    serviceGetGroup: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Group */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        group?: components["schemas"]["Group"];
-                    };
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-        };
-    };
-    serviceDeleteGroup: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Deleted */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-        };
-    };
-    serviceUpdateGroup: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    name?: string;
-                    description?: string;
-                    /** Format: uri */
-                    website?: string;
-                    category?: string;
-                    /** @enum {string} */
-                    status?: "active" | "inactive";
-                };
-            };
-        };
-        responses: {
-            /** @description Group updated */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        group?: components["schemas"]["Group"];
-                    };
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-        };
-    };
-    serviceAddVenueToGroup: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** Format: uuid */
-                    venue_id: string;
-                };
-            };
-        };
-        responses: {
-            /** @description Venue added to group */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-        };
-    };
-    serviceRemoveVenueFromGroup: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                groupId: string;
-                venueId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Venue removed from group */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
         };
     };
@@ -4460,6 +3487,1185 @@ export interface operations {
                 };
                 content?: never;
             };
+        };
+    };
+    listPlaces: {
+        parameters: {
+            query?: {
+                /** @description Coordinates as lat,lng for proximity filtering */
+                near?: string;
+                radius_km?: number;
+                /** @description Filter by region slug */
+                region?: string;
+                q?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated place list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        meta: components["schemas"]["Meta"];
+                        places: components["schemas"]["Place"][];
+                    };
+                };
+            };
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    getPlace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Place */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        place: components["schemas"]["Place"];
+                    };
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listOrganizations: {
+        parameters: {
+            query?: {
+                kind?: "local_business" | "business" | "community_group" | "nonprofit" | "curator" | "collective";
+                /** @description True to filter to verified organizations only. */
+                verified?: boolean;
+                /** @description Comma-separated app names. Filters to organizations verified by any of these apps. */
+                verified_by?: string;
+                /** @description Comma-separated app names. Excludes organizations verified by these apps. */
+                not_verified_by?: string;
+                /** @description Filter to organizations created by accounts linked to this contributor app. */
+                created_by_contributor?: string;
+                near?: string;
+                radius_km?: number;
+                q?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated organization list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        meta: components["schemas"]["Meta"];
+                        organizations: components["schemas"]["Organization"][];
+                    };
+                };
+            };
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    getOrganization: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                idOrSlug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Organization */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        organization: components["schemas"]["Organization"];
+                    };
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listPersons: {
+        parameters: {
+            query?: {
+                verified?: boolean;
+                verified_by?: string;
+                q?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated person list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        meta: components["schemas"]["Meta"];
+                        persons: components["schemas"]["Person"][];
+                    };
+                };
+            };
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    getPerson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                idOrSlug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Person */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        person: components["schemas"]["Person"];
+                    };
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listBroadcasts: {
+        parameters: {
+            query?: {
+                /** @description Required for typical proximity reads. */
+                near?: string;
+                radius_km?: number;
+                organization_id?: string;
+                /** @description Filter to broadcasts from verified organizations. */
+                verified?: boolean;
+                verified_by?: string;
+                not_verified_by?: string;
+                created_by_contributor?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated broadcast list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        meta: components["schemas"]["Meta"];
+                        broadcasts: components["schemas"]["Broadcast"][];
+                    };
+                };
+            };
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    getBroadcast: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Broadcast */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        broadcast: components["schemas"]["Broadcast"];
+                    };
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listLists: {
+        parameters: {
+            query?: {
+                curator_id?: string;
+                curator_type?: "organization" | "person";
+                q?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated list of lists */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        meta: components["schemas"]["Meta"];
+                        lists: components["schemas"]["List"][];
+                    };
+                };
+            };
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    getList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                idOrSlug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List with items hydrated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        list: components["schemas"]["List"];
+                    };
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listVerifiers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Verifier registry */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        verifiers: components["schemas"]["Verifier"][];
+                    };
+                };
+            };
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    listVerifierRecentApprovals: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                appName: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recent approvals */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        approvals: components["schemas"]["VerifierApproval"][];
+                    };
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    serviceVerificationPath: {
+        parameters: {
+            query: {
+                target_type: "organization" | "person";
+                target_id: string;
+                identifier_type: "email";
+                identifier_value: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Path discovery result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificationPathResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description Target not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    serviceCreateVerificationChallenge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerificationChallengeInput"];
+            };
+        };
+        responses: {
+            /** @description Challenge created; email sent (with the calling key's brand_config sender identity) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificationChallengeResponse"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            /** @description WRONG_METHOD — this identifier requires the manual review path. Response includes redirect hint. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    serviceConfirmVerificationChallenge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerificationConfirmInput"];
+            };
+        };
+        responses: {
+            /** @description Verification outcome */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificationOutcome"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Challenge not found or expired */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Challenge already consumed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    serviceSubmitManualVerification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerificationManualInput"];
+            };
+        };
+        responses: {
+            /** @description Verification outcome — verified (auto-approved by app authority), pending (queued), or rejected. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificationOutcome"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            /** @description WRONG_METHOD — this identifier should use the challenges path. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    serviceListPendingVerifications: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pending reviews */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        reviews: components["schemas"]["PendingReview"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description Admin access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    serviceApprovePendingVerification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Approved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificationOutcome"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description Admin access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description Already reviewed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    serviceRejectPendingVerification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerificationRejectInput"];
+            };
+        };
+        responses: {
+            /** @description Rejected */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Admin access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description Already reviewed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    serviceCreateDispute: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DisputeInput"];
+            };
+        };
+        responses: {
+            /** @description Dispute recorded */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DisputeResponse"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    serviceCreatePlace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlaceInput"];
+            };
+        };
+        responses: {
+            /** @description Existing place returned (idempotent match on googlePlaceId) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        place: components["schemas"]["Place"];
+                    };
+                };
+            };
+            /** @description Place created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        place: components["schemas"]["Place"];
+                    };
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    serviceCreateOrganization: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrganizationInput"];
+            };
+        };
+        responses: {
+            /** @description Organization created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        organization: components["schemas"]["Organization"];
+                    };
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Slug already in use */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    serviceUpdateOrganization: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrganizationInput"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        organization: components["schemas"]["Organization"];
+                    };
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Not linked to this organization */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    serviceCreatePerson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonInput"];
+            };
+        };
+        responses: {
+            /** @description Person created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        person: components["schemas"]["Person"];
+                    };
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Slug already in use */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    serviceUpdatePerson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonInput"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        person: components["schemas"]["Person"];
+                    };
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Not linked to this person */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    serviceCreateBroadcast: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BroadcastInput"];
+            };
+        };
+        responses: {
+            /** @description Broadcast created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        broadcast: components["schemas"]["Broadcast"];
+                    };
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Not linked to this organization */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    serviceRetractBroadcast: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Retracted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        broadcast: components["schemas"]["Broadcast"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description Not linked to this organization */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    serviceCreateList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ListInput"];
+            };
+        };
+        responses: {
+            /** @description List created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        list: components["schemas"]["List"];
+                    };
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Not linked to the curator entity */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    serviceUpdateList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ListInput"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        list: components["schemas"]["List"];
+                    };
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Not linked to the curator entity */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    serviceAddListItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ListItemInput"];
+            };
+        };
+        responses: {
+            /** @description Item added */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        item: components["schemas"]["ListItem"];
+                    };
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Not linked to the curator entity */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    serviceRemoveListItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                position: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description Not linked to the curator entity */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    serviceLinkOrganization: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    organizationId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Already linked */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        organization: components["schemas"]["Organization"];
+                    };
+                };
+            };
+            /** @description Linked */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        organization: components["schemas"]["Organization"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    serviceUploadOrganizationLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    image: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Logo uploaded; new URL written to organization.logo */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        organization: components["schemas"]["Organization"];
+                    };
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Not linked to this organization */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    serviceUploadOrganizationImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    image: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Image uploaded; new URL written to organization.image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        organization: components["schemas"]["Organization"];
+                    };
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Not linked to this organization */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    serviceAssignEventOrganizer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    organizerOrganizationId?: string | null;
+                    /** Format: uuid */
+                    organizerPersonId?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Event organizer updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Not linked to this event or its current organizer */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
         };
     };
 }

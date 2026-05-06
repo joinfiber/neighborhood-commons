@@ -1,0 +1,1485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Neighborhood Commons — Open infrastructure for neighborhood data</title>
+  <meta name="description" content="Open infrastructure for neighborhood data. Events, organizations, places, broadcasts, curated lists. Schema.org-aligned, verified contributors, public reputation graph. Read free. Build with confidence. CC BY 4.0.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/pages.css">
+  <style>
+    /* ─────────────────────────────────────────────────────────────────── *
+     *  Two contexts on one page:
+     *    Marketing (above the fold) — generous, evocative, hero-led.
+     *    Reference (below the fold)  — tight, factual, document-shaped.
+     *  Visual rhythm shifts; palette and type system stay coherent.
+     *
+     *  Palette is inlined so the page renders correctly even when
+     *  /pages.css doesn't resolve (preview environments, offline reads).
+     * ─────────────────────────────────────────────────────────────────── */
+
+    :root {
+      --nc-bg: #f7f7f5;
+      --nc-surface: #ffffff;
+      --nc-text: #37352f;
+      --nc-muted: #6b6660;
+      --nc-dim: #9c9791;
+      --nc-border: #e8e6e1;
+      --nc-accent: #2c2c2c;
+      --nc-cream: #f5f0e8;
+    }
+
+    /* Reset + base — minimal, doesn't depend on pages.css */
+    *, *::before, *::after { box-sizing: border-box; }
+    html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+    body {
+      margin: 0;
+      font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--nc-bg);
+      color: var(--nc-text);
+      line-height: 1.6;
+      font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+      text-rendering: optimizeLegibility;
+    }
+    img { max-width: 100%; display: block; }
+
+    /* ─────────────────────────────────────────── *
+     *  Status strip — sits above the topbar.
+     *  Document metadata: spec version, status, license.
+     * ─────────────────────────────────────────── */
+    .nc-status-strip {
+      background: var(--nc-text);
+      color: var(--nc-bg);
+      font-size: 12px;
+      font-family: 'DM Mono', monospace;
+      letter-spacing: 0.02em;
+    }
+    .nc-status-inner {
+      max-width: 1180px; margin: 0 auto;
+      padding: 7px 32px;
+      display: flex; align-items: center; gap: 18px;
+      flex-wrap: wrap;
+    }
+    .nc-status-inner span { color: rgba(247, 247, 245, 0.65); }
+    .nc-status-inner strong {
+      color: var(--nc-bg); font-weight: 500;
+    }
+    .nc-status-dot {
+      display: inline-block; width: 6px; height: 6px;
+      border-radius: 50%; background: #7fc97f;
+      margin-right: 6px; vertical-align: middle;
+    }
+
+    /* ─────────────────────────────────────────── *
+     *  Sticky top bar — always visible.
+     *  Solid background; institutional, not glassy.
+     * ─────────────────────────────────────────── */
+    .nc-topbar {
+      position: sticky; top: 0; z-index: 50;
+      background: var(--nc-bg);
+      border-bottom: 1px solid var(--nc-border);
+    }
+    .nc-topbar-inner {
+      max-width: 1180px; margin: 0 auto;
+      padding: 16px 32px;
+      display: flex; align-items: center; gap: 16px;
+      font-size: 14px;
+    }
+    .nc-brand {
+      font-weight: 600; letter-spacing: -0.01em;
+      color: var(--nc-text);
+      text-decoration: none;
+    }
+    .nc-topnav {
+      display: flex; gap: 26px; margin-left: auto; flex-wrap: wrap;
+    }
+    .nc-topnav a {
+      color: var(--nc-muted); text-decoration: none;
+      transition: color 0.12s;
+    }
+    .nc-topnav a:hover { color: var(--nc-text); }
+    .nc-topnav-sep { color: var(--nc-border); user-select: none; }
+
+    /* ─────────────────────────────────────────── *
+     *  Hero (marketing voice).
+     *  Editorial: serif headline, sans body. Document-grade
+     *  with deliberate typographic flourishes — italic accent,
+     *  eyebrow marker, framed code specimen.
+     * ─────────────────────────────────────────── */
+    .nc-hero {
+      max-width: 880px; margin: 0 auto;
+      padding: 88px 32px 48px;
+    }
+    .nc-eyebrow {
+      font-size: 11px; font-weight: 500; letter-spacing: 0.18em;
+      text-transform: uppercase; color: var(--nc-muted);
+      margin-bottom: 28px;
+      font-family: 'DM Mono', monospace;
+      display: inline-flex; align-items: center; gap: 10px;
+    }
+    .nc-eyebrow::before {
+      content: ''; display: inline-block;
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #c08a3e;
+    }
+    .nc-hero h1 {
+      font-family: 'DM Serif Display', Georgia, serif;
+      font-size: clamp(2.25rem, 5.2vw, 3.6rem);
+      font-weight: 400;
+      line-height: 1.06;
+      letter-spacing: -0.015em;
+      margin: 0 0 28px;
+      color: var(--nc-text);
+      max-width: 18ch;
+    }
+    .nc-hero h1 em {
+      font-style: italic;
+      color: var(--nc-text);
+      /* Pull the italic in slightly — DM Serif Display italic is wide */
+      letter-spacing: -0.025em;
+    }
+    .nc-lede {
+      font-size: 1.125rem; line-height: 1.65;
+      color: var(--nc-muted);
+      max-width: 60ch;
+      margin: 0;
+    }
+    .nc-lede strong {
+      color: var(--nc-text); font-weight: 500;
+    }
+    .nc-stats {
+      display: block; color: var(--nc-text);
+      margin-top: 22px; font-size: 0.95rem;
+      max-width: 60ch; line-height: 1.6;
+      font-variant-numeric: tabular-nums;
+    }
+    .nc-stats strong { font-weight: 600; }
+
+    /* Hero code specimen — framed, with a label. Reads as an intentional
+       "live API" specimen rather than a floating cutout. The dark slab is
+       the only dark element on the page; the framing makes it deliberate. */
+    .nc-specimen {
+      margin: 44px 0 0;
+      border: 1px solid var(--nc-border);
+      border-radius: 12px;
+      background: var(--nc-surface);
+      overflow: hidden;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+    }
+    .nc-specimen-label {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 18px;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px; font-weight: 500;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--nc-muted);
+      border-bottom: 1px solid var(--nc-border);
+    }
+    .nc-specimen-label::before {
+      content: ''; display: inline-block;
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #7fc97f;
+      box-shadow: 0 0 0 3px rgba(127, 201, 127, 0.18);
+    }
+    .nc-specimen-label-end {
+      margin-left: auto; color: var(--nc-dim);
+      font-size: 10px; letter-spacing: 0.16em;
+    }
+    .nc-hero-curls {
+      background: #1c1a17; color: #e8e6e1;
+      padding: 20px 24px;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.84rem; line-height: 1.9;
+      margin: 0;
+      overflow-x: auto;
+      white-space: pre;
+    }
+    .nc-hero-curls .nc-curl-comment { color: #8a847b; }
+    .nc-hero-curls .nc-curl-prompt { color: #7a948a; }
+    .nc-hero-curls .nc-curl-string { color: #d4b886; }
+
+    .nc-hero-ctas {
+      display: flex; gap: 28px; flex-wrap: wrap;
+      align-items: center;
+      margin-top: 32px;
+    }
+    .nc-btn {
+      display: inline-block; padding: 11px 22px;
+      border-radius: 6px; font-size: 0.9rem; font-weight: 500;
+      text-decoration: none; font-family: inherit;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+      letter-spacing: -0.005em;
+    }
+    .nc-btn-primary {
+      background: var(--nc-accent); color: #fff;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .nc-btn-primary:hover {
+      text-decoration: none;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.06);
+    }
+    .nc-btn-primary:active {
+      transform: translateY(0);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+    /* Secondary CTA: plain text link with arrow, no button chrome */
+    .nc-link-arrow {
+      font-size: 0.9rem; color: var(--nc-text);
+      text-decoration: none; font-weight: 500;
+      border-bottom: 1px solid var(--nc-border);
+      padding-bottom: 2px;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .nc-link-arrow:hover {
+      border-bottom-color: var(--nc-text);
+      text-decoration: none;
+    }
+    .nc-link-arrow .nc-arrow {
+      display: inline-block; margin-left: 6px;
+      font-family: 'DM Mono', monospace;
+      transition: transform 0.15s ease;
+    }
+    .nc-link-arrow:hover .nc-arrow {
+      transform: translateX(2px);
+    }
+
+    /* ─────────────────────────────────────────── *
+     *  Three pillars
+     * ─────────────────────────────────────────── */
+    .nc-pillars {
+      max-width: 880px; margin: 0 auto;
+      padding: 32px 32px 72px;
+    }
+    .nc-pillars-grid {
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 40px;
+    }
+    .nc-pillar-num {
+      display: block;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px; font-weight: 500;
+      letter-spacing: 0.18em;
+      color: #c08a3e;
+      margin-bottom: 12px;
+    }
+    .nc-pillar h3 {
+      font-size: 1rem; font-weight: 600;
+      margin: 0 0 8px; color: var(--nc-text);
+      letter-spacing: -0.005em;
+    }
+    .nc-pillar p {
+      font-size: 0.9rem; color: var(--nc-muted);
+      line-height: 1.65; margin: 0;
+    }
+
+    /* ─────────────────────────────────────────── *
+     *  Section divider between marketing and docs
+     * ─────────────────────────────────────────── */
+    .nc-divider {
+      max-width: 880px; margin: 0 auto;
+      padding: 0 32px;
+    }
+    .nc-divider hr {
+      border: none; border-top: 1px solid var(--nc-border);
+      margin: 0;
+    }
+
+    /* ─────────────────────────────────────────── *
+     *  Docs (reference voice) — two-column with sticky sidebar
+     * ─────────────────────────────────────────── */
+    .nc-docs {
+      max-width: 1180px; margin: 0 auto;
+      padding: 64px 32px 100px;
+      display: grid; grid-template-columns: 220px 1fr;
+      gap: 64px;
+      align-items: start;
+    }
+
+    .nc-docs-nav {
+      position: sticky; top: 72px;
+      font-size: 0.85rem;
+      max-height: calc(100vh - 96px);
+      overflow-y: auto;
+      padding-right: 8px;
+      /* Subtle scrollbar */
+      scrollbar-width: thin;
+      scrollbar-color: var(--nc-border) transparent;
+    }
+    .nc-docs-nav::-webkit-scrollbar { width: 6px; }
+    .nc-docs-nav::-webkit-scrollbar-track { background: transparent; }
+    .nc-docs-nav::-webkit-scrollbar-thumb {
+      background: var(--nc-border); border-radius: 3px;
+    }
+    .nc-docs-nav-section {
+      font-size: 0.7rem; font-weight: 600; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--nc-dim);
+      margin: 26px 0 6px; padding-left: 10px;
+      font-family: 'DM Mono', monospace;
+    }
+    .nc-docs-nav-section:first-child { margin-top: 0; }
+    .nc-docs-nav a {
+      display: block;
+      padding: 4px 10px;
+      color: var(--nc-muted); text-decoration: none;
+      border-left: 2px solid transparent;
+      margin-left: -2px;
+      transition: color 0.12s, border-color 0.12s;
+    }
+    .nc-docs-nav a:hover { color: var(--nc-text); }
+    .nc-docs-nav a.active {
+      color: var(--nc-text); font-weight: 500;
+      border-left-color: var(--nc-text);
+    }
+
+    .nc-docs-content {
+      max-width: 720px;
+      font-size: 1rem;
+      line-height: 1.7;
+      color: var(--nc-text);
+    }
+
+    /* Section headings — numbered, document-style.
+       Hover reveals anchor link markers for direct links to sections. */
+    .nc-docs-content h2 {
+      font-size: 1.85rem; font-weight: 600;
+      margin: 88px 0 12px;
+      padding-top: 24px;
+      border-top: 1px solid var(--nc-border);
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+      scroll-margin-top: 80px;
+      display: flex; align-items: baseline; gap: 18px;
+      position: relative;
+    }
+    .nc-docs-content h2:first-child {
+      margin-top: 0; padding-top: 0; border-top: none;
+    }
+    .nc-docs-content h2 .nc-section-num {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: #c08a3e;
+      letter-spacing: 0;
+      flex-shrink: 0;
+      /* small inline pill so the number reads as a marker, not a prefix */
+      padding: 1px 8px;
+      border: 1px solid rgba(192, 138, 62, 0.25);
+      border-radius: 4px;
+      background: rgba(192, 138, 62, 0.06);
+      align-self: center;
+      font-feature-settings: "tnum" 1;
+    }
+    /* Anchor link marker — GitHub-style # on hover */
+    .nc-docs-content h2, .nc-docs-content h3 {
+      scroll-margin-top: 80px;
+    }
+    .nc-anchor {
+      opacity: 0; margin-left: 8px;
+      color: var(--nc-dim);
+      font-weight: 400; font-size: 0.85em;
+      text-decoration: none;
+      transition: opacity 0.15s, color 0.15s;
+    }
+    .nc-anchor:hover { color: var(--nc-text); text-decoration: none; }
+    .nc-docs-content h2:hover .nc-anchor,
+    .nc-docs-content h3:hover .nc-anchor {
+      opacity: 1;
+    }
+    .nc-docs-content h2 + p {
+      color: var(--nc-muted); font-size: 1.05rem;
+      margin-top: 8px; margin-bottom: 24px;
+      max-width: 60ch;
+    }
+    .nc-docs-content h3 {
+      font-size: 1.1rem; font-weight: 600;
+      margin: 40px 0 10px;
+      letter-spacing: -0.005em;
+      scroll-margin-top: 80px;
+    }
+    .nc-docs-content h3 + p {
+      margin-top: 0;
+    }
+
+    /* Body paragraphs */
+    .nc-docs-content p {
+      margin: 0 0 16px;
+      max-width: 70ch;
+    }
+    .nc-docs-content p em {
+      color: var(--nc-dim); font-style: italic;
+    }
+
+    /* Inline code */
+    .nc-docs-content code {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.84em;
+      background: var(--nc-cream);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: var(--nc-text);
+      letter-spacing: -0.01em;
+    }
+
+    /* Code blocks (body) — light treatment, document-feel */
+    .nc-docs-content pre {
+      background: var(--nc-cream);
+      border: 1px solid var(--nc-border);
+      border-radius: 8px;
+      padding: 16px 20px;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.84rem; line-height: 1.7;
+      overflow-x: auto;
+      margin: 16px 0 24px;
+      color: var(--nc-text);
+    }
+    .nc-docs-content pre code {
+      background: transparent; padding: 0;
+      font-size: inherit; color: inherit;
+    }
+
+    /* Links */
+    .nc-docs-content a {
+      color: var(--nc-text);
+      text-decoration: underline;
+      text-decoration-color: var(--nc-border);
+      text-underline-offset: 3px;
+      text-decoration-thickness: 1px;
+      transition: text-decoration-color 0.12s;
+    }
+    .nc-docs-content a:hover {
+      text-decoration-color: var(--nc-text);
+    }
+
+    .nc-docs-content strong { font-weight: 600; }
+
+    /* Lists */
+    .nc-docs-content ul, .nc-docs-content ol {
+      margin: 0 0 20px; padding-left: 24px;
+      max-width: 70ch;
+    }
+    .nc-docs-content li { margin-bottom: 6px; }
+    .nc-docs-content li::marker { color: var(--nc-dim); }
+
+    /* Tables — documentation-grade */
+    .nc-docs-content table {
+      width: 100%; border-collapse: collapse;
+      margin: 16px 0 28px;
+      font-size: 0.9rem;
+      line-height: 1.55;
+    }
+    .nc-docs-content thead {
+      border-bottom: 1.5px solid var(--nc-text);
+    }
+    .nc-docs-content th {
+      text-align: left;
+      padding: 10px 14px 10px 0;
+      font-weight: 600;
+      color: var(--nc-text);
+      font-size: 0.82rem;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+    .nc-docs-content td {
+      text-align: left;
+      padding: 12px 14px 12px 0;
+      border-bottom: 1px solid var(--nc-border);
+      vertical-align: top;
+      color: var(--nc-text);
+    }
+    .nc-docs-content td:first-child { padding-left: 0; }
+    .nc-docs-content td code { font-size: 0.85em; }
+
+    /* Callout — used sparingly for important notes */
+    .nc-callout {
+      background: var(--nc-cream);
+      border-left: 3px solid var(--nc-accent);
+      padding: 14px 18px;
+      border-radius: 0 6px 6px 0;
+      margin: 16px 0 24px;
+      font-size: 0.95rem;
+      max-width: 70ch;
+    }
+    .nc-callout strong { color: var(--nc-accent); }
+    .nc-callout p:last-child { margin-bottom: 0; }
+
+    /* Footer — stewardship statement + plain link list */
+    .nc-page-footer {
+      max-width: 1180px; margin: 0 auto;
+      padding: 40px 32px 48px;
+      border-top: 1px solid var(--nc-border);
+      font-size: 0.85rem;
+      color: var(--nc-muted);
+      line-height: 1.65;
+    }
+    .nc-footer-stewardship {
+      max-width: 60ch;
+      margin-bottom: 20px;
+    }
+    .nc-footer-stewardship strong {
+      color: var(--nc-text); font-weight: 600;
+    }
+    .nc-footer-stewardship a {
+      color: var(--nc-muted); text-decoration: underline;
+      text-decoration-color: var(--nc-border);
+      text-underline-offset: 3px;
+    }
+    .nc-footer-stewardship a:hover {
+      color: var(--nc-text); text-decoration-color: var(--nc-text);
+    }
+    .nc-footer-links {
+      display: flex; flex-wrap: wrap; gap: 22px;
+      font-size: 0.82rem;
+    }
+    .nc-footer-links a {
+      color: var(--nc-muted); text-decoration: none;
+    }
+    .nc-footer-links a:hover {
+      color: var(--nc-text); text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    /* ─────────────────────────────────────────── *
+     *  Responsive
+     * ─────────────────────────────────────────── */
+    @media (max-width: 960px) {
+      .nc-pillars-grid { grid-template-columns: 1fr; gap: 28px; }
+      .nc-hero { padding: 64px 24px 40px; }
+      .nc-hero h1 { max-width: none; }
+      .nc-pillars { padding: 24px 24px 56px; }
+      .nc-divider { padding: 0 24px; }
+      .nc-docs {
+        grid-template-columns: 1fr;
+        gap: 32px;
+        padding: 48px 24px 80px;
+      }
+      .nc-docs-nav {
+        position: static; max-height: none;
+        padding-right: 0;
+        border-bottom: 1px solid var(--nc-border);
+        padding-bottom: 24px;
+      }
+      .nc-docs-content { font-size: 0.95rem; max-width: none; }
+      .nc-docs-content h2 { font-size: 1.5rem; margin-top: 56px; }
+      .nc-topnav { gap: 14px; font-size: 0.8rem; }
+      .nc-topbar-inner { padding: 12px 24px; }
+    }
+    @media (max-width: 640px) {
+      .nc-topnav a:not(:first-child):not(:nth-child(-n+3)) { display: none; }
+      /* Hide all but first 3 + Spec/Github type things */
+      .nc-hero-ctas { flex-direction: column; align-items: stretch; }
+      .nc-hero-ctas .nc-btn { text-align: center; }
+    }
+  </style>
+</head>
+<body>
+  <div class="nc-page">
+
+    <!-- Status strip — document metadata -->
+    <div class="nc-status-strip">
+      <div class="nc-status-inner">
+        <span><strong>Specification 1.0.0</strong></span>
+        <span><span class="nc-status-dot"></span>Stable</span>
+        <span>Additive-only stability</span>
+        <span>CC&nbsp;BY&nbsp;4.0</span>
+      </div>
+    </div>
+
+    <!-- Top bar (sticky) -->
+    <header class="nc-topbar">
+      <div class="nc-topbar-inner">
+        <a href="/" class="nc-brand">Neighborhood Commons</a>
+        <nav class="nc-topnav">
+          <a href="#quickstart">Quick Start</a>
+          <a href="#types">Types</a>
+          <a href="#reading">Read</a>
+          <a href="#writing">Write</a>
+          <a href="#verification">Verify</a>
+          <a href="#reference">Reference</a>
+          <span class="nc-topnav-sep">·</span>
+          <a href="/openapi.json">Spec</a>
+          <a href="https://github.com/joinfiber/neighborhood-commons/blob/master/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a>
+          <a href="https://github.com/joinfiber/neighborhood-commons" target="_blank" rel="noopener">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <!-- ─── ABOVE THE FOLD: marketing voice ─── -->
+
+    <section class="nc-hero">
+      <div class="nc-eyebrow">Open neighborhood data infrastructure</div>
+      <h1>An open layer for <em>everything</em> that happens in a neighborhood.</h1>
+      <p class="nc-lede">
+        Six typed atoms — <strong>events</strong>, <strong>organizations</strong>, <strong>places</strong>, <strong>persons</strong>, <strong>broadcasts</strong>, <strong>curated lists</strong> — that any app can read, mix, and remix. Schema.org-aligned. Verified contributors. Public reputation graph. Read free, no key required.
+      </p>
+      {{statsLine}}
+
+      <div class="nc-specimen">
+        <div class="nc-specimen-label">
+          <span>Live API</span>
+          <span class="nc-specimen-label-end">No auth required</span>
+        </div>
+        <div class="nc-hero-curls"><span class="nc-curl-prompt">$</span> curl <span class="nc-curl-string">"{{baseUrl}}/api/v1/events?near=39.97,-75.14&amp;radius_km=2"</span>
+
+<span class="nc-curl-comment"># Verified businesses near a point</span>
+<span class="nc-curl-prompt">$</span> curl <span class="nc-curl-string">"{{baseUrl}}/api/v1/organizations?kind=local_business&amp;verified=true"</span>
+
+<span class="nc-curl-comment"># What's being broadcast right now</span>
+<span class="nc-curl-prompt">$</span> curl <span class="nc-curl-string">"{{baseUrl}}/api/v1/broadcasts?near=39.97,-75.14&amp;radius_km=1"</span></div>
+      </div>
+
+      <div class="nc-hero-ctas">
+        <a href="#quickstart" class="nc-btn nc-btn-primary">Quick Start</a>
+        <a href="#writing" class="nc-link-arrow">Apply for a service key<span class="nc-arrow">→</span></a>
+      </div>
+    </section>
+
+    <section class="nc-pillars">
+      <div class="nc-pillars-grid">
+        <div class="nc-pillar">
+          <span class="nc-pillar-num">01 — Open</span>
+          <h3>Read free.</h3>
+          <p>Every endpoint is open. No API key required for reads. The 1.0 spec is committed to additive-only stability — what works today works in 18 months.</p>
+        </div>
+        <div class="nc-pillar">
+          <span class="nc-pillar-num">02 — Composable</span>
+          <h3>Apps as surfaces.</h3>
+          <p>The Commons isn't a destination. Each app composes its own slice through opt-in filters: by verifier, by contributor, by proximity, by type. Same data, different editorial.</p>
+        </div>
+        <div class="nc-pillar">
+          <span class="nc-pillar-num">03 — Trusted</span>
+          <h3>Verify once. Recognized everywhere.</h3>
+          <p>When a business gets verified through one app, every other app can honor that verification — or filter it out. The reputation graph is public; verifiers earn or lose trust on the quality of their approvals.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section divider between marketing and reference -->
+    <div class="nc-divider"><hr></div>
+
+    <!-- ─── BELOW THE FOLD: reference voice ─── -->
+
+    <article class="nc-docs">
+
+      <!-- Sticky sidebar nav -->
+      <aside class="nc-docs-nav">
+        <div class="nc-docs-nav-section">Get started</div>
+        <a href="#quickstart">Quick Start</a>
+        <a href="#sdk">SDK &amp; spec</a>
+
+        <div class="nc-docs-nav-section">Types</div>
+        <a href="#types">Overview</a>
+        <a href="#type-place">Place</a>
+        <a href="#type-organization">Organization</a>
+        <a href="#type-person">Person</a>
+        <a href="#type-event">Event</a>
+        <a href="#type-broadcast">Broadcast</a>
+        <a href="#type-list">List</a>
+
+        <div class="nc-docs-nav-section">Reading</div>
+        <a href="#reading">Endpoints</a>
+        <a href="#reading-filters">Filters</a>
+        <a href="#reading-pagination">Pagination &amp; rate limits</a>
+
+        <div class="nc-docs-nav-section">Writing</div>
+        <a href="#writing">Service tier</a>
+        <a href="#writing-key">Getting a key</a>
+        <a href="#writing-brand">brand_config</a>
+        <a href="#writing-scoping">Scoping rules</a>
+
+        <div class="nc-docs-nav-section">Verification</div>
+        <a href="#verification">Flow</a>
+        <a href="#verification-authority">Authority</a>
+        <a href="#verification-reputation">Reputation graph</a>
+
+        <div class="nc-docs-nav-section">Real-time</div>
+        <a href="#webhooks">Webhooks</a>
+
+        <div class="nc-docs-nav-section">Reference</div>
+        <a href="#reference">Endpoints</a>
+        <a href="#reference-errors">Error codes</a>
+        <a href="#stability">Stability</a>
+      </aside>
+
+      <!-- Reference content -->
+      <div class="nc-docs-content">
+
+        <!-- ─── 1. Quick Start ─── -->
+        <h2 id="quickstart"><span class="nc-section-num">1</span>Quick Start</h2>
+        <p>You can read every endpoint without authentication. Start here.</p>
+
+        <h3>Read events near a point</h3>
+        <pre>$ curl "{{baseUrl}}/api/v1/events?near=39.97,-75.14&amp;radius_km=2&amp;limit=5"</pre>
+        <p>Returns up to five published events within 2&nbsp;km of the supplied coordinates. Response shape: <code>{ meta, events }</code>. Every event is self-contained — no further joins required to render it.</p>
+
+        <h3>Filter by type and verification</h3>
+        <pre>$ curl "{{baseUrl}}/api/v1/organizations?kind=local_business&amp;verified=true"</pre>
+        <p>Returns organizations whose <code>kind</code> is <code>local_business</code> and which have at least one active verified identifier. Add <code>verified_by=Holler,Merrie</code> to restrict to verifications issued by specific apps.</p>
+
+        <h3>Read what's broadcasting right now</h3>
+        <pre>$ curl "{{baseUrl}}/api/v1/broadcasts?near=39.97,-75.14&amp;radius_km=1"</pre>
+        <p>Active broadcasts only — expired and retracted broadcasts are filtered server-side. Response includes the embedded <code>organization</code> and <code>location</code> for each broadcast.</p>
+
+        <h3>Inspect the reputation graph</h3>
+        <pre>$ curl "{{baseUrl}}/api/v1/verifiers"</pre>
+        <p>Returns one entry per app that has ever issued a verification: approval count, active count, revoked count, methods used. Use this output to compose your own <code>verified_by</code> trust policy.</p>
+
+        <h3>Calendar feed</h3>
+        <pre>{{baseUrl}}/api/v1/events.ics</pre>
+        <p>Standards-compliant iCalendar feed. Drop the URL into Google Calendar / Apple Calendar / any RFC 5545 reader. RSS available at <code>/api/v1/events.rss</code>.</p>
+
+        <div class="nc-callout">
+          <p><strong>Writing data?</strong> Skip to <a href="#writing">Writing data</a> for the service-tier flow. There is no self-service write path; service keys are operator-issued.</p>
+        </div>
+
+        <!-- ─── 2. Types ─── -->
+        <h2 id="types"><span class="nc-section-num">2</span>Types</h2>
+        <p>The 1.0 substrate is six typed atoms. Each maps to a Schema.org concept. Every response shape is self-contained — no implicit knowledge, no extra joins required to interpret a record. Field names follow Schema.org canonical (camelCase) on output; database columns underlying them are snake_case.</p>
+
+        <table>
+          <thead><tr><th>Type</th><th>Schema.org</th><th>What it represents</th></tr></thead>
+          <tbody>
+            <tr><td><a href="#type-place"><code>Place</code></a></td><td>Place</td><td>Physical location — venue, park, address.</td></tr>
+            <tr><td><a href="#type-organization"><code>Organization</code></a></td><td>Organization · LocalBusiness</td><td>Collective entity — business, community group, nonprofit, curator.</td></tr>
+            <tr><td><a href="#type-person"><code>Person</code></a></td><td>Person</td><td>Individual — DJ, performer, curator, organizer.</td></tr>
+            <tr><td><a href="#type-event"><code>Event</code></a></td><td>Event</td><td>Activity at a specific time, hosted by an Organization or Person, at a Place.</td></tr>
+            <tr><td><a href="#type-broadcast"><code>Broadcast</code></a></td><td>(novel)</td><td>Ephemeral signal from an Organization, pinned to a Place, max 24h lifetime.</td></tr>
+            <tr><td><a href="#type-list"><code>List</code></a></td><td>ItemList</td><td>Curatorial selection of events, organizations, or places.</td></tr>
+          </tbody>
+        </table>
+
+        <h3 id="type-place">Place</h3>
+        <p>Schema.org <code>Place</code>. Physical locations, deduplicated by Google Places ID where one is available. The canonical record for an address; events and organizations link to it by <code>id</code>.</p>
+
+        <table>
+          <thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td><code>id</code></td><td>uuid</td><td>Internal Place ID. Used as FK from Events, Organizations, etc.</td></tr>
+            <tr><td><code>name</code></td><td>string</td><td>Canonical name.</td></tr>
+            <tr><td><code>address</code></td><td>PostalAddress</td><td>Schema.org <code>PostalAddress</code> object: <code>streetAddress</code>, <code>addressLocality</code>, <code>addressRegion</code>, <code>postalCode</code>, <code>addressCountry</code>.</td></tr>
+            <tr><td><code>geo</code></td><td>GeoCoordinates</td><td><code>{ latitude, longitude }</code>. Always present.</td></tr>
+            <tr><td><code>identifier</code></td><td>PropertyValue[]</td><td>External IDs. Common entry: <code>{ propertyID: "googlePlaceId", value: "ChIJ..." }</code>.</td></tr>
+          </tbody>
+        </table>
+
+        <pre>{
+  "id": "f1b2c3d4-...",
+  "name": "Espresso Co",
+  "address": {
+    "streetAddress": "1234 Main St",
+    "addressLocality": "Philadelphia",
+    "addressRegion": "PA",
+    "postalCode": "19125",
+    "addressCountry": "US"
+  },
+  "geo": { "latitude": 39.97, "longitude": -75.13 },
+  "identifier": [
+    { "propertyID": "googlePlaceId", "value": "ChIJ..." }
+  ]
+}</pre>
+
+        <div class="nc-callout">
+          <p><strong>Two place IDs in the system.</strong> <code>Place.id</code> is the internal Commons UUID. <code>Place.identifier[].value</code> with <code>propertyID: "googlePlaceId"</code> is the Google Places API ID. Events still expose a top-level <code>place_id</code> field that contains the Google ID for backward compatibility — do not confuse with <code>Place.id</code>.</p>
+        </div>
+
+        <h3 id="type-organization">Organization</h3>
+        <p>Schema.org <code>Organization</code>. The <code>kind</code> discriminator narrows to one of six subtypes; rigor of verification differs by kind.</p>
+
+        <table>
+          <thead><tr><th><code>kind</code></th><th>Used for</th><th>Verification rigor</th></tr></thead>
+          <tbody>
+            <tr><td><code>local_business</code></td><td>Business at a fixed physical location.</td><td>Heavy — business email loop or manual review.</td></tr>
+            <tr><td><code>business</code></td><td>Business with no fixed location (touring, online).</td><td>Heavy.</td></tr>
+            <tr><td><code>community_group</code></td><td>Birders of Philadelphia, running clubs, informal collectives.</td><td>Light — control of any email.</td></tr>
+            <tr><td><code>nonprofit</code></td><td>Registered nonprofits.</td><td>Heavy.</td></tr>
+            <tr><td><code>curator</code></td><td>Editorial curators, list-makers.</td><td>Light.</td></tr>
+            <tr><td><code>collective</code></td><td>Collaborative groups, art collectives.</td><td>Light.</td></tr>
+          </tbody>
+        </table>
+
+        <pre>{
+  "id": "...",
+  "slug": "bubs",
+  "name": "Bubs",
+  "kind": "local_business",
+  "additionalType": "https://schema.org/LocalBusiness",
+  "description": "Community board game shop",
+  "url": "https://bubs.example",
+  "logo": "https://...",
+  "telephone": "+12155550100",
+  "email": "hi@bubs.example",
+  "sameAs": ["https://instagram.com/bubs"],
+  "keywords": ["board games", "community"],
+  "openingHoursSpecification": [
+    { "dayOfWeek": "Monday", "opens": "12:00", "closes": "22:00" }
+  ],
+  "location": { "id": "...", "name": "Bubs", "address": {...}, "geo": {...} },
+  "verified": true,
+  "verification": {
+    "method": "manual_review",
+    "verifiedVia": "in_person",
+    "verifiedAt": "...",
+    "verifiedByApp": "Holler"
+  }
+}</pre>
+
+        <p>An Organization may have a single <code>location</code> (the primary place) and additional places via the <code>organization_places</code> link table — chains, pop-ups, shared spaces. Verification attaches to the Organization, not to any place.</p>
+
+        <h3 id="type-person">Person</h3>
+        <p>Schema.org <code>Person</code>. Individuals — performers, curators, organizers. Distinct from Organization for cases where the actor is one human, not a collective.</p>
+
+        <table>
+          <thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td><code>id</code>, <code>slug</code>, <code>name</code></td><td>required</td><td>Identity.</td></tr>
+            <tr><td><code>givenName</code>, <code>familyName</code>, <code>alternateName</code></td><td>optional</td><td>Stage names live in <code>alternateName</code>.</td></tr>
+            <tr><td><code>description</code>, <code>image</code>, <code>url</code>, <code>sameAs</code>, <code>jobTitle</code></td><td>optional</td><td>Standard Schema.org Person properties.</td></tr>
+            <tr><td><code>verified</code>, <code>verification</code></td><td>optional</td><td>Light-rigor verification only — any-domain email loop.</td></tr>
+          </tbody>
+        </table>
+
+        <pre>{
+  "id": "...",
+  "slug": "dj-karma",
+  "name": "DJ Karma",
+  "alternateName": "DJ K",
+  "description": "Philly-based DJ specializing in soul and disco.",
+  "image": "https://...",
+  "sameAs": ["https://soundcloud.com/djkarma"],
+  "jobTitle": "DJ",
+  "verified": true
+}</pre>
+
+        <h3 id="type-event">Event</h3>
+        <p>Schema.org <code>Event</code>. Activity at a specific time, at a Place, hosted by an Organization or Person. Events are the most-used type in the substrate and have the longest list of properties — the table below covers the core; the full schema is in <a href="/openapi.json">openapi.json</a>.</p>
+
+        <table>
+          <thead><tr><th>Field</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td><code>id</code>, <code>name</code>, <code>description</code></td><td>Standard.</td></tr>
+            <tr><td><code>start</code>, <code>end</code>, <code>timezone</code></td><td>ISO 8601 with timezone offset. Field name is <code>start</code> (not <code>startDate</code>) per the upstream Neighborhood API spec.</td></tr>
+            <tr><td><code>location</code></td><td>Embedded Place reference.</td></tr>
+            <tr><td><code>organizer</code></td><td>Embedded Organization or Person reference.</td></tr>
+            <tr><td><code>performer</code>[]</td><td>Array of performers (Person or Organization). Optional.</td></tr>
+            <tr><td><code>category</code>, <code>tags</code></td><td>Categorization.</td></tr>
+            <tr><td><code>cost</code>, <code>url</code>, <code>images</code></td><td>Practical fields.</td></tr>
+            <tr><td><code>recurrence</code>, <code>series_id</code>, <code>series_instance_number</code>, <code>series_instance_count</code></td><td>RRULE-based recurrence; series link.</td></tr>
+            <tr><td><code>open_window</code>, <code>capacity</code>, <code>rsvp</code>, <code>wheelchair_accessible</code></td><td>Visibility and access metadata.</td></tr>
+            <tr><td><code>source</code></td><td>Provenance: <code>{ publisher, method, contributor, collected_at, license }</code>.</td></tr>
+          </tbody>
+        </table>
+
+        <h3 id="type-broadcast">Broadcast</h3>
+        <p>Ephemeral signal from a verified Organization, pinned to a Place. Maximum 24h lifetime. No direct Schema.org analog; <code>SpecialAnnouncement</code> was checked and rejected as a fit for ephemeral commercial signals — conventions for <code>datePosted</code> and <code>expires</code> borrowed from there.</p>
+
+        <pre>{
+  "id": "...",
+  "message": "Half off all sandwiches until we sell out",
+  "datePosted": "2026-05-05T14:00:00-04:00",
+  "expires": "2026-05-05T18:00:00-04:00",
+  "status": "active",
+  "organization": { "id": "...", "name": "Bubs", "verified": true },
+  "location": { "id": "...", "name": "Bubs", "geo": {...} },
+  "source": { "publisher": "bubs", "method": "service", "contributor": "Holler", "collected_at": "..." }
+}</pre>
+
+        <p>Broadcast creation is not gated on the organization being verified — apps decide whether to surface unverified broadcasts in their feeds. <code>verified=true</code> + <code>verified_by=...</code> filters on <code>GET /v1/broadcasts</code> let consumer apps slice editorially.</p>
+
+        <h3 id="type-list">List</h3>
+        <p>Schema.org <code>ItemList</code>. Curatorial selections by an Organization or Person. Items are polymorphic — a single list can hold events, organizations, places, or any mix.</p>
+
+        <pre>{
+  "id": "...",
+  "slug": "this-weekends-picks",
+  "name": "This Weekend's Picks",
+  "description": "Five things worth your Saturday",
+  "curator": { "@type": "Person", "id": "...", "name": "Olive" },
+  "itemListOrder": "Ascending",
+  "numberOfItems": 5,
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "item": { "@type": "Event", "id": "...", "name": "..." },
+      "curatorNote": "If you only see one thing, see this."
+    }
+  ]
+}</pre>
+
+        <p>Lists are how curator workflows surface in the substrate. A curator (Organization or Person) builds a list; the items can be events they recommend, organizations worth watching, places worth knowing about — or all three in one list.</p>
+
+        <!-- ─── 3. Reading ─── -->
+        <h2 id="reading"><span class="nc-section-num">3</span>Reading data</h2>
+        <p>All read endpoints are unauthenticated. Optional <code>X-API-Key</code> header bumps rate limits; otherwise requests are limited per IP.</p>
+
+        <table>
+          <thead><tr><th>Method</th><th>Path</th><th>Returns</th></tr></thead>
+          <tbody>
+            <tr><td><code>GET</code></td><td><code>/v1/events</code></td><td>Paginated event list.</td></tr>
+            <tr><td><code>GET</code></td><td><code>/v1/events/:id</code></td><td>Single event by ID.</td></tr>
+            <tr><td><code>GET</code></td><td><code>/v1/events.ics</code></td><td>iCalendar feed.</td></tr>
+            <tr><td><code>GET</code></td><td><code>/v1/events.rss</code></td><td>RSS 2.0 feed.</td></tr>
+            <tr><td><code>GET</code></td><td><code>/v1/places</code></td><td>Paginated place list.</td></tr>
+            <tr><td><code>GET</code></td><td><code>/v1/places/:id</code></td><td>Single place.</td></tr>
+            <tr><td><code>GET</code></td><td><code>/v1/organizations</code></td><td>Paginated organization list.</td></tr>
+            <tr><td><code>GET</code></td><td><code>/v1/organizations/:idOrSlug</code></td><td>Single organization by id or slug.</td></tr>
+            <tr><td><code>GET</code></td><td><code>/v1/persons</code></td><td>Paginated person list.</td></tr>
+            <tr><td><code>GET</code></td><td><code>/v1/persons/:idOrSlug</code></td><td>Single person.</td></tr>
+            <tr><td><code>GET</code></td><td><code>/v1/broadcasts</code></td><td>Active broadcasts only.</td></tr>
+            <tr><td><code>GET</code></td><td><code>/v1/broadcasts/:id</code></td><td>Single broadcast.</td></tr>
+            <tr><td><code>GET</code></td><td><code>/v1/lists</code></td><td>Paginated list of lists.</td></tr>
+            <tr><td><code>GET</code></td><td><code>/v1/lists/:idOrSlug</code></td><td>Single list with hydrated items.</td></tr>
+            <tr><td><code>GET</code></td><td><code>/v1/verifiers</code></td><td>Reputation graph — one entry per app.</td></tr>
+            <tr><td><code>GET</code></td><td><code>/v1/verifiers/:appName/recent_approvals</code></td><td>Recent approvals by a specific verifier.</td></tr>
+            <tr><td><code>GET</code></td><td><code>/v1/meta</code></td><td>Spec metadata, regions, categories, stats.</td></tr>
+          </tbody>
+        </table>
+
+        <h3 id="reading-filters">Filter composition</h3>
+        <p>Filters are applied at the URL query level. Compose them freely; all are optional.</p>
+
+        <table>
+          <thead><tr><th>Filter</th><th>Applies to</th><th>Effect</th></tr></thead>
+          <tbody>
+            <tr><td><code>verified=true</code></td><td>organizations, persons, broadcasts</td><td>Only verified targets. Verification is computed from active rows in <code>account_verified_identifiers</code>.</td></tr>
+            <tr><td><code>verified_by=app1,app2</code></td><td>organizations, persons, broadcasts</td><td>Verified by any of the listed apps. Use the <code>appName</code> from <code>GET /v1/verifiers</code>.</td></tr>
+            <tr><td><code>not_verified_by=app-x</code></td><td>organizations, persons, broadcasts</td><td>Excludes targets verified only by the listed apps.</td></tr>
+            <tr><td><code>created_by_contributor=AppName</code></td><td>broadcasts, events</td><td>Filters to records whose <code>source.contributor</code> matches the supplied app name.</td></tr>
+            <tr><td><code>kind=local_business</code></td><td>organizations</td><td>Subtype filter. See the <a href="#type-organization">Organization kinds</a>.</td></tr>
+            <tr><td><code>near=lat,lng</code></td><td>events, places, organizations, broadcasts</td><td>Coordinates as <code>"39.97,-75.13"</code>. Pair with <code>radius_km</code>.</td></tr>
+            <tr><td><code>radius_km=N</code></td><td>events, places, organizations, broadcasts</td><td>Proximity radius. Required when using <code>near</code>.</td></tr>
+            <tr><td><code>q=text</code></td><td>events, places, organizations, persons, lists</td><td>Text search across name and description.</td></tr>
+            <tr><td><code>category=slug</code></td><td>events</td><td>Single category filter.</td></tr>
+            <tr><td><code>tag=slug</code></td><td>events</td><td>One or more tags. Multiple values: AND semantics.</td></tr>
+            <tr><td><code>start_after</code>, <code>start_before</code></td><td>events</td><td>ISO 8601 date or datetime.</td></tr>
+            <tr><td><code>collapse_series=true</code></td><td>events</td><td>Deduplicates recurring events to the next upcoming instance.</td></tr>
+            <tr><td><code>group_id=uuid</code></td><td>events</td><td>Filter to events with the given organizer (legacy field name; expects an Organization id).</td></tr>
+          </tbody>
+        </table>
+
+        <p>Filter composition is the editorial primitive. App C trusts a different verifier set than App B; both express that as URL parameters. There is no default firehose — apps construct their own slice.</p>
+
+        <h3 id="reading-pagination">Pagination &amp; rate limits</h3>
+        <p>List endpoints accept <code>limit</code> (1–200, default 50) and <code>offset</code> (default 0). Response shape:</p>
+        <pre>{
+  "meta": { "total": 142, "limit": 50, "offset": 0, "spec": "neighborhood-api-v0.2", "license": "CC-BY-4.0" },
+  "events": [ ... ]
+}</pre>
+
+        <p>Rate limit: <strong>1,000 requests/hour</strong> per IP — or per API key when an <code>X-API-Key</code> header is sent. Limits are returned in standard <code>RateLimit-*</code> headers. <code>429</code> response indicates the current window is exhausted; backoff and retry after the window rolls over.</p>
+
+        <p>Cache hints: read responses include <code>Cache-Control: public, max-age=60</code> for events, organizations, persons, places, lists, and verifiers. Broadcasts use a shorter <code>max-age=15</code> because they're ephemeral. Honor these on the consumer side to keep both your costs and Commons load down.</p>
+
+        <!-- ─── 4. Writing ─── -->
+        <h2 id="writing"><span class="nc-section-num">4</span>Writing data</h2>
+        <p>Writes flow through the service tier. There is no self-service write path — service keys are operator-issued after a brief onboarding conversation. Two effective tiers exist: <strong>Browse</strong> (read, no auth or basic API key for higher rate limit) and <strong>Service</strong> (write, with optional <code>is_admin</code> variant).</p>
+
+        <h3 id="writing-key">Getting a service key</h3>
+        <p>Email <a href="mailto:hi@neighborhood-commons.org?subject=Service-tier%20integration%20application&amp;body=App%20name%20and%20URL%3A%0A%0AWhat%20you%27re%20building%3A%0A%0AHow%20you%20plan%20to%20verify%20organizations%20you%20onboard%20%28in-person%2C%20video%20call%2C%20domain%20email%29%3A%0A%0ATeam%20contact%20email%3A%0A%0AExpected%20first-week%20write%20volume%3A%0A">hi@neighborhood-commons.org</a> with the following:</p>
+        <ul>
+          <li><strong>App name and URL.</strong></li>
+          <li><strong>What you're building.</strong> One paragraph is fine.</li>
+          <li><strong>How you plan to verify the organizations you onboard.</strong> In-person? Video call? Domain email only? This determines what <code>verification_authority</code> the operator grants your key.</li>
+          <li><strong>Team contact email.</strong></li>
+          <li><strong>Expected first-week write volume.</strong> Used to size rate limits.</li>
+        </ul>
+        <p>Typical turnaround is one business day. The operator will reply with the raw key string (saved once — cannot be recovered) and confirm what's set on it.</p>
+
+        <h3 id="writing-brand">brand_config</h3>
+        <p>Verification emails are sent from the Commons-shared Resend account. Two valid configurations:</p>
+        <table>
+          <thead><tr><th>Tier</th><th>Sender shown</th><th>Resend cost</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>Display-only</strong> (recommended for v1)</td>
+              <td><code>YourApp &lt;verify@neighborhood-commons.org&gt;</code></td>
+              <td>Free</td>
+            </tr>
+            <tr>
+              <td><strong>Full domain</strong></td>
+              <td><code>YourApp &lt;verify@yourapp.com&gt;</code></td>
+              <td>$20/mo Resend Pro + DNS setup</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>Most email clients show the display name first and prominently — the display-only tier reads as your brand to the user without requiring a separate verified domain. Subject and body are under your control either way.</p>
+        <p>The full-domain upgrade is a single <code>brand_config</code> field change with no code impact on your side once your domain is verified in Resend.</p>
+
+        <h3 id="writing-scoping">Scoping rules</h3>
+        <ul>
+          <li>Reads are unrestricted. Service keys can read any public data.</li>
+          <li>Writes are scoped: a service key can only create/update/delete data for organizations linked to it via <code>api_key_organization_links</code>.</li>
+          <li>Cross-organization writes return <code>403 NOT_LINKED</code>.</li>
+          <li>Admin keys (<code>is_admin=true</code>, currently only operator tooling) bypass scoping.</li>
+        </ul>
+
+        <h3>Places — register a venue</h3>
+        <p>Idempotent on <code>googlePlaceId</code>. If a Place with the supplied Google Place ID already exists, the response is <code>200</code> with the existing record. Otherwise <code>201</code> with the new one.</p>
+        <pre>$ curl -X POST "{{baseUrl}}/api/v1/service/places" \
+  -H "X-API-Key: $NC_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Bubs",
+    "googlePlaceId": "ChIJ...",
+    "address": {
+      "streetAddress": "1234 Main St",
+      "addressLocality": "Philadelphia",
+      "addressRegion": "PA",
+      "postalCode": "19125"
+    },
+    "geo": { "latitude": 39.97, "longitude": -75.13 }
+  }'</pre>
+
+        <h3>Organizations — create, link, update</h3>
+        <p>Three relevant endpoints: create a new Organization (auto-links the calling key), link your key to an existing Organization, or update an Organization you're already linked to.</p>
+        <pre>$ curl -X POST "{{baseUrl}}/api/v1/service/organizations" \
+  -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
+  -d '{
+    "name": "Bubs",
+    "kind": "local_business",
+    "description": "Community board game shop",
+    "url": "https://bubs.example",
+    "telephone": "+12155550100",
+    "email": "hi@bubs.example",
+    "primaryPlaceId": "PLACE_UUID"
+  }'
+
+# Link to an existing Organization (if another app created it first)
+$ curl -X POST "{{baseUrl}}/api/v1/service/organizations/link" \
+  -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
+  -d '{ "organizationId": "ORG_UUID" }'
+
+# Update fields on an Organization linked to this key
+$ curl -X PATCH "{{baseUrl}}/api/v1/service/organizations/ORG_UUID" \
+  -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
+  -d '{ "description": "Updated bio.", "telephone": "+12155550101" }'</pre>
+        <p>Image uploads (logo, hero image) are JSON-base64: <code>POST /v1/service/organizations/:id/logo</code> and <code>POST /v1/service/organizations/:id/image</code> with body <code>{ "image": "&lt;base64&gt;" }</code>. Magic-byte check, Sharp re-encoding, R2 upload — same pipeline as event images.</p>
+
+        <h3>Persons</h3>
+        <p>Create a Person record for performers, curators, or individual hosts. Person records are append-only for non-admin keys in 1.0 — operator-tier keys edit them. Person-link semantics (analogous to <code>api_key_organization_links</code>) ship in a later minor version.</p>
+        <pre>$ curl -X POST "{{baseUrl}}/api/v1/service/persons" \
+  -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
+  -d '{
+    "name": "DJ Karma",
+    "alternateName": "DJ K",
+    "description": "Philly-based DJ specializing in soul and disco.",
+    "jobTitle": "DJ",
+    "sameAs": ["https://soundcloud.com/djkarma"]
+  }'</pre>
+
+        <h3>Events — using the new organizer model</h3>
+        <p>Event creation predates 1.0 and accepts the existing <code>ServiceEventInput</code> shape. The body field is named <code>account_id</code> for backward compatibility but expects an Organization id. After 1.0 you can also reassign an event's organizer:</p>
+        <pre>$ curl -X PATCH "{{baseUrl}}/api/v1/service/events/EVENT_UUID/organizer" \
+  -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
+  -d '{ "organizerOrganizationId": "ORG_UUID" }'
+
+# Or assign to a Person (mutually exclusive with organizerOrganizationId)
+$ curl -X PATCH "{{baseUrl}}/api/v1/service/events/EVENT_UUID/organizer" \
+  -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
+  -d '{ "organizerPersonId": "PERSON_UUID" }'</pre>
+
+        <h3>Broadcasts — ephemeral signals</h3>
+        <p>Maximum 24h lifetime. Body: <code>organizationId</code>, <code>placeId</code>, <code>message</code> (≤280 chars), <code>expires</code> (ISO 8601, must be future, &lt;=24h ahead).</p>
+        <pre>$ curl -X POST "{{baseUrl}}/api/v1/service/broadcasts" \
+  -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
+  -d '{
+    "organizationId": "ORG_UUID",
+    "placeId": "PLACE_UUID",
+    "message": "Half off sandwiches until we sell out",
+    "expires": "2026-05-05T18:00:00-04:00"
+  }'
+
+# Retract early
+$ curl -X POST "{{baseUrl}}/api/v1/service/broadcasts/BROADCAST_UUID/retract" \
+  -H "X-API-Key: $NC_KEY"</pre>
+        <p>Verification gate: broadcast creation does <em>not</em> require the organization to be verified. Verification is a read-time consumer-app filter. Apps editorialize.</p>
+
+        <h3>Lists — curatorial workflows</h3>
+        <p>Two-step: create the list, then add items. Items are polymorphic — events, organizations, places, or any mix.</p>
+        <pre># Create the list (curator can be 'organization' or 'person')
+$ curl -X POST "{{baseUrl}}/api/v1/service/lists" \
+  -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
+  -d '{
+    "name": "This Weekend's Picks",
+    "description": "Five things worth your Saturday",
+    "curator": { "type": "person", "id": "PERSON_UUID" }
+  }'
+
+# Add an item by position
+$ curl -X POST "{{baseUrl}}/api/v1/service/lists/LIST_UUID/items" \
+  -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
+  -d '{
+    "position": 1,
+    "itemType": "event",
+    "itemId": "EVENT_UUID",
+    "curatorNote": "If you only see one thing, see this."
+  }'
+
+# Remove an item at position
+$ curl -X DELETE "{{baseUrl}}/api/v1/service/lists/LIST_UUID/items/3" \
+  -H "X-API-Key: $NC_KEY"</pre>
+        <p>Person-curated lists require an admin key for edits in 1.0 (the <code>api_key_organization_links</code> pattern doesn't extend to Person yet). If you're working with a Person curator and need self-service editing, contact the operator — admin support can issue a key with appropriate authority.</p>
+
+        <h3>Disputes</h3>
+        <p>Used to flag a verified target as misattributed. Records the dispute for operator review; no automated action in 1.0.</p>
+        <pre>$ curl -X POST "{{baseUrl}}/api/v1/service/disputes" \
+  -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
+  -d '{
+    "targetType": "organization",
+    "targetId": "ORG_UUID",
+    "reason": "Imposter — verified email manager@bubs.example does not match the actual venue.",
+    "submitterContact": "concerned@example.com"
+  }'</pre>
+
+        <!-- ─── 5. Verification ─── -->
+        <h2 id="verification"><span class="nc-section-num">5</span>Verification</h2>
+        <p>Verification is a process the Commons orchestrates and an attribute apps consume. The Commons routes; apps follow. Submission endpoints reject mismatches with <code>409 WRONG_METHOD</code> pointing at the correct path.</p>
+
+        <h3>The flow</h3>
+
+        <p><strong>Step 1 — Discover the path.</strong> Given a target and identifier, the Commons returns which submission endpoint to call:</p>
+        <pre>$ curl "{{baseUrl}}/api/v1/service/verifications/path?\
+target_type=organization&amp;target_id=ORG_UUID&amp;\
+identifier_type=email&amp;identifier_value=manager@bubs.example" \
+  -H "X-API-Key: $NC_KEY"</pre>
+
+        <p>Three possible response shapes:</p>
+        <pre>// Business-domain email on a heavy-rigor organization
+{
+  "alreadyVerified": false,
+  "requiredMethod": "domain_email_loop",
+  "endpoint": "/v1/service/verifications/challenges",
+  "reason": "business_email_domain"
+}
+
+// Personal-domain email (gmail, yahoo, etc.) on a heavy-rigor organization
+{
+  "alreadyVerified": false,
+  "requiredMethod": "manual_review",
+  "endpoint": "/v1/service/verifications/manual",
+  "reason": "personal_email_domain"
+}
+
+// Already verified — your UI should skip this and confirm the existing record
+{
+  "alreadyVerified": true,
+  "existingIdentifier": {
+    "identifierType": "email",
+    "method": "manual_review",
+    "verifiedAt": "...",
+    "verifiedByApp": "Merrie"
+  }
+}</pre>
+
+        <p><strong>Step 2a — Auto-track (challenge / confirm).</strong> Used when the path returned <code>domain_email_loop</code>. Issue a code; the Commons emails it from your <code>brand_config</code> sender:</p>
+        <pre>$ curl -X POST "{{baseUrl}}/api/v1/service/verifications/challenges" \
+  -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
+  -d '{
+    "targetType": "organization",
+    "targetId": "ORG_UUID",
+    "identifierType": "email",
+    "identifierValue": "manager@bubs.example"
+  }'
+
+# Response: { "challengeId": "...", "expiresAt": "..." }
+
+# User pastes the code in your UI; you submit
+$ curl -X POST "{{baseUrl}}/api/v1/service/verifications/challenges/CHALLENGE_ID/confirm" \
+  -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
+  -d '{ "code": "123456" }'
+
+# Response on match: { "status": "verified", "verifiedAt": "...", "method": "domain_email_loop", "identifier": {...} }
+# Response on mismatch: { "status": "rejected", "reason": "invalid_code" }</pre>
+
+        <p>Codes are six digits. Challenges expire after 30 minutes. Five wrong attempts on the same challenge return <code>429 RATE_LIMIT</code>.</p>
+
+        <p><strong>Step 2b — Manual track (structured evidence).</strong> Used when the path returned <code>manual_review</code>. Submit evidence; if your key has <code>verification_authority</code> covering the method, it auto-approves; otherwise it queues for admin review:</p>
+        <pre>$ curl -X POST "{{baseUrl}}/api/v1/service/verifications/manual" \
+  -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
+  -d '{
+    "targetType": "organization",
+    "targetId": "ORG_UUID",
+    "identifierType": "email",
+    "identifierValue": "manager@gmail.com",
+    "evidence": {
+      "phone": "+12155550100",
+      "verifiedVia": "in_person",
+      "reviewerAttestation": "Met owner Jane at the bar, confirmed identity via driver license; business address matches.",
+      "reviewerAccountId": "internal-reviewer-id",
+      "businessAddressObserved": true,
+      "idDocumentObserved": true
+    }
+  }'
+
+# With verification_authority: { "status": "verified", "verifiedAt": "...", "method": "manual_review", "identifier": {...} }
+# Without:                     { "status": "pending", "reviewId": "..." }</pre>
+
+        <p>Required evidence fields: <code>phone</code>, <code>verifiedVia</code> (<code>in_person</code> | <code>video_call</code>), <code>reviewerAttestation</code>, <code>reviewerAccountId</code>, <code>businessAddressObserved</code>, <code>idDocumentObserved</code>. Missing or malformed fields return <code>400 VALIDATION_ERROR</code>; submission to the wrong path (e.g., business email through manual) returns <code>409 WRONG_METHOD</code>.</p>
+
+        <h3 id="verification-authority">verification_authority</h3>
+        <p>An operator-set JSON array on each service key listing methods the key may auto-approve. Granted after the operator reviews your verification process during onboarding. Format: <code>method:context</code>. Examples:</p>
+
+        <table>
+          <thead><tr><th>Value</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td><code>["manual_review:in_person"]</code></td><td>Auto-approve manual reviews where <code>verifiedVia</code> is <code>in_person</code>. Queues for admin otherwise.</td></tr>
+            <tr><td><code>["manual_review:in_person", "manual_review:video_call"]</code></td><td>Both methods auto-approve.</td></tr>
+            <tr><td><code>null</code> / <code>[]</code></td><td>No authority. All manual submissions queue for admin review.</td></tr>
+            <tr><td><code>["*"]</code></td><td>Operator/admin wildcard. Reserved for Studio.</td></tr>
+          </tbody>
+        </table>
+
+        <p>Apps without authority can still submit manual-review evidence — those submissions just queue. Typical turnaround for admin review is one business day.</p>
+
+        <h3 id="verification-reputation">Reputation graph</h3>
+        <p>Every approval includes the approving app's stable name (snapshot of <code>brand_config.app_name</code> at approval time). The reputation graph is public:</p>
+        <pre>$ curl "{{baseUrl}}/api/v1/verifiers"
+
+# Returns one entry per app with: appName, firstApprovalAt, approvalCount,
+# activeCount, revokedCount, methods used.
+
+# Audit a specific verifier's recent work
+$ curl "{{baseUrl}}/api/v1/verifiers/Holler/recent_approvals"</pre>
+
+        <p>Apps reading the Commons compose <code>verified_by</code> filters that match their own trust policy. Sloppy verification is filtered out by other apps. Market discipline replaces central authority — and approving apps have a direct economic incentive to verify carefully, since their approvals being filtered means the businesses they onboarded lose reach across the rest of the ecosystem.</p>
+
+        <!-- ─── 6. Webhooks ─── -->
+        <h2 id="webhooks"><span class="nc-section-num">6</span>Webhooks</h2>
+        <p>Subscribe to push notifications instead of polling. Each delivery is HMAC-SHA256 signed. Failed deliveries are retried with exponential backoff; subscriptions that fail repeatedly are auto-disabled.</p>
+
+        <h3>Setup</h3>
+        <p>Subscribe with a service-tier API key:</p>
+        <pre>$ curl -X POST "{{baseUrl}}/api/v1/webhooks" \
+  -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://yourapp.example/webhooks/commons",
+    "event_types": ["event.created", "event.updated", "event.deleted"]
+  }'
+
+# Response includes a signing_secret. Save it — it cannot be recovered.
+# All deliveries to this subscription are signed with this secret.
+
+# Test the endpoint with a synthetic delivery
+$ curl -X POST "{{baseUrl}}/api/v1/webhooks/SUBSCRIPTION_ID/test" \
+  -H "X-API-Key: $NC_KEY"
+
+# Inspect recent delivery attempts (debugging)
+$ curl "{{baseUrl}}/api/v1/webhooks/SUBSCRIPTION_ID/deliveries" \
+  -H "X-API-Key: $NC_KEY"
+
+# Unsubscribe
+$ curl -X DELETE "{{baseUrl}}/api/v1/webhooks/SUBSCRIPTION_ID" \
+  -H "X-API-Key: $NC_KEY"</pre>
+
+        <h3>Event types</h3>
+        <p>1.0 surfaces the following event types. Additional types land additively as the substrate grows; consumers can subscribe to a subset or pass <code>["*"]</code> to receive all current and future types.</p>
+
+        <table>
+          <thead><tr><th>Type</th><th>Fires on</th></tr></thead>
+          <tbody>
+            <tr><td><code>event.created</code></td><td>New event row published.</td></tr>
+            <tr><td><code>event.updated</code></td><td>Event mutation (PATCH).</td></tr>
+            <tr><td><code>event.deleted</code></td><td>Event hard-deleted.</td></tr>
+            <tr><td><code>event.series_created</code></td><td>Recurring series instantiated.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Payload shape</h3>
+        <p>Every delivery is a POST to your subscribed URL with a JSON body:</p>
+        <pre>{
+  "type": "event.created",
+  "delivery_id": "...",
+  "subscription_id": "...",
+  "occurred_at": "2026-05-05T15:00:00Z",
+  "data": { /* the resource — Event, Organization, etc. — in spec shape */ }
+}</pre>
+
+        <h3>Signature verification</h3>
+        <p>Each delivery carries an <code>X-NC-Signature</code> header containing the HMAC-SHA256 of the raw request body, keyed by your subscription's <code>signing_secret</code>. Verify before trusting any delivery.</p>
+        <pre>// Node.js example — verify before processing
+import { createHmac, timingSafeEqual } from 'crypto';
+
+function verifyWebhook(rawBody: Buffer, signatureHeader: string, secret: string): boolean {
+  // Header format: "sha256=&lt;hex&gt;"
+  const [algo, sig] = signatureHeader.split('=');
+  if (algo !== 'sha256' || !sig) return false;
+
+  const expected = createHmac('sha256', secret).update(rawBody).digest('hex');
+
+  // Constant-time compare; both buffers must be the same length
+  const sigBuf = Buffer.from(sig, 'hex');
+  const expectedBuf = Buffer.from(expected, 'hex');
+  if (sigBuf.length !== expectedBuf.length) return false;
+  return timingSafeEqual(sigBuf, expectedBuf);
+}
+
+// Express handler
+app.post('/webhooks/commons', express.raw({ type: 'application/json' }), (req, res) =&gt; {
+  const sig = req.headers['x-nc-signature'] as string;
+  if (!verifyWebhook(req.body, sig, process.env.COMMONS_WEBHOOK_SECRET!)) {
+    return res.status(401).end();
+  }
+  const payload = JSON.parse(req.body.toString());
+  // ... process the delivery
+  res.status(204).end();
+});</pre>
+
+        <p>Verify against the <em>raw</em> request body, not a re-stringified version — different JSON serializers produce different byte sequences and the signature won't match.</p>
+
+        <h3>Retry behavior</h3>
+        <p>Deliveries that fail (network error, non-2xx response, timeout) retry with exponential backoff: ~30s, 2m, 10m, 1h, 6h. After five consecutive failures, the subscription is marked disabled and stops receiving deliveries until the operator re-enables it. Inspect <code>GET /v1/webhooks/:id/deliveries</code> for failure reasons.</p>
+
+        <p>Idempotency: Commons may retry a delivery that actually succeeded (e.g., your server returned 2xx but Commons didn't see the response). Use <code>delivery_id</code> as your idempotency key — store it server-side and skip processing on duplicates.</p>
+
+        <!-- ─── 7. SDK ─── -->
+        <h2 id="sdk"><span class="nc-section-num">7</span>SDK &amp; spec</h2>
+        <p>The official SDK is a typed TypeScript client generated from <a href="/openapi.json">openapi.json</a>. Install:</p>
+        <pre>npm install neighborhood-commons</pre>
+        <p>The SDK exposes both unauthenticated read methods and authenticated service-tier write methods. If you'd rather generate your own client in a different language, run an OpenAPI generator against <a href="/openapi.json">/openapi.json</a> directly.</p>
+
+        <!-- ─── 8. Reference ─── -->
+        <h2 id="reference"><span class="nc-section-num">8</span>Reference</h2>
+        <p>The complete endpoint list, request/response schemas, and error enum live in <a href="/openapi.json">openapi.json</a>. That document is authoritative — when this Guide and the spec disagree, trust the spec. The summary below is for orientation.</p>
+
+        <h3>Endpoint summary</h3>
+        <p>Read endpoints — no authentication required.</p>
+        <table>
+          <thead><tr><th>Method</th><th>Path</th></tr></thead>
+          <tbody>
+            <tr><td><code>GET</code></td><td><code>/v1/events</code> · <code>/v1/events/:id</code> · <code>/v1/events.ics</code> · <code>/v1/events.rss</code></td></tr>
+            <tr><td><code>GET</code></td><td><code>/v1/places</code> · <code>/v1/places/:id</code></td></tr>
+            <tr><td><code>GET</code></td><td><code>/v1/organizations</code> · <code>/v1/organizations/:idOrSlug</code></td></tr>
+            <tr><td><code>GET</code></td><td><code>/v1/persons</code> · <code>/v1/persons/:idOrSlug</code></td></tr>
+            <tr><td><code>GET</code></td><td><code>/v1/broadcasts</code> · <code>/v1/broadcasts/:id</code></td></tr>
+            <tr><td><code>GET</code></td><td><code>/v1/lists</code> · <code>/v1/lists/:idOrSlug</code></td></tr>
+            <tr><td><code>GET</code></td><td><code>/v1/verifiers</code> · <code>/v1/verifiers/:appName/recent_approvals</code></td></tr>
+            <tr><td><code>GET</code></td><td><code>/v1/meta</code> · <code>/v1/meta/regions</code> · <code>/v1/meta/categories</code></td></tr>
+          </tbody>
+        </table>
+
+        <p>Service-tier write endpoints — require <code>X-API-Key</code> header with a service-tier key.</p>
+        <table>
+          <thead><tr><th>Method</th><th>Path</th></tr></thead>
+          <tbody>
+            <tr><td><code>POST</code></td><td><code>/v1/service/places</code></td></tr>
+            <tr><td><code>POST</code> · <code>PATCH</code></td><td><code>/v1/service/organizations</code> · <code>/v1/service/organizations/:id</code></td></tr>
+            <tr><td><code>POST</code></td><td><code>/v1/service/organizations/link</code></td></tr>
+            <tr><td><code>POST</code></td><td><code>/v1/service/organizations/:id/logo</code> · <code>/v1/service/organizations/:id/image</code></td></tr>
+            <tr><td><code>POST</code> · <code>PATCH</code></td><td><code>/v1/service/persons</code> · <code>/v1/service/persons/:id</code></td></tr>
+            <tr><td><code>POST</code></td><td><code>/v1/service/broadcasts</code> · <code>/v1/service/broadcasts/:id/retract</code></td></tr>
+            <tr><td><code>POST</code> · <code>PATCH</code></td><td><code>/v1/service/lists</code> · <code>/v1/service/lists/:id</code></td></tr>
+            <tr><td><code>POST</code> · <code>DELETE</code></td><td><code>/v1/service/lists/:id/items</code> · <code>/v1/service/lists/:id/items/:position</code></td></tr>
+            <tr><td><code>POST</code> · <code>PATCH</code> · <code>DELETE</code></td><td><code>/v1/service/events</code> · <code>/v1/service/events/:id</code></td></tr>
+            <tr><td><code>PATCH</code></td><td><code>/v1/service/events/:id/organizer</code></td></tr>
+            <tr><td><code>POST</code></td><td><code>/v1/service/events/:id/image</code></td></tr>
+            <tr><td><code>GET</code></td><td><code>/v1/service/verifications/path</code></td></tr>
+            <tr><td><code>POST</code></td><td><code>/v1/service/verifications/challenges</code> · <code>/v1/service/verifications/challenges/:id/confirm</code></td></tr>
+            <tr><td><code>POST</code></td><td><code>/v1/service/verifications/manual</code></td></tr>
+            <tr><td><code>GET</code> · <code>POST</code></td><td><code>/v1/service/verifications/pending</code> · <code>.../:id/approve</code> · <code>.../:id/reject</code> <span style="color:var(--nc-dim);">(admin)</span></td></tr>
+            <tr><td><code>POST</code></td><td><code>/v1/service/disputes</code></td></tr>
+            <tr><td><code>POST</code> · <code>GET</code> · <code>DELETE</code></td><td><code>/v1/webhooks</code> · <code>/v1/webhooks/:id</code> · <code>/v1/webhooks/:id/test</code> · <code>/v1/webhooks/:id/deliveries</code></td></tr>
+          </tbody>
+        </table>
+
+        <h3 id="reference-errors">Error codes</h3>
+        <p>Every error response has the same envelope:</p>
+        <pre>{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Human-readable explanation."
+  }
+}</pre>
+
+        <p>Codes you'll commonly see, grouped by the HTTP status they accompany:</p>
+        <table>
+          <thead><tr><th>Status</th><th>Code</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td>400</td><td><code>VALIDATION_ERROR</code></td><td>Request body or query failed schema validation.</td></tr>
+            <tr><td>400</td><td><code>INVALID_URL</code> · <code>INVALID_SCHEME</code> · <code>BLOCKED_HOSTNAME</code> · <code>IP_LITERAL</code> · <code>URL_CREDENTIALS</code></td><td>URL field failed safety/normalcy checks.</td></tr>
+            <tr><td>400</td><td><code>DOMAIN_PENDING_REVIEW</code></td><td>URL's domain is not yet on the allowlist; queued for review. Soft/transient.</td></tr>
+            <tr><td>401</td><td><code>UNAUTHORIZED</code> · <code>API_KEY_REQUIRED</code> · <code>INVALID_API_KEY</code></td><td>Auth required or invalid.</td></tr>
+            <tr><td>403</td><td><code>NOT_LINKED</code></td><td>Service key is not linked to the target organization.</td></tr>
+            <tr><td>403</td><td><code>INSUFFICIENT_TIER</code></td><td>Endpoint requires admin or higher tier than the calling key has.</td></tr>
+            <tr><td>404</td><td><code>NOT_FOUND</code></td><td>Resource doesn't exist or isn't visible to the caller.</td></tr>
+            <tr><td>409</td><td><code>WRONG_METHOD</code></td><td>Verification submission posted to the wrong path. Call <code>GET /v1/service/verifications/path</code> first.</td></tr>
+            <tr><td>409</td><td><code>CONFLICT</code> · <code>DUPLICATE</code></td><td>State conflict, including slug collisions and duplicate <code>external_id</code>.</td></tr>
+            <tr><td>409</td><td><code>INSUFFICIENT_EVIDENCE</code> · <code>IDENTIFIER_DISPUTED</code> · <code>IMPOSTER_SIGNALS</code> · <code>OUT_OF_POLICY</code></td><td>Manual-review rejection reasons.</td></tr>
+            <tr><td>413</td><td><code>PAYLOAD_TOO_LARGE</code></td><td>Body exceeds the per-route limit.</td></tr>
+            <tr><td>429</td><td><code>RATE_LIMIT</code></td><td>Window exceeded. Back off; check <code>RateLimit-*</code> headers.</td></tr>
+            <tr><td>500</td><td><code>SERVER_ERROR</code></td><td>Internal failure. No internal details exposed.</td></tr>
+          </tbody>
+        </table>
+
+        <p>The complete <code>ErrorCode</code> enum is in <a href="/openapi.json">openapi.json</a>. Generated SDK clients receive it as a discriminated union, so error handling can <code>switch</code> on the code with full type-checking.</p>
+
+        <h3 id="stability">Stability</h3>
+        <p>The 1.0.0 spec is stable. Future minor versions add types, fields, and endpoints additively without breaking existing consumers. Removals or renames require a 2.0.0 release with strong justification — measured in years, not months. Watch the <a href="https://github.com/joinfiber/neighborhood-commons/blob/master/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a> for every contract-affecting change.</p>
+
+        <p>If something in this Guide contradicts <a href="/openapi.json">openapi.json</a> on a matter of fact, trust the spec and <a href="https://github.com/joinfiber/neighborhood-commons/issues" target="_blank" rel="noopener">file an issue</a>. The Spec wins. The Guide explains. The Log dates.</p>
+
+      </div>
+    </article>
+
+    <footer class="nc-page-footer">
+      <div class="nc-footer-stewardship">
+        <strong>Neighborhood Commons</strong> is open neighborhood data infrastructure, stewarded as a public good. Source under MIT. Data under CC&nbsp;BY&nbsp;4.0. Questions: <a href="mailto:hi@neighborhood-commons.org">hi@neighborhood-commons.org</a>.
+      </div>
+      <nav class="nc-footer-links">
+        <a href="/openapi.json">Specification</a>
+        <a href="/llms.txt">Guide</a>
+        <a href="https://github.com/joinfiber/neighborhood-commons/blob/master/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a>
+        <a href="https://github.com/joinfiber/neighborhood-commons" target="_blank" rel="noopener">Source</a>
+        <a href="https://github.com/The-Relational-Technology-Project/neighborhood-api" target="_blank" rel="noopener">Neighborhood&nbsp;API&nbsp;upstream</a>
+      </nav>
+    </footer>
+
+  </div>
+
+  <!-- Active section highlighting in the sidebar nav.
+       Uses IntersectionObserver — when a section heading scrolls past the
+       top sentinel, the matching sidebar link gets .active. Vanilla JS,
+       no framework, no dependencies, ~30 lines. -->
+  <script>
+    (function () {
+      const sectionIds = [
+        'quickstart', 'sdk',
+        'types', 'type-place', 'type-organization', 'type-person', 'type-event', 'type-broadcast', 'type-list',
+        'reading', 'reading-filters', 'reading-pagination',
+        'writing', 'writing-key', 'writing-brand', 'writing-scoping',
+        'verification', 'verification-authority', 'verification-reputation',
+        'webhooks',
+        'reference', 'reference-errors', 'stability',
+      ];
+      const links = new Map();
+      for (const id of sectionIds) {
+        const link = document.querySelector('.nc-docs-nav a[href="#' + id + '"]');
+        if (link) links.set(id, link);
+      }
+      if (!links.size || !('IntersectionObserver' in window)) return;
+
+      const visible = new Set();
+      const observer = new IntersectionObserver((entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) visible.add(e.target.id);
+          else visible.delete(e.target.id);
+        }
+        // Highlight the first sectionIds entry that's currently visible.
+        for (const link of links.values()) link.classList.remove('active');
+        for (const id of sectionIds) {
+          if (visible.has(id)) {
+            const link = links.get(id);
+            if (link) link.classList.add('active');
+            break;
+          }
+        }
+      }, { rootMargin: '-72px 0px -70% 0px', threshold: 0 });
+
+      for (const id of sectionIds) {
+        const el = document.getElementById(id);
+        if (el) observer.observe(el);
+      }
+    })();
+  </script>
+</body>
+</html>
