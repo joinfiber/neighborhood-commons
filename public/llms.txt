@@ -1,744 +1,940 @@
 # Neighborhood Commons — The Complete Guide
 
-> A shared, open database of neighborhood events. Not an app — plumbing.
-> Read for free. Contribute with a free API key. All data is CC BY 4.0.
+> Open neighborhood public-facts infrastructure. Six typed atoms — events, organizations, places, persons, broadcasts, curated lists — that any app can read, mix, and remix. Schema.org-aligned. Verified contributors. Public reputation graph. Read free, no key required. CC BY 4.0.
 
-This document is everything you need to pull event data from the Neighborhood Commons, understand what you got, and contribute your own events back. It is designed to be read top-to-bottom by a developer, an LLM agent, or anyone who understands that a database is basically a giant spreadsheet. No prior knowledge assumed. No other documents required.
+This document is the AI-readable mirror of the homepage at `https://api.neighborhood-commons.org`. Everything a developer or LLM agent needs to integrate is here, in one place, in document order. No prior knowledge assumed; no other documents required.
 
 Base URL: `https://api.neighborhood-commons.org`
 
-**This document is the Guide, part of the Commons Contract.** The Contract is three files together:
+**This document is the Guide, part of the Commons Contract.** The Contract is three files:
 
 - **The Spec** — [`/openapi.json`](https://api.neighborhood-commons.org/openapi.json) — machine-readable, authoritative. Generate your client from it.
 - **The Guide** — this file. Narrative companion. Explains *why* and *how*.
-- **The Log** — [`CHANGELOG.md`](https://github.com/joinfiber/neighborhood-commons/blob/master/CHANGELOG.md) — dated record of every change. Watch it.
+- **The Log** — [`CHANGELOG.md`](https://github.com/joinfiber/neighborhood-commons/blob/master/CHANGELOG.md) — dated record of every change.
 
-**Rule when they disagree: Spec wins. Guide explains. Log dates.** If something in this document contradicts the Spec on matters of fact, trust the Spec and open an issue.
-
-### Design Principles
-
-The Commons is **thin**. It stores events and serves them. Curation, social features, recommendations, user accounts, ingestion pipelines — all of that belongs in the apps that build on top. The Commons is plumbing.
-
-The Commons is **durable**. The shapes in this document don't change with the winds. They change when the culture of events changes — a new category of gathering, a new dimension of accessibility. Those changes are rare and deliberate. If you build against this contract today, it should work next year.
-
-The Commons is **authoritative**. Every event response is self-contained: name, place, time, description, cost, category, image, recurrence. No implicit knowledge, no extra joins, no undocumented carry-forward. A developer who's been shipping for 20 years and another sitting down for a weekend project should both arrive at the same understanding.
+**Spec wins. Guide explains. Log dates.** If something here contradicts the Spec on a matter of fact, trust the Spec and open an issue.
 
 ---
 
-## Part 1: Reading Events (No Setup Required)
+## What the Commons Is
 
-You can read every event in the Commons right now. No account. No API key. No authentication. Just make an HTTP request.
+The Neighborhood Commons is the typed substrate for neighborhood-scale public facts. Six types compose to express most of what a neighborhood produces as public information:
 
-### Your First Request
+- **Place** — physical locations (a venue, a park, an address)
+- **Organization** — collective entities (businesses, community groups, nonprofits, curators, collectives)
+- **Person** — individuals (DJs, performers, curators, organizers)
+- **Event** — activities at specific times, hosted by an Organization or Person, happening at a Place
+- **Broadcast** — ephemeral signals from a verified Organization, pinned to a Place, max 24h lifetime
+- **List** — curatorial selections of events, organizations, or places, by an Organization or Person
+
+Plus a verification + reputation system that lets apps trust contributors and trust each other.
+
+Each type maps to a Schema.org concept. Apps consume by composing filters that match their editorial — there is no default firehose. Apps contribute by integrating at the service tier, which carries real onboarding and accountability.
+
+The 1.0 surface lands events, organizations, places, persons, broadcasts, and lists. Future minor versions add additional public-fact types as consumer apps need them — notices, plans, assets, offers, jobs (the wider Craigslist-shaped frontier). The substrate scales by vocabulary, not by complexity at any single point.
+
+### Three pillars
+
+**01 — Open.** Every endpoint is open. No API key required for reads. The 1.0 spec is committed to additive-only stability — what works today works in 18 months.
+
+**02 — Composable.** The Commons isn't a destination. Each app composes its own slice through opt-in filters: by verifier, by contributor, by proximity, by type. Same data, different editorial.
+
+**03 — Trusted.** When a business gets verified through one app, every other app can honor that verification — or filter it out. The reputation graph is public; verifiers earn or lose trust on the quality of their approvals.
+
+### Design principles
+
+The Commons is **thin**. It stores typed atoms and serves them. Curation, social features, recommendations, user accounts, ingestion pipelines — all of that belongs in the apps that build on top.
+
+The Commons is **durable**. From 1.0 forward, the spec is **additive-only**. Future versions add types/fields/endpoints without breaking existing consumers. Removals or renames require a 2.0+ release and very strong justification — measured in years, not months.
+
+The Commons is **authoritative on facts**. Every response is self-contained: typed Schema.org-aligned shapes, no implicit knowledge, no extra joins to interpret a record.
+
+The Commons is **opt-in, not firehose**. Read endpoints accept filter parameters that compose into each app's editorial slice. Verification is a *signal* apps consume, not a permission gate the Commons enforces.
+
+The Commons is **authoritative on verification process, not on identity judgment**. The Commons orchestrates the verification flow (issuing challenges, validating returns, recording approvals). Apps surface the UI; trusted apps with verification authority can attest in their own onboarding flow. Bad verifications create market consequence — other apps filter them out — which is the primary discipline mechanism.
+
+---
+
+## 1. Quick Start
+
+You can read every endpoint without authentication. Start here.
+
+### Read events near a point
 
 ```bash
-curl "https://api.neighborhood-commons.org/api/v1/events?limit=5"
+curl "https://api.neighborhood-commons.org/api/v1/events?near=39.97,-75.14&radius_km=2&limit=5"
 ```
 
-That's it. You just pulled 5 events from the Commons. Here's what comes back:
+Returns up to five published events within 2 km of the supplied coordinates. Response shape: `{ meta, events }`. Every event is self-contained — no further joins required to render it.
+
+### Filter by type and verification
+
+```bash
+curl "https://api.neighborhood-commons.org/api/v1/organizations?kind=local_business&verified=true"
+```
+
+Returns organizations whose `kind` is `local_business` and which have at least one active verified identifier. Add `verified_by=Holler,Merrie` to restrict to verifications issued by specific apps.
+
+### Read what's broadcasting right now
+
+```bash
+curl "https://api.neighborhood-commons.org/api/v1/broadcasts?near=39.97,-75.14&radius_km=1"
+```
+
+Active broadcasts only — expired and retracted broadcasts are filtered server-side. Response includes the embedded `organization` and `location` for each broadcast.
+
+### Inspect the reputation graph
+
+```bash
+curl "https://api.neighborhood-commons.org/api/v1/verifiers"
+```
+
+Returns one entry per app that has ever issued a verification: approval count, active count, revoked count, methods used. Use this to compose your own `verified_by` trust policy.
+
+### Calendar feed
+
+```
+https://api.neighborhood-commons.org/api/v1/events.ics
+```
+
+Standards-compliant iCalendar. Drop the URL into Google Calendar / Apple Calendar / any RFC 5545 reader. RSS available at `/api/v1/events.rss`.
+
+**Writing data?** Skip to [Section 4: Writing data](#4-writing-data) for the service-tier flow. There is no self-service write path; service keys are operator-issued.
+
+---
+
+## 2. Types
+
+The 1.0 substrate is six typed atoms. Each maps to a Schema.org concept. Every response shape is self-contained — no implicit knowledge, no extra joins to interpret a record. Field names follow Schema.org canonical (camelCase) on output; database columns underlying them are snake_case.
+
+| Type | Schema.org | What it represents |
+|---|---|---|
+| `Place` | Place | Physical location — venue, park, address. |
+| `Organization` | Organization · LocalBusiness | Collective entity — business, community group, nonprofit, curator. |
+| `Person` | Person | Individual — DJ, performer, curator, organizer. |
+| `Event` | Event | Activity at a specific time, hosted by an Organization or Person, at a Place. |
+| `Broadcast` | (novel) | Ephemeral signal from an Organization, pinned to a Place, max 24h lifetime. |
+| `List` | ItemList | Curatorial selection of events, organizations, or places. |
+
+### 2.1 Place
+
+Schema.org `Place`. Physical locations, deduplicated by Google Places ID where available. The canonical record for an address; events and organizations link to it by `id`.
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | uuid | Internal Place ID. Used as FK from Events, Organizations, etc. |
+| `name` | string | Canonical name. |
+| `address` | PostalAddress | Schema.org `PostalAddress`: `streetAddress`, `addressLocality`, `addressRegion`, `postalCode`, `addressCountry`. |
+| `geo` | GeoCoordinates | `{ latitude, longitude }`. Always present. |
+| `identifier` | PropertyValue[] | External IDs. Common: `{ propertyID: "googlePlaceId", value: "ChIJ..." }`. |
 
 ```json
 {
-  "meta": {
-    "total": 142,
-    "limit": 5,
-    "offset": 0,
-    "spec": "neighborhood-api-v0.2",
-    "license": "CC-BY-4.0"
+  "id": "f1b2c3d4-...",
+  "name": "Espresso Co",
+  "address": {
+    "streetAddress": "1234 Main St",
+    "addressLocality": "Philadelphia",
+    "addressRegion": "PA",
+    "postalCode": "19125",
+    "addressCountry": "US"
   },
-  "events": [
-    {
-      "id": "a1b2c3d4-...",
-      "name": "Punk Rock Karaoke",
-      "start": "2026-04-15T20:00:00-04:00",
-      "end": "2026-04-15T22:00:00-04:00",
-      "timezone": "America/New_York",
-      "description": "Weekly karaoke with a punk twist.",
-      "category": ["karaoke"],
-      "place_id": null,
-      "location": {
-        "name": "Tattooed Moms",
-        "address": "530 South Street, Philadelphia PA 19147",
-        "lat": 39.9428,
-        "lng": -75.1534
-      },
-      "url": "https://example.com/event",
-      "images": ["https://images.neighborhood-commons.org/portal-events/abc123/image"],
-      "organizer": {
-        "name": "Tattooed Moms",
-        "phone": null
-      },
-      "cost": "Free",
-      "tags": ["all-ages", "free", "themed"],
-      "series_id": "x9y8z7-...",
-      "series_instance_number": 3,
-      "series_instance_count": 12,
-      "open_window": false,
-      "capacity": null,
-      "rsvp": null,
-      "wheelchair_accessible": null,
-      "recurrence": { "rrule": "FREQ=WEEKLY;COUNT=12" },
-      "source": {
-        "publisher": "Tattooed Moms",
-        "collected_at": "2026-03-30T17:00:00Z",
-        "method": "portal",
-        "contributor": null,
-        "license": "CC BY 4.0"
+  "geo": { "latitude": 39.97, "longitude": -75.13 },
+  "identifier": [
+    { "propertyID": "googlePlaceId", "value": "ChIJ..." }
+  ]
+}
+```
 
-      }
+> **Two place IDs in the system.** `Place.id` is the internal Commons UUID. `Place.identifier[].value` with `propertyID: "googlePlaceId"` is the Google Places API ID. Events still expose a top-level `place_id` field that contains the Google ID for backward compatibility — do not confuse with `Place.id`.
+
+### 2.2 Organization
+
+Schema.org `Organization`. The `kind` discriminator narrows to one of six subtypes; rigor of verification differs by kind.
+
+| `kind` | Used for | Verification rigor |
+|---|---|---|
+| `local_business` | Business at a fixed physical location. | Heavy — business email loop or manual review. |
+| `business` | Business with no fixed location (touring, online). | Heavy. |
+| `community_group` | Birders of Philadelphia, running clubs, informal collectives. | Light — control of any email. |
+| `nonprofit` | Registered nonprofits. | Heavy. |
+| `curator` | Editorial curators, list-makers. | Light. |
+| `collective` | Collaborative groups, art collectives. | Light. |
+
+```json
+{
+  "id": "...",
+  "slug": "bubs",
+  "name": "Bubs",
+  "kind": "local_business",
+  "additionalType": "https://schema.org/LocalBusiness",
+  "description": "Community board game shop",
+  "url": "https://bubs.example",
+  "logo": "https://...",
+  "telephone": "+12155550100",
+  "email": "hi@bubs.example",
+  "sameAs": ["https://instagram.com/bubs"],
+  "keywords": ["board games", "community"],
+  "openingHoursSpecification": [
+    { "dayOfWeek": "Monday", "opens": "12:00", "closes": "22:00" }
+  ],
+  "location": { "id": "...", "name": "Bubs", "address": {...}, "geo": {...} },
+  "verified": true,
+  "verification": {
+    "method": "manual_review",
+    "verifiedVia": "in_person",
+    "verifiedAt": "...",
+    "verifiedByApp": "Holler"
+  }
+}
+```
+
+An Organization may have a single `location` (the primary place) and additional places via the `organization_places` link table — chains, pop-ups, shared spaces. Verification attaches to the Organization, not to any place.
+
+### 2.3 Person
+
+Schema.org `Person`. Individuals — performers, curators, organizers. Distinct from Organization for cases where the actor is one human, not a collective.
+
+| Field | Type | Notes |
+|---|---|---|
+| `id`, `slug`, `name` | required | Identity. |
+| `givenName`, `familyName`, `alternateName` | optional | Stage names live in `alternateName`. |
+| `description`, `image`, `url`, `sameAs`, `jobTitle` | optional | Standard Schema.org Person properties. |
+| `verified`, `verification` | optional | Light-rigor verification only — any-domain email loop. |
+
+```json
+{
+  "id": "...",
+  "slug": "dj-karma",
+  "name": "DJ Karma",
+  "alternateName": "DJ K",
+  "description": "Philly-based DJ specializing in soul and disco.",
+  "image": "https://...",
+  "sameAs": ["https://soundcloud.com/djkarma"],
+  "jobTitle": "DJ",
+  "verified": true
+}
+```
+
+### 2.4 Event
+
+Schema.org `Event`. Activity at a specific time, at a Place, hosted by an Organization or Person. Events are the most-used type in the substrate; the table below covers the core. The full schema is in `/openapi.json`.
+
+| Field | Notes |
+|---|---|
+| `id`, `name`, `description` | Standard. |
+| `start`, `end`, `timezone` | ISO 8601 with timezone offset. Field name is `start` (not `startDate`) per the upstream Neighborhood API spec. |
+| `location` | Embedded Place reference. |
+| `organizer` | Embedded Organization or Person reference. |
+| `performer[]` | Array of performers (Person or Organization). Optional. |
+| `category`, `tags` | Categorization. See [Appendix A: Categories](#appendix-a-categories) and [Appendix B: Tags](#appendix-b-tags). |
+| `cost`, `url`, `images` | Practical fields. |
+| `recurrence`, `series_id`, `series_instance_number`, `series_instance_count` | RRULE-based recurrence; series link. |
+| `open_window`, `capacity`, `rsvp`, `wheelchair_accessible` | Visibility and access metadata. |
+| `source` | Provenance: `{ publisher, method, contributor, collected_at, license }`. |
+
+#### Timestamps and timezones
+
+Event times use ISO 8601 with timezone offset. The offset is DST-aware and computed for the event's actual date — events in the same venue across DST boundaries will have different offsets.
+
+```
+"start": "2026-04-15T20:00:00-04:00",  // DST active
+"start": "2026-12-15T20:00:00-05:00",  // DST inactive
+```
+
+The `timezone` field is the IANA name (`America/New_York`) and is authoritative for DST rules. Treat the offset on `start`/`end` as correct-at-time-of-storage; if you re-render in a different timezone, use `timezone` to re-resolve.
+
+#### Recurring events
+
+Recurrence uses RRULE format (RFC 5545). Bounded series (`COUNT=N` or `UNTIL=...`) materialize that many instances. Unbounded series materialize a rolling 6-week horizon and extend automatically via daily cron.
+
+| Pattern | RRULE |
+|---|---|
+| Every day | `FREQ=DAILY` |
+| Every week | `FREQ=WEEKLY` |
+| Every 2 weeks | `FREQ=WEEKLY;INTERVAL=2` |
+| Every month | `FREQ=MONTHLY` |
+| 2nd Friday of each month | `FREQ=MONTHLY;BYDAY=2FR` |
+| Mon/Wed/Fri | `FREQ=WEEKLY;BYDAY=MO,WE,FR` |
+| 12 weeks then stop | `FREQ=WEEKLY;COUNT=12` |
+
+`series_instance_count` on each event tells you the total instances in the series — useful for showing "Week 3 of 12" UI without a second call.
+
+`collapse_series=true` on `GET /v1/events` deduplicates a series to its next upcoming instance — useful for "tonight near me" feeds.
+
+### 2.5 Broadcast
+
+Ephemeral signal from a verified Organization, pinned to a Place. Maximum 24h lifetime. No direct Schema.org analog; `SpecialAnnouncement` was checked and rejected as a fit for ephemeral commercial signals — conventions for `datePosted` and `expires` borrowed from there.
+
+```json
+{
+  "id": "...",
+  "message": "Half off all sandwiches until we sell out",
+  "datePosted": "2026-05-05T14:00:00-04:00",
+  "expires": "2026-05-05T18:00:00-04:00",
+  "status": "active",
+  "organization": { "id": "...", "name": "Bubs", "verified": true },
+  "location": { "id": "...", "name": "Bubs", "geo": {...} },
+  "source": { "publisher": "bubs", "method": "service", "contributor": "Holler", "collected_at": "..." }
+}
+```
+
+Broadcast creation is not gated on the organization being verified — apps decide whether to surface unverified broadcasts in their feeds. `verified=true` + `verified_by=...` filters on `GET /v1/broadcasts` let consumer apps slice editorially.
+
+### 2.6 List
+
+Schema.org `ItemList`. Curatorial selections by an Organization or Person. Items are polymorphic — a single list can hold events, organizations, places, or any mix.
+
+```json
+{
+  "id": "...",
+  "slug": "this-weekends-picks",
+  "name": "This Weekend's Picks",
+  "description": "Five things worth your Saturday",
+  "curator": { "@type": "Person", "id": "...", "name": "Olive" },
+  "itemListOrder": "Ascending",
+  "numberOfItems": 5,
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "item": { "@type": "Event", "id": "...", "name": "..." },
+      "curatorNote": "If you only see one thing, see this."
     }
   ]
 }
 ```
 
-### Filtering Events
-
-Add query parameters to narrow your results. All are optional. Combine freely.
-
-| Parameter | Example | What it does |
-|-----------|---------|-------------|
-| `limit` | `?limit=20` | How many events to return (1-200, default 50) |
-| `offset` | `?offset=50` | Skip this many results (for pagination) |
-| `start_after` | `?start_after=2026-04-01` | Only events starting after this date |
-| `start_before` | `?start_before=2026-05-01` | Only events starting before this date |
-| `category` | `?category=live-music` | Only events in this category (see category list below) |
-| `tag` | `?tag=free&tag=outdoor` | Only events with ALL of these tags |
-| `q` | `?q=karaoke` | Text search across event names and descriptions |
-| `near` | `?near=39.97,-75.13` | Events near these coordinates (latitude,longitude) |
-| `radius_km` | `?radius_km=5` | Search radius in km (default 10, max 100, requires `near`) |
-| `collapse_series` | `?collapse_series=true` | For recurring events, show only the next upcoming instance |
-| `series_id` | `?series_id=uuid` | All instances of one recurring series |
-| `group_id` | `?group_id=uuid` | Events from a specific group |
-| `recurring` | `?recurring=true` | Only recurring events (or `false` for one-offs only) |
-
-**Pagination example:** To get page 2 of 20-event pages:
-```bash
-curl "https://api.neighborhood-commons.org/api/v1/events?limit=20&offset=20"
-```
-The `meta.total` field tells you how many total events match your filters.
-
-### Other Read Endpoints
-
-| What | URL | Notes |
-|------|-----|-------|
-| Single event | `GET /api/v1/events/:id` | Returns `{ "event": { ... } }` |
-| iCal feed | `GET /api/v1/events.ics` | Subscribe in Google/Apple Calendar |
-| RSS feed | `GET /api/v1/events.rss` | For feed readers |
-| Search venues | `GET /api/v1/accounts?q=coffee` | Returns matching venue/business accounts |
-| Venues with events | `GET /api/v1/accounts?include=events` | Each venue includes `regular_programming` and `upcoming_events` |
-| Single venue | `GET /api/v1/accounts/:idOrSlug` | By UUID or slug (e.g., `johnny-brendas`) |
-| List groups | `GET /api/v1/groups` | Filter by `type`, `category`, `near`, `q` |
-| Single group | `GET /api/v1/groups/:id` | Group with venues and upcoming events |
-| Changes feed | `GET /api/events/changes?since=<ISO-8601>` | Incremental sync. NOTE: path lives OUTSIDE `/v1` — full URL is `https://api.neighborhood-commons.org/api/events/changes`. Rate limit 10/min per IP. |
-| Feed metadata | `GET /api/v1/meta` | License, stewards, spec version |
-| Live stats | `GET /api/v1/meta/stats` | Event count, venue count, region |
-| Regions | `GET /api/v1/meta/regions` | Geographic regions with timezones |
-| Categories | `GET /api/v1/meta/categories` | Categories with current event counts |
-
-**Venue slug algorithm:** Slugs are derived from the business name — lowercase, remove apostrophes, replace non-alphanumeric characters with hyphens. Example: `"Johnny Brenda's"` becomes `johnny-brendas`.
-
-### Rate Limits
-
-| Endpoint | Limit | Key |
-|----------|-------|-----|
-| Events, accounts, meta | 1000/hr | API key ID or IP |
-| Groups | 30/min | IP |
-| Changes feed | 10/min | IP |
-| Contribute (pending tier) | 20/hr, 100/day | API key |
-| Contribute (verified) | 100/hr, 500/day | API key |
-| Contribute (trusted) | 500/hr, 2000/day | API key |
-
-With an API key (`X-API-Key` header), events and accounts endpoints give you a dedicated rate limit bucket. Without one, the limit is per IP address.
-
-Every response includes `RateLimit-*` headers so you can see where you stand.
+Lists are how curator workflows surface in the substrate. A curator (Organization or Person) builds a list; the items can be events they recommend, organizations worth watching, places worth knowing about — or all three in one list.
 
 ---
 
-## Part 2: Understanding the Data
+## 3. Reading data
 
-Think of the Commons as a spreadsheet where every row is an event. Here's what each column means.
+All read endpoints are unauthenticated. Optional `X-API-Key` header bumps rate limits; otherwise requests are limited per IP.
 
-### Every Event Has These Fields
+### 3.1 Endpoints
 
-Every event response includes every field listed below. If a value doesn't apply, it's `null` (for single values) or `[]` (for lists) — never missing. You can always trust the shape.
+| Method | Path | Returns |
+|---|---|---|
+| `GET` | `/v1/events` | Paginated event list. |
+| `GET` | `/v1/events/:id` | Single event by ID. |
+| `GET` | `/v1/events.ics` | iCalendar feed. |
+| `GET` | `/v1/events.rss` | RSS 2.0 feed. |
+| `GET` | `/v1/events/changes?since=...` | Lightweight sync feed (events updated since a cursor). Lives outside `/v1` at `/api/events/changes` — full URL `https://api.neighborhood-commons.org/api/events/changes`. |
+| `GET` | `/v1/places` | Paginated place list. |
+| `GET` | `/v1/places/:id` | Single place. |
+| `GET` | `/v1/organizations` | Paginated organization list. |
+| `GET` | `/v1/organizations/:idOrSlug` | Single organization by id or slug. |
+| `GET` | `/v1/persons` | Paginated person list. |
+| `GET` | `/v1/persons/:idOrSlug` | Single person. |
+| `GET` | `/v1/broadcasts` | Active broadcasts only. |
+| `GET` | `/v1/broadcasts/:id` | Single broadcast. |
+| `GET` | `/v1/lists` | Paginated list of lists. |
+| `GET` | `/v1/lists/:idOrSlug` | Single list with hydrated items. |
+| `GET` | `/v1/verifiers` | Reputation graph — one entry per app. |
+| `GET` | `/v1/verifiers/:appName/recent_approvals` | Recent approvals by a specific verifier. |
+| `GET` | `/v1/meta` | Spec metadata, regions, categories, stats. |
+| `GET` | `/v1/meta/regions` | Active regions. |
+| `GET` | `/v1/meta/categories` | Category vocabulary. |
+| `GET` | `/v1/meta/stats` | Aggregate counts. |
 
-**The basics — what, when, where:**
+### 3.2 Filter composition
 
-| Field | Type | Example | What it is |
-|-------|------|---------|-----------|
-| `id` | text | `"a1b2c3d4-..."` | Unique identifier (UUID). Use this to reference a specific event. |
-| `name` | text | `"Jazz Night"` | The event title. 1-200 characters. |
-| `start` | timestamp | `"2026-04-15T19:00:00-04:00"` | When it starts. ISO 8601 format with timezone offset. |
-| `end` | timestamp or null | `"2026-04-15T22:00:00-04:00"` | When it ends. Same format. Null if unknown. |
-| `timezone` | text | `"America/New_York"` | IANA timezone name. Use this for DST-correct local time display. |
-| `location` | object | `{ "name": "...", "address": "...", "lat": 39.97, "lng": -75.13 }` | Where it happens. `name` is always present. Others may be null. |
-| `category` | list | `["live-music"]` | Always a one-element list. Kebab-case slug. See category list below. |
+Filters apply at the URL query level. Compose them freely; all are optional.
 
-**Details — description, cost, links:**
+| Filter | Applies to | Effect |
+|---|---|---|
+| `verified=true` | organizations, persons, broadcasts | Only verified targets. |
+| `verified_by=app1,app2` | organizations, persons, broadcasts | Verified by any of the listed apps. |
+| `not_verified_by=app-x` | organizations, persons, broadcasts | Excludes targets verified only by these apps. |
+| `created_by_contributor=AppName` | broadcasts, events | Filters to records whose `source.contributor` matches. |
+| `kind=local_business` | organizations | Subtype filter. |
+| `near=lat,lng` | events, places, organizations, broadcasts | Coordinates as `"39.97,-75.13"`. Pair with `radius_km`. |
+| `radius_km=N` | events, places, organizations, broadcasts | Proximity radius. Required when using `near`. |
+| `q=text` | events, places, organizations, persons, lists | Text search across name and description. |
+| `category=slug` | events | Single category filter. See Appendix A. |
+| `tag=slug` | events | One or more tags. Multiple values: AND semantics. |
+| `start_after`, `start_before` | events | ISO 8601 date or datetime. |
+| `collapse_series=true` | events | Deduplicates recurring events to the next upcoming instance. |
+| `group_id=uuid` | events | Filter to events with the given organizer (legacy field name; expects an Organization id). |
 
-| Field | Type | Example | What it is |
-|-------|------|---------|-----------|
-| `description` | text or null | `"Live jazz quartet..."` | Event description. Max 2000 characters. |
-| `cost` | text or null | `"Free"`, `"$10"`, `"$5-15"` | Price as free-text. No structured pricing — just a human-readable string. |
-| `url` | text or null | `"https://example.com/event"` | Link to event page or tickets. |
-| `images` | list | `["https://r2.commons..."]` | Event cover image. Zero or one URL. All images are WebP, max 1200px wide, metadata stripped. |
-| `tags` | list | `["outdoor", "free", "all-ages"]` | Experience/access descriptors. May be empty. See tag list below. |
-| `wheelchair_accessible` | boolean or null | `true` | Accessibility flag. Null means not specified. |
+Filter composition is the editorial primitive. App C trusts a different verifier set than App B; both express that as URL parameters. There is no default firehose — apps construct their own slice.
 
-**The organizer:**
+### 3.3 Pagination & rate limits
 
-| Field | Type | Example | What it is |
-|-------|------|---------|-----------|
-| `organizer` | object | `{ "name": "The Coffee Shop", "phone": null }` | Who's hosting. `phone` is always null (reserved for future use). |
-| `place_id` | text or null | `"ChIJ..."` | External place identifier (e.g., Google Places ID). |
+List endpoints accept `limit` (1–200, default 50) and `offset` (default 0). Response shape:
 
-**Recurring events:**
-
-| Field | Type | Example | What it is |
-|-------|------|---------|-----------|
-| `series_id` | text or null | `"x9y8z7-..."` | If this event recurs, all instances share a series_id. Null for one-offs. |
-| `series_instance_number` | number or null | `3` | This is the 3rd occurrence in the series. |
-| `series_instance_count` | number or null | `12` | The series has 12 total instances. |
-| `recurrence` | object or null | `{ "rrule": "FREQ=WEEKLY;COUNT=12" }` | Recurrence rule in iCal RRULE format. Null for one-offs. |
-
-**Display behavior:**
-
-| Field | Type | What it is |
-|-------|------|-----------|
-| `open_window` | boolean | `false` (default): arrival at `start` is expected — the event disappears from feeds at start time. `true`: come-and-go window — the event stays visible until `end` (or start + 3 hours if no end). Use `true` for happy hours, open swims, markets, exhibits, drop-in office hours. |
-| `capacity` | integer or null | Informational max attendance. Commons does NOT track signups or enforce the cap. Use this to display "limited capacity" hints; do real ticketing in the consumer app via the `url` field. |
-| `rsvp` | `"recommended"`, `"required"`, or null | Whether RSVP is a thing for this event. Commons does not manage RSVPs. Use this to badge events ("RSVP required"); the actual signup flow lives in the consumer app or in `url`. |
-
-**Modeling film screenings.** Film is a first-class category (`category: "film"`). Each individual screening is one event row — multiple showtimes of the same film on the same day are multiple event rows, ideally sharing a `series_id` so a client can group them. Runtime is expressed by setting `end` explicitly at ingest (`end - start` = duration). Content rating (PG-13, R, etc.) is conveyed as a tag with a `rating:` prefix (e.g., `"tags": ["rating:r"]`). There are no Commons-specific runtime/rating/showtimes fields — film events use the same primitives as every other event type.
-
-**Clustering film screenings across theaters and dates.** When the same film plays at multiple theaters or across multiple days, set `tmdb_id` on every screening — the film's TMDB identifier from [themoviedb.org](https://www.themoviedb.org), the canonical external ID for theatrical releases (analogous to `place_id` from Google Places for venues). Consumers query `?category=film`, group results by `tmdb_id`, and render one card per film with the individual showtimes nested. For server-side filtering, `?tmdb_id={id}` returns every showing of a single film across the dataset — useful for "all showings of Anora this week" queries. Films not in TMDB (festival premieres, regional releases) leave `tmdb_id` null and appear as individual events. Consumers fetch additional film metadata (poster, synopsis, cast, runtime, rating) directly from TMDB using the ID — Commons stores no film metadata of its own.
-
-**Where it came from:**
-
-| Field | Type | Example | What it is |
-|-------|------|---------|-----------|
-| `source` | object | See below | Provenance: who published, how, and which app contributed. |
-
-`source.method` is one of: `portal` (venue submitted via web portal), `import` (bulk imported by admin), `api` (submitted via the Contribute API).
-
-`source.publisher` is always the venue/organizer name.
-
-`source.contributor` is the app or tool that contributed the data to the commons. It's an object with `name` and `url`, or `null` for portal-submitted events (the venue posted directly):
-```json
-"source": {
-  "publisher": "Johnny Brenda's",
-  "method": "api",
-  "contributor": { "name": "Playdate", "url": "https://playdate.com" },
-  "license": "CC BY 4.0"
-}
-```
-When `contributor` is present, consumers can display "Event data contributed by [Playdate](https://playdate.com)" — giving credit to the app that brought this data to the commons.
-
-### Understanding Timestamps and Timezones
-
-This is the trickiest part. Here's what you need to know:
-
-**The `start` and `end` fields include a timezone offset.** The `-04:00` in `"2026-04-15T19:00:00-04:00"` means "4 hours behind UTC." This is Eastern Daylight Time (EDT). In winter, the same venue would show `-05:00` (Eastern Standard Time).
-
-**The offset is already correct for that specific event date.** You don't need to compute DST yourself. If you're just displaying the time, parse the ISO 8601 string as-is.
-
-**The `timezone` field is the IANA timezone name** (like `America/New_York`). Use this if you need to do date math, convert to other timezones, or determine the event's local time independently. It's the authoritative source for DST rules.
-
-**Same venue, different seasons:**
-```
-March event: "start": "2026-03-14T19:00:00-04:00"  (EDT, offset -04:00)
-January event: "start": "2026-01-15T19:00:00-05:00" (EST, offset -05:00)
-```
-Both are 7:00 PM local time in Philadelphia. The offset changes because of Daylight Saving Time.
-
-### Understanding Recurring Events
-
-When someone creates a recurring event (e.g., "Trivia Night, every Tuesday for 12 weeks"), the Commons generates 12 individual event rows — one for each occurrence. Each row is self-contained with its own `id`, `start`, `end`, and all other fields.
-
-**You never need to "expand" a series.** Every instance is already a complete event. You can display it, filter it, and link to it independently.
-
-The `series_id` groups them. The `series_instance_number` tells you which one it is (1, 2, 3...). The `recurrence.rrule` tells you the pattern in iCal format.
-
-**Tip:** Use `?collapse_series=true` if you want to show "Trivia Night (every Tuesday)" as a single item instead of 12 separate listings. The API returns only the nearest upcoming instance per series.
-
-**Note:** When `collapse_series=true`, pagination is approximate — `meta.total` is `null` because deduplication happens post-fetch. Use this for browse feeds that show "what's coming up," not for iterating the complete dataset. For exhaustive iteration, use `collapse_series=false` (the default).
-
-**Bounded vs. unbounded series.** `series_instance_number` distinguishes the two shapes:
-- `series_instance_number = 0` — ongoing/unbounded series (submitted without `COUNT=` or `UNTIL=`). Commons materializes a rolling 6-week window of instances and extends the horizon automatically — contributors submit once and never need to re-post.
-- `series_instance_number >= 1` — bounded series. `series_instance_count` tells you the total.
-
-If you're building a UI that shows "the series" as a single thing, the canonical representative is the instance with the lowest `series_instance_number` (0 for ongoing, 1 for bounded).
-
-### Merging Commons Data with Your Own
-
-If you're building an app that has its own events AND wants to include Commons events, here's the practical approach:
-
-**Step 1: Pull events from the Commons.**
-```bash
-curl "https://api.neighborhood-commons.org/api/v1/events?limit=200"
-```
-
-**Step 2: Map Commons fields to your own fields.** Here's a typical mapping:
-
-| Your field | Commons field | Notes |
-|-----------|--------------|-------|
-| title | `name` | Direct copy |
-| date/time | `start` | Parse as ISO 8601 datetime |
-| end date/time | `end` | May be null |
-| venue | `location.name` | Always present |
-| address | `location.address` | May be null |
-| lat/lng | `location.lat`, `location.lng` | May be null |
-| description | `description` | May be null |
-| price | `cost` | Free-text string, may be null |
-| link | `url` | May be null |
-| image | `images[0]` | First element of array, or null if array is empty |
-| type/category | `category[0]` | First element of array. Kebab-case slug like `live-music` |
-
-**Step 3: Store the Commons `id` alongside your own data.** This lets you deduplicate — if the same event exists in both your system and the Commons, you can match on `id` and avoid showing it twice.
-
-**Step 4: Refresh periodically.** Events get updated (times change, descriptions are edited, events are cancelled). Pull fresh data every few hours, or use webhooks for real-time updates (see Part 4).
-
-**Step 5: Attribution.** The data is CC BY 4.0. Credit "Neighborhood Commons" somewhere in your app — a footer link, an about page, a data source label. That's the only requirement.
-
-### Keeping in Sync
-
-For apps that cache events locally (mobile apps, databases, static sites), use the changes feed:
-
-```bash
-# First sync — get everything
-curl "https://api.neighborhood-commons.org/api/events/changes?since=2020-01-01T00:00:00Z&limit=50"
-```
-
-Response:
 ```json
 {
-  "events": [ ...updated or new events... ],
-  "deleted_ids": ["uuid-1", "uuid-2"],
-  "sync_cursor": "2026-03-11T15:30:00Z",
-  "has_more": false
+  "meta": { "total": 142, "limit": 50, "offset": 0, "spec": "neighborhood-api-v0.2", "license": "CC-BY-4.0" },
+  "events": [ ... ]
 }
 ```
 
-1. On first sync, use a very old `since` date to get everything.
-2. Save the `sync_cursor` from the response.
-3. Next time, pass `since=<your saved cursor>`.
-4. If `has_more` is `true`, keep requesting with the new cursor until it's `false`.
-5. `deleted_ids` tells you which events to remove from your cache.
+Rate limit: **1,000 requests/hour** per IP — or per API key when an `X-API-Key` header is sent. Limits are returned in standard `RateLimit-*` headers. `429` indicates the current window is exhausted; back off and retry after the window rolls over.
 
-Rate limit: 10 requests/minute on this endpoint.
+Cache hints: read responses include `Cache-Control: public, max-age=60` for events, organizations, persons, places, lists, and verifiers. Broadcasts use `max-age=15` because they're ephemeral. Honor these on the consumer side to keep both your costs and Commons load down.
 
-### Visibility Rules
+### 3.4 Visibility rules
 
-Published events appear in feeds according to these rules. Knowing them up front saves debugging "where did my event go?":
+Published events appear in feeds according to these rules:
 
-1. **`status = 'published'`** — drafts, `pending_review`, and `unpublished` events are excluded from all public reads. Service API callers with the right scoping can read non-published rows.
-2. **Account is not suspended** — events from suspended accounts return `404`, not `403`. The Commons does not disclose whether a suspended account exists.
+1. **`status = 'published'`** — drafts, `pending_review`, and `unpublished` events are excluded from public reads. Service API callers with the right scoping can read non-published rows.
+2. **Account/Organization is not suspended** — events from suspended orgs return `404`, not `403`. The Commons does not disclose whether a suspended org exists.
 3. **Time gate** — controlled by `open_window`:
    - `open_window = false` (default): visible until `start`, hidden after.
    - `open_window = true`: visible until `end`, or `start + 3 hours` if no end time.
 4. **Region filter** — when a consumer provides coordinates (`near=lat,lng` + `radius_km`), results are filtered to events whose resolved `region_id` matches the provided location.
 
+### 3.5 Keeping in sync
+
+For consumers polling regularly, use `/api/events/changes?since=<ISO timestamp>` to pull only events updated since a cursor. Returns updated events plus IDs of events that have ended. Cached 60s, rate limited 10/min per IP. For higher throughput, use a service key or webhooks.
+
 ---
 
-## Part 3: Becoming a Contributor
+## 4. Writing data
 
-Contributing means pushing events INTO the Commons so that every app connected to it can show them. There are two ways to contribute:
+Writes flow through the service tier. There is no self-service write path — service keys are operator-issued after a brief onboarding conversation. Two effective tiers exist: **Browse** (read, no auth or basic API key for higher rate limit) and **Service** (write, with optional `is_admin` variant).
 
-1. **Upload a CSV** — Sign in to the contributor portal, upload a spreadsheet, map your columns, and submit. Best for one-time contributions or if you're not a developer.
-2. **Use the Contribute API** — Get a free API key, send JSON. Best for ongoing programmatic integration.
+### 4.1 Getting a service key
 
-Both are free. Both go through the same review process (new contributors start with manual review, then get auto-publish after demonstrating quality).
+Email `hi@neighborhood-commons.org` with the following:
 
-### Option A: Upload a CSV (No Code Required)
+- **App name and URL.**
+- **What you're building.** One paragraph is fine.
+- **How you plan to verify the organizations you onboard.** In-person? Video call? Domain email only? This determines what `verification_authority` the operator grants your key.
+- **Team contact email.**
+- **Expected first-week write volume.** Used to size rate limits.
 
-Go to [api.neighborhood-commons.org](https://api.neighborhood-commons.org) and click "Contributor sign in." Register with your email, then use the **Upload** screen to:
+Typical turnaround is one business day. The operator will reply with the raw key string (saved once — cannot be recovered) and confirm what's set on it.
 
-1. **Upload** — Drop a CSV file. The system detects your columns automatically.
-2. **Map** — Confirm which CSV columns map to Commons fields (name, date, venue, category, etc.). Common headers like "title", "event_name", "location" are auto-detected.
-3. **Preview** — See how your rows will look as events. Rows with errors are flagged. Unrecognized category terms can be mapped to Commons categories.
-4. **Submit** — Selected rows are created as events. New contributors' events go through admin review first.
+### 4.2 brand_config
 
-**Your CSV needs at minimum:** an event name column and a date column. Everything else (venue, time, category, description, price, URL, coordinates) is optional but makes the data more useful.
+Verification emails are sent from the Commons-shared Resend account. Two valid configurations:
 
-**Category mapping:** If your CSV uses different category terms (e.g., "concert" instead of "live-music"), the system learns your vocabulary over time. The first time you upload "concert", you map it to `live-music`. Next time, it auto-maps.
+| Tier | Sender shown | Resend cost |
+|---|---|---|
+| **Display-only** (recommended for v1) | `YourApp <verify@neighborhood-commons.org>` | Free |
+| **Full domain** | `YourApp <verify@yourapp.com>` | $20/mo Resend Pro + DNS setup |
 
-**Supported date formats:** `YYYY-MM-DD`, `MM/DD/YYYY`, `M/D/YYYY`, ISO 8601 datetimes. **Time formats:** `HH:MM` (24-hour), `h:mm AM/PM`.
+Most email clients show the display name first and prominently — the display-only tier reads as your brand to the user without requiring a separate verified domain. Subject and body are under your control either way. Upgrading later is a single `brand_config` field change with no code impact on your side.
 
-### Option B: Use the Contribute API
+### 4.3 Scoping rules
 
-For programmatic integration, get a free API key.
+- Reads are unrestricted. Service keys can read any public data.
+- Writes are scoped: a service key can only create/update/delete data for organizations linked to it via `api_key_organization_links`.
+- Cross-organization writes return `403 NOT_LINKED`.
+- Admin keys (`is_admin=true`, currently only operator tooling) bypass scoping.
 
-#### Step 1: Get Your API Key (2 minutes)
+### 4.4 Places — register a venue
 
-Send your email:
-```bash
-curl -X POST "https://api.neighborhood-commons.org/api/v1/developers/register/send-otp" \
-  -H "Content-Type: application/json" \
-  -d '{ "email": "you@example.com" }'
-```
-
-Check your email for a one-time code. Then verify and get your key:
-```bash
-curl -X POST "https://api.neighborhood-commons.org/api/v1/developers/register/verify-otp" \
-  -H "Content-Type: application/json" \
-  -d '{ "email": "you@example.com", "token": "12345678", "name": "My Event App", "url": "https://myeventapp.com" }'
-```
-
-The response includes your `raw_key` — it looks like `nc_a1b2c3d4e5f6...`. **Save it immediately.** It is shown exactly once and cannot be recovered.
-
-From now on, include it in every write request:
-```
-X-API-Key: nc_a1b2c3d4e5f6...
-```
-
-### Step 2: Submit Your First Event
-
-The minimum viable event needs 5 things: a name, a start time, a timezone, a category, and a location name.
+Idempotent on `googlePlaceId`. If a Place with the supplied Google Place ID already exists, the response is `200` with the existing record. Otherwise `201` with the new one.
 
 ```bash
-curl -X POST "https://api.neighborhood-commons.org/api/v1/contribute" \
-  -H "X-API-Key: nc_yourkey..." \
+curl -X POST "https://api.neighborhood-commons.org/api/v1/service/places" \
+  -H "X-API-Key: $NC_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "Open Mic Night",
-    "start": "2026-04-15T19:00:00-04:00",
+    "name": "Bubs",
+    "googlePlaceId": "ChIJ...",
+    "address": {
+      "streetAddress": "1234 Main St",
+      "addressLocality": "Philadelphia",
+      "addressRegion": "PA",
+      "postalCode": "19125"
+    },
+    "geo": { "latitude": 39.97, "longitude": -75.13 }
+  }'
+```
+
+### 4.5 Organizations — create, link, update
+
+Three relevant endpoints: create a new Organization (auto-links the calling key), link your key to an existing Organization, or update an Organization you're already linked to.
+
+```bash
+curl -X POST "https://api.neighborhood-commons.org/api/v1/service/organizations" \
+  -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
+  -d '{
+    "name": "Bubs",
+    "kind": "local_business",
+    "description": "Community board game shop",
+    "url": "https://bubs.example",
+    "telephone": "+12155550100",
+    "email": "hi@bubs.example",
+    "primaryPlaceId": "PLACE_UUID"
+  }'
+
+# Link to an existing Organization (if another app created it first)
+curl -X POST "https://api.neighborhood-commons.org/api/v1/service/organizations/link" \
+  -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
+  -d '{ "organizationId": "ORG_UUID" }'
+
+# Update fields on an Organization linked to this key
+curl -X PATCH "https://api.neighborhood-commons.org/api/v1/service/organizations/ORG_UUID" \
+  -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
+  -d '{ "description": "Updated bio.", "telephone": "+12155550101" }'
+```
+
+Image uploads (logo, hero image) are JSON-base64: `POST /v1/service/organizations/:id/logo` and `POST /v1/service/organizations/:id/image` with body `{ "image": "<base64>" }`. Magic-byte check, Sharp re-encoding, R2 upload — same pipeline as event images.
+
+### 4.6 Persons
+
+Create a Person record for performers, curators, or individual hosts. Person records are append-only for non-admin keys in 1.0 — operator-tier keys edit them. Person-link semantics ship in a later minor version.
+
+```bash
+curl -X POST "https://api.neighborhood-commons.org/api/v1/service/persons" \
+  -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
+  -d '{
+    "name": "DJ Karma",
+    "alternateName": "DJ K",
+    "description": "Philly-based DJ specializing in soul and disco.",
+    "jobTitle": "DJ",
+    "sameAs": ["https://soundcloud.com/djkarma"]
+  }'
+```
+
+### 4.7 Events — using the new organizer model
+
+Event creation accepts the existing `ServiceEventInput` shape. The body field is named `account_id` for backward compatibility but expects an Organization id. After 1.0 you can also reassign an event's organizer:
+
+```bash
+curl -X POST "https://api.neighborhood-commons.org/api/v1/service/events" \
+  -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
+  -d '{
+    "account_id": "ORG_UUID",
+    "name": "Thursday Jazz Night",
+    "start": "2026-05-07T19:00:00-04:00",
+    "end": "2026-05-07T22:00:00-04:00",
     "timezone": "America/New_York",
-    "category": "open-mic",
+    "category": "live-music",
     "location": {
-      "name": "The Coffee Shop",
-      "address": "123 Main St, Philadelphia PA 19125"
-    }
+      "name": "Bubs",
+      "address": "1234 Main St, Philadelphia PA",
+      "place_id": "ChIJ..."
+    },
+    "description": "Weekly jazz trio. BYOB.",
+    "cost": "Free"
   }'
+
+# Reassign an event's organizer
+curl -X PATCH "https://api.neighborhood-commons.org/api/v1/service/events/EVENT_UUID/organizer" \
+  -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
+  -d '{ "organizerOrganizationId": "ORG_UUID" }'
+
+# Or assign to a Person (mutually exclusive with organizerOrganizationId)
+curl -X PATCH "https://api.neighborhood-commons.org/api/v1/service/events/EVENT_UUID/organizer" \
+  -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
+  -d '{ "organizerPersonId": "PERSON_UUID" }'
 ```
 
-Response:
-```json
-{
-  "event": {
-    "id": "new-uuid-here",
-    "status": "pending_review",
-    "source": {
-      "publisher": "My Event App",
-      "method": "api"
-    }
-  }
-}
-```
+### 4.8 Broadcasts — ephemeral signals
 
-That's it. Your event is in the Commons.
-
-### Step 3: Understand What Happens After Submission
-
-**New API keys start at `pending` tier.** Your events go into a review queue and someone approves them before they're published. Once you've demonstrated quality submissions, your key gets upgraded:
-
-| Tier | What happens to your events | Rate limit |
-|------|---------------------------|-----------|
-| `pending` (new keys) | Enter review queue, published after approval | 20/hour, 100/day |
-| `verified` | Auto-published immediately | 100/hour, 500/day |
-| `trusted` | Auto-published immediately | 500/hour, 2000/day |
-| `service` | Auto-published. Issued to trusted consumer apps (Merrie, Studio). | 2000/hour, 20000/day |
-
-Tier upgrades are manual. Submit good data consistently and it happens.
-
-### The Full Contribute Event Schema
-
-**Required fields:**
-
-| Field | Type | Rules | Example |
-|-------|------|-------|---------|
-| `name` | text | 1-200 characters | `"Jazz Night"` |
-| `start` | timestamp | ISO 8601 with timezone offset | `"2026-04-15T19:00:00-04:00"` |
-| `timezone` | text | IANA timezone name | `"America/New_York"` |
-| `category` | text | One of the 20 category slugs (see below) | `"live-music"` |
-| `location.name` | text | 1-200 characters | `"South Restaurant"` |
-
-**Optional fields:**
-
-| Field | Type | Rules | Example |
-|-------|------|-------|---------|
-| `end` | timestamp | ISO 8601 with offset | `"2026-04-15T22:00:00-04:00"` |
-| `description` | text | Max 2000 characters | `"Weekly jazz quartet."` |
-| `cost` | text | Max 100 characters | `"Free"`, `"$10"`, `"$5-15"` |
-| `url` | URL | Must pass URL normalcy checks; non-allowlisted domains queue for review (see below) | `"https://example.com/event"` |
-| `image_url` | URL | The Commons downloads, re-encodes, and hosts it | `"https://example.com/photo.jpg"` |
-| `location.address` | text | Max 500 chars. Providing this enables geocoding. | `"600 N Broad St, Philadelphia PA"` |
-| `location.lat` | number | -90 to 90 | `39.9654` |
-| `location.lng` | number | -180 to 180 | `-75.1527` |
-| `location.place_id` | text | External place ID | `"ChIJ..."` |
-| `tags` | list of text | Max 15 tags. See tag list below. | `["outdoor", "free"]` |
-| `wheelchair_accessible` | boolean | | `true` |
-| `open_window` | boolean | Default `false`. `true` for come-and-go events (happy hour, open swim, market). Affects feed visibility. | `true` |
-| `capacity` | integer or null | Informational max attendance. Commons does NOT enforce or track signups. Ticketing lives in `url`. | `50` |
-| `rsvp` | string or null | `"recommended"`, `"required"`, or null. Signal only — Commons does not manage RSVPs. | `"required"` |
-| `external_id` | text | Your system's ID for this event. Used for dedup. | `"my-system-12345"` |
-| `venue_id` | UUID | Link to a Commons venue account | `"uuid-here"` |
-| `recurrence` | text | RRULE format (see below) | `"FREQ=WEEKLY;COUNT=12"` |
-| `instance_count` | number | 0-52, how many instances to generate | `12` |
-| `custom_category` | text | Max 50 chars, for niche sub-categories | `"sound bath"` |
-
-### Submitting Recurring Events
-
-Use RRULE format (the same standard used by iCalendar). The Commons expands your pattern into individual event instances.
-
-**Bounded vs. unbounded.** If you include `COUNT=` or `UNTIL=` the Commons creates exactly that many instances (capped at 52). If you omit both (e.g. `FREQ=WEEKLY;INTERVAL=2`), the Commons treats the series as **ongoing** — it materializes a rolling 6-week horizon and extends automatically via a daily cron. **Submit once, never re-post.** Re-submitting an unbounded recurrence (via your resync logic) will create a duplicate series unless you also send `external_id`.
-
-| Pattern | RRULE | What it means |
-|---------|-------|--------------|
-| Every day | `FREQ=DAILY` | Daily, uses default count |
-| Every week | `FREQ=WEEKLY` | Same day each week |
-| Every 2 weeks | `FREQ=WEEKLY;INTERVAL=2` | Biweekly |
-| Every month | `FREQ=MONTHLY` | Same date each month |
-| 2nd Friday of each month | `FREQ=MONTHLY;BYDAY=2FR` | Ordinal weekday |
-| Mon/Wed/Fri | `FREQ=WEEKLY;BYDAY=MO,WE,FR` | Multiple days per week |
-| 12 weeks then stop | `FREQ=WEEKLY;COUNT=12` | Bounded series |
-
-Example — trivia every Tuesday for 8 weeks:
-```json
-{
-  "name": "Tuesday Trivia",
-  "start": "2026-04-07T19:00:00-04:00",
-  "timezone": "America/New_York",
-  "category": "trivia-games",
-  "location": { "name": "The Pub" },
-  "recurrence": "FREQ=WEEKLY;COUNT=8"
-}
-```
-
-Response:
-```json
-{
-  "event": {
-    "series_id": "new-series-uuid",
-    "instance_count": 8,
-    "instance_ids": ["id-1", "id-2", "...", "id-8"],
-    "status": "pending_review",
-    "source": { "publisher": "My App", "method": "api" }
-  }
-}
-```
-
-### Submitting Multiple Events at Once
+Maximum 24h lifetime. Body: `organizationId`, `placeId`, `message` (≤280 chars), `expires` (ISO 8601, must be future, ≤24h ahead).
 
 ```bash
-curl -X POST "https://api.neighborhood-commons.org/api/v1/contribute/batch" \
-  -H "X-API-Key: nc_yourkey..." \
-  -H "Content-Type: application/json" \
-  -d '{ "events": [
-    { "name": "Event 1", "start": "...", "timezone": "...", "category": "...", "location": { "name": "..." } },
-    { "name": "Event 2", "start": "...", "timezone": "...", "category": "...", "location": { "name": "..." } }
-  ] }'
-```
-
-Up to 50 events per batch. Response codes:
-- `201` — all events accepted
-- `207` — some succeeded, some failed (check per-event results)
-- `400` — all failed
-
-Each event in the batch counts individually against your rate limit.
-
-### Managing Your Events
-
-```bash
-# List events you submitted
-curl "https://api.neighborhood-commons.org/api/v1/contribute/mine?status=published" \
-  -H "X-API-Key: nc_yourkey..."
-
-# Edit a single event you submitted (one instance only; does NOT affect siblings in a series)
-curl -X PATCH "https://api.neighborhood-commons.org/api/v1/contribute/:id" \
-  -H "X-API-Key: nc_yourkey..." \
-  -H "Content-Type: application/json" \
-  -d '{ "description": "Updated description" }'
-
-# Edit a recurring event — applies to every future instance AND to the series template,
-# so instances the auto-extend cron materializes later also inherit the update.
-# Past instances are preserved. Use this (not PATCH /:id) when a user edits "the weekly event."
-curl -X PATCH "https://api.neighborhood-commons.org/api/v1/contribute/series/:seriesId" \
-  -H "X-API-Key: nc_yourkey..." \
-  -H "Content-Type: application/json" \
-  -d '{ "name": "New title", "cost": "$10" }'
-
-# Delete an event you submitted
-curl -X DELETE "https://api.neighborhood-commons.org/api/v1/contribute/:id" \
-  -H "X-API-Key: nc_yourkey..."
-
-# Link an event to a group
-curl -X PATCH "https://api.neighborhood-commons.org/api/v1/contribute/events/:id/group" \
-  -H "X-API-Key: nc_yourkey..." \
-  -H "Content-Type: application/json" \
-  -d '{ "group_id": "uuid" }'
-```
-
-You can only edit and delete events that belong to **the account your API key is linked to** — not just events the same key created. Ownership is by account, not by key UUID. This means rotating an API key (issue a new one linked to the same account, then revoke the old one) preserves all editorial control. It also means a team with multiple keys (dev + prod) under the same account share an event pool — both can edit each other's events. If a key has no linked account, every PATCH/DELETE returns `403 KEY_NOT_LINKED`. Contact an operator to issue properly-linked keys via `POST /service/api-keys` with an `account_id`.
-
-### Creating Venues and Groups
-
-**Venues** represent physical locations (bars, coffee shops, parks):
-```bash
-curl -X POST "https://api.neighborhood-commons.org/api/v1/contribute/venues" \
-  -H "X-API-Key: nc_yourkey..." \
-  -H "Content-Type: application/json" \
+curl -X POST "https://api.neighborhood-commons.org/api/v1/service/broadcasts" \
+  -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
   -d '{
-    "name": "The Coffee Shop",
-    "address": "123 Main St, Philadelphia PA 19125"
+    "organizationId": "ORG_UUID",
+    "placeId": "PLACE_UUID",
+    "message": "Half off sandwiches until we sell out",
+    "expires": "2026-05-05T18:00:00-04:00"
   }'
-```
-If a venue with the same slug already exists, the existing venue is returned (200) instead of creating a duplicate (201).
 
-**Groups** represent organizations (community groups, nonprofits, collectives, curators):
+# Retract early
+curl -X POST "https://api.neighborhood-commons.org/api/v1/service/broadcasts/BROADCAST_UUID/retract" \
+  -H "X-API-Key: $NC_KEY"
+```
+
+Verification gate: broadcast creation does *not* require the organization to be verified. Verification is a read-time consumer-app filter. Apps editorialize.
+
+### 4.9 Lists — curatorial workflows
+
+Two-step: create the list, then add items. Items are polymorphic — events, organizations, places, or any mix.
+
 ```bash
-curl -X POST "https://api.neighborhood-commons.org/api/v1/contribute/groups" \
-  -H "X-API-Key: nc_yourkey..." \
-  -H "Content-Type: application/json" \
+# Create the list (curator can be 'organization' or 'person')
+curl -X POST "https://api.neighborhood-commons.org/api/v1/service/lists" \
+  -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
   -d '{
-    "name": "Philly Bike Train",
-    "slug": "philly-bike-train",
-    "type": "community_group",
-    "category_tags": ["fitness", "outdoors"],
-    "neighborhood": "Fishtown",
-    "city": "Philadelphia"
+    "name": "This Weekend'\''s Picks",
+    "description": "Five things worth your Saturday",
+    "curator": { "type": "person", "id": "PERSON_UUID" }
   }'
+
+# Add an item by position
+curl -X POST "https://api.neighborhood-commons.org/api/v1/service/lists/LIST_UUID/items" \
+  -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
+  -d '{
+    "position": 1,
+    "itemType": "event",
+    "itemId": "EVENT_UUID",
+    "curatorNote": "If you only see one thing, see this."
+  }'
+
+# Remove an item at position
+curl -X DELETE "https://api.neighborhood-commons.org/api/v1/service/lists/LIST_UUID/items/3" \
+  -H "X-API-Key: $NC_KEY"
 ```
 
-Group types: `business`, `community_group`, `nonprofit`, `collective`, `curator`.
+Person-curated lists require an admin key for edits in 1.0 (the `api_key_organization_links` pattern doesn't extend to Person yet). If you're working with a Person curator and need self-service editing, contact the operator — admin support can issue a key with appropriate authority.
 
-### Important Behaviors
+### 4.10 Disputes
 
-- **Geocoding:** If you provide `location.address` but no coordinates, the Commons geocodes it automatically (via OpenStreetMap/Nominatim). The resulting lat/lng are stored on the event.
-- **Region resolution:** Coordinates are used to assign the event to a geographic region. Events without a region won't appear in location-filtered feeds — so always provide an address or coordinates.
-- **Image processing:** If you provide `image_url`, the Commons downloads the image, strips metadata, re-encodes it as WebP (max 1200px wide), and stores it on Cloudflare R2. The response contains the final hosted URL. Processing is asynchronous — POST/PATCH returns before the image is fetched. To know when async processing finishes (or permanently fails), subscribe to the `event.image_processed` webhook (see Part 4) — it fires once per event for both succeeded and failed outcomes, so consumers polling `images[]` get a stop signal in either direction.
-- **URL validation:** The `url` field is checked for normalcy and against an operator-managed allowlist of domains. Tracking parameters (`utm_*`, `fbclid`, etc.) are stripped automatically and `http://` is coerced to `https://`. The following return a `400` and are never accepted:
-  - `INVALID_URL` — malformed URL
-  - `INVALID_SCHEME` — scheme other than http/https
-  - `URL_CREDENTIALS` — embedded `user:pass@`
-  - `IP_LITERAL` — hostname is an IPv4 or IPv6 literal
-  - `BLOCKED_HOSTNAME` — `localhost`, `*.local`, `*.internal`, `*.localhost`
-
-  A non-allowlisted but otherwise valid domain returns `400 DOMAIN_PENDING_REVIEW` with the offending domain in `error.domain`. The Commons logs a review request automatically — operators review the queue and approve domains as appropriate. Once approved, contributors can resubmit the event and it will be accepted. Treat this as a soft, transient failure (similar to a moderation hold), not a permanent rejection.
-- **Capacity and RSVP:** Commons stores `capacity` (informational max attendance) and `rsvp` (`null` / `"recommended"` / `"required"`) as signals. **Commons does not manage attendance, count signups, or enforce caps.** Consumer apps display these to set expectations; the actual ticketing or signup flow lives in `url`. Use `link_url` for Eventbrite, Partiful, a venue's reservation page, etc. If you need an attendee management system, you're outside Commons' scope — that's app territory.
-- **Deduplication:** If you provide `external_id`, the Commons enforces uniqueness per API key. Submitting the same `external_id` twice returns `409 CONFLICT`.
-- **Tag validation:** Tags are checked against the category's allowed set. Invalid tags for that category are silently removed. You may get fewer tags back than you sent. Custom tags (not in the prescribed list) are accepted as-is.
-
-### Checking Your Key Status
+Used to flag a verified target as misattributed. Records the dispute for operator review; no automated action in 1.0.
 
 ```bash
-# See your key info, tier, and usage
-curl "https://api.neighborhood-commons.org/api/v1/developers/me" \
-  -H "X-API-Key: nc_yourkey..."
-
-# Rotate your key (requires email re-verification)
-curl -X POST "https://api.neighborhood-commons.org/api/v1/developers/keys/rotate" \
-  -H "X-API-Key: nc_yourkey..." \
-  -H "Content-Type: application/json" \
-  -d '{ "email": "you@example.com" }'
+curl -X POST "https://api.neighborhood-commons.org/api/v1/service/disputes" \
+  -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
+  -d '{
+    "targetType": "organization",
+    "targetId": "ORG_UUID",
+    "reason": "Imposter — verified email manager@bubs.example does not match the actual venue.",
+    "submitterContact": "concerned@example.com"
+  }'
 ```
 
 ---
 
-## Part 4: Real-Time Updates via Webhooks
+## 5. Verification
 
-Instead of polling for changes, you can subscribe to real-time notifications. When an event is created, updated, or deleted, the Commons sends an HTTPS POST to your endpoint.
+Verification is a process the Commons orchestrates and an attribute apps consume. The Commons routes; apps follow. Submission endpoints reject mismatches with `409 WRONG_METHOD` pointing at the correct path.
 
-### Setting Up a Webhook
+### 5.1 The flow
+
+**Step 1 — Discover the path.** Given a target and identifier, the Commons returns which submission endpoint to call:
+
+```bash
+curl "https://api.neighborhood-commons.org/api/v1/service/verifications/path?\
+target_type=organization&target_id=ORG_UUID&\
+identifier_type=email&identifier_value=manager@bubs.example" \
+  -H "X-API-Key: $NC_KEY"
+```
+
+Three possible response shapes:
+
+```json
+// Business-domain email on a heavy-rigor organization
+{
+  "alreadyVerified": false,
+  "requiredMethod": "domain_email_loop",
+  "endpoint": "/v1/service/verifications/challenges",
+  "reason": "business_email_domain"
+}
+
+// Personal-domain email (gmail, yahoo, etc.) on a heavy-rigor organization
+{
+  "alreadyVerified": false,
+  "requiredMethod": "manual_review",
+  "endpoint": "/v1/service/verifications/manual",
+  "reason": "personal_email_domain"
+}
+
+// Already verified — your UI should skip this and confirm the existing record
+{
+  "alreadyVerified": true,
+  "existingIdentifier": {
+    "identifierType": "email",
+    "method": "manual_review",
+    "verifiedAt": "...",
+    "verifiedByApp": "Merrie"
+  }
+}
+```
+
+### 5.2 Auto-track (challenge / confirm)
+
+Used when path returned `domain_email_loop`. Issue a code; the Commons emails it from your `brand_config` sender:
+
+```bash
+curl -X POST "https://api.neighborhood-commons.org/api/v1/service/verifications/challenges" \
+  -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
+  -d '{
+    "targetType": "organization",
+    "targetId": "ORG_UUID",
+    "identifierType": "email",
+    "identifierValue": "manager@bubs.example"
+  }'
+
+# Response: { "challengeId": "...", "expiresAt": "..." }
+
+# User pastes the code in your UI; you submit
+curl -X POST "https://api.neighborhood-commons.org/api/v1/service/verifications/challenges/CHALLENGE_ID/confirm" \
+  -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
+  -d '{ "code": "123456" }'
+
+# Response on match:    { "status": "verified", "verifiedAt": "...", "method": "domain_email_loop", "identifier": {...} }
+# Response on mismatch: { "status": "rejected", "reason": "invalid_code" }
+```
+
+Codes are six digits. Challenges expire after 30 minutes. Five wrong attempts on the same challenge return `429 RATE_LIMIT`.
+
+### 5.3 Manual track (structured evidence)
+
+Used when path returned `manual_review`. Submit evidence; if your key has `verification_authority` covering the method, it auto-approves; otherwise it queues for admin review:
+
+```bash
+curl -X POST "https://api.neighborhood-commons.org/api/v1/service/verifications/manual" \
+  -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
+  -d '{
+    "targetType": "organization",
+    "targetId": "ORG_UUID",
+    "identifierType": "email",
+    "identifierValue": "manager@gmail.com",
+    "evidence": {
+      "phone": "+12155550100",
+      "verifiedVia": "in_person",
+      "reviewerAttestation": "Met owner Jane at the bar, confirmed identity via driver license; business address matches.",
+      "reviewerAccountId": "internal-reviewer-id",
+      "businessAddressObserved": true,
+      "idDocumentObserved": true
+    }
+  }'
+
+# With verification_authority: { "status": "verified", "verifiedAt": "...", "method": "manual_review", "identifier": {...} }
+# Without:                      { "status": "pending", "reviewId": "..." }
+```
+
+Required evidence fields: `phone`, `verifiedVia` (`in_person` | `video_call`), `reviewerAttestation`, `reviewerAccountId`, `businessAddressObserved`, `idDocumentObserved`. Missing or malformed fields return `400 VALIDATION_ERROR`; submission to the wrong path (e.g., business email through manual) returns `409 WRONG_METHOD`.
+
+### 5.4 verification_authority
+
+An operator-set JSON array on each service key listing methods the key may auto-approve. Granted after the operator reviews your verification process during onboarding. Format: `method:context`.
+
+| Value | Meaning |
+|---|---|
+| `["manual_review:in_person"]` | Auto-approve manual reviews where `verifiedVia` is `in_person`. Queues for admin otherwise. |
+| `["manual_review:in_person", "manual_review:video_call"]` | Both methods auto-approve. |
+| `null` / `[]` | No authority. All manual submissions queue for admin review. |
+| `["*"]` | Operator/admin wildcard. Reserved for Studio. |
+
+Apps without authority can still submit manual-review evidence — those submissions just queue. Typical turnaround for admin review is one business day.
+
+### 5.5 Reputation graph
+
+Every approval includes the approving app's stable name (snapshot of `brand_config.app_name` at approval time). The reputation graph is public:
+
+```bash
+curl "https://api.neighborhood-commons.org/api/v1/verifiers"
+
+# Returns one entry per app with: appName, firstApprovalAt, approvalCount,
+# activeCount, revokedCount, methods used.
+
+# Audit a specific verifier's recent work
+curl "https://api.neighborhood-commons.org/api/v1/verifiers/Holler/recent_approvals"
+```
+
+Apps reading the Commons compose `verified_by` filters that match their own trust policy. Sloppy verification is filtered out by other apps. Market discipline replaces central authority — and approving apps have a direct economic incentive to verify carefully, since their approvals being filtered means the businesses they onboarded lose reach across the rest of the ecosystem.
+
+---
+
+## 6. Webhooks
+
+Subscribe to push notifications instead of polling. Each delivery is HMAC-SHA256 signed. Failed deliveries are retried with exponential backoff; subscriptions that fail repeatedly are auto-disabled.
+
+### 6.1 Setup
+
+Subscribe with a service-tier API key:
 
 ```bash
 curl -X POST "https://api.neighborhood-commons.org/api/v1/webhooks" \
-  -H "X-API-Key: nc_yourkey..." \
-  -H "Content-Type: application/json" \
+  -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
   -d '{
-    "url": "https://yourapp.com/webhooks/commons",
+    "url": "https://yourapp.example/webhooks/commons",
     "event_types": ["event.created", "event.updated", "event.deleted"]
   }'
+
+# Response includes a signing_secret. Save it — it cannot be recovered.
+# All deliveries to this subscription are signed with this secret.
+
+# Test the endpoint with a synthetic delivery
+curl -X POST "https://api.neighborhood-commons.org/api/v1/webhooks/SUBSCRIPTION_ID/test" \
+  -H "X-API-Key: $NC_KEY"
+
+# Inspect recent delivery attempts
+curl "https://api.neighborhood-commons.org/api/v1/webhooks/SUBSCRIPTION_ID/deliveries" \
+  -H "X-API-Key: $NC_KEY"
+
+# Unsubscribe
+curl -X DELETE "https://api.neighborhood-commons.org/api/v1/webhooks/SUBSCRIPTION_ID" \
+  -H "X-API-Key: $NC_KEY"
 ```
 
-The response includes a `signing_secret` — **save it immediately.** It is shown exactly once.
+### 6.2 Event types
 
-### Event Types
+1.0 surfaces:
 
-| Type | When it fires |
-|------|--------------|
-| `event.created` | A new event is published |
-| `event.updated` | An existing event is modified |
-| `event.deleted` | An event is removed |
-| `event.series_created` | A new recurring series is created (one webhook for the whole series, includes all instance IDs) |
-| `event.image_processed` | The async image download + R2 re-encode finished for an event (success or permanent failure). Opt-in: not included in the default `event_types` because the payload shape is different from the others (see below). |
+| Type | Fires on |
+|---|---|
+| `event.created` | New event row published. |
+| `event.updated` | Event mutation (PATCH). |
+| `event.deleted` | Event hard-deleted. |
+| `event.series_created` | Recurring series instantiated. |
 
-**`event.image_processed` payload** — distinct from the standard `{ event_type, event, timestamp, delivery_id }` shape. Fires once per event regardless of outcome:
+Additional types land additively as the substrate grows.
+
+### 6.3 Payload shape
+
+Every delivery is a POST to your subscribed URL with a JSON body:
 
 ```json
 {
-  "event_type": "event.image_processed",
-  "event_id": "4d1ecb4c-ee6e-4199-9ad0-587efbd9c65b",
-  "status": "succeeded",
-  "image_url": "https://images.neighborhood-commons.org/portal-events/4d1.../image",
-  "error_code": null,
-  "timestamp": "2026-04-23T14:22:01Z",
-  "delivery_id": "8421"
+  "type": "event.created",
+  "delivery_id": "...",
+  "subscription_id": "...",
+  "occurred_at": "2026-05-05T15:00:00Z",
+  "data": { /* the resource — Event, Organization, etc. — in spec shape */ }
 }
 ```
 
-On failure: `status: "failed"`, `image_url: null`, and `error_code` is one of `URL_BLOCKED` (SSRF/validation rejected the URL), `DOWNLOAD_FAILED` (HTTP error or fetch threw), `INVALID_FORMAT` (not JPEG/PNG/WebP, or file truncated), `ENCODE_FAILED` (Sharp re-encode threw), or `UPLOAD_FAILED` (R2 rejected the upload). The full event row is not included — fetch `GET /events/{event_id}` if you need the rest.
+### 6.4 Signature verification
 
-### Verifying Webhook Signatures
+Each delivery carries an `X-NC-Signature` header containing the HMAC-SHA256 of the raw request body, keyed by your subscription's `signing_secret`. Verify before trusting any delivery.
 
-Every delivery includes an `X-NC-Signature` header. Verify it to confirm the request came from the Commons:
+```typescript
+import { createHmac, timingSafeEqual } from 'crypto';
 
-```javascript
-const crypto = require('crypto');
+function verifyWebhook(rawBody: Buffer, signatureHeader: string, secret: string): boolean {
+  // Header format: "sha256=<hex>"
+  const [algo, sig] = signatureHeader.split('=');
+  if (algo !== 'sha256' || !sig) return false;
 
-function verifySignature(rawBody, signatureHeader, secret) {
-  const expected = 'sha256=' + crypto.createHmac('sha256', secret)
-    .update(rawBody)
-    .digest('hex');
-  return crypto.timingSafeEqual(
-    Buffer.from(signatureHeader),
-    Buffer.from(expected)
-  );
+  const expected = createHmac('sha256', secret).update(rawBody).digest('hex');
+
+  // Constant-time compare; both buffers must be the same length
+  const sigBuf = Buffer.from(sig, 'hex');
+  const expectedBuf = Buffer.from(expected, 'hex');
+  if (sigBuf.length !== expectedBuf.length) return false;
+  return timingSafeEqual(sigBuf, expectedBuf);
 }
+
+// Express handler
+app.post('/webhooks/commons', express.raw({ type: 'application/json' }), (req, res) => {
+  const sig = req.headers['x-nc-signature'] as string;
+  if (!verifyWebhook(req.body, sig, process.env.COMMONS_WEBHOOK_SECRET!)) {
+    return res.status(401).end();
+  }
+  const payload = JSON.parse(req.body.toString());
+  // ... process the delivery
+  res.status(204).end();
+});
 ```
 
-### Reliability
+Verify against the *raw* request body, not a re-stringified version — different JSON serializers produce different byte sequences and the signature won't match.
 
-- Failed deliveries retry 3 times: after 1 minute, 5 minutes, 25 minutes.
-- 10 consecutive failures automatically disables your subscription.
-- Re-enable with `PATCH /api/v1/webhooks/:id` setting `{ "status": "active" }`.
-- Max 5 subscriptions per API key.
-- Webhook URLs must be HTTPS. Private IPs and cloud metadata endpoints are blocked.
+### 6.5 Retry behavior
 
-### Managing Webhooks
+Deliveries that fail (network error, non-2xx response, timeout) retry with exponential backoff: ~30s, 2m, 10m, 1h, 6h. After five consecutive failures, the subscription is marked disabled and stops receiving deliveries until the operator re-enables it. Inspect `GET /v1/webhooks/:id/deliveries` for failure reasons.
 
-```bash
-# List your subscriptions
-curl "https://api.neighborhood-commons.org/api/v1/webhooks" \
-  -H "X-API-Key: nc_yourkey..."
+### 6.6 Idempotency
 
-# Test a webhook (sends a test delivery)
-curl -X POST "https://api.neighborhood-commons.org/api/v1/webhooks/:id/test" \
-  -H "X-API-Key: nc_yourkey..."
-
-# View delivery history
-curl "https://api.neighborhood-commons.org/api/v1/webhooks/:id/deliveries" \
-  -H "X-API-Key: nc_yourkey..."
-
-# Confirm a specific event reached this subscriber
-curl "https://api.neighborhood-commons.org/api/v1/webhooks/:id/deliveries?event_id=4d1ecb4c-ee6e-4199-9ad0-587efbd9c65b&status=delivered" \
-  -H "X-API-Key: nc_yourkey..."
-
-# Update a webhook
-curl -X PATCH "https://api.neighborhood-commons.org/api/v1/webhooks/:id" \
-  -H "X-API-Key: nc_yourkey..." \
-  -H "Content-Type: application/json" \
-  -d '{ "url": "https://newurl.com/hook", "status": "active" }'
-
-# Delete a webhook
-curl -X DELETE "https://api.neighborhood-commons.org/api/v1/webhooks/:id" \
-  -H "X-API-Key: nc_yourkey..."
-```
+Commons may retry a delivery that actually succeeded (e.g., your server returned 2xx but Commons didn't see the response). Use `delivery_id` as your idempotency key — store it server-side and skip processing on duplicates.
 
 ---
 
-## Reference: Categories
+## 7. SDK & spec
 
-20 categories. Use the slug (left column) in API requests. Both kebab-case (`live-music`) and underscore (`live_music`) are accepted on input. Responses always use kebab-case.
+The official SDK is a typed TypeScript client generated from `/openapi.json`. Install:
+
+```bash
+npm install neighborhood-commons
+```
+
+The SDK exposes both unauthenticated read methods and authenticated service-tier write methods. If you'd rather generate your own client in a different language, run an OpenAPI generator against `/openapi.json` directly.
+
+The published npm package version aligns with the spec version. Major version bumps follow the spec (rare); minor versions land additively as the spec grows.
+
+---
+
+## 8. Reference
+
+The complete endpoint list, request/response schemas, and error enum live in `/openapi.json`. That document is authoritative — when this Guide and the spec disagree, trust the spec. The summary below is for orientation.
+
+### 8.1 Endpoint summary — read
+
+No authentication required.
+
+| Method | Path |
+|---|---|
+| `GET` | `/v1/events` · `/v1/events/:id` · `/v1/events.ics` · `/v1/events.rss` |
+| `GET` | `/api/events/changes` |
+| `GET` | `/v1/places` · `/v1/places/:id` |
+| `GET` | `/v1/organizations` · `/v1/organizations/:idOrSlug` |
+| `GET` | `/v1/persons` · `/v1/persons/:idOrSlug` |
+| `GET` | `/v1/broadcasts` · `/v1/broadcasts/:id` |
+| `GET` | `/v1/lists` · `/v1/lists/:idOrSlug` |
+| `GET` | `/v1/verifiers` · `/v1/verifiers/:appName/recent_approvals` |
+| `GET` | `/v1/meta` · `/v1/meta/regions` · `/v1/meta/categories` · `/v1/meta/stats` |
+
+### 8.2 Endpoint summary — service tier
+
+Require `X-API-Key` header with a service-tier key.
+
+| Method | Path |
+|---|---|
+| `POST` | `/v1/service/places` |
+| `POST` · `PATCH` | `/v1/service/organizations` · `/v1/service/organizations/:id` |
+| `POST` | `/v1/service/organizations/link` |
+| `POST` | `/v1/service/organizations/:id/logo` · `/v1/service/organizations/:id/image` |
+| `POST` · `PATCH` | `/v1/service/persons` · `/v1/service/persons/:id` |
+| `POST` | `/v1/service/broadcasts` · `/v1/service/broadcasts/:id/retract` |
+| `POST` · `PATCH` | `/v1/service/lists` · `/v1/service/lists/:id` |
+| `POST` · `DELETE` | `/v1/service/lists/:id/items` · `/v1/service/lists/:id/items/:position` |
+| `POST` · `PATCH` · `DELETE` | `/v1/service/events` · `/v1/service/events/:id` |
+| `PATCH` | `/v1/service/events/:id/organizer` |
+| `POST` | `/v1/service/events/:id/image` |
+| `GET` | `/v1/service/verifications/path` |
+| `POST` | `/v1/service/verifications/challenges` · `/v1/service/verifications/challenges/:id/confirm` |
+| `POST` | `/v1/service/verifications/manual` |
+| `GET` · `POST` | `/v1/service/verifications/pending` · `.../:id/approve` · `.../:id/reject` (admin) |
+| `POST` | `/v1/service/disputes` |
+| `POST` · `GET` · `DELETE` | `/v1/webhooks` · `/v1/webhooks/:id` · `/v1/webhooks/:id/test` · `/v1/webhooks/:id/deliveries` |
+
+### 8.3 Error codes
+
+Every error response has the same envelope:
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Human-readable explanation."
+  }
+}
+```
+
+Codes you'll commonly see, grouped by HTTP status:
+
+| Status | Code | Meaning |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | Request body or query failed schema validation. |
+| 400 | `INVALID_URL` · `INVALID_SCHEME` · `BLOCKED_HOSTNAME` · `IP_LITERAL` · `URL_CREDENTIALS` | URL field failed safety/normalcy checks. |
+| 400 | `DOMAIN_PENDING_REVIEW` | URL's domain is not yet on the allowlist; queued for review. Soft/transient. |
+| 401 | `UNAUTHORIZED` · `API_KEY_REQUIRED` · `INVALID_API_KEY` | Auth required or invalid. |
+| 403 | `NOT_LINKED` | Service key is not linked to the target organization. |
+| 403 | `INSUFFICIENT_TIER` | Endpoint requires admin or higher tier than the calling key has. |
+| 404 | `NOT_FOUND` | Resource doesn't exist or isn't visible to the caller. |
+| 409 | `WRONG_METHOD` | Verification submission posted to the wrong path. Call `GET /v1/service/verifications/path` first. |
+| 409 | `CONFLICT` · `DUPLICATE` | State conflict, including slug collisions and duplicate `external_id`. |
+| 409 | `INSUFFICIENT_EVIDENCE` · `IDENTIFIER_DISPUTED` · `IMPOSTER_SIGNALS` · `OUT_OF_POLICY` | Manual-review rejection reasons. |
+| 413 | `PAYLOAD_TOO_LARGE` | Body exceeds the per-route limit. |
+| 429 | `RATE_LIMIT` | Window exceeded. Back off; check `RateLimit-*` headers. |
+| 500 | `SERVER_ERROR` | Internal failure. No internal details exposed. |
+
+The complete `ErrorCode` enum is in `/openapi.json`. Generated SDK clients receive it as a discriminated union, so error handling can `switch` on the code with full type-checking.
+
+### 8.4 Stability
+
+The 1.0.0 spec is stable. Future minor versions add types, fields, and endpoints additively without breaking existing consumers. Removals or renames require a 2.0.0 release with strong justification — measured in years, not months. Watch the [Changelog](https://github.com/joinfiber/neighborhood-commons/blob/master/CHANGELOG.md) for every contract-affecting change.
+
+If something in this Guide contradicts `/openapi.json` on a matter of fact, trust the spec and [file an issue](https://github.com/joinfiber/neighborhood-commons/issues). The Spec wins. The Guide explains. The Log dates.
+
+---
+
+## Appendix A: Categories
+
+20 event categories. Use the slug (left column) in API requests. Both kebab-case (`live-music`) and underscore (`live_music`) are accepted on input. Responses always use kebab-case.
 
 | Slug | Label | Group |
 |------|-------|-------|
@@ -763,7 +959,9 @@ curl -X DELETE "https://api.neighborhood-commons.org/api/v1/webhooks/:id" \
 | `community` | Community | Civic |
 | `spectator` | Spectator | Civic |
 
-## Reference: Tags
+---
+
+## Appendix B: Tags
 
 30 prescribed tags plus any custom tags you want. Tags describe the experience of attending — "Can I go? What's the space like? What's the energy?"
 
@@ -783,47 +981,15 @@ curl -X DELETE "https://api.neighborhood-commons.org/api/v1/webhooks/:id" \
 `hands-on`, `tasting`, `acoustic`, `participatory`, `volunteer`
 
 **Rules:**
+
 - Age tags (`all-ages`, `18-plus`, `21-plus`) are mutually exclusive. If you submit more than one, only the first is kept.
 - Max 15 tags per event.
 - Custom tags are accepted alongside prescribed ones. Must be lowercase kebab-case, max 100 characters.
 - Each category has an approved subset of prescribed tags. Tags not approved for the category are silently removed.
 
-## Reference: Errors
+---
 
-Every error response has this shape:
-```json
-{
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Human-readable explanation of what went wrong"
-  }
-}
-```
-
-| Code | HTTP Status | What it means |
-|------|-------------|--------------|
-| `VALIDATION_ERROR` | 400 | Your request body failed validation. The message says which field. |
-| `INVALID_URL` | 400 | A URL in the payload is malformed. |
-| `INVALID_SCHEME` | 400 | URL scheme is not http or https. |
-| `URL_CREDENTIALS` | 400 | URL contains embedded `user:pass@` credentials. |
-| `IP_LITERAL` | 400 | URL hostname is an IPv4 or IPv6 literal. |
-| `BLOCKED_HOSTNAME` | 400 | URL hostname is `localhost`, `*.local`, `*.internal`, or `*.localhost`. |
-| `DOMAIN_PENDING_REVIEW` | 400 | The URL's domain is not yet on the allowlist. A review request was logged automatically; response includes `error.domain`. Soft/transient — retry after approval. |
-| `DOMAIN_NOT_APPROVED` | 400 | Legacy error code kept for compatibility. New integrations should expect `DOMAIN_PENDING_REVIEW`. |
-| `UNAUTHORIZED` | 401 | Missing or invalid API key. |
-| `FORBIDDEN` | 403 | Your key doesn't have permission for this action. |
-| `NOT_FOUND` | 404 | That event/account/group doesn't exist. |
-| `NOT_LINKED` | 403 | Your service key is not linked to the target portal account. |
-| `KEY_NOT_LINKED` | 403 | Your contribute API key has no linked owning account. The key cannot create or edit events until an operator links it. |
-| `ACCOUNT_REQUIRED` | 400 | `POST /service/api-keys` was called for a non-service tier without `account_id`. Required to prevent KEY_NOT_LINKED at use time. |
-| `NO_OWNER` | 403 | Operation requires an owning account and none is set (admin access required). |
-| `CONFLICT` | 409 | State conflict — e.g. a domain approval request is already reviewed. |
-| `DUPLICATE` | 409 | You already submitted an event with this `external_id`. |
-| `PAYLOAD_TOO_LARGE` | 413 | Request body exceeds the per-route limit. |
-| `RATE_LIMIT` | 429 | Too many requests. Check `RateLimit-*` headers for when to retry. |
-| `SERVER_ERROR` | 500 | Something broke on our end. No internal details exposed. |
-
-## Reference: Regions
+## Appendix C: Regions
 
 Every event belongs to a geographic region (a city or neighborhood). When you submit an event:
 
@@ -833,166 +999,16 @@ Every event belongs to a geographic region (a city or neighborhood). When you su
 
 Events without a proper region won't appear in location-filtered feeds. Always provide an address or coordinates.
 
----
-
-## Part 5: Service API (Building Consumer Apps)
-
-If you're building an app that manages events on behalf of venue operators — a CMS, a scheduling tool, a venue management platform — you need the Service API. This is the layer that lets your app authenticate its own users, link them to Commons portal accounts, and manage their data via REST.
-
-### The Model
-
-Your app owns authentication. The Commons owns event data. The link between them is a portal account, identified by email.
-
-1. A venue operator signs up on **your** app (your auth, your database)
-2. Your app calls the Commons to establish the link
-3. Your app creates/updates/deletes events on their behalf
-4. The data flows to every other app connected to the Commons
-
-### Getting a Service Key
-
-Service keys are issued by the Commons operator. Contact hi@neighborhood-commons.org with:
-- Your app name and URL
-- What you're building and how you'll use the data
-- Contact email for your team
-
-Service keys are scoped: you can only modify data for accounts you've explicitly linked to your key. You cannot read, modify, or delete data belonging to other apps' accounts.
-
-Beyond scoping, three operator-set knobs configure how your key participates in the verification system:
-
-- `brand_config` — verification email sender identity (`app_name`, `from_name`, optional `from_email`, optional per-template `subjects`). Two valid configurations:
-  - **Display-only branding (free tier)**: set `app_name` and `from_name` only. Verification emails come from the Commons-verified domain (e.g. `verify@neighborhood-commons.org`) with your app's display name (e.g. `Holler <verify@neighborhood-commons.org>`). Subject and body are still under your brand. Most email clients show the display name first and prominently — this reads as your app to the user without needing a verified domain. Recommended for v1 integrations.
-  - **Full domain branding (paid tier)**: additionally set `from_email`. Verification emails come from your app's domain (e.g. `verify@holler.app`). Requires your domain verified in the shared Resend account ($20/mo Resend Pro at time of writing). Coordinate with the operator at issuance.
-- `verification_authority` — methods this key may auto-approve manual reviews for, e.g. `["manual_review:in_person"]`. Granted after the operator reviews your verification process. Without it, manual-review submissions queue for admin review (slower turnaround).
-- `is_admin` — operator-only. Studio (the operator's tooling) is the only key with this. Bypasses scoping; accesses verification review queue.
-
-### Linking Accounts
-
-```bash
-# Find-or-create a portal account and link it to your service key
-curl -X POST "https://api.neighborhood-commons.org/api/v1/service/accounts/link" \
-  -H "X-API-Key: nc_your_service_key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "john@johnnysbar.com",
-    "business_name": "Johnny'\''s Bar",
-    "claimed_by": "your-app-name"
-  }'
-```
-
-Response:
-```json
-{
-  "account": {
-    "id": "uuid-of-portal-account",
-    "email": "john@johnnysbar.com",
-    "business_name": "Johnny's Bar",
-    "status": "active",
-    "claimed_at": "2026-04-08T...",
-    "claimed_by": "your-app-name"
-  },
-  "created": true,
-  "linked": true
-}
-```
-
-If the account already exists (same email), it's returned as-is with `created: false`. The link to your service key is established either way.
-
-### Looking Up Accounts
-
-```bash
-# Check if an account exists before linking
-curl "https://api.neighborhood-commons.org/api/v1/service/accounts?email=john@johnnysbar.com" \
-  -H "X-API-Key: nc_your_service_key"
-```
-
-### Creating Events for Linked Accounts
-
-Once linked, create events using the account's portal ID:
-
-```bash
-curl -X POST "https://api.neighborhood-commons.org/api/v1/service/events" \
-  -H "X-API-Key: nc_your_service_key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "account_id": "uuid-from-link-response",
-    "name": "Thursday Jazz Night",
-    "start": "2026-04-17T19:00:00-04:00",
-    "end": "2026-04-17T22:00:00-04:00",
-    "timezone": "America/New_York",
-    "category": "live_music",
-    "location": {
-      "name": "Johnny'\''s Bar",
-      "address": "1234 Frankford Ave, Philadelphia PA"
-    },
-    "description": "Weekly jazz trio. BYOB.",
-    "cost": "Free"
-  }'
-```
-
-The Service API accepts the same **friendly-shape** payload as the Contribute API and the public read schema — `name`, `start`, `timezone`, `location`, `url`, `cost`. `recurrence` is optional; omit it for one-off events. See [`ServiceEventInput`](https://api.neighborhood-commons.org/openapi.json) in the Spec for the authoritative field list. **Spec wins when this Guide and the Spec disagree.**
-
-### Scoping Rules
-
-- **Reads are unrestricted** — any service key can read all public data (same as the public API)
-- **Writes are scoped** — you can only create/update/delete events for accounts linked to your key
-- **Cross-account writes return 403** — `"This API key is not linked to the target account"`
-- **Admin keys** bypass scoping (issued only to the platform operator)
-
-### Service Endpoint Reference
-
-**The authoritative list of Service API endpoints lives in [`/openapi.json`](https://api.neighborhood-commons.org/openapi.json).** That spec is the contract — prefer it over this doc when they disagree. What follows is the common subset consumers reach for most often.
-
-| Method | Path | Scope |
-|--------|------|-------|
-| `POST` | `/service/accounts/link` | Find-or-create a portal account by email and link it to your key |
-| `GET` | `/service/accounts` | List/search linked accounts (with event counts) |
-| `GET` | `/service/accounts/:id` | Single account detail |
-| `POST` | `/service/accounts` | Create a new portal account |
-| `PATCH` | `/service/accounts/:id` | Update a linked account |
-| `DELETE` | `/service/accounts/:id` | Delete a linked account (and its events) |
-| `POST` | `/service/accounts/:id/cover-image` | Upload an account cover image |
-| `POST` | `/service/accounts/:id/logo` | Upload an account logo |
-| `GET` | `/service/events` | List events (supports `time`, `search`, `source_method`, `category`, `all_instances` filters) |
-| `GET` | `/service/events/:id` | Single event detail |
-| `POST` | `/service/events` | Create an event (or recurring series) for a linked account |
-| `PATCH` | `/service/events/:id` | Update a single event (one instance only, does NOT propagate within a series) |
-| `PATCH` | `/service/events/batch` | Batch-update a subset of fields across many events |
-| `PATCH` | `/service/events/series/:seriesId` | Update all future instances AND the series template (auto-extend inherits) |
-| `DELETE` | `/service/events/:id` | Delete a single event |
-| `DELETE` | `/service/events/series/:seriesId` | Delete every event in a series |
-| `POST` | `/service/events/:id/image` | Upload an event image (JSON base64, JSON image_url, or multipart) |
-| `PATCH` | `/service/events/:id/group` | Link an event to a group (or unlink with `{ group_id: null }`) |
-| `GET` | `/service/groups` | List groups |
-| `GET` | `/service/groups/:id` | Group detail |
-| `POST` | `/service/groups` | Create a group |
-| `PATCH` | `/service/groups/:id` | Update a group |
-| `DELETE` | `/service/groups/:id` | Delete a group |
-| `POST` | `/service/groups/:id/venues` | Add a venue to a group |
-| `DELETE` | `/service/groups/:groupId/venues/:venueId` | Remove a venue from a group |
-| `GET` | `/service/stats` | Platform stats (admin) |
-| `GET` | `/service/api-keys` | List all API keys (admin) |
-| `POST` | `/service/api-keys` | Issue a new API key, linked to an account. Returns the raw key once. (admin) |
-| `PATCH` | `/service/api-keys/:id` | Update an API key — name, status (revoked), tier, etc. (admin) |
-| `GET` | `/service/approved-domains` | List allowlisted contribute-URL domains (admin) |
-| `POST` | `/service/approved-domains` | Add a domain to the allowlist (admin) |
-| `DELETE` | `/service/approved-domains/:domain` | Remove a domain from the allowlist (admin) |
-| `GET` | `/service/domain-approval-requests?status=pending` | Review queue of pending domain requests (admin) |
-| `POST` | `/service/domain-approval-requests/:id/approve` | Approve a request and add its domain (admin) |
-| `POST` | `/service/domain-approval-requests/:id/reject` | Reject a pending request without allowlisting (admin) |
-
-Admin-only endpoints require a service key with `is_admin=true`. Non-admin service keys are scoped to linked accounts only.
+`GET /v1/meta/regions` lists active regions.
 
 ---
 
-## Stability
+## License & contact
 
-The v1 API is stable. Breaking changes to `/api/v1/*` endpoints require at least 90 days notice. Response shapes, query parameters, and authentication requirements are locked. Extension APIs (`/portal/*`, `/service/*`) may evolve with shorter notice. If a breaking change is needed, v2 will be introduced and v1 will keep running.
+All data is published under **Creative Commons Attribution 4.0 International (CC BY 4.0)**. You can use it for any purpose — commercial or non-commercial — as long as you credit "Neighborhood Commons."
 
----
+The source is open under MIT: [github.com/joinfiber/neighborhood-commons](https://github.com/joinfiber/neighborhood-commons).
 
-## License
+Questions: hi@neighborhood-commons.org
 
-All event data is published under **Creative Commons Attribution 4.0 International (CC BY 4.0)**. You can use it for any purpose — commercial or non-commercial — as long as you credit "Neighborhood Commons."
-
-Contact: hi@neighborhood-commons.org
-Spec: [Neighborhood API v0.2](https://github.com/The-Relational-Technology-Project/neighborhood-api)
+Spec we follow: [Neighborhood API v0.2](https://github.com/The-Relational-Technology-Project/neighborhood-api).
