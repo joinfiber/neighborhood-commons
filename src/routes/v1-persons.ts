@@ -17,7 +17,7 @@ import { supabaseAdmin } from '../lib/supabase.js';
 import { createError } from '../middleware/error-handler.js';
 import { validateRequest, sanitizeSearchInput } from '../lib/helpers.js';
 import { optionalApiKey } from '../middleware/api-key.js';
-import { hydrateVerificationsFor, type VerificationByTarget } from '../lib/verification-hydrate.js';
+import { hydrateVerificationsFor, resolveVerificationIdFilter, type VerificationByTarget } from '../lib/verification-hydrate.js';
 
 const router: ReturnType<typeof Router> = Router();
 router.use(optionalApiKey);
@@ -56,11 +56,29 @@ router.get('/', async (req, res, next) => {
     const limit = params.limit || 50;
     const offset = params.offset || 0;
 
+    // Pre-resolve verification filters into id set — see organizations route
+    // for the reasoning. Pushes the filter into SQL so meta.total is honest.
+    const verifFilter = await resolveVerificationIdFilter('person', {
+      verified: params.verified,
+      verified_by: params.verified_by,
+      not_verified_by: params.not_verified_by,
+    });
+    if ('empty' in verifFilter && verifFilter.empty) {
+      res.set('Cache-Control', 'public, max-age=60');
+      res.json({ meta: buildMeta(0, limit, offset), persons: [] });
+      return;
+    }
+
     let query = supabaseAdmin
       .from('persons')
       .select(PERSON_SELECT, { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
+
+    if ('includeIds' in verifFilter) query = query.in('id', verifFilter.includeIds);
+    if ('excludeIds' in verifFilter) {
+      query = query.not('id', 'in', `(${verifFilter.excludeIds.join(',')})`);
+    }
 
     if (params.q) {
       const sanitized = sanitizeSearchInput(params.q);
@@ -80,22 +98,7 @@ router.get('/', async (req, res, next) => {
     const ids = (persons || []).map(p => p.id as string);
     const verifications = await hydrateVerificationsFor('person', ids);
 
-    let formatted = (persons || []).map(p => formatPerson(p, verifications));
-
-    // Filter by verified state (post-fetch since the verification source is in a separate table)
-    if (params.verified === 'true') {
-      formatted = formatted.filter(p => p.verified);
-    } else if (params.verified === 'false') {
-      formatted = formatted.filter(p => !p.verified);
-    }
-    if (params.verified_by) {
-      const allowed = new Set(params.verified_by.split(',').map(s => s.trim()));
-      formatted = formatted.filter(p => p.verification && allowed.has(p.verification.verifiedByApp));
-    }
-    if (params.not_verified_by) {
-      const blocked = new Set(params.not_verified_by.split(',').map(s => s.trim()));
-      formatted = formatted.filter(p => !p.verification || !blocked.has(p.verification.verifiedByApp));
-    }
+    const formatted = (persons || []).map(p => formatPerson(p, verifications));
 
     res.set('Cache-Control', 'public, max-age=60');
     res.json({

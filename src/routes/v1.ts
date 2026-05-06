@@ -56,6 +56,10 @@ const listSchema = z.object({
   recurring: z.enum(['true', 'false']).optional(),
   contributor: z.string().max(200).optional(),
   tmdb_id: z.string().max(50).optional(),
+  // first_party=true   → only events posted by the verified business itself
+  // first_party=false  → only events aggregated from public sources (scrapers, feeds)
+  // (omitted)          → both tiers, no filter applied
+  first_party: z.enum(['true', 'false']).optional(),
   limit: z.coerce.number().min(1).max(200).default(50),
   offset: z.coerce.number().min(0).default(0),
 });
@@ -151,6 +155,16 @@ async function queryFilteredEvents(params: ListParams, opts?: {
   // TMDB film filter (cluster all showings of a single film across theaters/dates)
   if (params.tmdb_id) {
     query = query.eq('tmdb_id', params.tmdb_id);
+  }
+
+  // First-party filter — distinguishes information posted BY the business
+  // itself (after they verified) from public-facts information aggregated
+  // about them by scrapers, feeds, and ingestion pipelines. SQL-level so
+  // meta.total reflects the filtered count.
+  if (params.first_party === 'true') {
+    query = query.eq('first_party', true);
+  } else if (params.first_party === 'false') {
+    query = query.eq('first_party', false);
   }
 
   // Date range filters

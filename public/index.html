@@ -156,6 +156,16 @@
       font-variant-numeric: tabular-nums;
     }
     .nc-stats strong { font-weight: 600; }
+    /* Sub-line under the headline stats — breaks the aggregate count into
+       its two-tier reality. Smaller, dim, mono. The honesty signal that
+       grant readers and skeptical developers both look for. */
+    .nc-stats-tier {
+      margin-top: 6px;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.82rem; letter-spacing: 0.01em;
+      color: var(--nc-dim);
+      font-variant-numeric: tabular-nums;
+    }
 
     /* Hero code specimen — framed, with a label. Reads as an intentional
        "live API" specimen rather than a floating cutout. The dark slab is
@@ -712,7 +722,7 @@
       <div class="nc-imagine">
         <div class="nc-imagine-eyebrow">Imagine building</div>
         <ul>
-          <li>A guide that surfaces only the events from curators you trust.</li>
+          <li>A guide that shows only events posted by the venues themselves — no scrapers, no aggregators.</li>
           <li>A live feed of what businesses are broadcasting on the next block over.</li>
           <li>A real-estate explorer that maps the rhythm of a Tuesday night.</li>
           <li>A civic dashboard tracking the vitality of a single district.</li>
@@ -763,9 +773,9 @@
           <p>The Commons isn't a destination. Each app composes its own slice through opt-in filters: by verifier, by contributor, by proximity, by type. Same data, different editorial.</p>
         </div>
         <div class="nc-pillar">
-          <span class="nc-pillar-num">03 — Trusted</span>
-          <h3>Verify once. Recognized everywhere.</h3>
-          <p>When a business gets verified through one app, every other app can honor that verification — or filter it out. The reputation graph is public. Verifiers earn or lose trust on the quality of their work.</p>
+          <span class="nc-pillar-num">03 — Layered</span>
+          <h3>Two tiers of authority.</h3>
+          <p>The Commons separates information <em>about</em> a business from information <em>from</em> a business. Public facts come from scrapers, listings, and feeds — broad coverage, best-effort quality. First-party content comes from businesses themselves after they verify — authoritative, the business stands behind it. Apps filter to the tier they need.</p>
         </div>
       </div>
     </section>
@@ -1268,7 +1278,20 @@ $ curl -X DELETE "{{baseUrl}}/api/v1/service/lists/LIST_UUID/items/3" \
 
         <!-- ─── 5. Verification ─── -->
         <h2 id="verification"><span class="nc-section-num">5</span>Verification</h2>
-        <p>Verification is a process the Commons orchestrates and an attribute apps consume. The Commons routes; apps follow. Submission endpoints reject mismatches with <code>409 WRONG_METHOD</code> pointing at the correct path.</p>
+        <p>Verification does two things at once. It establishes that an organization or person controls an identifier (an email, a domain, a phone). And it <strong>unlocks first-party publishing</strong> for that target — the ability for a business to post their own events, their own broadcasts, their own operating hours, with the authority signal that comes from "this came from the business itself."</p>
+
+        <p>Until a target is verified, the Commons can still hold information about them — happy hours scraped from a flyer, events lifted from a venue's website, hours pulled from a public listing. That's the <em>public-facts</em> tier: source-tracked, possibly accurate, best-effort quality. Apps consume both tiers and filter to the one they need:</p>
+
+        <pre># Everything the Commons knows about events near a point
+$ curl "{{baseUrl}}/api/v1/events?near=39.97,-75.14&amp;radius_km=2"
+
+# Only events posted by the verified business itself
+$ curl "{{baseUrl}}/api/v1/events?near=39.97,-75.14&amp;radius_km=2&amp;first_party=true"
+
+# Only events aggregated from public sources (scrapers, feeds)
+$ curl "{{baseUrl}}/api/v1/events?near=39.97,-75.14&amp;radius_km=2&amp;first_party=false"</pre>
+
+        <p>The Commons orchestrates the verification process; apps consume the result. Submission endpoints reject mismatches with <code>409 WRONG_METHOD</code> pointing at the correct path.</p>
 
         <h3>The flow</h3>
 
