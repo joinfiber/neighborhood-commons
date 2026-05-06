@@ -14,6 +14,16 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-05-06 (latest)
+
+- SDK: published `neighborhood-commons@1.0.0` on npm, aligning the SDK major version with the spec major version. Generated types now reflect the corrected `first_party` semantics (server-computed, not caller-provided). No code changes from prior 0.0.4 generation other than the spec-driven type updates and the version bump itself. Per `sdk/RELEASING.md`: `git tag sdk-v1.0.0 && git push origin sdk-v1.0.0` on master after merge to trigger the publish workflow.
+- Fixed: `events.first_party` is now computed server-side at insert time from the organizer's verification state, never trusted from caller input. Pre-1.0 the portal route auto-set `first_party=true` on every portal-submitted event ("Portal events are always entered by the originator"), and the service-tier `ServiceEventInput` accepted it as a free-form boolean. Both were inherited from a time when verification didn't yet exist; in the new model, `first_party=true` means *the organizer is a verified business* and that's a fact about the system, not a claim a caller can self-issue.
+- Spec: removed `first_party` from `ServiceEventInput` (input shape). Still present on the `Event` and `ServiceEvent` output shapes; description updated to reflect server-computed semantics. Existing service-tier callers sending `first_party` now have it silently stripped by the input parser; no 4xx, no breakage.
+- Migration 076: `UPDATE events SET first_party = false WHERE first_party = true`. The 25 existing events with `first_party=true` were misattributed by the legacy portal logic — no organization is currently verified, so no event should be first-party. Backfilled to false. Going forward, first_party flips to true automatically as venues' verifications land.
+- New helper: `isFirstPartyByOrganizer(orgId, personId)` in `src/lib/verification-hydrate.ts`. Used by both portal and service write paths.
+
+---
+
 ## 2026-05-06 (later)
 
 - New: `?first_party=true|false` filter on `GET /v1/events`. The Commons holds two tiers of authority on the same data substrate: **public-facts** (information *about* a business — scrapers, feeds, ingestion pipelines) and **first-party** (information *from* a business, posted by the business itself after verification). The filter lets apps choose which tier to surface. Schema-level filter (not post-fetch), so `meta.total` reflects the filtered count.

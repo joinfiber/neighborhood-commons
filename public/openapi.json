@@ -5303,7 +5303,7 @@
           },
           "first_party": {
             "type": "boolean",
-            "description": "Whether the event was entered by its originator (venue, host, group) rather than a third party"
+            "description": "Authority tier. `true` if the event's organizer (organization or person) had at least one active verified identifier at the time the event was inserted — meaning the event was posted by the verified business itself. `false` for public-facts events aggregated from scrapers, feeds, and ingestion pipelines. Computed server-side; not a writable input. Filterable via `?first_party=true|false` on `GET /events`."
           },
           "event_image_focal_y": {
             "type": [
@@ -5569,7 +5569,8 @@
           },
           "first_party": {
             "type": "boolean",
-            "default": false
+            "default": false,
+            "description": "Authority tier. Computed server-side from the organizer's verification state at insert time."
           },
           "source_publisher": {
             "type": [
@@ -5966,9 +5967,6 @@
               null
             ],
             "description": "Whether RSVP is a thing for this event. Commons does not manage RSVPs."
-          },
-          "first_party": {
-            "type": "boolean"
           },
           "contributor": {
             "type": "object",

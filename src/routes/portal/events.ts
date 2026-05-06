@@ -19,8 +19,25 @@ import { writeLimiter, portalLimiter } from "../../middleware/rate-limit.js";
 import { PORTAL_SELECT, MANAGED_SOURCES, toPortalEvent, portalInputToInsert, toTimestamptz, fromTimestamptz, getAdminUserId, formatDateStr, generateInstanceDates } from "../../lib/event-operations.js";
 import { createEventSeries, deleteSeriesEvents, updateSeriesFutureInstances } from "../../lib/event-series.js";
 import { getUserClient, getPortalAccount, getPortalAccountId, getAuditActor, checkPortalCreationRateLimit } from "../../lib/portal-helpers.js";
+import { isFirstPartyByOrganizer } from "../../lib/verification-hydrate.js";
 
 const VALID_TIMEZONES = new Set(Intl.supportedValuesOf("timeZone"));
+
+/**
+ * For a portal event: an event is first-party iff the portal account's
+ * organization (1:1 link via organizations.owner_account_id) has at least
+ * one active verified identifier. Until the portal grows a verification
+ * UI, this returns false for every account — which is the correct state.
+ */
+async function computePortalEventFirstParty(portalAccountId: string): Promise<boolean> {
+  const { data: org } = await supabaseAdmin
+    .from('organizations')
+    .select('id')
+    .eq('owner_account_id', portalAccountId)
+    .maybeSingle();
+  if (!org) return false;
+  return isFirstPartyByOrganizer(org.id as string, null);
+}
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -174,7 +191,11 @@ router.post('/events', writeLimiter, async (req, res, next) => {
     }
 
     const insertData = portalInputToInsert(data, account.id, adminUserId, account.status);
-    insertData.first_party = true; // Portal events are always entered by the originator
+    // first_party is computed server-side from the organizer's verification
+    // state — the flag means "posted by a verified business," not "posted
+    // via the portal." If the portal account's organization is verified,
+    // events they post are first-party; otherwise they're public-facts.
+    insertData.first_party = await computePortalEventFirstParty(account.id);
 
     // Recurring events: expand into individual instance rows
     if (data.recurrence !== 'none') {

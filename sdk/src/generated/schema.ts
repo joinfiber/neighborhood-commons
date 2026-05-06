@@ -1391,7 +1391,7 @@ export interface components {
             recurrence?: null | {
                 rrule?: string;
             };
-            /** @description Whether the event was entered by its originator (venue, host, group) rather than a third party */
+            /** @description Authority tier. `true` if the event's organizer (organization or person) had at least one active verified identifier at the time the event was inserted — meaning the event was posted by the verified business itself. `false` for public-facts events aggregated from scrapers, feeds, and ingestion pipelines. Computed server-side; not a writable input. Filterable via `?first_party=true|false` on `GET /events`. */
             first_party?: boolean;
             /** @description Vertical focal point for image cropping (0=top, 1=bottom, 0.5=center) */
             event_image_focal_y?: number | null;
@@ -1475,7 +1475,10 @@ export interface components {
             /** Format: uuid */
             series_id?: string | null;
             series_instance_number?: number | null;
-            /** @default false */
+            /**
+             * @description Authority tier. Computed server-side from the organizer's verification state at insert time.
+             * @default false
+             */
             first_party: boolean;
             source_publisher?: string | null;
             source_feed_url?: string | null;
@@ -1601,7 +1604,6 @@ export interface components {
              * @enum {string|null}
              */
             rsvp?: "recommended" | "required" | null;
-            first_party?: boolean;
             /** @description Per-event attribution for the app/tool that publishes this event, distinct from the account-derived source.publisher. Surfaces on the read path as source.contributor. Omit to fall back to legacy derivation (source.publisher on api-method events). Send null on PATCH to clear an existing override. */
             contributor?: {
                 name: string;

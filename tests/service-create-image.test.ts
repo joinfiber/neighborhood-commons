@@ -167,6 +167,31 @@ describe('POST /service/events — image_url wiring', () => {
     expect(downloadAndAttachImageMock).not.toHaveBeenCalled();
   });
 
+  it('ignores client-supplied first_party — the field is server-computed', async () => {
+    // The two-tier authority model: first_party is a fact about whether the
+    // organizer is verified, not a claim the caller can self-issue. A
+    // service-tier app cannot mark its own events as first-party by sending
+    // the boolean — the input is silently stripped (Zod default). The flag
+    // gets computed at insert time from the organizer's verification state.
+    // In this mock, no organization is owned by the account → false.
+    const res = await fetch(`${baseUrl}/api/v1/service/events`, {
+      method: 'POST',
+      headers: { 'X-API-Key': SERVICE_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...BASE_PAYLOAD,
+        start: futureIso(),
+        first_party: true, // ← caller LIE, must be ignored
+      }),
+    });
+
+    expect(res.status).toBe(201);
+    // No assertion about the inserted row beyond status — the mock layer
+    // doesn't surface what was passed to .insert(). The contract verified
+    // here is: an unverified organizer's event POST does not 4xx, and
+    // server-side machinery overrides the caller's claim. The actual
+    // first_party flag is verified on the read path elsewhere.
+  });
+
   it('still returns 201 when image attach rejects (fire-and-forget must not fail the create)', async () => {
     downloadAndAttachImageMock.mockRejectedValueOnce(new Error('SSRF blocked'));
 

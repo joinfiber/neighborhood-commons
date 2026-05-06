@@ -163,3 +163,41 @@ export async function resolveVerificationIdFilter(
   // No filters effective.
   return {};
 }
+
+/**
+ * Returns true if the given organizer (org or person) has at least one
+ * active verified identifier. Used by event write paths to compute
+ * first_party server-side: an event is first-party iff its organizer
+ * is verified at insert time.
+ *
+ * If both ids are null/undefined, returns false. If both are provided,
+ * returns true if EITHER is verified (xor is enforced elsewhere).
+ */
+export async function isFirstPartyByOrganizer(
+  organizerOrgId: string | null | undefined,
+  organizerPersonId: string | null | undefined,
+): Promise<boolean> {
+  if (!organizerOrgId && !organizerPersonId) return false;
+
+  if (organizerOrgId) {
+    const { count } = await supabaseAdmin
+      .from('account_verified_identifiers')
+      .select('id', { count: 'exact', head: true })
+      .eq('target_type', 'organization')
+      .eq('target_id', organizerOrgId)
+      .eq('status', 'active');
+    if ((count ?? 0) > 0) return true;
+  }
+
+  if (organizerPersonId) {
+    const { count } = await supabaseAdmin
+      .from('account_verified_identifiers')
+      .select('id', { count: 'exact', head: true })
+      .eq('target_type', 'person')
+      .eq('target_id', organizerPersonId)
+      .eq('status', 'active');
+    if ((count ?? 0) > 0) return true;
+  }
+
+  return false;
+}
