@@ -156,6 +156,7 @@ describe('contract drift: in-contract routes documented in openapi.json', () => 
     'service/events.ts': '/service',
     'service/series.ts': '/service',
     'service/admin-ops.ts': '/service',
+    'service/register.ts': '/service/register',
     // 1.0.0 type-system service routes
     'service/places.ts': '/service',
     'service/organizations.ts': '/service',

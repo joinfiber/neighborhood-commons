@@ -10,7 +10,6 @@
  */
 
 import { Router } from 'express';
-import { randomInt, timingSafeEqual } from 'crypto';
 import { z } from 'zod';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { validateRequest } from '../lib/helpers.js';
@@ -18,11 +17,9 @@ import { createError } from '../middleware/error-handler.js';
 import { enumerationLimiter, writeLimiter, verifyOtpLimiter } from '../middleware/rate-limit.js';
 import { requireApiKey } from '../middleware/api-key.js';
 import { generateAndStoreKey } from '../lib/api-keys.js';
-import { sendEmail } from '../lib/email.js';
+import { storeOtp, verifyOtp, sendOtpEmail } from '../lib/developer-otp.js';
 
 const router: ReturnType<typeof Router> = Router();
-
-const OTP_TTL_MINUTES = 10;
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -43,85 +40,6 @@ const rotateKeySchema = z.object({
   email: z.string().email().max(320),
   token: z.string().min(6).max(8),
 });
-
-// ---------------------------------------------------------------------------
-// OTP helpers
-// ---------------------------------------------------------------------------
-
-/** Generate an 8-digit numeric code */
-function generateOtpCode(): string {
-  return String(randomInt(10_000_000, 99_999_999));
-}
-
-/** Store an OTP code for the given email. Cleans up any prior codes for that email. */
-async function storeOtp(email: string): Promise<string> {
-  const code = generateOtpCode();
-  const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000).toISOString();
-
-  // Delete any existing codes for this email
-  await supabaseAdmin
-    .from('developer_otps')
-    .delete()
-    .eq('email', email.toLowerCase());
-
-  const { error } = await supabaseAdmin
-    .from('developer_otps')
-    .insert({ email: email.toLowerCase(), code, expires_at: expiresAt });
-
-  if (error) {
-    console.error('[DEVELOPERS] OTP store failed:', error.message);
-    throw new Error('Failed to store OTP');
-  }
-
-  return code;
-}
-
-/** Verify an OTP code. Returns true if valid, false otherwise. Deletes the code on success. */
-async function verifyOtp(email: string, token: string): Promise<boolean> {
-  const { data: otp } = await supabaseAdmin
-    .from('developer_otps')
-    .select('id, code, expires_at')
-    .eq('email', email.toLowerCase())
-    .maybeSingle();
-
-  if (!otp) return false;
-  if (new Date(otp.expires_at) < new Date()) {
-    await supabaseAdmin.from('developer_otps').delete().eq('id', otp.id);
-    return false;
-  }
-
-  // Timing-safe comparison to prevent side-channel attacks on OTP codes
-  const match = otp.code.length === token.length &&
-    timingSafeEqual(Buffer.from(otp.code), Buffer.from(token));
-  if (!match) return false;
-
-  await supabaseAdmin.from('developer_otps').delete().eq('id', otp.id);
-  return true;
-}
-
-/** Send the OTP email via Mailgun */
-async function sendOtpEmail(email: string, code: string): Promise<void> {
-  const html = `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
-      <div style="font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: #7a7670; margin-bottom: 24px;">
-        Neighborhood Commons
-      </div>
-      <div style="font-size: 16px; color: #37352f; line-height: 1.6; margin-bottom: 24px;">
-        Your verification code is:
-      </div>
-      <div style="font-size: 32px; font-weight: 600; letter-spacing: 6px; color: #1a1917; font-family: monospace; margin-bottom: 24px;">
-        ${code}
-      </div>
-      <div style="font-size: 14px; color: #6b6660; line-height: 1.6;">
-        Enter this code to complete your API key registration. It expires in ${OTP_TTL_MINUTES} minutes.
-      </div>
-      <div style="font-size: 13px; color: #9c9791; margin-top: 32px;">
-        If you didn't request this, you can ignore this email.
-      </div>
-    </div>
-  `;
-  await sendEmail(email, 'Your Neighborhood Commons verification code', html);
-}
 
 // ---------------------------------------------------------------------------
 // POST /developers/register/send-otp

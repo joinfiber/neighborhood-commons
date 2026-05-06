@@ -99,7 +99,7 @@ https://api.neighborhood-commons.org/api/v1/events.ics
 
 Standards-compliant iCalendar. Drop the URL into Google Calendar / Apple Calendar / any RFC 5545 reader. RSS available at `/api/v1/events.rss`.
 
-**Writing data?** Skip to [Section 4: Writing data](#4-writing-data) for the service-tier flow. There is no self-service write path; service keys are operator-issued.
+**Writing data?** Skip to [Section 4: Writing data](#4-writing-data). You can self-issue a service key in `pending` status and build your full integration immediately — only the live-write step requires a one-time review.
 
 ---
 
@@ -395,39 +395,66 @@ For consumers polling regularly, use `/api/events/changes?since=<ISO timestamp>`
 
 ## 4. Writing data
 
-Writes flow through the service tier. There is no self-service write path — service keys are operator-issued after a brief onboarding conversation. Two effective tiers exist: **Browse** (read, no auth or basic API key for higher rate limit) and **Service** (write, with optional `is_admin` variant).
+Writes go through a service key. **You can self-issue a key and build your entire integration before talking to anyone** — auth, request shapes, verification flows, webhook signatures, every endpoint. The only thing gated is actually delivering data to the Commons. Keys ship in `pending` status and stay there until a one-time review activates writes. Reads are unrestricted either way.
 
-### 4.1 Getting a service key
+### 4.1 Get a key
 
-Email `hi@neighborhood-commons.org` with the following:
+Two-step OTP flow against the public API. No human in the loop until activation.
 
-- **App name and URL.**
-- **What you're building.** One paragraph is fine.
-- **How you plan to verify the organizations you onboard.** In-person? Video call? Domain email only? This determines what `verification_authority` the operator grants your key.
-- **Team contact email.**
-- **Expected first-week write volume.** Used to size rate limits.
+**Step 1 — request a verification code:**
 
-Typical turnaround is one business day. The operator will reply with the raw key string (saved once — cannot be recovered) and confirm what's set on it.
+```bash
+curl -X POST "https://api.neighborhood-commons.org/api/v1/service/register/send-otp" \
+  -H "Content-Type: application/json" \
+  -d '{ "email": "you@yourcompany.com" }'
+```
 
-### 4.2 brand_config
+You'll receive an 8-digit code by email. It expires in 10 minutes.
 
-Verification emails are sent from the Commons-shared Resend account. Two valid configurations:
+**Step 2 — submit the code along with your application:**
 
-| Tier | Sender shown | Resend cost |
-|---|---|---|
-| **Display-only** (recommended for v1) | `YourApp <verify@neighborhood-commons.org>` | Free |
-| **Full domain** | `YourApp <verify@yourapp.com>` | $20/mo Resend Pro + DNS setup |
+```bash
+curl -X POST "https://api.neighborhood-commons.org/api/v1/service/register/verify-otp" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "you@yourcompany.com",
+    "token": "12345678",
+    "app_name": "Your App",
+    "app_url": "https://yourapp.com",
+    "what_youre_building": "One paragraph: who the user is, what the integration looks like.",
+    "verification_process": "How you verify the organizations you onboard — in person, video call, domain email loop, manual editorial review, etc. Drives the verification_authority granted at activation."
+  }'
+```
 
-Most email clients show the display name first and prominently — the display-only tier reads as your brand to the user without requiring a separate verified domain. Subject and body are under your control either way. Upgrading later is a single `brand_config` field change with no code impact on your side.
+The response includes `api_key.raw_key` — the credential, returned once. Use it as `X-API-Key: nc_...` on every subsequent request. The key lands with `status: "pending_activation"` — reads work immediately; writes return `403 KEY_PENDING` until you complete activation (§4.3).
 
-### 4.3 Scoping rules
+### 4.2 What `pending` lets you do
 
-- Reads are unrestricted. Service keys can read any public data.
-- Writes are scoped: a service key can only create/update/delete data for organizations linked to it via `api_key_organization_links`.
+A pending key authenticates everywhere. You can:
+
+- Read every public endpoint, with the higher service-tier rate limit.
+- Hit `GET /v1/service/verifications/path` to exercise the routing-authority logic.
+- Dry-run write requests — schema validation runs, so you'll see your payload shape rejected the same way it would be on a live key.
+- Build, deploy, and demo your whole integration end-to-end against staging or production reads.
+
+What pending blocks: any write that mutates Commons state (`POST`/`PATCH`/`DELETE` on `/v1/service/*`). These return `403 KEY_PENDING` with a short message explaining the activation path. Nothing else changes between pending and active.
+
+### 4.3 Activate writes
+
+Once your build is ready, email `hi@neighborhood-commons.org` from the same address you registered with, including a link to your app. The review focuses on what your verification process looks like in practice — verifying organizations is the part of the flow with downstream consequences for other apps reading the Commons. Activation flips a single column on your key; no rotation, no code changes on your side.
+
+### 4.4 Brand identity on verification emails
+
+Verification emails ship under your app's display name (`YourApp <verify@neighborhood-commons.org>`) — most email clients show the display name first and prominently, so this reads as your app to the user. If you'd prefer they come from your own domain (`verify@yourapp.com`), mention it during activation. It's a config field, not a code change.
+
+### 4.5 Scoping rules
+
+- Reads are unrestricted. Active service keys can read any public data; pending keys can too.
+- Writes are scoped: an active service key can only create/update/delete data for organizations linked to it via `api_key_organization_links`.
 - Cross-organization writes return `403 NOT_LINKED`.
-- Admin keys (`is_admin=true`, currently only operator tooling) bypass scoping.
+- Admin keys (`is_admin=true`, currently used only by Studio) bypass scoping.
 
-### 4.4 Places — register a venue
+### 4.6 Places — register a venue
 
 Idempotent on `googlePlaceId`. If a Place with the supplied Google Place ID already exists, the response is `200` with the existing record. Otherwise `201` with the new one.
 
@@ -448,7 +475,7 @@ curl -X POST "https://api.neighborhood-commons.org/api/v1/service/places" \
   }'
 ```
 
-### 4.5 Organizations — create, link, update
+### 4.7 Organizations — create, link, update
 
 Three relevant endpoints: create a new Organization (auto-links the calling key), link your key to an existing Organization, or update an Organization you're already linked to.
 
@@ -478,9 +505,9 @@ curl -X PATCH "https://api.neighborhood-commons.org/api/v1/service/organizations
 
 Image uploads (logo, hero image) are JSON-base64: `POST /v1/service/organizations/:id/logo` and `POST /v1/service/organizations/:id/image` with body `{ "image": "<base64>" }`. Magic-byte check, Sharp re-encoding, R2 upload — same pipeline as event images.
 
-### 4.6 Persons
+### 4.8 Persons
 
-Create a Person record for performers, curators, or individual hosts. Person records are append-only for non-admin keys in 1.0 — operator-tier keys edit them. Person-link semantics ship in a later minor version.
+Create a Person record for performers, curators, or individual hosts. Person records are append-only for standard service keys in 1.0; per-Person edit semantics ship in a later minor version.
 
 ```bash
 curl -X POST "https://api.neighborhood-commons.org/api/v1/service/persons" \
@@ -494,7 +521,7 @@ curl -X POST "https://api.neighborhood-commons.org/api/v1/service/persons" \
   }'
 ```
 
-### 4.7 Events — using the new organizer model
+### 4.9 Events — using the new organizer model
 
 Event creation accepts the existing `ServiceEventInput` shape. The body field is named `account_id` for backward compatibility but expects an Organization id. After 1.0 you can also reassign an event's organizer:
 
@@ -528,7 +555,7 @@ curl -X PATCH "https://api.neighborhood-commons.org/api/v1/service/events/EVENT_
   -d '{ "organizerPersonId": "PERSON_UUID" }'
 ```
 
-### 4.8 Broadcasts — ephemeral signals
+### 4.10 Broadcasts — ephemeral signals
 
 Maximum 24h lifetime. Body: `organizationId`, `placeId`, `message` (≤280 chars), `expires` (ISO 8601, must be future, ≤24h ahead).
 
@@ -549,7 +576,7 @@ curl -X POST "https://api.neighborhood-commons.org/api/v1/service/broadcasts/BRO
 
 Verification gate: broadcast creation does *not* require the organization to be verified. Verification is a read-time consumer-app filter. Apps editorialize.
 
-### 4.9 Lists — curatorial workflows
+### 4.11 Lists — curatorial workflows
 
 Two-step: create the list, then add items. Items are polymorphic — events, organizations, places, or any mix.
 
@@ -578,11 +605,11 @@ curl -X DELETE "https://api.neighborhood-commons.org/api/v1/service/lists/LIST_U
   -H "X-API-Key: $NC_KEY"
 ```
 
-Person-curated lists require an admin key for edits in 1.0 (the `api_key_organization_links` pattern doesn't extend to Person yet). If you're working with a Person curator and need self-service editing, contact the operator — admin support can issue a key with appropriate authority.
+Person-curated lists need a one-time activation note in 1.0 — the `api_key_organization_links` pattern doesn't extend to Person yet. If your integration depends on Person curators editing their own lists, mention it during activation and we'll grant the key the necessary authority.
 
-### 4.10 Disputes
+### 4.12 Disputes
 
-Used to flag a verified target as misattributed. Records the dispute for operator review; no automated action in 1.0.
+Used to flag a verified target as misattributed. Records the dispute for human review; no automated action in 1.0.
 
 ```bash
 curl -X POST "https://api.neighborhood-commons.org/api/v1/service/disputes" \
@@ -700,7 +727,7 @@ Required evidence fields: `phone`, `verifiedVia` (`in_person` | `video_call`), `
 
 ### 5.4 verification_authority
 
-An operator-set JSON array on each service key listing methods the key may auto-approve. Granted after the operator reviews your verification process during onboarding. Format: `method:context`.
+A JSON array on each service key listing the verification methods the key may auto-approve. Set during activation, based on the verification process you described. Format: `method:context`.
 
 | Value | Meaning |
 |---|---|
@@ -825,7 +852,7 @@ Verify against the *raw* request body, not a re-stringified version — differen
 
 ### 6.5 Retry behavior
 
-Deliveries that fail (network error, non-2xx response, timeout) retry with exponential backoff: ~30s, 2m, 10m, 1h, 6h. After five consecutive failures, the subscription is marked disabled and stops receiving deliveries until the operator re-enables it. Inspect `GET /v1/webhooks/:id/deliveries` for failure reasons.
+Deliveries that fail (network error, non-2xx response, timeout) retry with exponential backoff: ~30s, 2m, 10m, 1h, 6h. After five consecutive failures, the subscription is automatically disabled and stops receiving deliveries; re-enable it by `PATCH`-ing `status` back to `active` once your endpoint is healthy. Inspect `GET /v1/webhooks/:id/deliveries` for failure reasons.
 
 ### 6.6 Idempotency
 

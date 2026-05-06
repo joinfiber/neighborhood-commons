@@ -684,8 +684,10 @@
 
         <div class="nc-docs-nav-section">Writing</div>
         <a href="#writing">Service tier</a>
-        <a href="#writing-key">Getting a key</a>
-        <a href="#writing-brand">brand_config</a>
+        <a href="#writing-key">Get a key</a>
+        <a href="#writing-pending">What pending lets you do</a>
+        <a href="#writing-activate">Activate writes</a>
+        <a href="#writing-brand">Brand identity</a>
         <a href="#writing-scoping">Scoping rules</a>
 
         <div class="nc-docs-nav-section">Verification</div>
@@ -730,7 +732,7 @@
         <p>Standards-compliant iCalendar feed. Drop the URL into Google Calendar / Apple Calendar / any RFC 5545 reader. RSS available at <code>/api/v1/events.rss</code>.</p>
 
         <div class="nc-callout">
-          <p><strong>Writing data?</strong> Skip to <a href="#writing">Writing data</a> for the service-tier flow. There is no self-service write path; service keys are operator-issued.</p>
+          <p><strong>Writing data?</strong> Skip to <a href="#writing">Writing data</a>. You can self-issue a service key in <code>pending</code> status and build your full integration immediately — only the live-write step requires a one-time review.</p>
         </div>
 
         <!-- ─── 2. Types ─── -->
@@ -973,45 +975,50 @@
 
         <!-- ─── 4. Writing ─── -->
         <h2 id="writing"><span class="nc-section-num">4</span>Writing data</h2>
-        <p>Writes flow through the service tier. There is no self-service write path — service keys are operator-issued after a brief onboarding conversation. Two effective tiers exist: <strong>Browse</strong> (read, no auth or basic API key for higher rate limit) and <strong>Service</strong> (write, with optional <code>is_admin</code> variant).</p>
+        <p>Writes go through a service key. <strong>You can self-issue a key and build your full integration before talking to anyone</strong> — auth, request shapes, verification flows, webhook signatures. The only thing gated is actually delivering data to the Commons. Keys ship pending and stay there until a one-time review activates writes. Reads are unrestricted either way.</p>
 
-        <h3 id="writing-key">Getting a service key</h3>
-        <p>Email <a href="mailto:hi@neighborhood-commons.org?subject=Service-tier%20integration%20application&amp;body=App%20name%20and%20URL%3A%0A%0AWhat%20you%27re%20building%3A%0A%0AHow%20you%20plan%20to%20verify%20organizations%20you%20onboard%20%28in-person%2C%20video%20call%2C%20domain%20email%29%3A%0A%0ATeam%20contact%20email%3A%0A%0AExpected%20first-week%20write%20volume%3A%0A">hi@neighborhood-commons.org</a> with the following:</p>
+        <h3 id="writing-key">Get a key</h3>
+        <p>Two-step OTP flow against the public API. No human in the loop until activation.</p>
+        <p><strong>Step 1 — request a verification code:</strong></p>
+        <pre>$ curl -X POST "{{baseUrl}}/api/v1/service/register/send-otp" \
+  -H "Content-Type: application/json" \
+  -d '{ "email": "you@yourcompany.com" }'</pre>
+        <p>You'll receive an 8-digit code by email. It expires in 10 minutes.</p>
+        <p><strong>Step 2 — submit the code along with your application:</strong></p>
+        <pre>$ curl -X POST "{{baseUrl}}/api/v1/service/register/verify-otp" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "you@yourcompany.com",
+    "token": "12345678",
+    "app_name": "Your App",
+    "app_url": "https://yourapp.com",
+    "what_youre_building": "One paragraph: who the user is, what the integration looks like.",
+    "verification_process": "How you verify organizations you onboard — in person, video call, domain email loop, manual review."
+  }'</pre>
+        <p>The response includes <code>api_key.raw_key</code> — the credential, returned once. Use it as <code>X-API-Key: nc_...</code> from then on. The key lands with <code>status: "pending_activation"</code> — reads work immediately; writes return <code>403 KEY_PENDING</code> until activation.</p>
+
+        <h3 id="writing-pending">What pending lets you do</h3>
+        <p>A pending key authenticates everywhere. You can:</p>
         <ul>
-          <li><strong>App name and URL.</strong></li>
-          <li><strong>What you're building.</strong> One paragraph is fine.</li>
-          <li><strong>How you plan to verify the organizations you onboard.</strong> In-person? Video call? Domain email only? This determines what <code>verification_authority</code> the operator grants your key.</li>
-          <li><strong>Team contact email.</strong></li>
-          <li><strong>Expected first-week write volume.</strong> Used to size rate limits.</li>
+          <li>Read every public endpoint, with the higher service-tier rate limit.</li>
+          <li>Hit <code>GET /v1/service/verifications/path</code> to exercise the routing-authority logic.</li>
+          <li>Dry-run write requests — schema validation runs, so you'll see your payload shape rejected the same way it would be on a live key.</li>
+          <li>Build, deploy, and demo your whole integration end-to-end against production reads.</li>
         </ul>
-        <p>Typical turnaround is one business day. The operator will reply with the raw key string (saved once — cannot be recovered) and confirm what's set on it.</p>
+        <p>What pending blocks: any write that mutates Commons state (<code>POST</code>/<code>PATCH</code>/<code>DELETE</code> on <code>/v1/service/*</code>). These return <code>403 KEY_PENDING</code>. Nothing else changes between pending and active.</p>
 
-        <h3 id="writing-brand">brand_config</h3>
-        <p>Verification emails are sent from the Commons-shared Resend account. Two valid configurations:</p>
-        <table>
-          <thead><tr><th>Tier</th><th>Sender shown</th><th>Resend cost</th></tr></thead>
-          <tbody>
-            <tr>
-              <td><strong>Display-only</strong> (recommended for v1)</td>
-              <td><code>YourApp &lt;verify@neighborhood-commons.org&gt;</code></td>
-              <td>Free</td>
-            </tr>
-            <tr>
-              <td><strong>Full domain</strong></td>
-              <td><code>YourApp &lt;verify@yourapp.com&gt;</code></td>
-              <td>$20/mo Resend Pro + DNS setup</td>
-            </tr>
-          </tbody>
-        </table>
-        <p>Most email clients show the display name first and prominently — the display-only tier reads as your brand to the user without requiring a separate verified domain. Subject and body are under your control either way.</p>
-        <p>The full-domain upgrade is a single <code>brand_config</code> field change with no code impact on your side once your domain is verified in Resend.</p>
+        <h3 id="writing-activate">Activate writes</h3>
+        <p>Once your build is ready, email <a href="mailto:hi@neighborhood-commons.org?subject=Activate%20my%20pending%20service%20key&amp;body=Email%20I%20registered%20with%3A%0A%0AApp%20URL%3A%0A%0AAnything%20else%20you%27d%20like%20me%20to%20know%3A%0A">hi@neighborhood-commons.org</a> from the same address you registered with, including a link to your app. The review focuses on what your verification process looks like in practice — verifying organizations is the part of the flow with downstream consequences for other apps reading the Commons. Activation flips a single column on your key; no rotation, no code changes on your side.</p>
+
+        <h3 id="writing-brand">Brand identity on verification emails</h3>
+        <p>Verification emails ship under your app's display name (<code>YourApp &lt;verify@neighborhood-commons.org&gt;</code>) — most email clients show the display name first and prominently, so this reads as your app to the user. If you'd prefer they come from your own domain (<code>verify@yourapp.com</code>), mention it during activation. It's a config field, not a code change.</p>
 
         <h3 id="writing-scoping">Scoping rules</h3>
         <ul>
-          <li>Reads are unrestricted. Service keys can read any public data.</li>
-          <li>Writes are scoped: a service key can only create/update/delete data for organizations linked to it via <code>api_key_organization_links</code>.</li>
+          <li>Reads are unrestricted. Active service keys can read any public data; pending keys can too.</li>
+          <li>Writes are scoped: an active service key can only create/update/delete data for organizations linked to it via <code>api_key_organization_links</code>.</li>
           <li>Cross-organization writes return <code>403 NOT_LINKED</code>.</li>
-          <li>Admin keys (<code>is_admin=true</code>, currently only operator tooling) bypass scoping.</li>
+          <li>Admin keys (<code>is_admin=true</code>, currently used only by Studio) bypass scoping.</li>
         </ul>
 
         <h3>Places — register a venue</h3>
@@ -1057,7 +1064,7 @@ $ curl -X PATCH "{{baseUrl}}/api/v1/service/organizations/ORG_UUID" \
         <p>Image uploads (logo, hero image) are JSON-base64: <code>POST /v1/service/organizations/:id/logo</code> and <code>POST /v1/service/organizations/:id/image</code> with body <code>{ "image": "&lt;base64&gt;" }</code>. Magic-byte check, Sharp re-encoding, R2 upload — same pipeline as event images.</p>
 
         <h3>Persons</h3>
-        <p>Create a Person record for performers, curators, or individual hosts. Person records are append-only for non-admin keys in 1.0 — operator-tier keys edit them. Person-link semantics (analogous to <code>api_key_organization_links</code>) ship in a later minor version.</p>
+        <p>Create a Person record for performers, curators, or individual hosts. Person records are append-only for standard service keys in 1.0; per-Person edit semantics (analogous to <code>api_key_organization_links</code>) ship in a later minor version.</p>
         <pre>$ curl -X POST "{{baseUrl}}/api/v1/service/persons" \
   -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
   -d '{
@@ -1119,10 +1126,10 @@ $ curl -X POST "{{baseUrl}}/api/v1/service/lists/LIST_UUID/items" \
 # Remove an item at position
 $ curl -X DELETE "{{baseUrl}}/api/v1/service/lists/LIST_UUID/items/3" \
   -H "X-API-Key: $NC_KEY"</pre>
-        <p>Person-curated lists require an admin key for edits in 1.0 (the <code>api_key_organization_links</code> pattern doesn't extend to Person yet). If you're working with a Person curator and need self-service editing, contact the operator — admin support can issue a key with appropriate authority.</p>
+        <p>Person-curated lists need a one-time activation note in 1.0 — the <code>api_key_organization_links</code> pattern doesn't extend to Person yet. If your integration depends on Person curators editing their own lists, mention it during activation and we'll grant the key the necessary authority.</p>
 
         <h3>Disputes</h3>
-        <p>Used to flag a verified target as misattributed. Records the dispute for operator review; no automated action in 1.0.</p>
+        <p>Used to flag a verified target as misattributed. Records the dispute for human review; no automated action in 1.0.</p>
         <pre>$ curl -X POST "{{baseUrl}}/api/v1/service/disputes" \
   -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
   -d '{
@@ -1218,7 +1225,7 @@ $ curl -X POST "{{baseUrl}}/api/v1/service/verifications/challenges/CHALLENGE_ID
         <p>Required evidence fields: <code>phone</code>, <code>verifiedVia</code> (<code>in_person</code> | <code>video_call</code>), <code>reviewerAttestation</code>, <code>reviewerAccountId</code>, <code>businessAddressObserved</code>, <code>idDocumentObserved</code>. Missing or malformed fields return <code>400 VALIDATION_ERROR</code>; submission to the wrong path (e.g., business email through manual) returns <code>409 WRONG_METHOD</code>.</p>
 
         <h3 id="verification-authority">verification_authority</h3>
-        <p>An operator-set JSON array on each service key listing methods the key may auto-approve. Granted after the operator reviews your verification process during onboarding. Format: <code>method:context</code>. Examples:</p>
+        <p>A JSON array on each service key listing the verification methods the key may auto-approve. Set during activation, based on the verification process you described. Format: <code>method:context</code>. Examples:</p>
 
         <table>
           <thead><tr><th>Value</th><th>Meaning</th></tr></thead>
@@ -1328,7 +1335,7 @@ app.post('/webhooks/commons', express.raw({ type: 'application/json' }), (req, r
         <p>Verify against the <em>raw</em> request body, not a re-stringified version — different JSON serializers produce different byte sequences and the signature won't match.</p>
 
         <h3>Retry behavior</h3>
-        <p>Deliveries that fail (network error, non-2xx response, timeout) retry with exponential backoff: ~30s, 2m, 10m, 1h, 6h. After five consecutive failures, the subscription is marked disabled and stops receiving deliveries until the operator re-enables it. Inspect <code>GET /v1/webhooks/:id/deliveries</code> for failure reasons.</p>
+        <p>Deliveries that fail (network error, non-2xx response, timeout) retry with exponential backoff: ~30s, 2m, 10m, 1h, 6h. After five consecutive failures, the subscription is automatically disabled and stops receiving deliveries; re-enable it by <code>PATCH</code>-ing <code>status</code> back to <code>active</code> once your endpoint is healthy. Inspect <code>GET /v1/webhooks/:id/deliveries</code> for failure reasons.</p>
 
         <p>Idempotency: Commons may retry a delivery that actually succeeded (e.g., your server returned 2xx but Commons didn't see the response). Use <code>delivery_id</code> as your idempotency key — store it server-side and skip processing on duplicates.</p>
 

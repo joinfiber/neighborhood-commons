@@ -34,6 +34,8 @@ const SCHEMA: Record<string, string[]> = {
     'url', 'is_admin',
     // Added in migration 072 (1.0.0 verification system)
     'brand_config', 'verification_authority',
+    // Added in migration 075 (self-service service-key registration)
+    'activated_at', 'application_metadata',
   ],
   audit_logs: [
     'id', 'action', 'actor_hash', 'resource_id', 'metadata', 'endpoint',

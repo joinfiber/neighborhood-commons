@@ -97,8 +97,12 @@ export async function requireApiKey(req: Request, _res: Response, next: NextFunc
 }
 
 /**
- * Require a service-tier API key. Full CRUD access to accounts and events.
- * Service keys are issued manually by the platform operator.
+ * Require an activated service-tier API key. Full CRUD access to typed
+ * resources, broadcasts, lists, verifications.
+ *
+ * Service keys can be self-issued via `/v1/service/register/*` — those land
+ * with `activated_at = NULL` and authenticate for reads but get rejected
+ * here with `KEY_PENDING` until a one-time admin review flips them on.
  */
 export async function requireServiceApiKey(req: Request, _res: Response, next: NextFunction): Promise<void> {
   const apiKey = req.headers['x-api-key'];
@@ -110,7 +114,7 @@ export async function requireServiceApiKey(req: Request, _res: Response, next: N
     const keyHash = hashApiKey(apiKey);
     const { data: keyInfo } = await supabaseAdmin
       .from('api_keys')
-      .select('id, contributor_tier, is_admin, brand_config, verification_authority')
+      .select('id, contributor_tier, is_admin, brand_config, verification_authority, activated_at')
       .eq('key_hash', keyHash)
       .eq('status', 'active')
       .maybeSingle();
@@ -121,6 +125,14 @@ export async function requireServiceApiKey(req: Request, _res: Response, next: N
 
     if (keyInfo.contributor_tier !== 'service') {
       return next(createError('This endpoint requires a service-tier API key', 403, 'INSUFFICIENT_TIER'));
+    }
+
+    if (keyInfo.activated_at === null) {
+      return next(createError(
+        'Your service key is registered but pending one-time activation. Reads work; writes resume after activation. Email hi@neighborhood-commons.org to request activation.',
+        403,
+        'KEY_PENDING',
+      ));
     }
 
     req.apiKeyInfo = {

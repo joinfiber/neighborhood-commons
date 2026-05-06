@@ -98,7 +98,7 @@ beforeEach(() => {
 
   // Admin service key — bypasses linked-account scoping
   mockResponses.set('api_keys', {
-    data: { id: 'svc-key-uuid', contributor_tier: 'service', is_admin: true, raw_key_hash: '' },
+    data: { id: 'svc-key-uuid', contributor_tier: 'service', is_admin: true, raw_key_hash: '', activated_at: '2025-01-01T00:00:00Z' },
     error: null,
   });
   mockResponses.set('portal_accounts', {

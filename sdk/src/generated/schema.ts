@@ -468,6 +468,68 @@ export interface paths {
         patch: operations["serviceUpdateApiKey"];
         trace?: never;
     };
+    "/service/api-keys/{id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Activate a pending service-tier key (admin)
+         * @description Flip a self-registered service-tier API key from pending (`activated_at` NULL — reads only) to fully active (`activated_at` set — writes resume). Optionally sets `brand_config`, `verification_authority`, and `rate_limit_per_hour` in the same call. Admin service key required. Idempotent: returns `already_active: true` if the key was previously activated.
+         */
+        post: operations["serviceActivateApiKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/service/register/send-otp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Self-service: send registration OTP
+         * @description Step 1 of self-issuance for a service-tier API key. Sends a verification code to the supplied email. Step 2 is `POST /service/register/verify-otp`, which issues the (pending) key. No authentication required.
+         */
+        post: operations["serviceRegisterSendOtp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/service/register/verify-otp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Self-service: verify OTP and receive a pending service key
+         * @description Step 2 of self-issuance. On a valid OTP, creates a service-tier api_key with `activated_at = NULL` and stores the application metadata for review. The raw key is returned ONCE — store it immediately.
+         *
+         *     The issued key authenticates for reads at the service-tier rate limit and for the `/service/verifications/path` lookup, but every write under `/service/*` returns `403 KEY_PENDING` until an admin calls `POST /service/api-keys/{id}/activate`. No code changes needed when the key is activated.
+         */
+        post: operations["serviceRegisterVerifyOtp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/service/migrate-image-urls": {
         parameters: {
             query?: never;
@@ -1557,7 +1619,7 @@ export interface components {
         /**
          * @description Machine-readable error identifier. Groups:
          *
-         *     - **Auth**: `ACCESS_DENIED`, `ACCOUNT_DISABLED`, `ACCOUNT_REQUIRED`, `API_KEY_REQUIRED`, `CAPTCHA_FAILED`, `FORBIDDEN`, `INSUFFICIENT_TIER`, `INVALID_API_KEY`, `INVALID_OTP`, `KEY_NOT_LINKED`, `NOT_LINKED`, `NO_OWNER`, `UNAUTHORIZED`
+         *     - **Auth**: `ACCESS_DENIED`, `ACCOUNT_DISABLED`, `ACCOUNT_REQUIRED`, `API_KEY_REQUIRED`, `CAPTCHA_FAILED`, `FORBIDDEN`, `INSUFFICIENT_TIER`, `INVALID_API_KEY`, `INVALID_OTP`, `KEY_NOT_LINKED`, `KEY_PENDING`, `NOT_LINKED`, `NO_OWNER`, `UNAUTHORIZED`
          *     - **Validation / resource**: `ALREADY_EXISTS`, `BATCH_ALREADY_SUBMITTED`, `CONFLICT`, `DUPLICATE`, `INVALID_STATE`, `NOT_FOUND`, `VALIDATION_ERROR`
          *     - **URL / domain**: `BLOCKED_HOSTNAME`, `DOMAIN_PENDING_REVIEW`, `INVALID_SCHEME`, `INVALID_URL`, `INVALID_WEBHOOK_URL`, `IP_LITERAL`, `URL_CREDENTIALS`
          *     - **Rate limit / quota**: `PAYLOAD_TOO_LARGE`, `RATE_LIMIT`, `SUBSCRIPTION_LIMIT`
@@ -1566,7 +1628,7 @@ export interface components {
          *     - **Server / infrastructure**: `DATABASE_ERROR`, `INTERNAL_ERROR`, `SERVER_ERROR`, `SERVICE_UNAVAILABLE`, `UPSTREAM_ERROR`
          * @enum {string}
          */
-        ErrorCode: "ACCESS_DENIED" | "ACCOUNT_DISABLED" | "ACCOUNT_REQUIRED" | "ALREADY_EXISTS" | "API_KEY_REQUIRED" | "BATCH_ALREADY_SUBMITTED" | "BLOCKED_HOSTNAME" | "CAPTCHA_FAILED" | "CONFLICT" | "CSV_EMPTY" | "CSV_INVALID" | "CSV_TOO_LARGE" | "DATABASE_ERROR" | "DOMAIN_PENDING_REVIEW" | "DUPLICATE" | "FORBIDDEN" | "IDENTIFIER_DISPUTED" | "IMPOSTER_SIGNALS" | "INSUFFICIENT_EVIDENCE" | "INSUFFICIENT_TIER" | "INTERNAL_ERROR" | "INVALID_API_KEY" | "INVALID_OTP" | "INVALID_SCHEME" | "INVALID_STATE" | "INVALID_URL" | "INVALID_WEBHOOK_URL" | "IP_LITERAL" | "KEY_NOT_LINKED" | "NO_OWNER" | "NO_VALID_ROWS" | "NOT_FOUND" | "NOT_LINKED" | "OUT_OF_POLICY" | "PAYLOAD_TOO_LARGE" | "RATE_LIMIT" | "SERVER_ERROR" | "SERVICE_UNAVAILABLE" | "SUBSCRIPTION_LIMIT" | "UNAUTHORIZED" | "UPSTREAM_ERROR" | "URL_CREDENTIALS" | "VALIDATION_ERROR" | "WRONG_METHOD";
+        ErrorCode: "ACCESS_DENIED" | "ACCOUNT_DISABLED" | "ACCOUNT_REQUIRED" | "ALREADY_EXISTS" | "API_KEY_REQUIRED" | "BATCH_ALREADY_SUBMITTED" | "BLOCKED_HOSTNAME" | "CAPTCHA_FAILED" | "CONFLICT" | "CSV_EMPTY" | "CSV_INVALID" | "CSV_TOO_LARGE" | "DATABASE_ERROR" | "DOMAIN_PENDING_REVIEW" | "DUPLICATE" | "FORBIDDEN" | "IDENTIFIER_DISPUTED" | "IMPOSTER_SIGNALS" | "INSUFFICIENT_EVIDENCE" | "INSUFFICIENT_TIER" | "INTERNAL_ERROR" | "INVALID_API_KEY" | "INVALID_OTP" | "INVALID_SCHEME" | "INVALID_STATE" | "INVALID_URL" | "INVALID_WEBHOOK_URL" | "IP_LITERAL" | "KEY_NOT_LINKED" | "KEY_PENDING" | "NO_OWNER" | "NO_VALID_ROWS" | "NOT_FOUND" | "NOT_LINKED" | "OUT_OF_POLICY" | "PAYLOAD_TOO_LARGE" | "RATE_LIMIT" | "SERVER_ERROR" | "SERVICE_UNAVAILABLE" | "SUBSCRIPTION_LIMIT" | "UNAUTHORIZED" | "UPSTREAM_ERROR" | "URL_CREDENTIALS" | "VALIDATION_ERROR" | "WRONG_METHOD";
         Error: {
             error: {
                 code: components["schemas"]["ErrorCode"];
@@ -3224,6 +3286,159 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["NotFound"];
+        };
+    };
+    serviceActivateApiKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @description Per-key sender identity for verification emails. Operator-set at activation. */
+                    brand_config?: Record<string, never>;
+                    /** @description Methods this key may auto-approve, e.g. ["manual_review:in_person"]. */
+                    verification_authority?: string[];
+                    rate_limit_per_hour?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Key activated, or already active */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        api_key?: Record<string, never>;
+                        /** Format: uuid */
+                        api_key_id?: string;
+                        already_active?: boolean;
+                        /** Format: date-time */
+                        activated_at?: string | null;
+                    };
+                };
+            };
+            /** @description Key is not service tier */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description Admin access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    serviceRegisterSendOtp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: email */
+                    email: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OTP sent */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success?: boolean;
+                        message?: string;
+                    };
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    serviceRegisterVerifyOtp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: email */
+                    email: string;
+                    token: string;
+                    app_name: string;
+                    /** Format: uri */
+                    app_url: string;
+                    /** @description One paragraph. Who's the user, what's the integration shape. */
+                    what_youre_building: string;
+                    /** @description How you verify the organizations you onboard. Drives the verification_authority granted at activation. */
+                    verification_process: string;
+                    expected_first_week_writes?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Pending service key issued */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        api_key?: {
+                            /** Format: uuid */
+                            id?: string;
+                            /** @description Returned once. Store immediately — not recoverable. */
+                            raw_key?: string;
+                            name?: string;
+                            rate_limit_per_hour?: number;
+                            /** @enum {string} */
+                            status?: "pending_activation";
+                            /** Format: date-time */
+                            created_at?: string;
+                        };
+                        message?: string;
+                    };
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            /** @description Invalid or expired verification code (INVALID_OTP) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description An active service-tier key already exists for this email (ALREADY_EXISTS) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            429: components["responses"]["RateLimited"];
         };
     };
     serviceMigrateImageUrls: {
