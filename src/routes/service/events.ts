@@ -26,8 +26,25 @@ import {
 import { createEventSeries } from '../../lib/event-series.js';
 import { downloadAndAttachImage } from '../../lib/image-processing.js';
 import { nominatimGeocode } from '../../lib/geocoding.js';
+import { isFirstPartyByOrganizer } from '../../lib/verification-hydrate.js';
 import { config } from '../../config.js';
 import { assertLinkedAccount, assertLinkedEvent } from './helpers.js';
+
+/**
+ * Compute first_party for a service-created event. The flag is true iff
+ * the event's organizer (the org owned by the linked portal account) has
+ * an active verified identifier at insert time. Until verifications start
+ * landing, every service-created event is public-facts.
+ */
+async function computeServiceEventFirstParty(portalAccountId: string): Promise<boolean> {
+  const { data: org } = await supabaseAdmin
+    .from('organizations')
+    .select('id')
+    .eq('owner_account_id', portalAccountId)
+    .maybeSingle();
+  if (!org) return false;
+  return isFirstPartyByOrganizer(org.id as string, null);
+}
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -89,10 +106,13 @@ export const createEventSchema = z.object({
   image_focal_y: z.number().min(0).max(1).optional(),
   // source_method is NOT caller-overridable — hardcoded to 'api' on the Service path.
   // source_publisher is NOT caller-overridable — derived from the linked account's business_name.
+  // first_party is NOT caller-overridable — computed server-side at insert time
+  // from the organizer's verification state (the flag means "posted by a
+  // verified business," and that's a fact about the system, not a claim
+  // the caller can self-issue).
   // contributor IS caller-overridable (migration 062) — per-event "who ran this"
   // attribution, distinct from the subscribable publisher. Optional.
   contributor: contributorSchema.optional(),
-  first_party: z.boolean().optional(),
   venue_id: z.string().uuid().optional(),
   external_id: z.string().max(500).optional(),
   tmdb_id: z.string().max(50).optional(),
@@ -125,7 +145,10 @@ export const updateEventSchema = z.object({
   // Pass `contributor: null` to clear an existing override and fall back to
   // the legacy source_publisher-on-api derivation.
   contributor: contributorSchema.nullable().optional(),
-  first_party: z.boolean().optional(),
+  // first_party is computed server-side at insert from the organizer's
+  // verification state. Not a writable PATCH input — the only legitimate
+  // way to change it post-insert is to recompute (which a future endpoint
+  // can expose if needed; for now, recreate the event).
   status: z.enum(['published', 'pending_review', 'suspended', 'unpublished']).optional(),
   tmdb_id: z.string().max(50).nullable().optional(),
 });
@@ -178,7 +201,8 @@ export function friendlyToPortalInput(
         data.contributor && typeof data.contributor.url === 'string' && data.contributor.url
           ? data.contributor.url
           : null,
-      first_party: data.first_party,
+      // first_party intentionally omitted — set by the route handler after
+      // computing from the organizer's verification state.
       tmdb_id: data.tmdb_id ?? null,
     },
     event_date: eventDate,
@@ -306,6 +330,11 @@ router.post('/events', serviceLimiter, async (req, res, next) => {
     const { portal, event_date: eventDate, start_time: startTime, end_time: endTime }
       = friendlyToPortalInput(data, (account.business_name as string | null) ?? null);
     portal.tags = validatedTags;
+    // first_party is server-computed at insert from the organizer's
+    // verification state. Today this is false for every account (no orgs
+    // verified yet); once an org's verified identifier lands, future
+    // events from that account flip to true automatically.
+    portal.first_party = await computeServiceEventFirstParty(data.account_id);
 
     const insert = portalInputToInsert(portal, data.account_id, adminUserId);
 
@@ -449,7 +478,9 @@ router.patch('/events/batch', serviceLimiter, async (req, res, next) => {
         open_window: z.boolean().optional(),
         capacity: z.number().int().min(1).max(10000).nullable().optional(),
         rsvp: z.enum(['recommended', 'required']).nullable().optional(),
-        first_party: z.boolean().optional(),
+        // first_party is server-computed at insert; not editable via batch
+        // update. Recreate events if the organizer's verification state
+        // changes and you want to re-tier them.
       }).refine((u) => Object.keys(u).length > 0, { message: 'No fields to update' }),
     });
 
@@ -523,7 +554,6 @@ router.patch('/events/:id', serviceLimiter, async (req, res, next) => {
     if (data.capacity !== undefined) dbUpdate.capacity = data.capacity;
     if (data.rsvp !== undefined) dbUpdate.rsvp = data.rsvp;
     if (data.open_window !== undefined) dbUpdate.open_window = data.open_window;
-    if (data.first_party !== undefined) dbUpdate.first_party = data.first_party;
     if (data.image_focal_y !== undefined) dbUpdate.event_image_focal_y = data.image_focal_y;
     if (data.contributor !== undefined) {
       // null clears the override and falls back to the legacy derivation.
