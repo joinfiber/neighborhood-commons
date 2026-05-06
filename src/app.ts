@@ -250,214 +250,46 @@ export function createApp(): Express {
     return cachedStats;
   }
 
+  // Load the homepage template once at boot. The template lives in
+  // public/index.html and uses {{baseUrl}} / {{statsLine}} placeholders;
+  // both are substituted per request.
+  const indexTemplatePath = path.resolve(__dirname, '../public/index.html');
+  let indexTemplate = '';
+  try {
+    indexTemplate = readFileSync(indexTemplatePath, 'utf-8');
+  } catch (err) {
+    console.warn('[LANDING] Failed to read public/index.html:', err);
+  }
+
   app.get('/', async (_req, res, next) => {
     try {
       const baseUrl = config.apiBaseUrl || 'https://api.neighborhood-commons.org';
       const { totalEvents, totalOrganizations, totalPlaces, regionName } = await getLandingStats();
 
       const statsLine = totalEvents > 0
-        ? `Currently serving <strong>${totalEvents.toLocaleString()} events</strong>, <strong>${totalOrganizations.toLocaleString()} organizations</strong>, and <strong>${totalPlaces.toLocaleString()} places</strong>${regionName ? ` in <strong>${regionName}</strong>` : ''}.`
+        ? `<span class="nc-stats">Currently serving <strong>${totalEvents.toLocaleString()} events</strong>, <strong>${totalOrganizations.toLocaleString()} organizations</strong>, and <strong>${totalPlaces.toLocaleString()} places</strong>${regionName ? ` in <strong>${regionName}</strong>` : ''}.</span>`
         : '';
+
+      if (!indexTemplate) {
+        // Template unavailable — render a minimal fallback so the route
+        // still responds. Should only happen if public/index.html went missing.
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.send(`<!DOCTYPE html><html><head><title>Neighborhood Commons</title></head><body style="font-family:system-ui;max-width:640px;margin:80px auto;padding:0 24px;color:#37352f;"><h1>Neighborhood Commons</h1><p>Open neighborhood data infrastructure. The homepage is temporarily unavailable. The API is at <code>${baseUrl}/api/v1/events</code> and the spec is at <a href="/openapi.json">/openapi.json</a>.</p></body></html>`);
+        return;
+      }
+
+      const html = indexTemplate
+        .replace(/\{\{baseUrl\}\}/g, baseUrl)
+        .replace('{{statsLine}}', statsLine);
 
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.setHeader('Cache-Control', 'public, max-age=300');
-      res.send(`<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Neighborhood Commons — Open neighborhood data infrastructure</title>
-  <meta name="description" content="Open infrastructure for neighborhood data. Events, organizations, places, broadcasts, curated lists. Schema.org-aligned, verified contributors, public reputation graph. Read free. Build with confidence. CC BY 4.0.">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/pages.css">
-  <style>
-    .nc-landing { max-width: 760px; margin: 0 auto; padding: 56px 24px 80px; }
-    .nc-hero h1 { font-size: 2.5rem; font-weight: 400; line-height: 1.15; letter-spacing: -0.02em; margin: 0 0 16px; }
-    .nc-hero p { font-size: 1.05rem; line-height: 1.7; color: var(--nc-muted); max-width: 580px; }
-    .nc-hero .nc-stats { color: var(--nc-text); margin-top: 8px; }
-    .nc-hero .nc-stats strong { font-weight: 600; }
-    .nc-label { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--nc-dim); margin: 48px 0 14px; }
-    .nc-hero .nc-label { margin-top: 0; margin-bottom: 20px; }
-    .nc-case { margin: 48px 0 0; }
-    .nc-case-point { margin-bottom: 32px; }
-    .nc-case-heading { font-size: 1.05rem; font-weight: 500; color: var(--nc-text); margin-bottom: 8px; }
-    .nc-case-point p { font-size: 0.9rem; color: var(--nc-muted); line-height: 1.7; margin: 0; }
-    .nc-ctas { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 40px 0; }
-    .nc-cta { background: var(--nc-surface); border: 1px solid var(--nc-border); border-radius: 12px; padding: 24px; }
-    .nc-cta-label { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--nc-dim); margin-bottom: 10px; }
-    .nc-cta p { font-size: 0.9rem; color: var(--nc-text); line-height: 1.6; margin: 0 0 16px; }
-    .nc-btn { display: inline-block; padding: 10px 20px; border-radius: 8px; font-size: 0.875rem; font-weight: 500; text-decoration: none; font-family: inherit; }
-    .nc-btn-primary { background: var(--nc-accent); color: #fff; }
-    .nc-btn-secondary { background: var(--nc-surface); color: var(--nc-accent); border: 1px solid var(--nc-border); }
-    .nc-code { background: var(--nc-accent); color: #e8e6e1; border-radius: 10px; padding: 18px 22px; font-family: 'DM Mono', monospace; font-size: 0.8rem; line-height: 1.7; overflow-x: auto; margin: 0 0 8px; white-space: pre; }
-    .nc-dim-note { font-size: 0.8rem; color: var(--nc-dim); line-height: 1.6; margin: 8px 0 0; }
-    .nc-prose { font-size: 0.9rem; color: var(--nc-muted); line-height: 1.7; margin: 0 0 20px; }
-    .nc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 40px; margin-bottom: 24px; }
-    .nc-grid-item { display: flex; gap: 12px; padding: 4px 0; font-size: 0.875rem; }
-    .nc-grid-label { color: var(--nc-text); font-weight: 500; min-width: 80px; }
-    .nc-grid-desc { color: var(--nc-muted); }
-    .nc-ep-list { background: var(--nc-surface); border: 1px solid var(--nc-border); border-radius: 10px; overflow: hidden; margin-bottom: 8px; }
-    .nc-ep { display: flex; align-items: baseline; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--nc-border); font-size: 0.875rem; }
-    .nc-ep:last-child { border-bottom: none; }
-    .nc-ep-method { font-size: 0.75rem; font-weight: 600; font-family: 'DM Mono', monospace; min-width: 36px; }
-    .nc-ep-method-get { color: #2d8a4e; }
-    .nc-ep-method-post { color: var(--nc-text); }
-    .nc-ep-path { font-family: 'DM Mono', monospace; font-weight: 500; }
-    .nc-ep-desc { color: var(--nc-dim); margin-left: auto; text-align: right; }
-    .nc-ep-auth { font-size: 0.7rem; color: var(--nc-dim); background: var(--nc-bg); padding: 1px 6px; border-radius: 4px; }
-    .nc-app { background: var(--nc-surface); border: 1px solid var(--nc-border); border-radius: 12px; padding: 20px 24px; margin-bottom: 12px; }
-    .nc-app-placeholder { background: transparent; border-style: dashed; }
-    .nc-app a { font-size: 0.9rem; font-weight: 500; }
-    .nc-app p { font-size: 0.85rem; color: var(--nc-muted); line-height: 1.6; margin: 6px 0 0; }
-    .nc-stability { background: var(--nc-cream); border-radius: 10px; padding: 20px 24px; margin: 16px 0 40px; font-size: 0.875rem; line-height: 1.7; }
-    .nc-footer { border-top: 1px solid var(--nc-border); padding-top: 24px; display: flex; flex-wrap: wrap; gap: 10px 24px; align-items: center; font-size: 0.8rem; }
-    .nc-footer a, .nc-footer span { color: var(--nc-muted); text-decoration: none; }
-    .nc-footer a:hover { text-decoration: underline; }
-    @media (max-width: 640px) {
-      .nc-hero h1 { font-size: 1.75rem; }
-      .nc-ctas { grid-template-columns: 1fr; }
-      .nc-grid { grid-template-columns: 1fr; }
-      .nc-ep-desc { display: none; }
-    }
-  </style>
-</head>
-<body>
-  <div class="nc-page">
-    <header class="nc-header">
-      <div class="nc-header-inner">
-        <span style="font-weight:600;">Neighborhood Commons</span>
-      </div>
-    </header>
-    <main class="nc-landing">
-
-      <div class="nc-hero">
-        <div class="nc-label">neighborhood commons &middot; v1.0.0</div>
-        <h1>An open layer for everything that happens in a neighborhood.</h1>
-        <p>
-          Events. Organizations. Places. Broadcasts. Curated lists. Six types of public facts every neighborhood app can read, mix, and remix &mdash; the typed substrate under the next generation of community tooling.
-          ${statsLine ? `<span class="nc-stats">${statsLine}</span>` : ''}
-        </p>
-      </div>
-
-      <div class="nc-case">
-        <div class="nc-case-point">
-          <div class="nc-case-heading">Read free. Build with confidence.</div>
-          <p>Every endpoint is open. No API key required to read. No rate-limit gating. The spec is locked at 1.0.0 and committed to <strong>additive-only stability</strong> &mdash; future versions add types and fields without breaking existing consumers. If you build against this contract today, the same code should work in 18 months.</p>
-        </div>
-        <div class="nc-case-point">
-          <div class="nc-case-heading">Apps don&rsquo;t compete with the Commons. They compete on what they show.</div>
-          <p>The Commons isn&rsquo;t a destination. Each app composes its own slice through opt-in filters: by verifier, by contributor, by proximity, by type. Same data, different editorial. A neighborhood with one Yelp is fragile. A neighborhood with twenty different surfaces over the same open substrate is alive.</p>
-        </div>
-        <div class="nc-case-point">
-          <div class="nc-case-heading">Verify once. Recognized everywhere.</div>
-          <p>When a business gets verified through one app on the network, every other app can honor that verification &mdash; or filter it out. The reputation graph is public; verifiers earn or lose trust based on the quality of their approvals. No central referee. The market polices itself.</p>
-        </div>
-      </div>
-
-      <div class="nc-ctas">
-        <div class="nc-cta">
-          <div class="nc-cta-label">Build a consumer app</div>
-          <p>Read every endpoint without authentication. Curl examples below. Generate a typed client from <a href="${baseUrl}/openapi.json">openapi.json</a> or install the SDK: <code>npm install neighborhood-commons</code>.</p>
-          <a href="${baseUrl}/llms.txt" class="nc-btn nc-btn-primary">Read the Guide</a>
-        </div>
-        <div class="nc-cta">
-          <div class="nc-cta-label">Contribute through an integration</div>
-          <p>Service-tier write access is operator-issued, with brand-configured verification and a public reputation track record. Email us with what you&rsquo;re building and how you&rsquo;ll verify.</p>
-          <a href="mailto:hi@neighborhood-commons.org?subject=Service-tier%20integration" class="nc-btn nc-btn-secondary">Apply for a service key</a>
-        </div>
-      </div>
-
-      <div class="nc-label">Try it now</div>
-      <div class="nc-code">$ curl "${baseUrl}/api/v1/events?near=39.97,-75.14&radius_km=2"
-
-# Verified businesses near a point
-$ curl "${baseUrl}/api/v1/organizations?kind=local_business&verified=true"
-
-# What&rsquo;s being broadcast right now
-$ curl "${baseUrl}/api/v1/broadcasts?near=39.97,-75.14&radius_km=1"
-
-# The reputation graph &mdash; who verifies whom, with full track record
-$ curl "${baseUrl}/api/v1/verifiers"</div>
-      <p class="nc-dim-note">No authentication required. Schema.org-aligned JSON responses. Calendar feeds also available at <code>/api/v1/events.ics</code> and <code>/api/v1/events.rss</code>.</p>
-
-      <div class="nc-label">What&rsquo;s in the substrate</div>
-      <p class="nc-prose">Six types of public facts. Each maps to a Schema.org concept &mdash; the open vocabulary the rest of the web already uses for events, places, and organizations. Apps compose them however they want.</p>
-      <div class="nc-grid">
-        <div class="nc-grid-item"><span class="nc-grid-label">Place</span><span class="nc-grid-desc">Physical locations. Address, coordinates, identified by Google Places ID.</span></div>
-        <div class="nc-grid-item"><span class="nc-grid-label">Organization</span><span class="nc-grid-desc">Businesses, community groups, nonprofits, curators, collectives.</span></div>
-        <div class="nc-grid-item"><span class="nc-grid-label">Person</span><span class="nc-grid-desc">DJs, performers, curators, individual organizers.</span></div>
-        <div class="nc-grid-item"><span class="nc-grid-label">Event</span><span class="nc-grid-desc">Activities at a time, hosted by an Organization or Person, at a Place.</span></div>
-        <div class="nc-grid-item"><span class="nc-grid-label">Broadcast</span><span class="nc-grid-desc">Ephemeral signals from verified businesses. Maximum 24h lifetime.</span></div>
-        <div class="nc-grid-item"><span class="nc-grid-label">List</span><span class="nc-grid-desc">Curatorial selections of events, organizations, or places.</span></div>
-      </div>
-      <p class="nc-dim-note">Every response is self-contained. Verified state and provenance ride along with every record &mdash; consumers compose their own trust policy via <code>verified_by</code>, <code>not_verified_by</code>, and <code>created_by_contributor</code> filters.</p>
-
-      <div class="nc-label">Read API</div>
-      <div class="nc-ep-list">
-        <div class="nc-ep"><span class="nc-ep-method nc-ep-method-get">GET</span><span class="nc-ep-path">/api/v1/events</span><span class="nc-ep-desc">Events &mdash; filter, search, paginate</span></div>
-        <div class="nc-ep"><span class="nc-ep-method nc-ep-method-get">GET</span><span class="nc-ep-path">/api/v1/places</span><span class="nc-ep-desc">Physical locations</span></div>
-        <div class="nc-ep"><span class="nc-ep-method nc-ep-method-get">GET</span><span class="nc-ep-path">/api/v1/organizations</span><span class="nc-ep-desc">Businesses, community groups, curators</span></div>
-        <div class="nc-ep"><span class="nc-ep-method nc-ep-method-get">GET</span><span class="nc-ep-path">/api/v1/persons</span><span class="nc-ep-desc">Individuals &mdash; performers, curators, hosts</span></div>
-        <div class="nc-ep"><span class="nc-ep-method nc-ep-method-get">GET</span><span class="nc-ep-path">/api/v1/broadcasts</span><span class="nc-ep-desc">Ephemeral signals, active only</span></div>
-        <div class="nc-ep"><span class="nc-ep-method nc-ep-method-get">GET</span><span class="nc-ep-path">/api/v1/lists</span><span class="nc-ep-desc">Curatorial selections</span></div>
-        <div class="nc-ep"><span class="nc-ep-method nc-ep-method-get">GET</span><span class="nc-ep-path">/api/v1/verifiers</span><span class="nc-ep-desc">Reputation graph &mdash; per-app verification track records</span></div>
-        <div class="nc-ep"><span class="nc-ep-method nc-ep-method-get">GET</span><span class="nc-ep-path">/api/v1/events.ics</span><span class="nc-ep-desc">iCalendar feed</span></div>
-        <div class="nc-ep"><span class="nc-ep-method nc-ep-method-get">GET</span><span class="nc-ep-path">/api/v1/meta</span><span class="nc-ep-desc">Metadata, stats, regions, categories</span></div>
-      </div>
-      <p class="nc-dim-note">Rate limit: 1,000 requests/hour per IP (or per API key). Full surface in <a href="${baseUrl}/openapi.json">openapi.json</a>.</p>
-
-      <div class="nc-label">Verification &amp; reputation</div>
-      <p class="nc-prose">Verification is a process the Commons orchestrates and an attribute apps consume &mdash; not a permission gate. When an app verifies a business through email-loop or in-person review, every other app on the network sees the verification, who issued it, and that verifier&rsquo;s public track record. Apps compose <code>verified_by</code> filters that match their own trust policy.</p>
-      <div class="nc-code">$ curl "${baseUrl}/api/v1/verifiers"
-
-# Filter to organizations verified by trusted apps
-$ curl "${baseUrl}/api/v1/organizations?verified_by=Holler,Merrie"
-
-# Audit a verifier&rsquo;s recent approvals
-$ curl "${baseUrl}/api/v1/verifiers/Holler/recent_approvals"</div>
-      <p class="nc-dim-note">Verify once, recognized everywhere apps choose to honor. Sloppy verification is filtered out by other apps. Market discipline replaces central authority.</p>
-
-      <div class="nc-label">Real-time webhooks</div>
-      <p class="nc-prose">
-        Subscribe to <code>event.created</code>, <code>event.updated</code>, and <code>event.deleted</code>.
-        HMAC-SHA256 signed. Automatic retries. More event types are added as the substrate grows.
-        Setup via the API: <code>POST /api/v1/webhooks</code>.
-      </p>
-
-      <div class="nc-label">Expressions of the Commons</div>
-      <p class="nc-prose">The substrate is open. Apps build different experiences on it. These are some of the surfaces in flight.</p>
-      <div class="nc-app"><a href="https://merrie.co" target="_blank" rel="noopener">merrie.co &nearr;</a><p>The publishing tool for curators and venue operators. Surfaces events for browsing, lets curators build editorial lists, generates venue pages automatically.</p></div>
-      <div class="nc-app"><a href="https://joinfiber.app" target="_blank" rel="noopener">Fiber &nearr;</a><p>The social mobile app. Browse what&rsquo;s on tonight, share plans with friends, see what&rsquo;s nearby. Same data, social-first surface.</p></div>
-      <div class="nc-app"><span style="font-size:0.9rem;font-weight:500;">Holler &middot; in development</span><p>Verified businesses broadcast real-time signals into nearby feeds &mdash; "kitchen open late," "half off sandwiches." Holler does in-person business verification, and other apps consume the verified businesses through the public reputation graph.</p></div>
-      <div class="nc-app nc-app-placeholder"><span style="font-size:0.9rem;font-weight:500;color:var(--nc-dim);">Yours</span><p>A neighborhood newsletter. A civic dashboard. A nightlife guide. A walking tour. A "free stuff in Fishtown" filter. Whatever your audience, the substrate is here.</p></div>
-
-      <div class="nc-label">How this is built</div>
-      <p class="nc-prose">The Commons is thin on purpose. It stores typed atoms and serves them. It doesn&rsquo;t editorialize, recommend, or curate &mdash; those are the concerns of the apps that build on top. The Commons is plumbing, and good plumbing doesn&rsquo;t change with the winds.</p>
-      <p class="nc-prose" style="color:var(--nc-dim);">Schema.org-aligned response shapes. Row Level Security on every table. Zod validation on every input. Images re-encoded through Sharp. No ORMs, no magic. Every behavior is traceable from the route handler to the database query to the response. The <a href="https://github.com/joinfiber/neighborhood-commons" target="_blank" rel="noopener">source is open</a> and written to be read by skeptics.</p>
-
-      <div class="nc-stability">
-        <strong>The 1.0.0 spec is stable.</strong> Future minor versions add types, fields, and endpoints additively. Removals or renames require 2.0.0 with strong justification &mdash; measured in years, not months. Watch <a href="https://github.com/joinfiber/neighborhood-commons/blob/master/CHANGELOG.md" target="_blank" rel="noopener">the Log</a> for every change.
-      </div>
-
-      <div class="nc-footer">
-        <a href="/portal#/developers">API Reference</a>
-        <a href="/llms.txt">AI-Readable Docs</a>
-        <a href="https://github.com/The-Relational-Technology-Project/neighborhood-api" target="_blank" rel="noopener">Neighborhood API Spec</a>
-        <a href="https://github.com/joinfiber/neighborhood-commons" target="_blank" rel="noopener">GitHub</a>
-        <a href="/portal#/login">Contributor Sign In</a>
-        <div style="flex:1"></div>
-        <span style="color:var(--nc-dim);">CC BY 4.0 &middot; MIT &middot; hi@neighborhood-commons.org</span>
-      </div>
-    </main>
-  </div>
-</body>
-</html>`);
+      res.send(html);
     } catch (err) {
       next(err);
     }
   });
+
 
   // ─── .well-known discovery ───────────────────────────────────────
   app.get('/.well-known/neighborhood', (_req, res) => {
