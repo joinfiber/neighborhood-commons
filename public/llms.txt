@@ -868,7 +868,33 @@ The official SDK is a typed TypeScript client generated from `/openapi.json`. In
 npm install neighborhood-commons
 ```
 
-The SDK exposes both unauthenticated read methods and authenticated service-tier write methods. If you'd rather generate your own client in a different language, run an OpenAPI generator against `/openapi.json` directly.
+The SDK is intentionally thin: generated types and a typed `fetch` wrapper. ~50 lines of runtime, zero opinions beyond the spec. Anything more would be a second source of truth that drifts.
+
+### What the SDK gets you in 2026
+
+- **Version pinning.** `neighborhood-commons@1.0.0` is a real artifact in `package.json` with a hash and a manifest. Six months from now you know exactly which spec version your code targets. AI-generated code has no version semantics unless you write them down — the SDK writes them down for you.
+- **CI determinism.** Two engineers, same build. Your build today and your build in six months produce identical output if you don't bump the dep.
+- **A canonical reference your AI assistant can anchor on.** "Match the SDK pattern" is a higher-quality prompt than "implement this from scratch." The SDK's value has shifted — less an ergonomic wrapper, more a stable reference document for whatever's editing your code.
+- **An audit trail.** Diffing two SDK versions shows exactly what moved in the API.
+
+### What the SDK does not get you
+
+- No abstractions beyond the spec. No retry logic, no caching, no auth dance, no smart defaults. The SDK and `curl` hit the same endpoints with the same headers.
+- It is not required. For TypeScript prototypes, AI assistants pointed at `/openapi.json` generate working calls without the SDK in the loop. For production codebases — multiple contributors, CI, deliberate upgrade paths — the npm package earns its keep.
+
+### Generating clients in other languages
+
+The spec is the contract. Whatever you generate from it is as canonical as what we publish.
+
+```bash
+# TypeScript types only (matches what we publish)
+npx openapi-typescript https://api.neighborhood-commons.org/openapi.json -o ./types.ts
+
+# Full clients in any supported language
+openapi-generator-cli generate -i https://api.neighborhood-commons.org/openapi.json -g python  -o ./client
+openapi-generator-cli generate -i https://api.neighborhood-commons.org/openapi.json -g go      -o ./client
+openapi-generator-cli generate -i https://api.neighborhood-commons.org/openapi.json -g rust    -o ./client
+```
 
 The published npm package version aligns with the spec version. Major version bumps follow the spec (rare); minor versions land additively as the spec grows.
 
