@@ -23,8 +23,16 @@ export type { paths, components } from "./generated/schema.js";
 export type Meta = components["schemas"]["Meta"];
 export type Event = components["schemas"]["Event"];
 export type Source = components["schemas"]["Source"];
-export type Account = components["schemas"]["Account"];
-export type Group = components["schemas"]["Group"];
+// Legacy `Account` and `Group` types were removed from the spec in 1.0.0.
+// Use `ServiceAccount` for the service-tier portal-account read shape and
+// `Organization` for the new collective-entity type that supersedes Group.
+export type ServiceAccount = components["schemas"]["ServiceAccount"];
+export type ServiceEvent = components["schemas"]["ServiceEvent"];
+export type Place = components["schemas"]["Place"];
+export type Organization = components["schemas"]["Organization"];
+export type Person = components["schemas"]["Person"];
+export type Broadcast = components["schemas"]["Broadcast"];
+export type List = components["schemas"]["List"];
 export type Webhook = components["schemas"]["Webhook"];
 export type ErrorCode = components["schemas"]["ErrorCode"];
 export type ApiError = components["schemas"]["Error"];
