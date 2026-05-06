@@ -857,6 +857,14 @@ Service keys are issued by the Commons operator. Contact hi@neighborhood-commons
 
 Service keys are scoped: you can only modify data for accounts you've explicitly linked to your key. You cannot read, modify, or delete data belonging to other apps' accounts.
 
+Beyond scoping, three operator-set knobs configure how your key participates in the verification system:
+
+- `brand_config` — verification email sender identity (`app_name`, `from_name`, optional `from_email`, optional per-template `subjects`). Two valid configurations:
+  - **Display-only branding (free tier)**: set `app_name` and `from_name` only. Verification emails come from the Commons-verified domain (e.g. `verify@neighborhood-commons.org`) with your app's display name (e.g. `Holler <verify@neighborhood-commons.org>`). Subject and body are still under your brand. Most email clients show the display name first and prominently — this reads as your app to the user without needing a verified domain. Recommended for v1 integrations.
+  - **Full domain branding (paid tier)**: additionally set `from_email`. Verification emails come from your app's domain (e.g. `verify@holler.app`). Requires your domain verified in the shared Resend account ($20/mo Resend Pro at time of writing). Coordinate with the operator at issuance.
+- `verification_authority` — methods this key may auto-approve manual reviews for, e.g. `["manual_review:in_person"]`. Granted after the operator reviews your verification process. Without it, manual-review submissions queue for admin review (slower turnaround).
+- `is_admin` — operator-only. Studio (the operator's tooling) is the only key with this. Bypasses scoping; accesses verification review queue.
+
 ### Linking Accounts
 
 ```bash
