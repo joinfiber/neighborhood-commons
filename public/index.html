@@ -15,14 +15,35 @@
      *    Marketing (above the fold) — generous, evocative, hero-led.
      *    Reference (below the fold)  — tight, factual, document-shaped.
      *  Visual rhythm shifts; palette and type system stay coherent.
-     *  Palette inherits from /pages.css (--nc-bg, --nc-text, etc.).
+     *
+     *  Palette is inlined so the page renders correctly even when
+     *  /pages.css doesn't resolve (preview environments, offline reads).
      * ─────────────────────────────────────────────────────────────────── */
 
+    :root {
+      --nc-bg: #f7f7f5;
+      --nc-surface: #ffffff;
+      --nc-text: #37352f;
+      --nc-muted: #6b6660;
+      --nc-dim: #9c9791;
+      --nc-border: #e8e6e1;
+      --nc-accent: #2c2c2c;
+      --nc-cream: #f5f0e8;
+    }
+
+    /* Reset + base — minimal, doesn't depend on pages.css */
+    *, *::before, *::after { box-sizing: border-box; }
+    html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
     body {
       margin: 0;
+      font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--nc-bg);
+      color: var(--nc-text);
+      line-height: 1.6;
       font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
       text-rendering: optimizeLegibility;
     }
+    img { max-width: 100%; display: block; }
 
     /* ─────────────────────────────────────────── *
      *  Status strip — sits above the topbar.
@@ -173,6 +194,7 @@
       font-size: 0.84rem; line-height: 1.9;
       margin: 0;
       overflow-x: auto;
+      white-space: pre;
     }
     .nc-hero-curls .nc-curl-comment { color: #8a847b; }
     .nc-hero-curls .nc-curl-prompt { color: #7a948a; }
