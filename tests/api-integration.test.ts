@@ -276,6 +276,33 @@ describe('GET /api/v1/events', () => {
     expect(body.error.message).not.toContain('connection');
     expect(body.error.code).toBeDefined();
   });
+
+  it('accepts the first_party=true filter and the response shape includes first_party on each event', async () => {
+    // The two-tier authority model: first_party distinguishes information
+    // posted BY the verified business (first-party) from information
+    // aggregated ABOUT them (public-facts). Apps filter via the query param.
+    mockResponses.set('events', {
+      data: [makeDbRow({ first_party: true })],
+      error: null,
+      count: 1,
+    });
+
+    const res = await fetch(`${baseUrl}/api/v1/events?first_party=true`);
+    expect(res.status).toBe(200);
+
+    const body = await res.json();
+    expect(body.events).toHaveLength(1);
+    // The flag round-trips on the response shape so consumers can decide
+    // whether to surface visual differentiation.
+    expect(body.events[0].first_party).toBe(true);
+  });
+
+  it('rejects malformed first_party values with 400', async () => {
+    const res = await fetch(`${baseUrl}/api/v1/events?first_party=maybe`);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error.code).toBe('VALIDATION_ERROR');
+  });
 });
 
 describe('GET /api/v1/events/:id', () => {

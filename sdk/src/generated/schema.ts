@@ -2121,6 +2121,8 @@ export interface operations {
                 contributor?: string;
                 /** @description Filter to all showings of a film (clusters film-category events across theaters and dates). Pair with `?category=film` for clean results. */
                 tmdb_id?: string;
+                /** @description Filter by authorship tier. `true` = events posted by the verified business itself (first-party). `false` = events aggregated from public sources (scrapers, feeds, ingestion pipelines). Omit for both. The Commons separates information *from* a business from information *about* a business; apps choose what tier to surface. */
+                first_party?: "true" | "false";
                 /** @description Page size */
                 limit?: number;
                 /** @description Page offset */

@@ -18,7 +18,7 @@ import { supabaseAdmin } from '../lib/supabase.js';
 import { createError } from '../middleware/error-handler.js';
 import { validateRequest, sanitizeSearchInput } from '../lib/helpers.js';
 import { optionalApiKey } from '../middleware/api-key.js';
-import { hydrateVerificationsFor, type VerificationByTarget } from '../lib/verification-hydrate.js';
+import { hydrateVerificationsFor, resolveVerificationIdFilter, type VerificationByTarget } from '../lib/verification-hydrate.js';
 import { formatPlace } from './v1-places.js';
 
 const router: ReturnType<typeof Router> = Router();
@@ -73,11 +73,32 @@ router.get('/', async (req, res, next) => {
     const limit = params.limit || 50;
     const offset = params.offset || 0;
 
+    // Pre-resolve verification filters into an include/exclude id set so SQL
+    // can apply them. This is what makes meta.total reflect the FILTERED
+    // count — the older post-fetch approach reported the unfiltered total
+    // and confused paginating consumers.
+    const verifFilter = await resolveVerificationIdFilter('organization', {
+      verified: params.verified,
+      verified_by: params.verified_by,
+      not_verified_by: params.not_verified_by,
+    });
+    if ('empty' in verifFilter && verifFilter.empty) {
+      res.set('Cache-Control', 'public, max-age=60');
+      res.json({ meta: buildMeta(0, limit, offset), organizations: [] });
+      return;
+    }
+
     let query = supabaseAdmin
       .from('organizations')
       .select(ORG_SELECT, { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
+
+    if ('includeIds' in verifFilter) query = query.in('id', verifFilter.includeIds);
+    if ('excludeIds' in verifFilter) {
+      // Supabase JS .not('id', 'in', '(uuid1,uuid2,...)') format
+      query = query.not('id', 'in', `(${verifFilter.excludeIds.join(',')})`);
+    }
 
     if (params.kind) query = query.eq('kind', params.kind);
 
@@ -111,26 +132,11 @@ router.get('/', async (req, res, next) => {
       for (const p of places || []) placesById.set(p.id as string, p);
     }
 
-    // Hydrate verifications
+    // Hydrate verifications (still needed for the `verification` block on each org)
     const orgIds = (orgs || []).map(o => o.id as string);
     const verifications = await hydrateVerificationsFor('organization', orgIds);
 
     let formatted = (orgs || []).map(o => formatOrganization(o, placesById, verifications));
-
-    // Verification filters (post-fetch since source is in another table)
-    if (params.verified === 'true') {
-      formatted = formatted.filter(o => o.verified);
-    } else if (params.verified === 'false') {
-      formatted = formatted.filter(o => !o.verified);
-    }
-    if (params.verified_by) {
-      const allowed = new Set(params.verified_by.split(',').map(s => s.trim()));
-      formatted = formatted.filter(o => o.verification && allowed.has(o.verification.verifiedByApp));
-    }
-    if (params.not_verified_by) {
-      const blocked = new Set(params.not_verified_by.split(',').map(s => s.trim()));
-      formatted = formatted.filter(o => !o.verification || !blocked.has(o.verification.verifiedByApp));
-    }
 
     // Geo filter post-fetch
     if (params.near && params.radius_km) {
