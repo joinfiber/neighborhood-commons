@@ -345,6 +345,8 @@ Filters apply at the URL query level. Compose them freely; all are optional.
 
 | Filter | Applies to | Effect |
 |---|---|---|
+| `first_party=true` | events | Only events posted by the verified business itself. The authority tier. |
+| `first_party=false` | events | Only events aggregated from public sources (scrapers, feeds). The coverage tier. |
 | `verified=true` | organizations, persons, broadcasts | Only verified targets. |
 | `verified_by=app1,app2` | organizations, persons, broadcasts | Verified by any of the listed apps. |
 | `not_verified_by=app-x` | organizations, persons, broadcasts | Excludes targets verified only by these apps. |
@@ -360,6 +362,13 @@ Filters apply at the URL query level. Compose them freely; all are optional.
 | `group_id=uuid` | events | Filter to events with the given organizer (legacy field name; expects an Organization id). |
 
 Filter composition is the editorial primitive. App C trusts a different verifier set than App B; both express that as URL parameters. There is no default firehose — apps construct their own slice.
+
+The Commons holds two tiers of authority on the same data substrate:
+
+- **Public facts.** Information *about* a business — happy hours scraped from a flyer, events lifted from a venue's website, hours pulled from a public listing. Source-tracked, possibly accurate, best-effort quality. Today this is the dominant tier (Studio is the primary contributor pipeline).
+- **First-party.** Information *from* a business — events the business posted themselves, broadcasts they issued, hours they curated. Available only after the business verifies itself; the business stands behind every record. This tier is bootstrapping in 2026.
+
+Apps choose: maximum coverage (take everything), maximum authority (filter to `first_party=true`), or composed (surface both with visual differentiation).
 
 ### 3.3 Pagination & rate limits
 
@@ -626,7 +635,11 @@ curl -X POST "https://api.neighborhood-commons.org/api/v1/service/disputes" \
 
 ## 5. Verification
 
-Verification is a process the Commons orchestrates and an attribute apps consume. The Commons routes; apps follow. Submission endpoints reject mismatches with `409 WRONG_METHOD` pointing at the correct path.
+Verification does two things at once. It establishes that an organization or person controls an identifier (email, domain, phone). And it **unlocks first-party publishing** for that target — the business's ability to post their own events, broadcasts, hours, with the authority signal that comes from "this came from the business itself."
+
+Until a target is verified, the Commons can still hold information about them — happy hours scraped from a flyer, events lifted from a venue's website, hours pulled from a public listing. That's the **public-facts** tier: source-tracked, possibly accurate, best-effort quality. Apps consume both tiers and filter via `first_party=true|false` (see §3.2).
+
+The Commons orchestrates the verification process; apps consume the result. Submission endpoints reject mismatches with `409 WRONG_METHOD` pointing at the correct path.
 
 ### 5.1 The flow
 

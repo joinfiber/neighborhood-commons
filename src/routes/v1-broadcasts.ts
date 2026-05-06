@@ -16,7 +16,7 @@ import { supabaseAdmin } from '../lib/supabase.js';
 import { createError } from '../middleware/error-handler.js';
 import { validateRequest, validateUuidParam } from '../lib/helpers.js';
 import { optionalApiKey } from '../middleware/api-key.js';
-import { hydrateVerificationsFor } from '../lib/verification-hydrate.js';
+import { hydrateVerificationsFor, resolveVerificationIdFilter } from '../lib/verification-hydrate.js';
 import { formatPlace } from './v1-places.js';
 import { formatOrganization } from './v1-organizations.js';
 
@@ -68,6 +68,20 @@ router.get('/', async (req, res, next) => {
     const limit = params.limit || 50;
     const offset = params.offset || 0;
 
+    // Pre-resolve verification filters into the set of organization IDs
+    // whose broadcasts are allowed/disallowed. Pushes the filter into SQL
+    // so meta.total reflects the filtered count.
+    const verifFilter = await resolveVerificationIdFilter('organization', {
+      verified: params.verified,
+      verified_by: params.verified_by,
+      not_verified_by: params.not_verified_by,
+    });
+    if ('empty' in verifFilter && verifFilter.empty) {
+      res.set('Cache-Control', 'public, max-age=15');
+      res.json({ meta: buildMeta(0, limit, offset), broadcasts: [] });
+      return;
+    }
+
     let query = supabaseAdmin
       .from('broadcasts')
       .select(BROADCAST_SELECT, { count: 'exact' })
@@ -75,6 +89,11 @@ router.get('/', async (req, res, next) => {
       .gt('expires_at', new Date().toISOString())
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
+
+    if ('includeIds' in verifFilter) query = query.in('organization_id', verifFilter.includeIds);
+    if ('excludeIds' in verifFilter) {
+      query = query.not('organization_id', 'in', `(${verifFilter.excludeIds.join(',')})`);
+    }
 
     if (params.organization_id) {
       query = query.eq('organization_id', params.organization_id);
@@ -91,28 +110,14 @@ router.get('/', async (req, res, next) => {
       throw createError('Failed to fetch broadcasts', 500, 'SERVER_ERROR');
     }
 
-    // Hydrate verifications for the embedded organizations
+    // Hydrate verifications for the embedded organizations (still needed
+    // for the `verification` block on each broadcast's organization)
     const orgIds = Array.from(new Set(
       (broadcasts || []).map(b => (b as Record<string, unknown>).organization_id as string)
     ));
     const verifications = await hydrateVerificationsFor('organization', orgIds);
 
     let formatted = (broadcasts || []).map(b => formatBroadcast(b as Record<string, unknown>, verifications));
-
-    // Verification filters
-    if (params.verified === 'true') {
-      formatted = formatted.filter(b => b.organization?.verified);
-    } else if (params.verified === 'false') {
-      formatted = formatted.filter(b => !b.organization?.verified);
-    }
-    if (params.verified_by) {
-      const allowed = new Set(params.verified_by.split(',').map(s => s.trim()));
-      formatted = formatted.filter(b => b.organization?.verification && allowed.has(b.organization.verification.verifiedByApp));
-    }
-    if (params.not_verified_by) {
-      const blocked = new Set(params.not_verified_by.split(',').map(s => s.trim()));
-      formatted = formatted.filter(b => !b.organization?.verification || !blocked.has(b.organization.verification.verifiedByApp));
-    }
 
     // Geo filter (post-fetch on the embedded place)
     if (params.near && params.radius_km) {

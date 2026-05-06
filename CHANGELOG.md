@@ -14,6 +14,15 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-05-06 (later)
+
+- New: `?first_party=true|false` filter on `GET /v1/events`. The Commons holds two tiers of authority on the same data substrate: **public-facts** (information *about* a business — scrapers, feeds, ingestion pipelines) and **first-party** (information *from* a business, posted by the business itself after verification). The filter lets apps choose which tier to surface. Schema-level filter (not post-fetch), so `meta.total` reflects the filtered count.
+- Fixed: `verified=true` / `verified_by` / `not_verified_by` filters on `/v1/organizations`, `/v1/persons`, and `/v1/broadcasts` no longer report misleading `meta.total`. The previous post-fetch filter pattern returned the unfiltered count (e.g., `total: 328` while the array was empty), which broke pagination semantics. Filters now resolve to an org/person ID set up front and apply at the SQL layer via `IN`/`NOT IN`. Behavior change: pagination over verified-filtered results is now correct.
+- Documentation: pillar 03 on the homepage reframed from "Verify once. Recognized everywhere." to "Two tiers of authority." Verification is repositioned as the gate that unlocks first-party publishing, not just an identity proof. Imagine block, stats line, and verification docs section all reflect the two-tier model honestly. Stats line now surfaces a public-facts vs first-party breakdown so visitors see the bootstrapping state rather than an undifferentiated total.
+- No spec breaking changes. SDK regenerated against the updated spec.
+
+---
+
 ## 2026-05-06
 
 - New: self-service registration for service-tier API keys. `POST /api/v1/service/register/send-otp` + `POST /api/v1/service/register/verify-otp` issue a service-tier key in pending status. Pending keys authenticate for reads (at the service-tier rate limit) and for `/service/verifications/path`, but every write under `/service/*` returns `403 KEY_PENDING` until activation. The whole integration — auth wiring, request shapes, schema validation — can be built and demoed without operator involvement.

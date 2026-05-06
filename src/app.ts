@@ -223,7 +223,9 @@ export function createApp(): Express {
   // ─── Landing page (server-rendered, instant load, no JS) ───────────
   let cachedStats = {
     totalEvents: 0,
+    firstPartyEvents: 0,
     totalOrganizations: 0,
+    verifiedOrganizations: 0,
     totalPlaces: 0,
     regionName: '',
     fetchedAt: 0,
@@ -233,15 +235,20 @@ export function createApp(): Express {
   async function getLandingStats() {
     if (Date.now() - cachedStats.fetchedAt < STATS_TTL_MS) return cachedStats;
     try {
-      const [eventResult, orgResult, placeResult, regionResult] = await Promise.all([
+      const [eventResult, firstPartyResult, orgResult, placeResult, regionResult, verifiedRows] = await Promise.all([
         supabaseAdmin.from('events').select('id', { count: 'exact', head: true }).eq('status', 'published'),
+        supabaseAdmin.from('events').select('id', { count: 'exact', head: true }).eq('status', 'published').eq('first_party', true),
         supabaseAdmin.from('organizations').select('id', { count: 'exact', head: true }),
         supabaseAdmin.from('places').select('id', { count: 'exact', head: true }),
         supabaseAdmin.from('regions').select('name').eq('is_active', true).limit(1).maybeSingle(),
+        supabaseAdmin.from('account_verified_identifiers').select('target_id').eq('target_type', 'organization').eq('status', 'active'),
       ]);
+      const verifiedOrgIds = new Set(((verifiedRows.data || []) as Array<{ target_id: string }>).map(r => r.target_id));
       cachedStats = {
         totalEvents: eventResult.count || 0,
+        firstPartyEvents: firstPartyResult.count || 0,
         totalOrganizations: orgResult.count || 0,
+        verifiedOrganizations: verifiedOrgIds.size,
         totalPlaces: placeResult.count || 0,
         regionName: regionResult.data?.name || '',
         fetchedAt: Date.now(),
@@ -264,10 +271,24 @@ export function createApp(): Express {
   app.get('/', async (_req, res, next) => {
     try {
       const baseUrl = config.apiBaseUrl || 'https://api.neighborhood-commons.org';
-      const { totalEvents, totalOrganizations, totalPlaces, regionName } = await getLandingStats();
+      const {
+        totalEvents,
+        firstPartyEvents,
+        totalOrganizations,
+        verifiedOrganizations,
+        totalPlaces,
+        regionName,
+      } = await getLandingStats();
 
+      // Surface the two-tier reality honestly: aggregate count first, then a
+      // dim sub-line breaking it into public-facts vs first-party. The
+      // breakdown converts what would otherwise read as embarrassment ("0
+      // verified businesses!") into a visible roadmap state ("first-party
+      // tier is bootstrapping — early apps welcome").
+      const publicFactsEvents = Math.max(0, totalEvents - firstPartyEvents);
       const statsLine = totalEvents > 0
-        ? `<span class="nc-stats">Currently serving <strong>${totalEvents.toLocaleString()} events</strong>, <strong>${totalOrganizations.toLocaleString()} organizations</strong>, and <strong>${totalPlaces.toLocaleString()} places</strong>${regionName ? ` in <strong>${regionName}</strong>` : ''}.</span>`
+        ? `<span class="nc-stats">Currently serving <strong>${totalEvents.toLocaleString()} events</strong> across <strong>${totalOrganizations.toLocaleString()} organizations</strong> and <strong>${totalPlaces.toLocaleString()} places</strong>${regionName ? ` in <strong>${regionName}</strong>` : ''}.</span>` +
+          `<span class="nc-stats nc-stats-tier">${publicFactsEvents.toLocaleString()} public-facts · ${firstPartyEvents.toLocaleString()} first-party · ${verifiedOrganizations.toLocaleString()} verified businesses. First-party tier is bootstrapping — early apps welcome.</span>`
         : '';
 
       if (!indexTemplate) {
