@@ -24,6 +24,7 @@
 import { Router } from 'express';
 import { requireServiceApiKey } from '../../middleware/api-key.js';
 
+import registerRoutes from './register.js';
 import accountsRoutes from './accounts.js';
 import eventsRoutes from './events.js';
 import seriesRoutes from './series.js';
@@ -41,7 +42,12 @@ import disputesRoutes from './disputes.js';
 
 const router: ReturnType<typeof Router> = Router();
 
-// All service routes require a service-tier API key
+// Self-service registration is unauthenticated by design — it's the entry
+// point for anyone applying for a service-tier key. Mounted BEFORE the
+// service-tier auth check below.
+router.use('/register', registerRoutes);
+
+// Everything else requires an active service-tier API key.
 router.use(requireServiceApiKey);
 
 // Sub-routers — mounted at root; each defines its own paths.

@@ -2349,6 +2349,274 @@
         }
       }
     },
+    "/service/api-keys/{id}/activate": {
+      "post": {
+        "summary": "Activate a pending service-tier key (admin)",
+        "description": "Flip a self-registered service-tier API key from pending (`activated_at` NULL — reads only) to fully active (`activated_at` set — writes resume). Optionally sets `brand_config`, `verification_authority`, and `rate_limit_per_hour` in the same call. Admin service key required. Idempotent: returns `already_active: true` if the key was previously activated.",
+        "operationId": "serviceActivateApiKey",
+        "security": [
+          {
+            "serviceApiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "brand_config": {
+                    "type": "object",
+                    "description": "Per-key sender identity for verification emails. Operator-set at activation."
+                  },
+                  "verification_authority": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Methods this key may auto-approve, e.g. [\"manual_review:in_person\"]."
+                  },
+                  "rate_limit_per_hour": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Key activated, or already active",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "api_key": {
+                      "type": "object"
+                    },
+                    "api_key_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "already_active": {
+                      "type": "boolean"
+                    },
+                    "activated_at": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Key is not service tier"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "description": "Admin access required"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/service/register/send-otp": {
+      "post": {
+        "summary": "Self-service: send registration OTP",
+        "description": "Step 1 of self-issuance for a service-tier API key. Sends a verification code to the supplied email. Step 2 is `POST /service/register/verify-otp`, which issues the (pending) key. No authentication required.",
+        "operationId": "serviceRegisterSendOtp",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 320
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OTP sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/service/register/verify-otp": {
+      "post": {
+        "summary": "Self-service: verify OTP and receive a pending service key",
+        "description": "Step 2 of self-issuance. On a valid OTP, creates a service-tier api_key with `activated_at = NULL` and stores the application metadata for review. The raw key is returned ONCE — store it immediately.\n\nThe issued key authenticates for reads at the service-tier rate limit and for the `/service/verifications/path` lookup, but every write under `/service/*` returns `403 KEY_PENDING` until an admin calls `POST /service/api-keys/{id}/activate`. No code changes needed when the key is activated.",
+        "operationId": "serviceRegisterVerifyOtp",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "token",
+                  "app_name",
+                  "app_url",
+                  "what_youre_building",
+                  "verification_process"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 320
+                  },
+                  "token": {
+                    "type": "string",
+                    "minLength": 6,
+                    "maxLength": 8
+                  },
+                  "app_name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "app_url": {
+                    "type": "string",
+                    "format": "uri",
+                    "maxLength": 500
+                  },
+                  "what_youre_building": {
+                    "type": "string",
+                    "minLength": 20,
+                    "maxLength": 2000,
+                    "description": "One paragraph. Who's the user, what's the integration shape."
+                  },
+                  "verification_process": {
+                    "type": "string",
+                    "minLength": 20,
+                    "maxLength": 2000,
+                    "description": "How you verify the organizations you onboard. Drives the verification_authority granted at activation."
+                  },
+                  "expected_first_week_writes": {
+                    "type": "string",
+                    "maxLength": 200
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Pending service key issued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "api_key": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "raw_key": {
+                          "type": "string",
+                          "description": "Returned once. Store immediately — not recoverable."
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "rate_limit_per_hour": {
+                          "type": "integer"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "pending_activation"
+                          ]
+                        },
+                        "created_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "description": "Invalid or expired verification code (INVALID_OTP)"
+          },
+          "409": {
+            "description": "An active service-tier key already exists for this email (ALREADY_EXISTS)"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
     "/service/migrate-image-urls": {
       "post": {
         "summary": "One-time image URL migration",
@@ -5737,7 +6005,7 @@
       },
       "ErrorCode": {
         "type": "string",
-        "description": "Machine-readable error identifier. Groups:\n\n- **Auth**: `ACCESS_DENIED`, `ACCOUNT_DISABLED`, `ACCOUNT_REQUIRED`, `API_KEY_REQUIRED`, `CAPTCHA_FAILED`, `FORBIDDEN`, `INSUFFICIENT_TIER`, `INVALID_API_KEY`, `INVALID_OTP`, `KEY_NOT_LINKED`, `NOT_LINKED`, `NO_OWNER`, `UNAUTHORIZED`\n- **Validation / resource**: `ALREADY_EXISTS`, `BATCH_ALREADY_SUBMITTED`, `CONFLICT`, `DUPLICATE`, `INVALID_STATE`, `NOT_FOUND`, `VALIDATION_ERROR`\n- **URL / domain**: `BLOCKED_HOSTNAME`, `DOMAIN_PENDING_REVIEW`, `INVALID_SCHEME`, `INVALID_URL`, `INVALID_WEBHOOK_URL`, `IP_LITERAL`, `URL_CREDENTIALS`\n- **Rate limit / quota**: `PAYLOAD_TOO_LARGE`, `RATE_LIMIT`, `SUBSCRIPTION_LIMIT`\n- **CSV / import**: `CSV_EMPTY`, `CSV_INVALID`, `CSV_TOO_LARGE`, `NO_VALID_ROWS`\n- **Verification**: `IDENTIFIER_DISPUTED`, `IMPOSTER_SIGNALS`, `INSUFFICIENT_EVIDENCE`, `OUT_OF_POLICY`, `WRONG_METHOD`\n- **Server / infrastructure**: `DATABASE_ERROR`, `INTERNAL_ERROR`, `SERVER_ERROR`, `SERVICE_UNAVAILABLE`, `UPSTREAM_ERROR`",
+        "description": "Machine-readable error identifier. Groups:\n\n- **Auth**: `ACCESS_DENIED`, `ACCOUNT_DISABLED`, `ACCOUNT_REQUIRED`, `API_KEY_REQUIRED`, `CAPTCHA_FAILED`, `FORBIDDEN`, `INSUFFICIENT_TIER`, `INVALID_API_KEY`, `INVALID_OTP`, `KEY_NOT_LINKED`, `KEY_PENDING`, `NOT_LINKED`, `NO_OWNER`, `UNAUTHORIZED`\n- **Validation / resource**: `ALREADY_EXISTS`, `BATCH_ALREADY_SUBMITTED`, `CONFLICT`, `DUPLICATE`, `INVALID_STATE`, `NOT_FOUND`, `VALIDATION_ERROR`\n- **URL / domain**: `BLOCKED_HOSTNAME`, `DOMAIN_PENDING_REVIEW`, `INVALID_SCHEME`, `INVALID_URL`, `INVALID_WEBHOOK_URL`, `IP_LITERAL`, `URL_CREDENTIALS`\n- **Rate limit / quota**: `PAYLOAD_TOO_LARGE`, `RATE_LIMIT`, `SUBSCRIPTION_LIMIT`\n- **CSV / import**: `CSV_EMPTY`, `CSV_INVALID`, `CSV_TOO_LARGE`, `NO_VALID_ROWS`\n- **Verification**: `IDENTIFIER_DISPUTED`, `IMPOSTER_SIGNALS`, `INSUFFICIENT_EVIDENCE`, `OUT_OF_POLICY`, `WRONG_METHOD`\n- **Server / infrastructure**: `DATABASE_ERROR`, `INTERNAL_ERROR`, `SERVER_ERROR`, `SERVICE_UNAVAILABLE`, `UPSTREAM_ERROR`",
         "enum": [
           "ACCESS_DENIED",
           "ACCOUNT_DISABLED",
@@ -5768,6 +6036,7 @@
           "INVALID_WEBHOOK_URL",
           "IP_LITERAL",
           "KEY_NOT_LINKED",
+          "KEY_PENDING",
           "NO_OWNER",
           "NO_VALID_ROWS",
           "NOT_FOUND",

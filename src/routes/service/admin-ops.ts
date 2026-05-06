@@ -295,6 +295,65 @@ router.patch('/api-keys/:id', serviceLimiter, async (req, res, next) => {
   }
 });
 
+/**
+ * POST /service/api-keys/:id/activate — Flip a self-registered service key
+ * from pending to active. Optionally sets brand_config and verification_authority
+ * in the same transaction; otherwise those stay at whatever was on the row
+ * (typically NULL for self-registered keys).
+ *
+ * No-op (returns 200 with `already_active: true`) if the key is already active —
+ * activation is idempotent.
+ */
+router.post('/api-keys/:id/activate', serviceLimiter, async (req, res, next) => {
+  try {
+    if (!req.apiKeyInfo?.isAdmin) {
+      throw createError('Admin access required', 403, 'FORBIDDEN');
+    }
+    validateUuidParam(req.params.id, 'API key ID');
+    const schema = z.object({
+      brand_config: z.record(z.unknown()).optional(),
+      verification_authority: z.array(z.string()).optional(),
+      rate_limit_per_hour: z.number().int().min(1).max(100000).optional(),
+    });
+    const updates = validateRequest(schema, req.body ?? {});
+
+    const { data: existing, error: readError } = await supabaseAdmin
+      .from('api_keys')
+      .select('id, contributor_tier, activated_at, application_metadata')
+      .eq('id', req.params.id)
+      .maybeSingle();
+
+    if (readError || !existing) throw createError('API key not found', 404, 'NOT_FOUND');
+    if (existing.contributor_tier !== 'service') {
+      throw createError('Only service-tier keys are activated; this key is a different tier.', 400, 'VALIDATION_ERROR');
+    }
+
+    if (existing.activated_at !== null) {
+      res.json({ api_key_id: existing.id, already_active: true, activated_at: existing.activated_at });
+      return;
+    }
+
+    const patch: Record<string, unknown> = { activated_at: new Date().toISOString() };
+    if (updates.brand_config !== undefined) patch.brand_config = updates.brand_config;
+    if (updates.verification_authority !== undefined) patch.verification_authority = updates.verification_authority;
+    if (updates.rate_limit_per_hour !== undefined) patch.rate_limit_per_hour = updates.rate_limit_per_hour;
+
+    const { data: activated, error: updateError } = await supabaseAdmin
+      .from('api_keys')
+      .update(patch)
+      .eq('id', req.params.id)
+      .select('id, key_prefix, name, contact_email, contributor_tier, rate_limit_per_hour, brand_config, verification_authority, activated_at, application_metadata, created_at')
+      .single();
+
+    if (updateError) throw createError('Failed to activate API key', 500, 'SERVER_ERROR');
+
+    console.log(`[SERVICE] API key ${req.params.id} activated for live writes`);
+    res.json({ api_key: activated, already_active: false });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // =============================================================================
 // IMAGE URL MIGRATION
 // =============================================================================

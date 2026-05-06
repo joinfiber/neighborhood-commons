@@ -31,6 +31,18 @@ export function hashApiKey(rawKey: string): string {
   return createHash('sha256').update(rawKey).digest('hex');
 }
 
+export interface GenerateKeyOptions {
+  /**
+   * If true, the key is created with `activated_at = NULL` — it authenticates
+   * for reads but `requireServiceApiKey` will reject writes with `KEY_PENDING`
+   * until an admin flips it to active. Default false (issued already-activated).
+   * Only meaningful when contributorTier === 'service'.
+   */
+  pending?: boolean;
+  /** JSON captured at self-service registration; opaque to the database. */
+  applicationMetadata?: Record<string, unknown>;
+}
+
 /**
  * Generate a new API key, hash it, and store it in the database.
  * Returns the raw key (shown once) and row metadata.
@@ -43,6 +55,7 @@ export async function generateAndStoreKey(
   contributorTier: string = 'pending',
   rateLimitPerHour: number = 1000,
   url?: string,
+  options: GenerateKeyOptions = {},
 ): Promise<GeneratedKey> {
   const rawKey = generateRawKey();
   const keyHash = hashApiKey(rawKey);
@@ -58,6 +71,8 @@ export async function generateAndStoreKey(
       contributor_tier: contributorTier,
       rate_limit_per_hour: rateLimitPerHour,
       url: url || null,
+      activated_at: options.pending ? null : new Date().toISOString(),
+      application_metadata: options.applicationMetadata ?? null,
     })
     .select('id, name, created_at')
     .single();

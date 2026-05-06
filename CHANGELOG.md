@@ -14,6 +14,16 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-05-06
+
+- New: self-service registration for service-tier API keys. `POST /api/v1/service/register/send-otp` + `POST /api/v1/service/register/verify-otp` issue a service-tier key in pending status. Pending keys authenticate for reads (at the service-tier rate limit) and for `/service/verifications/path`, but every write under `/service/*` returns `403 KEY_PENDING` until activation. The whole integration — auth wiring, request shapes, schema validation — can be built and demoed without operator involvement.
+- New: `POST /api/v1/service/api-keys/{id}/activate` (admin) flips a pending service key to live; optionally sets `brand_config`, `verification_authority`, and `rate_limit_per_hour` in the same call. Idempotent.
+- New: ErrorCode `KEY_PENDING` — service-tier writes against an unactivated key.
+- Migration 075: `api_keys.activated_at` (timestamptz) and `api_keys.application_metadata` (jsonb) columns. Existing keys backfilled to `activated_at = created_at`.
+- Documentation: `public/llms.txt` and `public/index.html` writing-data sections rewritten around self-issuance. Cuts the Resend pricing table and the operator-as-character framing — those were operator-implementation details that distracted from "how do I integrate."
+
+---
+
 ## 2026-05-05 — 1.0.0
 
 The pre-1.0 consolidation. The Commons spec moves from "open events API" to **typed substrate for neighborhood-scale public facts**. Schema.org-aligned types, Commons-orchestrated verification, public reputation graph, opt-in filter primitives. Pre-1.0 was the breaking-changes window; 1.0.0 commits to additive-only stability — future minor versions add types/fields/endpoints without breaking existing consumers, and breaking changes require 2.0.0 with strong justification.
