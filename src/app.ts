@@ -361,28 +361,24 @@ export function createApp(): Express {
   // are handled by server-rendered pages, not the React SPA.
   app.use(pageRoutes);
 
-  // ─── Portal SPA (static files) ─────────────────────────────────
-  // Serve the built portal frontend. Must be after API routes and pages
-  // so /api/* and /events/* are handled first.
-  //
-  // Vite produces hashed filenames (index-Ab12Cd.js) — safe to cache
-  // forever since the hash changes on every build. But index.html must
-  // never be cached: it's the entry point that references the current hash.
-  // Without no-cache on index.html, browsers/CDNs serve stale HTML that
-  // points to an old JS bundle, and UI changes don't land after deploy.
+  // ─── Portal SPA (static files, retired) ─────────────────────────
+  // The Portal SPA was a venue self-service UI from a previous era; it's
+  // not actively used and is being removed in stages. The /assets static
+  // middleware stays for now so any cached references don't 500; the
+  // larger deletion (rm -rf portal/) lands in a follow-up PR.
   const portalDir = path.resolve(__dirname, '../portal');
   app.use('/assets', express.static(path.join(portalDir, 'assets'), { maxAge: '365d', immutable: true }));
-  // index: false prevents express.static from serving portal/index.html for "/"
-  // — the server-rendered homepage handles that route explicitly above
-  app.use(express.static(portalDir, { maxAge: 0, index: false }));
 
-  // SPA fallback: any non-API, non-page route serves index.html
-  // (supports client-side hash routing)
-  app.get('*', (_req, res, next) => {
-    if (_req.path === '/' || _req.path.startsWith('/api/') || _req.path.startsWith('/events/') || _req.path.startsWith('/venues/')) return next();
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.sendFile(path.join(portalDir, 'index.html'), (err) => {
-      if (err) next(); // portal not built yet — 404 is fine
+  // 404 fallback: any request that didn't match a route above gets a
+  // proper 404, not the Portal SPA. Skips /api/* — those are handled by
+  // the global error handler with the canonical { error } shape.
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/api/')) return next();
+    res.status(404).setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.sendFile(path.join(__dirname, '../public/404.html'), {
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    }, (err) => {
+      if (err) next();
     });
   });
 
