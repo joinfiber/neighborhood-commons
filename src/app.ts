@@ -95,14 +95,20 @@ export function createApp(): Express {
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
-          // jsdelivr is allowed for the /spec page's Scalar API reference
-          // bundle. The CDN is also where Scalar fetches its companion
-          // assets at runtime, hence the connect-src + style-src entries.
+          // jsdelivr is allowed for the /spec page's Scalar API reference:
+          //   script-src   the bundle itself
+          //   style-src    Scalar injects a runtime stylesheet
+          //   font-src     Inter + JetBrains Mono shipped inside the bundle
+          //   connect-src  Scalar fetches companion assets lazily
+          // api.neighborhood-commons.org is in connect-src so the spec
+          // viewer's "Try it" panel works when the page is served from the
+          // apex (neighborhood-commons.org) — same Express deployment, but
+          // the browser sees it as a different origin.
           styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://cdn.jsdelivr.net'],
-          fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+          fontSrc: ["'self'", 'https://fonts.gstatic.com', 'https://cdn.jsdelivr.net'],
           scriptSrc: ["'self'", 'https://challenges.cloudflare.com', 'https://static.cloudflareinsights.com', 'https://cdn.jsdelivr.net'],
           frameSrc: ["'self'", 'https://challenges.cloudflare.com'],
-          connectSrc: ["'self'", config.supabase.url, 'https://places.googleapis.com', 'https://cdn.jsdelivr.net'],
+          connectSrc: ["'self'", config.supabase.url, 'https://places.googleapis.com', 'https://cdn.jsdelivr.net', 'https://api.neighborhood-commons.org'],
           imgSrc: ["'self'", 'data:', 'https:'],
         },
       },
