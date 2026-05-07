@@ -3,198 +3,183 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Neighborhood Commons — Open infrastructure for neighborhood data</title>
+  <title>Neighborhood Commons — open neighborhood data infrastructure</title>
   <meta name="description" content="Open infrastructure for neighborhood data. Events, organizations, places, broadcasts, curated lists. Schema.org-aligned, verified contributors, public reputation graph. Read free. Build with confidence. CC BY 4.0.">
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/pages.css">
+
   <style>
-    /* ─────────────────────────────────────────────────────────────────── *
-     *  Two contexts on one page:
-     *    Marketing (above the fold) — generous, evocative, hero-led.
-     *    Reference (below the fold)  — tight, factual, document-shaped.
-     *  Visual rhythm shifts; palette and type system stay coherent.
+    /*
+     * Neighborhood Commons — homepage stylesheet.
      *
-     *  Palette is inlined so the page renders correctly even when
-     *  /pages.css doesn't resolve (preview environments, offline reads).
-     * ─────────────────────────────────────────────────────────────────── */
+     * Single self-contained file. Intentionally simple: one media query
+     * (≤640px), no flex sticky-footer, no grid 1fr foot guns, no /pages.css
+     * dependency. The page is a document, not a web app.
+     */
 
     :root {
-      --nc-bg: #f7f7f5;
-      --nc-surface: #ffffff;
-      --nc-text: #37352f;
-      --nc-muted: #6b6660;
-      --nc-dim: #9c9791;
-      --nc-border: #e8e6e1;
-      --nc-accent: #2c2c2c;
-      --nc-cream: #f5f0e8;
+      --bg:      #f7f7f5;
+      --surface: #ffffff;
+      --cream:   #faf8f4;
+      --text:    #1c1a17;
+      --muted:   #5b5852;
+      --dim:     #9c9791;
+      --border:  #e8e4dd;
+      --gold:    #c08a3e;
+      --code:    #1c1a17;
+      --code-fg: #e8e6e1;
     }
 
-    /* Reset + base — minimal, doesn't depend on pages.css */
     *, *::before, *::after { box-sizing: border-box; }
     html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
     body {
       margin: 0;
-      font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: var(--nc-bg);
-      color: var(--nc-text);
-      line-height: 1.6;
-      font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
-      text-rendering: optimizeLegibility;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 16px; line-height: 1.6;
+      font-feature-settings: "kern" 1, "liga" 1;
     }
     img { max-width: 100%; display: block; }
 
-    /* Defensive: nothing should ever cause a horizontal page scroll. If a
-       child element is wider than the viewport, it scrolls inside its
-       container (pre, table) — never the whole page. */
-    html, body { overflow-x: hidden; }
+    /* Safety net: wide content inside .nc-hero-curls / docs <pre> blocks
+       (white-space: pre) scrolls inside its own container via overflow-x:
+       auto. But browsers still report descendant scrollWidth on
+       ancestors, which can produce page-level horizontal scroll. This
+       pins the document shut. */
+    html, body { overflow-x: clip; }
 
-    /* /pages.css sets .nc-page { display: flex; flex-direction: column }
-       for the sticky-footer pattern. The trouble: flex with
-       align-items: stretch widens to the largest child's intrinsic
-       min-content on the cross axis — and the hero's <pre> curls block
-       (white-space: pre, long URLs) has a min-content of ~600px. That
-       was forcing the entire layout wider than the viewport on mobile.
-       The homepage is content-rich enough that the footer sits at the
-       bottom on its own; we don't need flex for that here. */
-    .nc-page { display: block; }
-
-    /* ─────────────────────────────────────────── *
-     *  Status strip — sits above the topbar.
-     *  Document metadata: spec version, status, license.
-     * ─────────────────────────────────────────── */
+    /* ── Status strip + topbar ─────────────────────────── */
     .nc-status-strip {
-      background: var(--nc-text);
-      color: var(--nc-bg);
-      font-size: 12px;
-      font-family: 'DM Mono', monospace;
+      background: var(--text); color: var(--bg);
+      font-family: 'DM Mono', monospace; font-size: 12px;
       letter-spacing: 0.02em;
     }
     .nc-status-inner {
       max-width: 1180px; margin: 0 auto;
-      padding: 7px 32px;
-      display: flex; align-items: center; gap: 18px;
-      flex-wrap: wrap;
+      padding: 7px 24px;
+      display: flex; flex-wrap: wrap; gap: 14px 18px;
+      align-items: center;
     }
-    .nc-status-inner span { color: rgba(247, 247, 245, 0.65); }
-    .nc-status-inner strong {
-      color: var(--nc-bg); font-weight: 500;
-    }
+    .nc-status-inner span { color: rgba(247,247,245,0.65); }
+    .nc-status-inner strong { color: var(--bg); font-weight: 500; }
     .nc-status-dot {
       display: inline-block; width: 6px; height: 6px;
       border-radius: 50%; background: #7fc97f;
       margin-right: 6px; vertical-align: middle;
     }
 
-    /* ─────────────────────────────────────────── *
-     *  Sticky top bar — always visible.
-     *  Solid background; institutional, not glassy.
-     * ─────────────────────────────────────────── */
     .nc-topbar {
       position: sticky; top: 0; z-index: 50;
-      background: var(--nc-bg);
-      border-bottom: 1px solid var(--nc-border);
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
     }
     .nc-topbar-inner {
       max-width: 1180px; margin: 0 auto;
-      padding: 16px 32px;
-      display: flex; align-items: center; gap: 16px;
+      padding: 14px 24px;
+      display: flex; flex-wrap: wrap; align-items: center; gap: 16px;
       font-size: 14px;
     }
     .nc-brand {
       font-weight: 600; letter-spacing: -0.01em;
-      color: var(--nc-text);
-      text-decoration: none;
+      color: var(--text); text-decoration: none;
     }
     .nc-topnav {
-      display: flex; gap: 26px; margin-left: auto; flex-wrap: wrap;
+      display: flex; flex-wrap: wrap; gap: 22px;
+      margin-left: auto;
     }
-    .nc-topnav a {
-      color: var(--nc-muted); text-decoration: none;
-      transition: color 0.12s;
-    }
-    .nc-topnav a:hover { color: var(--nc-text); }
-    .nc-topnav-sep { color: var(--nc-border); user-select: none; }
+    .nc-topnav a { color: var(--muted); text-decoration: none; }
+    .nc-topnav a:hover { color: var(--text); }
+    .nc-topnav-sep { color: var(--border); user-select: none; }
 
-    /* ─────────────────────────────────────────── *
-     *  Hero (marketing voice).
-     *  Editorial: serif headline, sans body. Document-grade
-     *  with deliberate typographic flourishes — italic accent,
-     *  eyebrow marker, framed code specimen.
-     * ─────────────────────────────────────────── */
+    /* ── Hero ─────────────────────────────────────────── */
     .nc-hero {
       max-width: 880px; margin: 0 auto;
-      padding: 88px 32px 48px;
+      padding: 72px 24px 40px;
     }
     .nc-eyebrow {
-      font-size: 11px; font-weight: 500; letter-spacing: 0.18em;
-      text-transform: uppercase; color: var(--nc-muted);
-      margin-bottom: 28px;
       font-family: 'DM Mono', monospace;
+      font-size: 11px; font-weight: 500;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--muted);
       display: inline-flex; align-items: center; gap: 10px;
+      margin-bottom: 28px;
     }
     .nc-eyebrow::before {
-      content: ''; display: inline-block;
-      width: 6px; height: 6px; border-radius: 50%;
-      background: #c08a3e;
+      content: ''; width: 6px; height: 6px;
+      border-radius: 50%; background: var(--gold);
     }
     .nc-hero h1 {
       font-family: 'DM Serif Display', Georgia, serif;
-      font-size: clamp(2.25rem, 5.2vw, 3.6rem);
-      font-weight: 400;
-      line-height: 1.06;
+      font-size: clamp(2.1rem, 5.2vw, 3.6rem);
+      font-weight: 400; line-height: 1.06;
       letter-spacing: -0.015em;
       margin: 0 0 28px;
-      color: var(--nc-text);
-      max-width: 18ch;
     }
-    .nc-hero h1 em {
-      font-style: italic;
-      color: var(--nc-text);
-      /* Pull the italic in slightly — DM Serif Display italic is wide */
-      letter-spacing: -0.025em;
-    }
+    .nc-hero h1 em { font-style: italic; letter-spacing: -0.025em; }
     .nc-lede {
       font-size: 1.125rem; line-height: 1.65;
-      color: var(--nc-muted);
+      color: var(--muted);
       max-width: 60ch;
       margin: 0;
     }
-    .nc-lede strong {
-      color: var(--nc-text); font-weight: 500;
+    .nc-lede strong { color: var(--text); font-weight: 500; }
+
+    .nc-imagine {
+      margin: 28px 0 0;
+      padding: 22px 26px;
+      border-left: 3px solid var(--gold);
+      background: var(--cream);
+      border-radius: 0 6px 6px 0;
     }
+    .nc-imagine-eyebrow {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px; font-weight: 500;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--gold);
+      margin: 0 0 12px;
+    }
+    .nc-imagine ul { list-style: none; padding: 0; margin: 0; max-width: 60ch; }
+    .nc-imagine li {
+      font-size: 0.98rem; line-height: 1.55;
+      color: var(--text);
+      margin-bottom: 10px;
+    }
+    .nc-imagine li:last-child { margin-bottom: 0; }
+    .nc-imagine li::before {
+      content: '→ '; color: var(--gold);
+      font-family: 'DM Mono', monospace;
+    }
+
+    .nc-atoms {
+      margin: 22px 0 0; max-width: 60ch;
+      font-size: 0.92rem; color: var(--muted);
+      font-family: 'DM Mono', monospace; letter-spacing: 0.02em;
+    }
+    .nc-atoms strong { color: var(--text); font-weight: 500; }
+
     .nc-stats {
-      display: block; color: var(--nc-text);
+      display: block; color: var(--text);
       margin-top: 22px; font-size: 0.95rem;
       max-width: 60ch; line-height: 1.6;
       font-variant-numeric: tabular-nums;
     }
     .nc-stats strong { font-weight: 600; }
-    /* Sub-line under the headline stats — breaks the aggregate count into
-       its two-tier reality. Smaller, dim, mono. The honesty signal that
-       grant readers and skeptical developers both look for. */
     .nc-stats-tier {
+      display: block;
       margin-top: 6px;
       font-family: 'DM Mono', monospace;
-      font-size: 0.82rem; letter-spacing: 0.01em;
-      color: var(--nc-dim);
+      font-size: 0.78rem; letter-spacing: 0.01em;
+      color: var(--dim);
       font-variant-numeric: tabular-nums;
     }
 
-    /* Hero code specimen — framed, with a label. Reads as an intentional
-       "live API" specimen rather than a floating cutout. The dark slab is
-       the only dark element on the page; the framing makes it deliberate.
-       max-width: 100% explicitly so the inner .nc-hero-curls (white-space:
-       pre + long curl URLs) can't widen the frame on narrow viewports. */
     .nc-specimen {
-      margin: 44px 0 0;
-      max-width: 100%;
-      border: 1px solid var(--nc-border);
-      border-radius: 12px;
-      background: var(--nc-surface);
-      overflow: hidden;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+      margin: 40px 0 0;
+      border: 1px solid var(--border); border-radius: 12px;
+      background: var(--surface); overflow: hidden;
     }
     .nc-specimen-label {
       display: flex; align-items: center; gap: 10px;
@@ -202,22 +187,21 @@
       font-family: 'DM Mono', monospace;
       font-size: 11px; font-weight: 500;
       letter-spacing: 0.12em; text-transform: uppercase;
-      color: var(--nc-muted);
-      border-bottom: 1px solid var(--nc-border);
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
     }
     .nc-specimen-label::before {
-      content: ''; display: inline-block;
-      width: 8px; height: 8px; border-radius: 50%;
-      background: #7fc97f;
-      box-shadow: 0 0 0 3px rgba(127, 201, 127, 0.18);
+      content: ''; width: 8px; height: 8px;
+      border-radius: 50%; background: #7fc97f;
+      box-shadow: 0 0 0 3px rgba(127,201,127,0.18);
     }
     .nc-specimen-label-end {
-      margin-left: auto; color: var(--nc-dim);
+      margin-left: auto; color: var(--dim);
       font-size: 10px; letter-spacing: 0.16em;
     }
     .nc-hero-curls {
-      background: #1c1a17; color: #e8e6e1;
-      padding: 20px 24px;
+      background: var(--code); color: var(--code-fg);
+      padding: 18px 22px;
       font-family: 'DM Mono', monospace;
       font-size: 0.84rem; line-height: 1.9;
       margin: 0;
@@ -228,533 +212,319 @@
     .nc-hero-curls .nc-curl-prompt { color: #7a948a; }
     .nc-hero-curls .nc-curl-string { color: #d4b886; }
 
-    /* Imagination block — concrete-ish app vignettes. Keeps the sentence
-       structure parallel so the eye scans them fast, and uses --nc-text
-       (not --nc-muted) so they pop slightly more than ordinary body copy.
-       This is the "what could you build with this?" beat. */
-    .nc-imagine {
-      margin: 28px 0 0;
-      padding: 22px 26px;
-      border-left: 3px solid #c08a3e;
-      background: #faf8f4;
-      border-radius: 0 6px 6px 0;
-    }
-    .nc-imagine-eyebrow {
-      font-family: 'DM Mono', monospace;
-      font-size: 10px; font-weight: 500;
-      letter-spacing: 0.18em; text-transform: uppercase;
-      color: #c08a3e;
-      margin: 0 0 12px;
-    }
-    .nc-imagine ul {
-      list-style: none; padding: 0; margin: 0;
-      /* minmax(0, 1fr): defeats default min-content widening on the track,
-         so long unbreakable atoms in any LI can't push the column beyond
-         the parent's content area on narrow viewports. */
-      display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px;
-      max-width: 60ch;
-    }
-    .nc-imagine li {
-      font-size: 0.98rem; line-height: 1.55;
-      color: var(--nc-text);
-    }
-    .nc-imagine li::before {
-      content: '→'; color: #c08a3e;
-      margin-right: 12px; font-family: 'DM Mono', monospace;
-      font-size: 0.85rem;
-    }
-
-    /* Atom inventory — names the substrate plainly after the imagination
-       block has done the motivating work. */
-    .nc-atoms {
-      margin: 22px 0 0; max-width: 60ch;
-      font-size: 0.92rem; color: var(--nc-muted);
-      font-family: 'DM Mono', monospace;
-      letter-spacing: 0.02em;
-    }
-    .nc-atoms strong { color: var(--nc-text); font-weight: 500; }
-
-    /* Tease — points at the docs below the fold. Small, confident,
-       not begging for attention. */
     .nc-hero-tease {
-      margin: 36px 0 0;
+      margin: 32px 0 0; max-width: 60ch;
       font-family: 'DM Mono', monospace;
       font-size: 0.82rem; letter-spacing: 0.02em;
-      color: var(--nc-muted);
-      max-width: 60ch;
+      color: var(--muted);
     }
-    .nc-hero-tease strong { color: var(--nc-text); font-weight: 500; }
-    .nc-hero-tease::before {
-      content: '⏷  ';
-      color: #c08a3e;
-      font-weight: 600;
-    }
-
-    /* Thesis section — the strategic frame. Sits between pillars and the
-       divider. Heaviest above-the-fold element after the h1, on purpose:
-       this is the closing argument to a developer scrolling toward the
-       docs, and (implicitly) the public-good framing for grant readers. */
-    .nc-thesis {
-      max-width: 880px; margin: 56px auto 0;
-      padding: 56px 32px;
-      border-top: 1px solid var(--nc-border);
-      border-bottom: 1px solid var(--nc-border);
-    }
-    .nc-thesis-eyebrow {
-      font-family: 'DM Mono', monospace;
-      font-size: 11px; font-weight: 500;
-      letter-spacing: 0.18em; text-transform: uppercase;
-      color: #c08a3e;
-      margin: 0 0 24px;
-    }
-    .nc-thesis h2 {
-      font-family: 'DM Serif Display', Georgia, serif;
-      font-size: clamp(1.75rem, 3.6vw, 2.5rem);
-      font-weight: 400; line-height: 1.15;
-      letter-spacing: -0.015em;
-      margin: 0 0 28px;
-      color: var(--nc-text);
-      max-width: 24ch;
-    }
-    .nc-thesis h2 em { font-style: italic; }
-    .nc-thesis p {
-      font-size: 1.05rem; line-height: 1.7;
-      color: var(--nc-muted);
-      max-width: 60ch;
-      margin: 0 0 18px;
-    }
-    .nc-thesis p:last-child { margin: 0; }
-    .nc-thesis strong { color: var(--nc-text); font-weight: 500; }
+    .nc-hero-tease strong { color: var(--text); font-weight: 500; }
+    .nc-hero-tease::before { content: '⏷  '; color: var(--gold); font-weight: 600; }
 
     .nc-hero-ctas {
-      display: flex; gap: 28px; flex-wrap: wrap;
+      display: flex; flex-wrap: wrap; gap: 22px;
+      margin: 36px 0 0;
       align-items: center;
-      margin-top: 32px;
     }
     .nc-btn {
-      display: inline-block; padding: 11px 22px;
-      border-radius: 6px; font-size: 0.9rem; font-weight: 500;
-      text-decoration: none; font-family: inherit;
-      transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
-      letter-spacing: -0.005em;
-    }
-    .nc-btn-primary {
-      background: var(--nc-accent); color: #fff;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.06);
-    }
-    .nc-btn-primary:hover {
+      display: inline-block;
+      padding: 11px 22px;
+      background: var(--text); color: var(--bg);
+      font-weight: 500; font-size: 0.95rem;
       text-decoration: none;
-      transform: translateY(-1px);
-      box-shadow: 0 4px 8px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.06);
+      border-radius: 6px;
+      transition: background 0.12s;
     }
-    .nc-btn-primary:active {
-      transform: translateY(0);
-      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-    }
-    /* Secondary CTA: plain text link with arrow, no button chrome */
+    .nc-btn:hover { background: #000; }
+    .nc-btn-primary { /* alias for the existing class */ }
     .nc-link-arrow {
-      font-size: 0.9rem; color: var(--nc-text);
-      text-decoration: none; font-weight: 500;
-      border-bottom: 1px solid var(--nc-border);
-      padding-bottom: 2px;
-      transition: border-color 0.15s, color 0.15s;
+      color: var(--text); text-decoration: none;
+      font-size: 0.95rem; font-weight: 500;
+      display: inline-flex; align-items: center; gap: 8px;
     }
-    .nc-link-arrow:hover {
-      border-bottom-color: var(--nc-text);
-      text-decoration: none;
-    }
-    .nc-link-arrow .nc-arrow {
-      display: inline-block; margin-left: 6px;
-      font-family: 'DM Mono', monospace;
-      transition: transform 0.15s ease;
-    }
-    .nc-link-arrow:hover .nc-arrow {
-      transform: translateX(2px);
-    }
+    .nc-link-arrow:hover { text-decoration: underline; text-underline-offset: 4px; }
+    .nc-arrow { /* the trailing → in nc-link-arrow text */ }
 
-    /* ─────────────────────────────────────────── *
-     *  Three pillars
-     * ─────────────────────────────────────────── */
+    /* ── Pillars ──────────────────────────────────────── */
     .nc-pillars {
       max-width: 880px; margin: 0 auto;
-      padding: 32px 32px 72px;
+      padding: 16px 24px 56px;
     }
+    /* 3 pillars: 3-up on desktop, 1-up below. Skipping 2-up because
+       3 items in 2 columns is always a 2+1 wrap, which reads poorly.
+       The narrow override comes a little before the mobile breakpoint
+       so the transition is symmetric, not orphaned. */
     .nc-pillars-grid {
-      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 40px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 32px;
+    }
+    .nc-pillar { min-width: 0; }
+    @media (max-width: 860px) {
+      .nc-pillars-grid { grid-template-columns: minmax(0, 1fr); gap: 24px; }
     }
     .nc-pillar-num {
       display: block;
       font-family: 'DM Mono', monospace;
       font-size: 11px; font-weight: 500;
       letter-spacing: 0.18em;
-      color: #c08a3e;
+      color: var(--gold);
       margin-bottom: 12px;
     }
     .nc-pillar h3 {
       font-size: 1rem; font-weight: 600;
-      margin: 0 0 8px; color: var(--nc-text);
-      letter-spacing: -0.005em;
+      margin: 0 0 8px; letter-spacing: -0.005em;
     }
     .nc-pillar p {
-      font-size: 0.9rem; color: var(--nc-muted);
+      font-size: 0.9rem; color: var(--muted);
       line-height: 1.65; margin: 0;
     }
 
-    /* ─────────────────────────────────────────── *
-     *  Section divider between marketing and docs
-     * ─────────────────────────────────────────── */
+    /* ── Thesis ───────────────────────────────────────── */
+    .nc-thesis {
+      max-width: 880px; margin: 40px auto 0;
+      padding: 48px 24px;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .nc-thesis-eyebrow {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px; font-weight: 500;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--gold);
+      margin: 0 0 20px;
+    }
+    .nc-thesis h2 {
+      font-family: 'DM Serif Display', Georgia, serif;
+      font-size: clamp(1.6rem, 3.6vw, 2.5rem);
+      font-weight: 400; line-height: 1.15;
+      letter-spacing: -0.015em;
+      margin: 0 0 24px;
+      max-width: 24ch;
+    }
+    .nc-thesis h2 em { font-style: italic; }
+    .nc-thesis p {
+      font-size: 1.02rem; line-height: 1.7;
+      color: var(--muted);
+      max-width: 60ch;
+      margin: 0 0 18px;
+    }
+    .nc-thesis p:last-child { margin: 0; }
+    .nc-thesis strong { color: var(--text); font-weight: 500; }
+
     .nc-divider {
       max-width: 880px; margin: 0 auto;
-      padding: 0 32px;
+      padding: 0 24px;
     }
     .nc-divider hr {
-      border: none; border-top: 1px solid var(--nc-border);
-      margin: 0;
+      border: none; border-top: 1px solid var(--border);
+      margin: 56px 0 0;
     }
 
-    /* ─────────────────────────────────────────── *
-     *  Docs (reference voice) — two-column with sticky sidebar
-     * ─────────────────────────────────────────── */
+    /* ── Docs ─────────────────────────────────────────── */
     .nc-docs {
       max-width: 1180px; margin: 0 auto;
-      padding: 64px 32px 100px;
-      display: grid; grid-template-columns: 220px 1fr;
-      gap: 64px;
-      align-items: start;
+      padding: 56px 24px 80px;
+      display: grid;
+      grid-template-columns: 220px minmax(0, 1fr);
+      gap: 56px;
     }
-
     .nc-docs-nav {
-      position: sticky; top: 72px;
-      font-size: 0.85rem;
-      max-height: calc(100vh - 96px);
+      position: sticky; top: 64px;
+      align-self: start;
+      max-height: calc(100vh - 88px);
       overflow-y: auto;
+      font-size: 0.85rem;
       padding-right: 8px;
-      /* Subtle scrollbar */
       scrollbar-width: thin;
-      scrollbar-color: var(--nc-border) transparent;
-    }
-    .nc-docs-nav::-webkit-scrollbar { width: 6px; }
-    .nc-docs-nav::-webkit-scrollbar-track { background: transparent; }
-    .nc-docs-nav::-webkit-scrollbar-thumb {
-      background: var(--nc-border); border-radius: 3px;
     }
     .nc-docs-nav-section {
-      font-size: 0.7rem; font-weight: 600; letter-spacing: 0.12em;
-      text-transform: uppercase; color: var(--nc-dim);
-      margin: 26px 0 6px; padding-left: 10px;
       font-family: 'DM Mono', monospace;
+      font-size: 10px; font-weight: 500;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--dim);
+      margin: 22px 0 8px;
     }
     .nc-docs-nav-section:first-child { margin-top: 0; }
     .nc-docs-nav a {
       display: block;
-      padding: 4px 10px;
-      color: var(--nc-muted); text-decoration: none;
-      border-left: 2px solid transparent;
-      margin-left: -2px;
-      transition: color 0.12s, border-color 0.12s;
-    }
-    .nc-docs-nav a:hover { color: var(--nc-text); }
-    .nc-docs-nav a.active {
-      color: var(--nc-text); font-weight: 500;
-      border-left-color: var(--nc-text);
-    }
-
-    .nc-docs-content {
-      max-width: 720px;
-      font-size: 1rem;
-      line-height: 1.7;
-      color: var(--nc-text);
-    }
-
-    /* Section headings — numbered, document-style.
-       Hover reveals anchor link markers for direct links to sections. */
-    .nc-docs-content h2 {
-      font-size: 1.85rem; font-weight: 600;
-      margin: 88px 0 12px;
-      padding-top: 24px;
-      border-top: 1px solid var(--nc-border);
-      letter-spacing: -0.02em;
-      line-height: 1.2;
-      scroll-margin-top: 80px;
-      display: flex; align-items: baseline; gap: 18px;
-      position: relative;
-    }
-    .nc-docs-content h2:first-child {
-      margin-top: 0; padding-top: 0; border-top: none;
-    }
-    .nc-docs-content h2 .nc-section-num {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.95rem;
-      font-weight: 500;
-      color: #c08a3e;
-      letter-spacing: 0;
-      flex-shrink: 0;
-      /* small inline pill so the number reads as a marker, not a prefix */
-      padding: 1px 8px;
-      border: 1px solid rgba(192, 138, 62, 0.25);
-      border-radius: 4px;
-      background: rgba(192, 138, 62, 0.06);
-      align-self: center;
-      font-feature-settings: "tnum" 1;
-    }
-    /* Anchor link marker — GitHub-style # on hover */
-    .nc-docs-content h2, .nc-docs-content h3 {
-      scroll-margin-top: 80px;
-    }
-    .nc-anchor {
-      opacity: 0; margin-left: 8px;
-      color: var(--nc-dim);
-      font-weight: 400; font-size: 0.85em;
+      padding: 4px 0;
+      color: var(--muted);
       text-decoration: none;
-      transition: opacity 0.15s, color 0.15s;
     }
-    .nc-anchor:hover { color: var(--nc-text); text-decoration: none; }
-    .nc-docs-content h2:hover .nc-anchor,
-    .nc-docs-content h3:hover .nc-anchor {
-      opacity: 1;
+    .nc-docs-nav a:hover { color: var(--text); }
+
+    .nc-docs-content { min-width: 0; }
+    .nc-docs-content > *:first-child { margin-top: 0; }
+    .nc-docs-content h2 {
+      font-family: 'DM Serif Display', Georgia, serif;
+      font-size: 1.65rem; font-weight: 400;
+      line-height: 1.2; letter-spacing: -0.015em;
+      margin: 64px 0 16px;
+      color: var(--text);
+      display: flex; align-items: baseline; gap: 18px;
     }
-    .nc-docs-content h2 + p {
-      color: var(--nc-muted); font-size: 1.05rem;
-      margin-top: 8px; margin-bottom: 24px;
-      max-width: 60ch;
+    .nc-docs-content h2:first-child { margin-top: 0; }
+    .nc-section-num {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.9rem; font-weight: 500;
+      letter-spacing: 0.05em;
+      color: var(--gold);
     }
     .nc-docs-content h3 {
       font-size: 1.1rem; font-weight: 600;
-      margin: 40px 0 10px;
+      margin: 36px 0 10px;
+      color: var(--text);
       letter-spacing: -0.005em;
-      scroll-margin-top: 80px;
     }
-    .nc-docs-content h3 + p {
-      margin-top: 0;
-    }
-
-    /* Body paragraphs */
     .nc-docs-content p {
+      font-size: 0.95rem; line-height: 1.7;
       margin: 0 0 16px;
       max-width: 70ch;
     }
-    .nc-docs-content p em {
-      color: var(--nc-dim); font-style: italic;
-    }
-
-    /* Inline code */
+    .nc-docs-content p em { color: var(--muted); }
     .nc-docs-content code {
       font-family: 'DM Mono', monospace;
-      font-size: 0.84em;
-      background: var(--nc-cream);
-      padding: 2px 6px;
+      font-size: 0.85em;
+      background: var(--cream);
+      padding: 1px 6px;
       border-radius: 4px;
-      color: var(--nc-text);
-      letter-spacing: -0.01em;
+      color: var(--text);
     }
-
-    /* Code blocks (body) — light treatment, document-feel */
     .nc-docs-content pre {
-      background: var(--nc-cream);
-      border: 1px solid var(--nc-border);
+      background: var(--cream);
+      border: 1px solid var(--border);
       border-radius: 8px;
       padding: 16px 20px;
       font-family: 'DM Mono', monospace;
       font-size: 0.84rem; line-height: 1.7;
       overflow-x: auto;
       margin: 16px 0 24px;
-      color: var(--nc-text);
     }
     .nc-docs-content pre code {
       background: transparent; padding: 0;
-      font-size: inherit; color: inherit;
+      font-size: inherit;
     }
-
-    /* Links */
     .nc-docs-content a {
-      color: var(--nc-text);
+      color: var(--text);
       text-decoration: underline;
-      text-decoration-color: var(--nc-border);
+      text-decoration-color: var(--border);
       text-underline-offset: 3px;
-      text-decoration-thickness: 1px;
-      transition: text-decoration-color 0.12s;
     }
-    .nc-docs-content a:hover {
-      text-decoration-color: var(--nc-text);
-    }
-
+    .nc-docs-content a:hover { text-decoration-color: var(--text); }
     .nc-docs-content strong { font-weight: 600; }
-
-    /* Lists */
     .nc-docs-content ul, .nc-docs-content ol {
       margin: 0 0 20px; padding-left: 24px;
       max-width: 70ch;
     }
     .nc-docs-content li { margin-bottom: 6px; }
-    .nc-docs-content li::marker { color: var(--nc-dim); }
+    .nc-docs-content li::marker { color: var(--dim); }
 
-    /* Tables — documentation-grade */
     .nc-docs-content table {
       width: 100%; border-collapse: collapse;
       margin: 16px 0 28px;
-      font-size: 0.9rem;
-      line-height: 1.55;
+      font-size: 0.9rem; line-height: 1.55;
     }
-    .nc-docs-content thead {
-      border-bottom: 1.5px solid var(--nc-text);
-    }
+    .nc-docs-content thead { border-bottom: 1.5px solid var(--text); }
     .nc-docs-content th {
-      text-align: left;
-      padding: 10px 14px 10px 0;
-      font-weight: 600;
-      color: var(--nc-text);
-      font-size: 0.82rem;
-      letter-spacing: 0.02em;
+      text-align: left; padding: 10px 14px 10px 0;
+      font-weight: 600; color: var(--text);
+      font-size: 0.78rem; letter-spacing: 0.04em;
       text-transform: uppercase;
     }
     .nc-docs-content td {
-      text-align: left;
-      padding: 12px 14px 12px 0;
-      border-bottom: 1px solid var(--nc-border);
+      text-align: left; padding: 12px 14px 12px 0;
+      border-bottom: 1px solid var(--border);
       vertical-align: top;
-      color: var(--nc-text);
     }
     .nc-docs-content td:first-child { padding-left: 0; }
-    .nc-docs-content td code { font-size: 0.85em; }
 
-    /* Callout — used sparingly for important notes */
     .nc-callout {
-      background: var(--nc-cream);
-      border-left: 3px solid var(--nc-accent);
+      background: var(--cream);
+      border-left: 3px solid var(--gold);
       padding: 14px 18px;
       border-radius: 0 6px 6px 0;
       margin: 16px 0 24px;
-      font-size: 0.95rem;
       max-width: 70ch;
     }
-    .nc-callout strong { color: var(--nc-accent); }
-    .nc-callout p:last-child { margin-bottom: 0; }
+    .nc-callout p { margin: 0; }
 
-    /* Footer — stewardship statement + plain link list */
+    /* Anchor target offset for sticky topbar */
+    [id]:target { scroll-margin-top: 80px; }
+
+    /* ── Footer ───────────────────────────────────────── */
     .nc-page-footer {
       max-width: 1180px; margin: 0 auto;
-      padding: 40px 32px 48px;
-      border-top: 1px solid var(--nc-border);
-      font-size: 0.85rem;
-      color: var(--nc-muted);
-      line-height: 1.65;
-    }
-    .nc-footer-stewardship {
-      max-width: 60ch;
-      margin-bottom: 20px;
-    }
-    .nc-footer-stewardship strong {
-      color: var(--nc-text); font-weight: 600;
-    }
-    .nc-footer-stewardship a {
-      color: var(--nc-muted); text-decoration: underline;
-      text-decoration-color: var(--nc-border);
-      text-underline-offset: 3px;
-    }
-    .nc-footer-stewardship a:hover {
-      color: var(--nc-text); text-decoration-color: var(--nc-text);
-    }
-    .nc-footer-links {
+      padding: 40px 24px 56px;
+      border-top: 1px solid var(--border);
       display: flex; flex-wrap: wrap; gap: 22px;
-      font-size: 0.82rem;
+      align-items: center; justify-content: space-between;
+      font-size: 0.85rem; color: var(--muted);
     }
-    .nc-footer-links a {
-      color: var(--nc-muted); text-decoration: none;
-    }
-    .nc-footer-links a:hover {
-      color: var(--nc-text); text-decoration: underline;
-      text-underline-offset: 3px;
-    }
+    .nc-footer-links { display: flex; flex-wrap: wrap; gap: 22px; }
+    .nc-page-footer a { color: var(--muted); text-decoration: none; }
+    .nc-page-footer a:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
 
-    /* ─────────────────────────────────────────── *
-     *  Responsive
-     *  Three breakpoints:
-     *    - 960px: tablet / small laptop. Stack pillars + collapse docs sidebar.
-     *    - 640px: phone landscape / small tablet. Trim topnav, stack CTAs.
-     *    - 480px: phone portrait. Tighten everything; tables scroll inline.
-     * ─────────────────────────────────────────── */
-    @media (max-width: 960px) {
-      /* minmax(0, 1fr) on every collapsed-to-single-column grid: stops
-         intrinsic min-content (long URLs in <code>, <pre> with curl
-         commands) from forcing the track wider than the viewport. The
-         classic "grid items don't shrink" mobile bug. */
-      .nc-pillars-grid { grid-template-columns: minmax(0, 1fr); gap: 28px; }
-      .nc-hero { padding: 64px 24px 40px; }
-      .nc-hero h1 { max-width: none; }
-      .nc-pillars { padding: 24px 24px 56px; }
-      .nc-thesis { margin: 40px 24px 0; padding: 40px 24px; }
-      .nc-divider { padding: 0 24px; }
+    /* ── Mobile (≤640px) ──────────────────────────────── */
+    @media (max-width: 640px) {
+      .nc-status-inner { padding: 7px 18px; gap: 12px 14px; font-size: 11px; }
+      .nc-topbar-inner { padding: 12px 18px; gap: 12px; }
+      .nc-topnav { gap: 14px; font-size: 0.8rem; }
+      .nc-topnav-sep { display: none; }
+      /* Trim the topnav to first 3 anchors on phone — full nav is on the
+         page itself one scroll down, no need to crowd the topbar. */
+      .nc-topnav a:not(:nth-child(-n+3)) { display: none; }
+
+      .nc-hero { padding: 40px 18px 28px; }
+      .nc-hero h1 { font-size: 2.05rem; line-height: 1.1; }
+      .nc-lede { font-size: 1.02rem; }
+      .nc-imagine { padding: 18px 20px; }
+      .nc-imagine li { font-size: 0.92rem; }
+      .nc-atoms { font-size: 0.85rem; }
+      .nc-stats-tier { font-size: 0.74rem; line-height: 1.55; }
+      .nc-specimen-label { padding: 8px 14px; font-size: 10px; }
+      .nc-hero-curls { padding: 14px 16px; font-size: 0.78rem; line-height: 1.85; }
+      .nc-hero-ctas { gap: 16px; flex-direction: column; align-items: stretch; }
+      .nc-btn, .nc-link-arrow { text-align: center; justify-content: center; }
+
+      .nc-pillars { padding: 8px 18px 40px; }
+      .nc-pillars-grid { gap: 24px; }
+
+      .nc-thesis { margin-top: 24px; padding: 32px 18px; }
+      .nc-thesis h2 { font-size: 1.55rem; }
+      .nc-thesis p { font-size: 0.98rem; }
+
+      .nc-divider { padding: 0 18px; }
+      .nc-divider hr { margin-top: 32px; }
+
+      /* Sidebar nav becomes a stacked top section on mobile */
       .nc-docs {
         grid-template-columns: minmax(0, 1fr);
-        gap: 32px;
-        padding: 48px 24px 80px;
+        gap: 28px;
+        padding: 32px 18px 56px;
       }
       .nc-docs-nav {
-        position: static; max-height: none;
-        padding-right: 0;
-        border-bottom: 1px solid var(--nc-border);
-        padding-bottom: 24px;
+        position: static;
+        max-height: none;
+        overflow: visible;
+        padding: 0 0 24px;
+        border-bottom: 1px solid var(--border);
       }
-      .nc-docs-content { font-size: 0.95rem; max-width: none; }
-      .nc-docs-content h2 { font-size: 1.5rem; margin-top: 56px; }
-      .nc-topnav { gap: 14px; font-size: 0.8rem; }
-      .nc-topbar-inner { padding: 12px 24px; }
-    }
-    @media (max-width: 640px) {
-      .nc-topnav a:not(:first-child):not(:nth-child(-n+3)) { display: none; }
-      .nc-topnav-sep { display: none; }
-      .nc-hero-ctas { flex-direction: column; align-items: stretch; }
-      .nc-hero-ctas .nc-btn { text-align: center; }
-      .nc-hero { padding: 48px 20px 32px; }
-      .nc-pillars { padding: 16px 20px 40px; }
-      .nc-thesis { margin: 32px 20px 0; padding: 32px 20px; }
-      .nc-imagine { padding: 18px 20px; }
-      .nc-imagine-eyebrow { font-size: 9px; }
-      .nc-imagine li { font-size: 0.92rem; }
-      .nc-status-inner { padding: 7px 20px; gap: 14px; font-size: 11px; }
-      /* Stats sub-line is mono and dense — let it wrap naturally on phones
-         instead of trying to keep it on one line. */
-      .nc-stats-tier { font-size: 0.75rem; line-height: 1.55; }
-    }
-    @media (max-width: 480px) {
-      /* Even tighter padding; only the brand + Quick Start in the topnav. */
-      .nc-topnav a:not(:nth-child(-n+1)) { display: none; }
-      .nc-topbar-inner { padding: 10px 18px; gap: 12px; }
-      .nc-hero { padding: 36px 18px 24px; }
-      .nc-eyebrow { margin-bottom: 18px; }
-      .nc-hero h1 { font-size: 2rem; line-height: 1.1; }
-      .nc-lede { font-size: 1.02rem; }
-      .nc-imagine { padding: 14px 16px; margin-top: 22px; }
-      .nc-imagine li { font-size: 0.88rem; line-height: 1.5; }
-      .nc-pillars { padding: 12px 18px 32px; }
-      .nc-pillars-grid { gap: 22px; }
-      .nc-pillar h3 { font-size: 1.15rem; }
-      .nc-thesis { margin: 24px 18px 0; padding: 28px 18px; }
-      .nc-thesis h2 { font-size: 1.5rem; margin-bottom: 20px; }
-      .nc-thesis p { font-size: 0.98rem; }
-      .nc-divider { padding: 0 18px; }
-      .nc-docs { padding: 32px 18px 56px; }
-      .nc-docs-content h2 { font-size: 1.35rem; margin-top: 44px; }
-      .nc-docs-content h3 { font-size: 1.05rem; }
+      .nc-docs-content h2 { font-size: 1.4rem; margin-top: 48px; }
+      .nc-section-num { font-size: 0.85rem; }
+      .nc-docs-content h3 { font-size: 1rem; margin-top: 28px; }
       .nc-docs-content p, .nc-docs-content li { font-size: 0.92rem; }
       .nc-docs-content pre { font-size: 0.78rem; padding: 12px 14px; }
       /* Tables scroll horizontally inside the cell rather than busting the
-         layout. The wrapper-less display:block trick keeps semantic markup. */
-      .nc-docs-content table {
-        display: block;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        max-width: 100%;
-      }
-      /* Specimen — tighter padding on tiny screens. */
-      .nc-specimen { margin-top: 32px; }
-      .nc-specimen-label { padding: 8px 14px; font-size: 10px; }
-      .nc-hero-curls { padding: 14px 16px; font-size: 0.78rem; }
+         layout. The display:block trick lets a wide table scroll on its own. */
+      .nc-docs-content table { display: block; overflow-x: auto; max-width: 100%; }
+
+      .nc-page-footer { padding: 32px 18px 40px; flex-direction: column; align-items: flex-start; gap: 16px; }
+      .nc-footer-links { gap: 16px; }
     }
   </style>
 </head>
 <body>
-  <div class="nc-page">
 
     <!-- Status strip — document metadata -->
     <div class="nc-status-strip">
@@ -1691,52 +1461,5 @@ $ openapi-generator-cli generate -i {{baseUrl}}/openapi.json -g rust    -o ./cli
       </nav>
     </footer>
 
-  </div>
-
-  <!-- Active section highlighting in the sidebar nav.
-       Uses IntersectionObserver — when a section heading scrolls past the
-       top sentinel, the matching sidebar link gets .active. Vanilla JS,
-       no framework, no dependencies, ~30 lines. -->
-  <script>
-    (function () {
-      const sectionIds = [
-        'quickstart', 'sdk',
-        'types', 'type-place', 'type-organization', 'type-person', 'type-event', 'type-broadcast', 'type-list',
-        'reading', 'reading-filters', 'reading-pagination',
-        'writing', 'writing-key', 'writing-brand', 'writing-scoping',
-        'verification', 'verification-authority', 'verification-reputation',
-        'webhooks',
-        'reference', 'reference-errors', 'stability',
-      ];
-      const links = new Map();
-      for (const id of sectionIds) {
-        const link = document.querySelector('.nc-docs-nav a[href="#' + id + '"]');
-        if (link) links.set(id, link);
-      }
-      if (!links.size || !('IntersectionObserver' in window)) return;
-
-      const visible = new Set();
-      const observer = new IntersectionObserver((entries) => {
-        for (const e of entries) {
-          if (e.isIntersecting) visible.add(e.target.id);
-          else visible.delete(e.target.id);
-        }
-        // Highlight the first sectionIds entry that's currently visible.
-        for (const link of links.values()) link.classList.remove('active');
-        for (const id of sectionIds) {
-          if (visible.has(id)) {
-            const link = links.get(id);
-            if (link) link.classList.add('active');
-            break;
-          }
-        }
-      }, { rootMargin: '-72px 0px -70% 0px', threshold: 0 });
-
-      for (const id of sectionIds) {
-        const el = document.getElementById(id);
-        if (el) observer.observe(el);
-      }
-    })();
-  </script>
 </body>
 </html>
