@@ -3,17 +3,14 @@
  *
  * All routes here require the calling service key to have is_admin=true.
  * Segregated in one file so the `isAdmin` gate is easy to audit and so
- * the non-admin files stay free of the pattern. This is the known
- * "fifth auth model" deviation from CLAUDE.md's four-auth-model rule —
- * accepted for now because Studio and Merrie talk to these paths with
- * admin service keys. A future PR can move these to `/api/admin/*`
- * (requireCommonsAdmin, JWT) once we coordinate with those consumers.
+ * the non-admin files stay free of the pattern.
  *
  * Endpoints:
  *   - GET  /service/stats
  *   - GET  /service/api-keys
  *   - POST /service/api-keys
  *   - PATCH /service/api-keys/:id
+ *   - POST /service/api-keys/:id/activate
  *   - POST /service/migrate-image-urls
  *   - GET/POST/DELETE /service/approved-domains
  *   - GET /service/domain-approval-requests

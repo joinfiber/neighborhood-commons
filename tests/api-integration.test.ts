@@ -504,52 +504,6 @@ describe('error response shape', () => {
 });
 
 // =============================================================================
-// AUTH REJECTION
-// =============================================================================
-
-describe('authentication enforcement', () => {
-  it('portal routes reject unauthenticated requests', async () => {
-    const res = await fetch(`${baseUrl}/api/portal/events`);
-    expect(res.status).toBe(401);
-
-    const body = await res.json();
-    expect(body.error.code).toBe('UNAUTHORIZED');
-  });
-
-  it('admin routes reject unauthenticated requests', async () => {
-    const res = await fetch(`${baseUrl}/api/admin/stats`);
-    expect(res.status).toBe(401);
-
-    const body = await res.json();
-    expect(body.error.code).toBe('UNAUTHORIZED');
-  });
-
-  it('portal routes reject invalid tokens', async () => {
-    mockAuthUser.value = { data: { user: null }, error: { message: 'invalid' } };
-
-    const res = await fetch(`${baseUrl}/api/portal/events`, {
-      headers: { Authorization: 'Bearer fake-token-here' },
-    });
-    expect(res.status).toBe(401);
-  });
-
-  it('admin routes reject non-admin users', async () => {
-    mockAuthUser.value = {
-      data: { user: { id: 'not-an-admin-uuid', email: 'user@example.com' } },
-      error: null,
-    };
-
-    const res = await fetch(`${baseUrl}/api/admin/stats`, {
-      headers: { Authorization: 'Bearer valid-but-not-admin' },
-    });
-    expect(res.status).toBe(403);
-
-    const body = await res.json();
-    expect(body.error.code).toBe('FORBIDDEN');
-  });
-});
-
-// =============================================================================
 // CORS
 // =============================================================================
 

@@ -20,8 +20,6 @@ import { globalLimiter } from './middleware/rate-limit.js';
 
 // Routes
 import publicRoutes from './routes/public.js';
-import portalRoutes from './routes/portal.js';
-import adminRoutes from './routes/admin.js';
 import v1Routes, { v1Limiter, icsHandler, rssHandler } from './routes/v1.js';
 import v1GroupRoutes, { groupsLimiter } from './routes/v1-groups.js';
 import v1AccountRoutes, { accountsLimiter } from './routes/v1-accounts.js';
@@ -34,7 +32,6 @@ import v1VerifiersRoutes, { verifiersLimiter } from './routes/v1-verifiers.js';
 import webhookRoutes from './routes/webhooks.js';
 import metaRoutes from './routes/meta.js';
 import cronRoutes from './routes/cron.js';
-import placesRoutes from './routes/places.js';
 import developerRoutes from './routes/developers.js';
 import contributeRoutes from './routes/contribute.js';
 import serviceRoutes from './routes/service.js';
@@ -140,13 +137,10 @@ export function createApp(): Express {
   app.use('/widget', publicCors);
   app.use('/pages.css', publicCors);
 
-  // Restricted CORS for portal, admin, webhooks, internal routes
-  app.use('/api/portal', privateCors);
-  app.use('/api/admin', privateCors);
+  // Restricted CORS for webhooks, internal, cron routes
   app.use('/api/webhooks', privateCors);
   app.use('/api/internal', privateCors);
   app.use('/api/cron', privateCors);
-  app.use('/api/places', privateCors);
 
   // Response compression
   app.use(compression());
@@ -199,13 +193,6 @@ export function createApp(): Express {
   // ─── Public Data API ─────────────────────────────────────────────
   app.use('/api/events', publicRoutes);
 
-  // ─── Portal (business CRUD) ──────────────────────────────────────
-  app.use('/api/portal', portalRoutes);
-
-  // ─── Commons Admin ───────────────────────────────────────────────
-  app.use('/api/admin', adminRoutes);
-  app.use('/api/portal/admin', adminRoutes);
-
   // ─── Neighborhood API v1 ─────────────────────────────────────────
   app.use('/api/v1/events', v1Limiter, v1Routes);
   app.use('/api/v1/groups', groupsLimiter, v1GroupRoutes);
@@ -238,9 +225,6 @@ export function createApp(): Express {
   // ─── Contribute API (external app writes) ─────────────────────
   app.use('/api/v1/contribute', contributeRoutes);
   app.use('/api/v1/service', serviceRoutes);
-
-  // ─── Places (venue search for portal) ──────────────────────────
-  app.use('/api/places', placesRoutes);
 
   // ─── Landing page (server-rendered, instant load, no JS) ───────────
   let cachedStats = {
@@ -360,14 +344,6 @@ export function createApp(): Express {
   // Must be before portal SPA fallback so /events/:id and /venues/:slug
   // are handled by server-rendered pages, not the React SPA.
   app.use(pageRoutes);
-
-  // ─── Portal SPA (static files, retired) ─────────────────────────
-  // The Portal SPA was a venue self-service UI from a previous era; it's
-  // not actively used and is being removed in stages. The /assets static
-  // middleware stays for now so any cached references don't 500; the
-  // larger deletion (rm -rf portal/) lands in a follow-up PR.
-  const portalDir = path.resolve(__dirname, '../portal');
-  app.use('/assets', express.static(path.join(portalDir, 'assets'), { maxAge: '365d', immutable: true }));
 
   // 404 fallback: any request that didn't match a route above gets a
   // proper 404, not the Portal SPA. Skips /api/* — those are handled by

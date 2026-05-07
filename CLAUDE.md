@@ -8,19 +8,18 @@ This document is the shared backdrop for development — whether you're a human 
 
 A public data service for neighborhood events. Venues and organizers post events — concerts, comedy, markets, community gatherings — and every app in the city can show them. One post, every audience.
 
-Three components, nothing more:
+Two components, nothing more:
 
-1. **Database** — PostgreSQL via Supabase. Events, venues, accounts, API keys. Row Level Security on every table.
-2. **API** — Express server implementing the Neighborhood API spec. Public reads (no auth), self-service API keys for higher limits, service-tier keys for full CRUD.
-3. **Portal** — React SPA where venue operators sign up, post events, done. Lightweight self-service. No admin tooling, no curation features.
+1. **Database** — PostgreSQL via Supabase. Events, organizations, places, persons, broadcasts, lists, API keys. Row Level Security on every table.
+2. **API + Homepage** — Express server implementing the Neighborhood API spec. Public reads (no auth), self-service API keys for higher limits, service-tier keys for full CRUD. Includes the server-rendered homepage at `/`, the rendered spec viewer at `/spec`, and `/llms.txt` / `/openapi.json` for machine-readable consumption.
 
-All admin tooling, data ingestion, and curation happens in external tools that connect via the Service API. The commons is thin infrastructure — it stores data and serves it. That's the job.
+All admin tooling, data ingestion, curation, and venue self-service happens in external tools that connect via the Service API. The commons is thin infrastructure — it stores data and serves it. That's the job.
 
 ### Steady-State Work
 
 Week to week, the work here is:
 1. **Maintain the API** — keep it spec-compliant, fast, and reliable. Downstream consumers depend on stability.
-2. **Keep the portal functional** — the portal is how venue operators manage their own data. It should be clear, fast, and bug-free.
+2. **Maintain the homepage and spec viewer** — these are the two surfaces a developer or grant reader lands on. Keep them sharp.
 3. **Respond to spec changes** — when the Neighborhood API spec evolves, adopt the changes faithfully.
 
 Everything else — new endpoints, schema extensions, infrastructure changes — is occasional and should be done carefully.
@@ -107,12 +106,12 @@ Don't invent non-spec query parameters for the v1 public API without strong just
 
 Neighborhood Commons extends the Neighborhood API with capabilities the spec doesn't cover:
 
-- **Portal CRUD** — venues and organizers submit and manage their own events (the spec is read-only)
 - **Service API** — full CRUD for trusted external tools (admin tools, import scripts, partner apps)
+- **Verification system** — Commons-orchestrated identifier verification + a public reputation graph
 - **Webhooks** — real-time push notifications for downstream consumers
 - **Image hosting** — upload, re-encode, and serve event images
 
-These extensions live under their own route prefixes (`/api/portal/*`, `/api/admin/*`, `/api/v1/service/*`). The spec-aligned public API (`/api/v1/*`) remains clean and spec-compliant.
+These extensions live under `/api/v1/service/*`. The spec-aligned public API (`/api/v1/*`) remains clean and spec-compliant.
 
 ### What We Don't Do
 
@@ -135,11 +134,9 @@ This project serves two audiences simultaneously. Every decision must hold up fo
 
 **The API serves developers and entrepreneurs.** They're building event apps, community dashboards, civic tools, newsletters. They need structured, predictable, complete data atoms. Every event instance must be self-sufficient — carrying its full story without implicit knowledge, extra joins, or undocumented carry-forward behavior. Rigidity here is a feature: spec-correct responses, bounded recurrence rules, reliable pagination, no surprises. If a developer can't trust the data shape, they'll build around us instead of on top of us.
 
-**The portal serves venue operators.** Bar managers, yoga studio owners, coffee shop staff, community organizers. They post events between pouring drinks and teaching classes. The portal must be instantly understandable: sign up, post your event, done. It enforces data quality, but it's friendly in how it presents structure. Operators think "every Thursday for 3 months," not "12 instances of a weekly pattern." Meet them in their language.
+**The homepage serves first-time visitors and grant readers.** Someone arriving cold needs to understand what this is, why it exists, and how to participate — in under a minute. The homepage at `/` is a single-page document that does this work. The spec viewer at `/spec` is the developer-friendly view of every endpoint. Both surfaces should be honest about state (what's live vs. bootstrapping) and clear about the deal (cooperate on data, compete on experience).
 
-**The art is in nailing both.** Backend strict enough that the commons is a respected public resource. Portal intuitive enough that someone who's never used a CMS can post their open mic night in two minutes. Neither audience should feel the other's complexity. A bar owner never sees an RRULE. A developer never gets an event instance that requires a join to interpret. Same data, two perfect interfaces.
-
-When these goals conflict, resolve in favor of the data. The portal can always present rigid data more gently. But if the data is sloppy to make the portal easier, every downstream consumer inherits the mess.
+When these goals conflict, resolve in favor of the data. The homepage can always present rigid data more gently. But if the data is sloppy to make the page easier, every downstream consumer inherits the mess.
 
 ## Architecture
 
@@ -156,20 +153,19 @@ Don't add middleware that breaks this chain. Don't add middleware that condition
 ### Database Access
 
 - **`supabaseAdmin`** (service role) for system operations — cron jobs, webhook delivery, admin routes, service API.
-- **`createUserClient(token)`** for user-context operations — portal CRUD where RLS policies enforce ownership.
 - Never construct raw SQL. Every query goes through PostgREST. If PostgREST can't express the query, write an RPC function in a migration.
 - Every RPC function: `SECURITY DEFINER`, `SET search_path = public, extensions`, and `REVOKE EXECUTE FROM PUBLIC, authenticated, anon` unless explicitly public.
 
 ### Row Level Security (RLS)
 
-**Every table has RLS enabled.** The Supabase anon key is embedded in the portal SPA and can be extracted by anyone. Without RLS, the anon role can read/write tables directly via PostgREST, bypassing Express entirely.
+**Every table has RLS enabled.** Defense-in-depth: even though all writes go through Express + service-tier auth, RLS keeps the database safe if anything ever gets misconfigured.
 
 | Table | RLS | Access Pattern |
 |-------|-----|----------------|
-| `events` | Policies: anon/authenticated read all; authenticated portal users write own | Portal uses `createUserClient(token)` — RLS enforces `creator_account_id` ownership |
-| `portal_accounts` | Policies: authenticated read/update own (via `auth.uid()`) | Portal uses `createUserClient(token)`; admin uses `supabaseAdmin` |
+| `events` | Enabled, no policies (deny all non-service) | Only accessed via `supabaseAdmin` in API routes |
+| `portal_accounts` | Enabled, no policies (deny all non-service) | Legacy table from when portal had Supabase auth; now only accessed via `supabaseAdmin` |
 | `event_series` | Enabled, no policies (service role only) | Only accessed via `supabaseAdmin` in cron/service |
-| `regions` | Policies: public read | Read-only for all roles; admin writes via `supabaseAdmin` |
+| `regions` | Policies: public read | Read-only for all roles |
 | `api_keys` | Enabled, no policies (deny all non-service) | Only accessed via `supabaseAdmin` in Express |
 | `audit_logs` | Enabled, no policies (deny all non-service) | Fire-and-forget insert via `supabaseAdmin` |
 | `webhook_subscriptions` | Enabled, no policies (deny all non-service) | Only accessed via `supabaseAdmin` in webhook routes |
@@ -245,18 +241,20 @@ There is no self-service registration for service keys. They are issued to speci
 
 ### Endpoints
 
-The service router (`routes/service.ts`) exposes:
+The service router (`routes/service/`) exposes:
 
-- **Accounts**: Create, list, get, update, suspend/reactivate portal accounts
-- **Events**: Full CRUD — create (single or recurring), update, delete events on behalf of any account
-- **Images**: Upload event images via the same Sharp pipeline as the portal
+- **Typed resources**: Place, Organization, Person, Broadcast, List — full CRUD per Schema.org-aligned shape
+- **Events**: Full CRUD — create (single or recurring), update, delete on behalf of any linked account
+- **Images**: Upload via the same magic-byte + Sharp re-encode pipeline used everywhere
+- **Verifications**: Issue identifier challenges, submit manual reviews, query the routing path
+- **Self-service registration**: Apps register their own service-tier keys at `/v1/service/register/*`; keys land in pending status and activate after a one-time review
 
 All requests require a valid service-tier API key. All input is validated with Zod. All mutations dispatch webhooks.
 
 ### Design Principles
 
 - The Service API uses `supabaseAdmin` — it bypasses RLS by design, because service keys represent trusted operators, not end users.
-- Service endpoints share validation schemas and transform logic with the portal where possible (via `lib/event-operations.ts`), so the same data quality rules apply regardless of entry point.
+- Validation schemas and transform logic live in shared helpers (`lib/event-operations.ts`, etc.) so the same data quality rules apply regardless of entry point.
 - External tools should not need to know Supabase internals. The Service API is a clean REST interface over the commons dataset.
 
 ## Security Rules
@@ -273,16 +271,16 @@ All requests require a valid service-tier API key. All input is validated with Z
 
 ### Authentication
 
-Four auth models, clearly separated:
+Two auth models, clearly separated:
 
-| Model | Middleware | Client | Use Case |
-|-------|-----------|--------|----------|
-| Portal | `requirePortalAuth` | `createUserClient(token)` | Venue operators managing their own events |
-| Admin | `requireCommonsAdmin` | `supabaseAdmin` | Account management (approve/suspend) |
-| API Key | `requireApiKey` | `supabaseAdmin` | Developers reading data, managing webhooks |
-| Service | `requireServiceApiKey` | `supabaseAdmin` | Trusted tools with full CRUD (admin tools, import scripts) |
+| Model | Middleware | Use Case |
+|-------|-----------|----------|
+| Browse-tier API Key | `requireApiKey` | Developers reading data, managing their own webhooks. Self-issued via `/v1/developers/register/*` OTP flow. |
+| Service-tier API Key | `requireServiceApiKey` | Trusted apps with full write access. Self-issued via `/v1/service/register/*` (lands in pending status); active after one-time human review. Admin variant (`is_admin=true`) for operator tooling. |
 
-Don't add a fifth auth model. If a new feature doesn't fit one of these four, reconsider the feature.
+The retired auth models — `requirePortalAuth` (Supabase JWT for venue operators) and `requireCommonsAdmin` (JWT + COMMONS_ADMIN_USER_IDS allow-list) — are gone. The Portal SPA they served has been retired in favor of consumer apps that build on the Service API.
+
+Don't add a third auth model. If a new feature doesn't fit one of these two, reconsider the feature.
 
 ### Rate Limiting
 
@@ -292,7 +290,7 @@ Every route has an explicit rate limit. No route inherits only the global limit 
 |------|-------|-----|
 | `browseLimiter` | 30/min | Public data reads |
 | `writeLimiter` | 10/min | State-changing operations |
-| `portalLimiter` | 30/min per user | Authenticated portal CRUD |
+| `serviceLimiter` | 300/min per key | Authenticated service-tier writes |
 | `enumerationLimiter` | 5/min | Account lists, stats, anything that reveals cardinality |
 
 When adding a new route, choose the appropriate limiter. If none fits, create a new named limiter with explicit justification.
@@ -361,7 +359,6 @@ The test suite is designed around the question: **what would silently break the 
 | `schema-alignment.test.ts` | Column name mismatches between code and database. Supabase/PostgREST silently returns null for nonexistent columns — this test turns silent data loss into loud failures. Found 6 real bugs on its first run. **Update the `SCHEMA` constant when migrations change columns.** |
 | `event-transform.test.ts` | Neighborhood API spec violations — wrong field names, wrong nesting, wrong types in the public API response. If these fail, every consumer of the API gets the wrong shape. |
 | `api-integration.test.ts` | End-to-end Express app tests — HTTP requests through the real middleware stack. Verifies status codes, response shapes, error formats, auth rejection, CORS headers, and content negotiation. |
-| `portal-crud.test.ts` | Portal auth enforcement, input validation (dates, times, categories, UUIDs, coordinates, recurrence patterns, field lengths), event CRUD lifecycle, registration, image upload rejection. |
 | `url-validation.test.ts` | SSRF protection — protocol enforcement, blocked hostnames, RFC 1918 ranges, cloud metadata IPs (169.254.169.254), IPv6 private ranges, IPv4-mapped addresses, DNS failure behavior (fail closed). |
 | `image-validation.test.ts` | Image upload security — magic byte validation (accept JPEG/PNG/WebP, reject GIF/BMP/SVG/PDF/EXE/HTML polyglots), Sharp re-encoding pipeline (dimension capping, metadata stripping, format normalization, truncated file rejection). |
 | `webhook-signing.test.ts` | Webhook HMAC-SHA256 signing (consistency, tamper detection, consumer verification), AES-256-GCM secret encryption (round-trip, random IV, tamper rejection, truncation rejection). |
@@ -373,7 +370,6 @@ The test suite is designed around the question: **what would silently break the 
 - **New route or query?** The schema alignment test picks up new column references automatically. If you reference a column that doesn't exist, it fails.
 - **New migration?** Update the `SCHEMA` constant in `schema-alignment.test.ts` first. Add the column there before writing the code that uses it.
 - **New public endpoint?** Add integration tests in `api-integration.test.ts` that verify the response shape, status codes, and error handling.
-- **New portal endpoint?** Add integration tests in `portal-crud.test.ts` — auth enforcement, input validation, and response shape.
 - **Changed auth, RLS, rate limits, or access patterns?** Update `public/llms.txt` and `docs/consumer-guide.md` in the same commit. The docs are the contract.
 - **New, changed, or removed endpoint, parameter, response field, error code, or auth requirement?** Update `public/openapi.json` in the same commit. No exceptions. See "The Contract" below.
 - **New transform or helper?** Add unit tests in the appropriate test file.
@@ -438,15 +434,11 @@ AUDIT_SALT=             # For audit log hashing (min 16 chars)
 Optional:
 ```bash
 NODE_ENV=development    # 'development' | 'test' | 'production'. Production gates boot on WEBHOOK_ENCRYPTION_KEY.
-COMMONS_ADMIN_USER_IDS= # Comma-separated Supabase auth UUIDs for admin access
-GOOGLE_PLACES_API_KEY=  # Venue search in portal
-TURNSTILE_SECRET_KEY=   # Cloudflare Turnstile (captcha)
-CAPTCHA_ENABLED=false   # Set to true when Turnstile is configured
-RESEND_API_KEY=         # Resend API key for transactional emails
+RESEND_API_KEY=         # Resend API key for transactional emails (verification flow)
 RESEND_FROM_DOMAIN=     # Sending domain (e.g. neighborhood-commons.org)
 COMMONS_R2_*=           # Cloudflare R2 credentials for image hosting
 CRON_SECRET=            # For cron endpoint auth (min 16 chars)
-DEFAULT_REGION_ID=      # UUID of default region for new portal events
+DEFAULT_REGION_ID=      # UUID of default region for service-tier-created events
 IP_FILTER_ENABLED=true  # Block datacenter IP prefixes on public endpoints (default on)
 SSRF_STRICT=0           # '0' (default) or '1'. When '1', outbound fetches to user URLs
                         # route through an undici connect hook that re-resolves DNS at
