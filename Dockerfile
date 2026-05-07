@@ -1,5 +1,7 @@
 # Neighborhood Commons — Standalone Docker Build
-# Builds both the API (Express) and the Portal (React SPA)
+#
+# Single-image build for the Express API + the server-rendered homepage.
+# The Portal SPA was retired in PR #41; the build is now one stage simpler.
 
 FROM node:20-alpine AS base
 WORKDIR /app
@@ -25,22 +27,6 @@ COPY src ./src
 RUN npm run build
 RUN ls -la dist/ && test -f dist/index.js
 
-# ─── Portal: Build React SPA ─────────────────────────────────
-FROM base AS portal-builder
-WORKDIR /app/portal
-COPY portal/package.json portal/package-lock.json ./
-RUN npm ci
-COPY portal/ .
-
-# Supabase config baked into the SPA at build time
-ARG VITE_SUPABASE_URL
-ARG VITE_SUPABASE_ANON_KEY
-ARG VITE_TURNSTILE_SITE_KEY
-# VITE_API_URL intentionally omitted — same-origin (empty string)
-
-RUN npm run build
-RUN ls -la dist/ && test -f dist/index.html
-
 # ─── Production image ─────────────────────────────────────────
 FROM node:20-alpine AS runner
 WORKDIR /app
@@ -49,7 +35,6 @@ ENV NODE_ENV=production
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=api-builder /app/package.json ./
 COPY --from=api-builder /app/dist ./dist
-COPY --from=portal-builder /app/portal/dist ./portal
 COPY public ./public
 
 # Run as non-root user
