@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>API Spec — Neighborhood Commons</title>
+  <meta name="description" content="OpenAPI 3.1 specification for the Neighborhood Commons API. Schema.org-aligned types, every endpoint, every request and response shape, every error code.">
+  <link rel="icon" href="data:,">
+  <style>
+    body {
+      margin: 0;
+      font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    /* Tiny banner above the rendered spec — links back to the homepage
+       and to the raw JSON. Keeps the visitor oriented; the rest of the
+       page is the Scalar-rendered spec. */
+    .nc-spec-banner {
+      display: flex; align-items: center; gap: 18px;
+      padding: 10px 24px;
+      background: #1c1a17; color: #f7f7f5;
+      font-family: 'DM Mono', monospace;
+      font-size: 12px; letter-spacing: 0.02em;
+      border-bottom: 1px solid #2a2722;
+    }
+    .nc-spec-banner a {
+      color: #f7f7f5; text-decoration: none;
+      opacity: 0.75; transition: opacity 0.12s;
+    }
+    .nc-spec-banner a:hover { opacity: 1; }
+    .nc-spec-banner .gold { color: #c08a3e; }
+    .nc-spec-banner .grow { flex: 1; }
+    @media (max-width: 640px) {
+      .nc-spec-banner { padding: 8px 16px; gap: 12px; font-size: 11px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="nc-spec-banner">
+    <a href="/">←&nbsp;Back to homepage</a>
+    <span class="gold">·</span>
+    <span>OpenAPI 3.1 · v1.0.0</span>
+    <span class="grow"></span>
+    <a href="/openapi.json">Raw JSON</a>
+  </div>
+
+  <!-- Scalar API reference — embedded via CDN. Single script, no build,
+       reads the spec from /openapi.json. Renders a navigable, searchable,
+       try-it-out view of every endpoint. -->
+  <script id="api-reference" data-url="/openapi.json"></script>
+  <script>
+    var configuration = {
+      theme: 'default',
+      hideDownloadButton: false,
+      hideClientButton: false,
+      defaultHttpClient: { targetKey: 'shell', clientKey: 'curl' },
+      hiddenClients: [],
+      metaData: {
+        title: 'Neighborhood Commons API',
+        description: 'Open neighborhood data infrastructure — Schema.org-aligned types.'
+      }
+    };
+    document.getElementById('api-reference').dataset.configuration = JSON.stringify(configuration);
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+</body>
+</html>

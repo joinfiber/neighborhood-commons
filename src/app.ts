@@ -170,8 +170,30 @@ export function createApp(): Express {
   });
 
   // ─── OpenAPI spec ─────────────────────────────────────────────────
-  app.get('/api/v1/openapi.json', (_req, res) => {
-    res.sendFile(path.join(__dirname, '../public/openapi.json'), { headers: { 'Content-Type': 'application/json' } });
+  // Two routes for the same file: /openapi.json is the conventional
+  // location (and what every link in the homepage points at);
+  // /api/v1/openapi.json is kept for backward-compatibility with any
+  // consumer that already pinned the versioned path. Without an
+  // explicit /openapi.json route, the request falls through to the
+  // Portal SPA catch-all and serves an HTML "login page," which was
+  // confusing every visitor who clicked the "Spec" link.
+  const openapiHandler = (_req: import('express').Request, res: import('express').Response) => {
+    res.sendFile(path.join(__dirname, '../public/openapi.json'), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  };
+  app.get('/openapi.json', openapiHandler);
+  app.get('/api/v1/openapi.json', openapiHandler);
+
+  // ─── Rendered spec viewer (human-readable) ──────────────────────
+  // /spec is the human-friendly view: a Scalar-rendered, navigable
+  // version of the spec. /openapi.json stays as the raw JSON for
+  // tooling. The homepage's "Spec" topnav link points at /spec so
+  // visitors land on something legible.
+  app.get('/spec', (_req, res) => {
+    res.sendFile(path.join(__dirname, '../public/spec.html'), {
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    });
   });
 
   // ─── Public Data API ─────────────────────────────────────────────
