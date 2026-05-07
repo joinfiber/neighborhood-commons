@@ -95,11 +95,14 @@ export function createApp(): Express {
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
-          styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+          // jsdelivr is allowed for the /spec page's Scalar API reference
+          // bundle. The CDN is also where Scalar fetches its companion
+          // assets at runtime, hence the connect-src + style-src entries.
+          styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://cdn.jsdelivr.net'],
           fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-          scriptSrc: ["'self'", 'https://challenges.cloudflare.com', 'https://static.cloudflareinsights.com'],
+          scriptSrc: ["'self'", 'https://challenges.cloudflare.com', 'https://static.cloudflareinsights.com', 'https://cdn.jsdelivr.net'],
           frameSrc: ["'self'", 'https://challenges.cloudflare.com'],
-          connectSrc: ["'self'", config.supabase.url, 'https://places.googleapis.com'],
+          connectSrc: ["'self'", config.supabase.url, 'https://places.googleapis.com', 'https://cdn.jsdelivr.net'],
           imgSrc: ["'self'", 'data:', 'https:'],
         },
       },
