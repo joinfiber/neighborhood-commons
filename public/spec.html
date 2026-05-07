@@ -45,28 +45,20 @@
 
   <!-- Scalar API reference — embedded via CDN. Single script, no build,
        reads the spec from /openapi.json. Renders a navigable, searchable,
-       try-it-out view of every endpoint. -->
-  <script id="api-reference" data-url="/openapi.json"></script>
-  <script>
-    var configuration = {
-      theme: 'default',
-      hideDownloadButton: false,
-      hideClientButton: false,
-      defaultHttpClient: { targetKey: 'shell', clientKey: 'curl' },
-      hiddenClients: [],
-      // Disable Scalar's CORS proxy. The /spec page is same-origin with the
-      // API (both on api.neighborhood-commons.org), so requests can go
-      // direct. With the proxy enabled, requests go to proxy.scalar.com
-      // which our CSP blocks — surfacing as "Failed to fetch" in the
-      // try-it panel.
-      proxyUrl: '',
-      metaData: {
-        title: 'Neighborhood Commons API',
-        description: 'Open neighborhood data infrastructure — Schema.org-aligned types.'
-      }
-    };
-    document.getElementById('api-reference').dataset.configuration = JSON.stringify(configuration);
-  </script>
+       try-it-out view of every endpoint.
+
+       Configuration goes on the data-configuration attribute (JSON-encoded)
+       rather than in a separate inline <script>, because our CSP blocks
+       inline scripts and we don't want to weaken it with 'unsafe-inline'.
+       proxyUrl: '' disables Scalar's default CORS proxy (proxy.scalar.com)
+       — our /api/v1/* endpoints set Access-Control-Allow-Origin: * so
+       requests fire direct from the page regardless of which subdomain
+       the visitor is on. -->
+  <script
+    id="api-reference"
+    data-url="/openapi.json"
+    data-configuration='{"theme":"default","proxyUrl":"","hideDownloadButton":false,"hideClientButton":false,"defaultHttpClient":{"targetKey":"shell","clientKey":"curl"},"metaData":{"title":"Neighborhood Commons API","description":"Open neighborhood data infrastructure — Schema.org-aligned types."}}'
+  ></script>
   <!-- Scalar version pinned. Bump deliberately when validating an upgrade. -->
   <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.25.39"></script>
 </body>
