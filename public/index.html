@@ -33,7 +33,16 @@
     }
 
     *, *::before, *::after { box-sizing: border-box; }
-    html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+    html {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      /* Anchor jumps glide instead of teleport. Respects user's
+         prefers-reduced-motion via the rule below. */
+      scroll-behavior: smooth;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+    }
     body {
       margin: 0;
       background: var(--bg);
@@ -93,6 +102,35 @@
     .nc-topnav a { color: var(--muted); text-decoration: none; }
     .nc-topnav a:hover { color: var(--text); }
     .nc-topnav-sep { color: var(--border); user-select: none; }
+
+    /* Hamburger menu — checkbox-hack pattern, no JS framework.
+       Hidden on desktop; visible on mobile, where the nav becomes a
+       dropdown drawer. The checkbox is the toggle source of truth;
+       a tiny script later closes it on link click for clean UX. */
+    .nav-toggle { display: none; }
+    .hamburger {
+      display: none;
+      cursor: pointer;
+      padding: 8px;
+      margin-left: auto;
+      user-select: none;
+    }
+    .hamburger span {
+      display: block;
+      width: 22px; height: 2px;
+      background: var(--text);
+      margin: 5px 0;
+      border-radius: 1px;
+      transition: transform 0.18s, opacity 0.18s;
+    }
+    /* Morph hamburger into an X when open */
+    .nav-toggle:checked ~ .hamburger span:nth-child(1) {
+      transform: translateY(7px) rotate(45deg);
+    }
+    .nav-toggle:checked ~ .hamburger span:nth-child(2) { opacity: 0; }
+    .nav-toggle:checked ~ .hamburger span:nth-child(3) {
+      transform: translateY(-7px) rotate(-45deg);
+    }
 
     /* ── Hero ─────────────────────────────────────────── */
     .nc-hero {
@@ -468,12 +506,37 @@
     /* ── Mobile (≤640px) ──────────────────────────────── */
     @media (max-width: 640px) {
       .nc-status-inner { padding: 7px 18px; gap: 12px 14px; font-size: 11px; }
-      .nc-topbar-inner { padding: 12px 18px; gap: 12px; }
-      .nc-topnav { gap: 14px; font-size: 0.8rem; }
+      .nc-topbar { position: sticky; }
+      .nc-topbar-inner { padding: 12px 18px; gap: 0; position: relative; }
+      .hamburger { display: block; }
+      /* Topnav becomes a full-width dropdown drawer, hidden by default.
+         A 1px border-top separates it from the topbar; each link fills
+         the drawer with comfortable tap targets. The checkbox-hack
+         reveals it via the sibling selector below. */
+      .nc-topnav {
+        position: absolute;
+        top: 100%; left: 0; right: 0;
+        background: var(--bg);
+        border-bottom: 1px solid var(--border);
+        flex-direction: column;
+        gap: 0;
+        padding: 0;
+        font-size: 0.95rem;
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.22s ease;
+      }
+      .nav-toggle:checked ~ .nc-topnav {
+        max-height: 600px;
+        border-top: 1px solid var(--border);
+      }
+      .nc-topnav a {
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--border);
+        color: var(--text);
+      }
+      .nc-topnav a:last-child { border-bottom: none; }
       .nc-topnav-sep { display: none; }
-      /* Trim the topnav to first 3 anchors on phone — full nav is on the
-         page itself one scroll down, no need to crowd the topbar. */
-      .nc-topnav a:not(:nth-child(-n+3)) { display: none; }
 
       .nc-hero { padding: 40px 18px 28px; }
       .nc-hero h1 { font-size: 2.05rem; line-height: 1.1; }
@@ -540,6 +603,10 @@
     <header class="nc-topbar">
       <div class="nc-topbar-inner">
         <a href="/" class="nc-brand">Neighborhood Commons</a>
+        <input type="checkbox" id="nav-toggle" class="nav-toggle" aria-hidden="true">
+        <label for="nav-toggle" class="hamburger" aria-label="Open menu">
+          <span></span><span></span><span></span>
+        </label>
         <nav class="nc-topnav">
           <a href="#quickstart">Quick Start</a>
           <a href="#types">Types</a>
@@ -1461,5 +1528,16 @@ $ openapi-generator-cli generate -i {{baseUrl}}/openapi.json -g rust    -o ./cli
       </nav>
     </footer>
 
+  <script>
+    // Close the mobile menu when a nav link is tapped — without this,
+    // the drawer stays open after navigating to a section. ~3 lines.
+    (function () {
+      var t = document.getElementById('nav-toggle');
+      if (!t) return;
+      document.querySelectorAll('.nc-topnav a').forEach(function (a) {
+        a.addEventListener('click', function () { t.checked = false; });
+      });
+    })();
+  </script>
 </body>
 </html>
