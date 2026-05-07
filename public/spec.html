@@ -54,6 +54,12 @@
       hideClientButton: false,
       defaultHttpClient: { targetKey: 'shell', clientKey: 'curl' },
       hiddenClients: [],
+      // Disable Scalar's CORS proxy. The /spec page is same-origin with the
+      // API (both on api.neighborhood-commons.org), so requests can go
+      // direct. With the proxy enabled, requests go to proxy.scalar.com
+      // which our CSP blocks — surfacing as "Failed to fetch" in the
+      // try-it panel.
+      proxyUrl: '',
       metaData: {
         title: 'Neighborhood Commons API',
         description: 'Open neighborhood data infrastructure — Schema.org-aligned types.'
