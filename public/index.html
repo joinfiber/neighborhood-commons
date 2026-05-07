@@ -50,6 +50,16 @@
        container (pre, table) — never the whole page. */
     html, body { overflow-x: hidden; }
 
+    /* /pages.css sets .nc-page { display: flex; flex-direction: column }
+       for the sticky-footer pattern. The trouble: flex with
+       align-items: stretch widens to the largest child's intrinsic
+       min-content on the cross axis — and the hero's <pre> curls block
+       (white-space: pre, long URLs) has a min-content of ~600px. That
+       was forcing the entire layout wider than the viewport on mobile.
+       The homepage is content-rich enough that the footer sits at the
+       bottom on its own; we don't need flex for that here. */
+    .nc-page { display: block; }
+
     /* ─────────────────────────────────────────── *
      *  Status strip — sits above the topbar.
      *  Document metadata: spec version, status, license.
@@ -174,9 +184,12 @@
 
     /* Hero code specimen — framed, with a label. Reads as an intentional
        "live API" specimen rather than a floating cutout. The dark slab is
-       the only dark element on the page; the framing makes it deliberate. */
+       the only dark element on the page; the framing makes it deliberate.
+       max-width: 100% explicitly so the inner .nc-hero-curls (white-space:
+       pre + long curl URLs) can't widen the frame on narrow viewports. */
     .nc-specimen {
       margin: 44px 0 0;
+      max-width: 100%;
       border: 1px solid var(--nc-border);
       border-radius: 12px;
       background: var(--nc-surface);
@@ -235,7 +248,10 @@
     }
     .nc-imagine ul {
       list-style: none; padding: 0; margin: 0;
-      display: grid; grid-template-columns: 1fr; gap: 10px;
+      /* minmax(0, 1fr): defeats default min-content widening on the track,
+         so long unbreakable atoms in any LI can't push the column beyond
+         the parent's content area on narrow viewports. */
+      display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px;
       max-width: 60ch;
     }
     .nc-imagine li {
@@ -658,14 +674,18 @@
      *    - 480px: phone portrait. Tighten everything; tables scroll inline.
      * ─────────────────────────────────────────── */
     @media (max-width: 960px) {
-      .nc-pillars-grid { grid-template-columns: 1fr; gap: 28px; }
+      /* minmax(0, 1fr) on every collapsed-to-single-column grid: stops
+         intrinsic min-content (long URLs in <code>, <pre> with curl
+         commands) from forcing the track wider than the viewport. The
+         classic "grid items don't shrink" mobile bug. */
+      .nc-pillars-grid { grid-template-columns: minmax(0, 1fr); gap: 28px; }
       .nc-hero { padding: 64px 24px 40px; }
       .nc-hero h1 { max-width: none; }
       .nc-pillars { padding: 24px 24px 56px; }
       .nc-thesis { margin: 40px 24px 0; padding: 40px 24px; }
       .nc-divider { padding: 0 24px; }
       .nc-docs {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr);
         gap: 32px;
         padding: 48px 24px 80px;
       }
