@@ -70,19 +70,19 @@ export function sanitizeSearchInput(raw: string): string | null {
 /**
  * Resolve an event_image_url value to a client-loadable URL.
  *
- * Portal event images are stored as R2 keys (e.g., "portal-events/{id}/image").
- * External event images (DICE, etc.) are already full URLs.
- * This helper converts R2 keys to the serving endpoint URL.
+ * Stored values are either raw R2 keys (e.g., "portal-events/{id}/image" —
+ * the legacy prefix is kept for backwards-compat with older rows) or full
+ * external URLs (DICE, scrapers, etc.). Keys are rewritten to the public
+ * R2 URL; external URLs pass through unchanged. The `apiBaseUrl` argument
+ * is unused in current code but kept in the signature for API stability;
+ * older callers that ran without R2 configured used to fall back to a
+ * /api/portal route, which no longer exists.
  */
-export function resolveEventImageUrl(raw: string | null | undefined, apiBaseUrl: string, r2PublicUrl?: string): string | null {
+export function resolveEventImageUrl(raw: string | null | undefined, _apiBaseUrl: string, r2PublicUrl?: string): string | null {
   if (!raw) return null;
-  // Raw R2 key stored in DB — resolve to public URL
   if (raw.startsWith('portal-events/')) {
-    if (r2PublicUrl) {
-      return `${r2PublicUrl}/${raw}`;
-    }
-    const id = raw.replace('portal-events/', '').replace('/image', '');
-    return `${apiBaseUrl}/api/portal/events/${id}/image`;
+    if (r2PublicUrl) return `${r2PublicUrl}/${raw}`;
+    return null;
   }
   return raw;
 }

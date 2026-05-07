@@ -148,10 +148,17 @@ describe('resolveEventImageUrl', () => {
     expect(resolveEventImageUrl(url, 'https://api.test')).toBe(url);
   });
 
-  it('converts R2 keys to serving endpoint URLs', () => {
+  it('rewrites R2 keys to public R2 URLs when configured', () => {
     const r2Key = 'portal-events/abc-123/image';
-    const result = resolveEventImageUrl(r2Key, 'https://api.test');
-    expect(result).toBe('https://api.test/api/portal/events/abc-123/image');
+    const result = resolveEventImageUrl(r2Key, 'https://api.test', 'https://r2.example');
+    expect(result).toBe('https://r2.example/portal-events/abc-123/image');
+  });
+
+  it('returns null for R2 keys when no R2 public URL is configured', () => {
+    // Defensive: with no r2PublicUrl, return null rather than a broken
+    // /api/portal route. In production r2PublicUrl is always set.
+    const r2Key = 'portal-events/abc-123/image';
+    expect(resolveEventImageUrl(r2Key, 'https://api.test')).toBeNull();
   });
 });
 

@@ -17,6 +17,46 @@ import { Request, Response, NextFunction } from 'express';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { createError } from './error-handler.js';
 
+// Extend Express Request with the API-key info we attach to authenticated
+// requests. Lives here (not auth.ts) since this is the only middleware
+// that populates it after the Portal JWT auth was retired.
+declare global {
+  namespace Express {
+    interface Request {
+      apiKeyInfo?: {
+        id: string;
+        tier?: string;
+        isAdmin?: boolean;
+        /**
+         * The portal_account this key is linked to via api_key_account_links.
+         * For Contribute keys this is the stable ownership identity — it
+         * survives key rotation. Service keys may link to multiple accounts;
+         * `linkedAccountId` here is the first (or only) linked account, used
+         * by Contribute-style ownership checks. Service-tier code that needs
+         * the full set should query api_key_account_links directly.
+         */
+        linkedAccountId?: string;
+        /**
+         * App branding for verification emails (1.0.0+).
+         * Set by operator at issuance via api_keys.brand_config.
+         */
+        brandConfig?: {
+          app_name?: string;
+          from_email?: string;
+          from_name?: string;
+          subjects?: Record<string, string>;
+        };
+        /**
+         * Methods this key may auto-approve manual verifications for, e.g.
+         * ["manual_review:in_person"]. Empty/null means submissions queue
+         * for admin review. Granted by operator after onboarding review.
+         */
+        verificationAuthority?: string[];
+      };
+    }
+  }
+}
+
 /** Hash an incoming raw API key to match the stored key_hash column. */
 function hashApiKey(rawKey: string): string {
   return createHash('sha256').update(rawKey).digest('hex');
