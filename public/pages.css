@@ -503,7 +503,10 @@ img { max-width: 100%; display: block; }
 
 .nc-error-code {
   font-size: 64px;
-  font-weight: 300;
+  /* 400 (Regular) — was 300 (Light) before self-hosting; the shipped
+     DM Sans woff2 covers weights 400–700. The visual difference at
+     this size is negligible against the muted border color. */
+  font-weight: 400;
   color: var(--nc-border);
   line-height: 1;
   margin-bottom: 16px;

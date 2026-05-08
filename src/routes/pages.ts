@@ -205,10 +205,21 @@ ${ogImg}
 <meta name="twitter:description" content="${safeDesc}">
 ${ogImage ? `<meta name="twitter:image" content="${escapeAttr(ogImage)}">` : ''}
 
-<!-- Fonts -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<!-- Fonts: self-hosted (see public/index.html for rationale). pages.css
+     references DM Sans by name; the @font-face declarations below bind
+     that name to the woff2 we ship. Preload the body weight so it lands
+     before the browser tries to paint. -->
+<link rel="preload" href="${SITE_DOMAIN}/fonts/dm-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+  @font-face {
+    font-family: 'DM Sans'; font-style: normal; font-weight: 400; font-display: swap;
+    src: url('${SITE_DOMAIN}/fonts/dm-sans-latin.woff2') format('woff2');
+  }
+  @font-face {
+    font-family: 'DM Sans'; font-style: normal; font-weight: 500; font-display: swap;
+    src: url('${SITE_DOMAIN}/fonts/dm-sans-latin.woff2') format('woff2');
+  }
+</style>
 
 <!-- Styles -->
 <link rel="stylesheet" href="${SITE_DOMAIN}/pages.css">

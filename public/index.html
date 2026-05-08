@@ -6,9 +6,13 @@
   <title>Neighborhood Commons — open neighborhood data infrastructure</title>
   <meta name="description" content="Open infrastructure for neighborhood data. Events, organizations, places, broadcasts, curated lists. Schema.org-aligned, verified contributors, public reputation graph. Read free. Build with confidence. CC BY 4.0.">
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+  <!-- Self-hosted fonts: DM Sans / DM Mono / DM Serif Display, latin
+       subsets. Eliminates the Google Fonts round trip (FOUT on first
+       paint, third-party privacy ping, extra DNS). Preload only the body
+       font — it's the largest visible text surface, so it's the one a
+       late swap would be most jarring on. The other two faces inherit
+       font-display: swap and arrive over the same HTTP/2 connection. -->
+  <link rel="preload" href="/fonts/dm-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
 
   <style>
     /*
@@ -18,6 +22,49 @@
      * (≤640px), no flex sticky-footer, no grid 1fr foot guns, no /pages.css
      * dependency. The page is a document, not a web app.
      */
+
+    /* ── Font faces ────────────────────────────────────────
+       DM Sans is shipped as a single woff2 covering weights 400–700.
+       Four @font-face declarations point at the same file so the
+       browser loads it once but treats each weight as a distinct face.
+       (Same trick Google Fonts uses on its CSS — variable axes inside
+       a single file.) DM Mono ships as two separate weights.
+       font-display: swap is safe here because the file is on the same
+       origin, served over HTTP/2 with a 1y immutable cache; the body
+       font is preloaded, so by the time the browser is ready to paint,
+       DM Sans is already in the cache and no swap is observable. */
+    @font-face {
+      font-family: 'DM Sans'; font-style: normal; font-weight: 400; font-display: swap;
+      src: url('/fonts/dm-sans-latin.woff2') format('woff2');
+    }
+    @font-face {
+      font-family: 'DM Sans'; font-style: normal; font-weight: 500; font-display: swap;
+      src: url('/fonts/dm-sans-latin.woff2') format('woff2');
+    }
+    @font-face {
+      font-family: 'DM Sans'; font-style: normal; font-weight: 600; font-display: swap;
+      src: url('/fonts/dm-sans-latin.woff2') format('woff2');
+    }
+    @font-face {
+      font-family: 'DM Sans'; font-style: normal; font-weight: 700; font-display: swap;
+      src: url('/fonts/dm-sans-latin.woff2') format('woff2');
+    }
+    @font-face {
+      font-family: 'DM Mono'; font-style: normal; font-weight: 400; font-display: swap;
+      src: url('/fonts/dm-mono-400-latin.woff2') format('woff2');
+    }
+    @font-face {
+      font-family: 'DM Mono'; font-style: normal; font-weight: 500; font-display: swap;
+      src: url('/fonts/dm-mono-500-latin.woff2') format('woff2');
+    }
+    @font-face {
+      font-family: 'DM Serif Display'; font-style: normal; font-weight: 400; font-display: swap;
+      src: url('/fonts/dm-serif-display-regular-latin.woff2') format('woff2');
+    }
+    @font-face {
+      font-family: 'DM Serif Display'; font-style: italic; font-weight: 400; font-display: swap;
+      src: url('/fonts/dm-serif-display-italic-latin.woff2') format('woff2');
+    }
 
     :root {
       --bg:      #f7f7f5;

@@ -116,8 +116,8 @@ export function createApp(): Express {
           //   style-src    Scalar injects a runtime stylesheet
           //   font-src     Inter + JetBrains Mono shipped inside the bundle
           //   connect-src  Scalar fetches companion assets lazily
-          styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://cdn.jsdelivr.net'],
-          fontSrc: ["'self'", 'https://fonts.gstatic.com', 'https://cdn.jsdelivr.net'],
+          styleSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'],
+          fontSrc: ["'self'", 'https://cdn.jsdelivr.net'],
           scriptSrc: ["'self'", 'https://challenges.cloudflare.com', 'https://static.cloudflareinsights.com', 'https://cdn.jsdelivr.net'],
           frameSrc: ["'self'", 'https://challenges.cloudflare.com'],
           connectSrc: ["'self'", config.supabase.url, 'https://places.googleapis.com', 'https://cdn.jsdelivr.net'],
@@ -360,6 +360,12 @@ export function createApp(): Express {
   const publicDir = path.resolve(__dirname, '../public');
   app.use('/pages.css', express.static(path.join(publicDir, 'pages.css'), { maxAge: '1d', immutable: true }));
   app.use('/widget', express.static(path.join(publicDir, 'widget'), { maxAge: '1h' }));
+  // Self-hosted woff2 fonts (DM Sans / DM Mono / DM Serif Display, latin
+  // subsets only). Filenames are stable — bumping a font version means
+  // replacing the file, which is rare. 1y immutable cache because the
+  // homepage CSS hard-references the filename, so any swap will show up
+  // as a `git diff` and be easy to reason about.
+  app.use('/fonts', express.static(path.join(publicDir, 'fonts'), { maxAge: '1y', immutable: true }));
 
   // ─── Public HTML pages (events, venues) ────────────────────────
   // Must be before portal SPA fallback so /events/:id and /venues/:slug
