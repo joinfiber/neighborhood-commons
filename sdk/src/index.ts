@@ -6,7 +6,7 @@ export interface CommonsClientOptions {
   apiKey?: string;
 }
 
-const DEFAULT_BASE_URL = "https://api.neighborhood-commons.org/api/v1";
+const DEFAULT_BASE_URL = "https://neighborhood-commons.org/api/v1";
 
 export function createCommonsClient(opts: CommonsClientOptions = {}): Client<paths> {
   const headers: Record<string, string> = {};

@@ -1,12 +1,12 @@
 # Neighborhood Commons SDK
 
-Typed client for the [Neighborhood Commons API](https://api.neighborhood-commons.org), generated from the OpenAPI spec.
+Typed client for the [Neighborhood Commons API](https://neighborhood-commons.org), generated from the OpenAPI spec.
 
 The SDK is a mirror of the spec. If the spec changes, this package changes. The spec is authoritative — if this SDK ever disagrees with `/openapi.json`, the spec wins.
 
 ## Read this first
 
-Beyond a list view, you should read [the Commons Contract Guide](https://api.neighborhood-commons.org/llms.txt) before building anything substantial. The SDK gives you typed access to every endpoint, but the *meaning* of each shape — how films cluster by `tmdb_id`, how attribution works via `source.contributor`, what `open_window` implies for feeds, how series IDs map to recurring events — lives in the Guide. The SDK is the floor; the Guide is what makes you build something good.
+Beyond a list view, you should read [the Commons Contract Guide](https://neighborhood-commons.org/llms.txt) before building anything substantial. The SDK gives you typed access to every endpoint, but the *meaning* of each shape — how films cluster by `tmdb_id`, how attribution works via `source.contributor`, what `open_window` implies for feeds, how series IDs map to recurring events — lives in the Guide. The SDK is the floor; the Guide is what makes you build something good.
 
 ## Stability promise
 
@@ -60,7 +60,7 @@ const commons = createCommonsClient({
 
 - **Typed request/response for every endpoint.** IDE autocomplete; compile-time errors on drift.
 - **Thin wrapper over [openapi-fetch](https://openapi-ts.dev/openapi-fetch/).** No magic, no hidden behavior. The whole source is short enough to read in a sitting.
-- **Generated from [`openapi.json`](https://api.neighborhood-commons.org/openapi.json).** Spec changes propagate here on the next release.
+- **Generated from [`openapi.json`](https://neighborhood-commons.org/openapi.json).** Spec changes propagate here on the next release.
 
 ## Why this SDK stays thin
 

@@ -6,7 +6,7 @@ Neighborhood Commons is a thin data service: a database, an API, and a contribut
 
 This is infrastructure designed to be cloned and run by any city. The data is the product.
 
-**Live instance: [api.neighborhood-commons.org](https://api.neighborhood-commons.org)**
+**Live instance: [neighborhood-commons.org](https://neighborhood-commons.org)**
 
 ## What's here
 
@@ -79,28 +79,28 @@ No API key required for public reads:
 
 ```bash
 # List upcoming events
-curl https://api.neighborhood-commons.org/api/v1/events
+curl https://neighborhood-commons.org/api/v1/events
 
 # Filter by category
-curl https://api.neighborhood-commons.org/api/v1/events?category=live-music
+curl https://neighborhood-commons.org/api/v1/events?category=live-music
 
 # Search by text
-curl https://api.neighborhood-commons.org/api/v1/events?q=happy+hour
+curl https://neighborhood-commons.org/api/v1/events?q=happy+hour
 
 # Nearby events
-curl https://api.neighborhood-commons.org/api/v1/events?near=39.97,-75.14&radius_km=2
+curl https://neighborhood-commons.org/api/v1/events?near=39.97,-75.14&radius_km=2
 
 # Single event
-curl https://api.neighborhood-commons.org/api/v1/events/{id}
+curl https://neighborhood-commons.org/api/v1/events/{id}
 
 # Calendar feed
-curl https://api.neighborhood-commons.org/api/v1/events.ics
+curl https://neighborhood-commons.org/api/v1/events.ics
 
 # RSS feed
-curl https://api.neighborhood-commons.org/api/v1/events.rss
+curl https://neighborhood-commons.org/api/v1/events.rss
 
 # API discovery
-curl https://api.neighborhood-commons.org/.well-known/neighborhood
+curl https://neighborhood-commons.org/.well-known/neighborhood
 ```
 
 Every event response includes provenance (`source.publisher`, `source.license`) and conforms to the Neighborhood API event schema. Data is licensed CC BY 4.0.
@@ -262,7 +262,7 @@ Code: MIT
 
 - [Neighborhood API spec](https://github.com/The-Relational-Technology-Project/neighborhood-api) — upstream open spec this project implements
 - [The Relational Technology Project](https://relationaltechproject.org) — stewards of the spec
-- [OpenAPI spec](https://api.neighborhood-commons.org/openapi.json) — authoritative, machine-readable (the Spec)
-- [The Guide](public/llms.txt) — narrative companion explaining *why* and *how*, also served at [api.neighborhood-commons.org/llms.txt](https://api.neighborhood-commons.org/llms.txt)
+- [OpenAPI spec](https://neighborhood-commons.org/openapi.json) — authoritative, machine-readable (the Spec)
+- [The Guide](public/llms.txt) — narrative companion explaining *why* and *how*, also served at [neighborhood-commons.org/llms.txt](https://neighborhood-commons.org/llms.txt)
 - [CHANGELOG](CHANGELOG.md) — the Log, dated record of every contract-affecting change
 - [API consumer guide](docs/consumer-guide.md) — integration walkthrough

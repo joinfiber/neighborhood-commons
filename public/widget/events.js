@@ -5,7 +5,7 @@
  *
  * Usage:
  *   <div id="nc-events" data-limit="10"></div>
- *   <script src="https://api.neighborhood-commons.org/widget/events.js" async></script>
+ *   <script src="https://neighborhood-commons.org/widget/events.js" async></script>
  *
  * Configuration (data attributes on the container div):
  *   data-limit    — Max events to show (default: 10, max: 50)
@@ -34,7 +34,7 @@
   // Determine API base from the script src
   var scripts = document.querySelectorAll('script[src*="widget/events.js"]');
   var scriptSrc = scripts.length ? scripts[scripts.length - 1].src : '';
-  var apiBase = scriptSrc ? scriptSrc.replace(/\/widget\/events\.js.*$/, '') : 'https://api.neighborhood-commons.org';
+  var apiBase = scriptSrc ? scriptSrc.replace(/\/widget\/events\.js.*$/, '') : 'https://neighborhood-commons.org';
 
   // Build API URL
   var url = apiBase + '/api/v1/events?limit=' + limit;

@@ -89,6 +89,22 @@ export function createApp(): Express {
   // Changing this without understanding Railway's proxy topology breaks rate limiting.
   app.set('trust proxy', 1);
 
+  // Canonical host is the apex: neighborhood-commons.org. The api.* subdomain
+  // exists for back-compat (1.0 SDK consumers, anyone who pinned the old
+  // URL) — every request to api.* gets a 308 permanent redirect to the
+  // apex, preserving method and body. The browser / fetch / curl -L all
+  // follow it transparently. Once consumers update their base URLs at
+  // their own pace, the redirect never fires.
+  //
+  // Has to run early — before route handlers and body parsing — so we
+  // don't waste work on requests we're about to redirect.
+  app.use((req, res, next) => {
+    if (req.hostname === 'api.neighborhood-commons.org') {
+      return res.redirect(308, `https://neighborhood-commons.org${req.originalUrl}`);
+    }
+    next();
+  });
+
   // Security headers
   app.use(
     helmet({
@@ -100,15 +116,11 @@ export function createApp(): Express {
           //   style-src    Scalar injects a runtime stylesheet
           //   font-src     Inter + JetBrains Mono shipped inside the bundle
           //   connect-src  Scalar fetches companion assets lazily
-          // api.neighborhood-commons.org is in connect-src so the spec
-          // viewer's "Try it" panel works when the page is served from the
-          // apex (neighborhood-commons.org) — same Express deployment, but
-          // the browser sees it as a different origin.
           styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://cdn.jsdelivr.net'],
           fontSrc: ["'self'", 'https://fonts.gstatic.com', 'https://cdn.jsdelivr.net'],
           scriptSrc: ["'self'", 'https://challenges.cloudflare.com', 'https://static.cloudflareinsights.com', 'https://cdn.jsdelivr.net'],
           frameSrc: ["'self'", 'https://challenges.cloudflare.com'],
-          connectSrc: ["'self'", config.supabase.url, 'https://places.googleapis.com', 'https://cdn.jsdelivr.net', 'https://api.neighborhood-commons.org'],
+          connectSrc: ["'self'", config.supabase.url, 'https://places.googleapis.com', 'https://cdn.jsdelivr.net'],
           imgSrc: ["'self'", 'data:', 'https:'],
         },
       },
@@ -285,7 +297,7 @@ export function createApp(): Express {
 
   app.get('/', async (_req, res, next) => {
     try {
-      const baseUrl = config.apiBaseUrl || 'https://api.neighborhood-commons.org';
+      const baseUrl = config.apiBaseUrl || 'https://neighborhood-commons.org';
       const {
         totalEvents,
         firstPartyEvents,
