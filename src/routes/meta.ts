@@ -57,7 +57,7 @@ router.get('/', (_req, res) => {
       spdx: 'CC-BY-4.0',
       url: 'https://creativecommons.org/licenses/by/4.0/',
     },
-    terms_url: 'https://api.neighborhood-commons.org/api/v1/events/terms',
+    terms_url: 'https://neighborhood-commons.org/api/v1/events/terms',
   });
 });
 

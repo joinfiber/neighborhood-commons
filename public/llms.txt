@@ -2,13 +2,13 @@
 
 > Open neighborhood public-facts infrastructure. Six typed atoms — events, organizations, places, persons, broadcasts, curated lists — that any app can read, mix, and remix. Schema.org-aligned. Verified contributors. Public reputation graph. Read free, no key required. CC BY 4.0.
 
-This document is the AI-readable mirror of the homepage at `https://api.neighborhood-commons.org`. Everything a developer or LLM agent needs to integrate is here, in one place, in document order. No prior knowledge assumed; no other documents required.
+This document is the AI-readable mirror of the homepage at `https://neighborhood-commons.org`. Everything a developer or LLM agent needs to integrate is here, in one place, in document order. No prior knowledge assumed; no other documents required.
 
-Base URL: `https://api.neighborhood-commons.org`
+Base URL: `https://neighborhood-commons.org`
 
 **This document is the Guide, part of the Commons Contract.** The Contract is three files:
 
-- **The Spec** — [`/openapi.json`](https://api.neighborhood-commons.org/openapi.json) — machine-readable, authoritative. Generate your client from it.
+- **The Spec** — [`/openapi.json`](https://neighborhood-commons.org/openapi.json) — machine-readable, authoritative. Generate your client from it.
 - **The Guide** — this file. Narrative companion. Explains *why* and *how*.
 - **The Log** — [`CHANGELOG.md`](https://github.com/joinfiber/neighborhood-commons/blob/master/CHANGELOG.md) — dated record of every change.
 
@@ -62,7 +62,7 @@ You can read every endpoint without authentication. Start here.
 ### Read events near a point
 
 ```bash
-curl "https://api.neighborhood-commons.org/api/v1/events?near=39.97,-75.14&radius_km=2&limit=5"
+curl "https://neighborhood-commons.org/api/v1/events?near=39.97,-75.14&radius_km=2&limit=5"
 ```
 
 Returns up to five published events within 2 km of the supplied coordinates. Response shape: `{ meta, events }`. Every event is self-contained — no further joins required to render it.
@@ -70,7 +70,7 @@ Returns up to five published events within 2 km of the supplied coordinates. Res
 ### Filter by type and verification
 
 ```bash
-curl "https://api.neighborhood-commons.org/api/v1/organizations?kind=local_business&verified=true"
+curl "https://neighborhood-commons.org/api/v1/organizations?kind=local_business&verified=true"
 ```
 
 Returns organizations whose `kind` is `local_business` and which have at least one active verified identifier. Add `verified_by=Holler,Merrie` to restrict to verifications issued by specific apps.
@@ -78,7 +78,7 @@ Returns organizations whose `kind` is `local_business` and which have at least o
 ### Read what's broadcasting right now
 
 ```bash
-curl "https://api.neighborhood-commons.org/api/v1/broadcasts?near=39.97,-75.14&radius_km=1"
+curl "https://neighborhood-commons.org/api/v1/broadcasts?near=39.97,-75.14&radius_km=1"
 ```
 
 Active broadcasts only — expired and retracted broadcasts are filtered server-side. Response includes the embedded `organization` and `location` for each broadcast.
@@ -86,7 +86,7 @@ Active broadcasts only — expired and retracted broadcasts are filtered server-
 ### Inspect the reputation graph
 
 ```bash
-curl "https://api.neighborhood-commons.org/api/v1/verifiers"
+curl "https://neighborhood-commons.org/api/v1/verifiers"
 ```
 
 Returns one entry per app that has ever issued a verification: approval count, active count, revoked count, methods used. Use this to compose your own `verified_by` trust policy.
@@ -94,7 +94,7 @@ Returns one entry per app that has ever issued a verification: approval count, a
 ### Calendar feed
 
 ```
-https://api.neighborhood-commons.org/api/v1/events.ics
+https://neighborhood-commons.org/api/v1/events.ics
 ```
 
 Standards-compliant iCalendar. Drop the URL into Google Calendar / Apple Calendar / any RFC 5545 reader. RSS available at `/api/v1/events.rss`.
@@ -321,7 +321,7 @@ All read endpoints are unauthenticated. Optional `X-API-Key` header bumps rate l
 | `GET` | `/v1/events/:id` | Single event by ID. |
 | `GET` | `/v1/events.ics` | iCalendar feed. |
 | `GET` | `/v1/events.rss` | RSS 2.0 feed. |
-| `GET` | `/v1/events/changes?since=...` | Lightweight sync feed (events updated since a cursor). Lives outside `/v1` at `/api/events/changes` — full URL `https://api.neighborhood-commons.org/api/events/changes`. |
+| `GET` | `/v1/events/changes?since=...` | Lightweight sync feed (events updated since a cursor). Lives outside `/v1` at `/api/events/changes` — full URL `https://neighborhood-commons.org/api/events/changes`. |
 | `GET` | `/v1/places` | Paginated place list. |
 | `GET` | `/v1/places/:id` | Single place. |
 | `GET` | `/v1/organizations` | Paginated organization list. |
@@ -413,7 +413,7 @@ Two-step OTP flow against the public API. No human in the loop until activation.
 **Step 1 — request a verification code:**
 
 ```bash
-curl -X POST "https://api.neighborhood-commons.org/api/v1/service/register/send-otp" \
+curl -X POST "https://neighborhood-commons.org/api/v1/service/register/send-otp" \
   -H "Content-Type: application/json" \
   -d '{ "email": "you@yourcompany.com" }'
 ```
@@ -423,7 +423,7 @@ You'll receive an 8-digit code by email. It expires in 10 minutes.
 **Step 2 — submit the code along with your application:**
 
 ```bash
-curl -X POST "https://api.neighborhood-commons.org/api/v1/service/register/verify-otp" \
+curl -X POST "https://neighborhood-commons.org/api/v1/service/register/verify-otp" \
   -H "Content-Type: application/json" \
   -d '{
     "email": "you@yourcompany.com",
@@ -468,7 +468,7 @@ Verification emails ship under your app's display name (`YourApp <verify@neighbo
 Idempotent on `googlePlaceId`. If a Place with the supplied Google Place ID already exists, the response is `200` with the existing record. Otherwise `201` with the new one.
 
 ```bash
-curl -X POST "https://api.neighborhood-commons.org/api/v1/service/places" \
+curl -X POST "https://neighborhood-commons.org/api/v1/service/places" \
   -H "X-API-Key: $NC_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -489,7 +489,7 @@ curl -X POST "https://api.neighborhood-commons.org/api/v1/service/places" \
 Three relevant endpoints: create a new Organization (auto-links the calling key), link your key to an existing Organization, or update an Organization you're already linked to.
 
 ```bash
-curl -X POST "https://api.neighborhood-commons.org/api/v1/service/organizations" \
+curl -X POST "https://neighborhood-commons.org/api/v1/service/organizations" \
   -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
   -d '{
     "name": "Bubs",
@@ -502,12 +502,12 @@ curl -X POST "https://api.neighborhood-commons.org/api/v1/service/organizations"
   }'
 
 # Link to an existing Organization (if another app created it first)
-curl -X POST "https://api.neighborhood-commons.org/api/v1/service/organizations/link" \
+curl -X POST "https://neighborhood-commons.org/api/v1/service/organizations/link" \
   -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
   -d '{ "organizationId": "ORG_UUID" }'
 
 # Update fields on an Organization linked to this key
-curl -X PATCH "https://api.neighborhood-commons.org/api/v1/service/organizations/ORG_UUID" \
+curl -X PATCH "https://neighborhood-commons.org/api/v1/service/organizations/ORG_UUID" \
   -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
   -d '{ "description": "Updated bio.", "telephone": "+12155550101" }'
 ```
@@ -519,7 +519,7 @@ Image uploads (logo, hero image) are JSON-base64: `POST /v1/service/organization
 Create a Person record for performers, curators, or individual hosts. Person records are append-only for standard service keys in 1.0; per-Person edit semantics ship in a later minor version.
 
 ```bash
-curl -X POST "https://api.neighborhood-commons.org/api/v1/service/persons" \
+curl -X POST "https://neighborhood-commons.org/api/v1/service/persons" \
   -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
   -d '{
     "name": "DJ Karma",
@@ -535,7 +535,7 @@ curl -X POST "https://api.neighborhood-commons.org/api/v1/service/persons" \
 Event creation accepts the existing `ServiceEventInput` shape. The body field is named `account_id` for backward compatibility but expects an Organization id. After 1.0 you can also reassign an event's organizer:
 
 ```bash
-curl -X POST "https://api.neighborhood-commons.org/api/v1/service/events" \
+curl -X POST "https://neighborhood-commons.org/api/v1/service/events" \
   -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
   -d '{
     "account_id": "ORG_UUID",
@@ -554,12 +554,12 @@ curl -X POST "https://api.neighborhood-commons.org/api/v1/service/events" \
   }'
 
 # Reassign an event's organizer
-curl -X PATCH "https://api.neighborhood-commons.org/api/v1/service/events/EVENT_UUID/organizer" \
+curl -X PATCH "https://neighborhood-commons.org/api/v1/service/events/EVENT_UUID/organizer" \
   -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
   -d '{ "organizerOrganizationId": "ORG_UUID" }'
 
 # Or assign to a Person (mutually exclusive with organizerOrganizationId)
-curl -X PATCH "https://api.neighborhood-commons.org/api/v1/service/events/EVENT_UUID/organizer" \
+curl -X PATCH "https://neighborhood-commons.org/api/v1/service/events/EVENT_UUID/organizer" \
   -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
   -d '{ "organizerPersonId": "PERSON_UUID" }'
 ```
@@ -569,7 +569,7 @@ curl -X PATCH "https://api.neighborhood-commons.org/api/v1/service/events/EVENT_
 Maximum 24h lifetime. Body: `organizationId`, `placeId`, `message` (≤280 chars), `expires` (ISO 8601, must be future, ≤24h ahead).
 
 ```bash
-curl -X POST "https://api.neighborhood-commons.org/api/v1/service/broadcasts" \
+curl -X POST "https://neighborhood-commons.org/api/v1/service/broadcasts" \
   -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
   -d '{
     "organizationId": "ORG_UUID",
@@ -579,7 +579,7 @@ curl -X POST "https://api.neighborhood-commons.org/api/v1/service/broadcasts" \
   }'
 
 # Retract early
-curl -X POST "https://api.neighborhood-commons.org/api/v1/service/broadcasts/BROADCAST_UUID/retract" \
+curl -X POST "https://neighborhood-commons.org/api/v1/service/broadcasts/BROADCAST_UUID/retract" \
   -H "X-API-Key: $NC_KEY"
 ```
 
@@ -591,7 +591,7 @@ Two-step: create the list, then add items. Items are polymorphic — events, org
 
 ```bash
 # Create the list (curator can be 'organization' or 'person')
-curl -X POST "https://api.neighborhood-commons.org/api/v1/service/lists" \
+curl -X POST "https://neighborhood-commons.org/api/v1/service/lists" \
   -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
   -d '{
     "name": "This Weekend'\''s Picks",
@@ -600,7 +600,7 @@ curl -X POST "https://api.neighborhood-commons.org/api/v1/service/lists" \
   }'
 
 # Add an item by position
-curl -X POST "https://api.neighborhood-commons.org/api/v1/service/lists/LIST_UUID/items" \
+curl -X POST "https://neighborhood-commons.org/api/v1/service/lists/LIST_UUID/items" \
   -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
   -d '{
     "position": 1,
@@ -610,7 +610,7 @@ curl -X POST "https://api.neighborhood-commons.org/api/v1/service/lists/LIST_UUI
   }'
 
 # Remove an item at position
-curl -X DELETE "https://api.neighborhood-commons.org/api/v1/service/lists/LIST_UUID/items/3" \
+curl -X DELETE "https://neighborhood-commons.org/api/v1/service/lists/LIST_UUID/items/3" \
   -H "X-API-Key: $NC_KEY"
 ```
 
@@ -621,7 +621,7 @@ Person-curated lists need a one-time activation note in 1.0 — the `api_key_org
 Used to flag a verified target as misattributed. Records the dispute for human review; no automated action in 1.0.
 
 ```bash
-curl -X POST "https://api.neighborhood-commons.org/api/v1/service/disputes" \
+curl -X POST "https://neighborhood-commons.org/api/v1/service/disputes" \
   -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
   -d '{
     "targetType": "organization",
@@ -646,7 +646,7 @@ The Commons orchestrates the verification process; apps consume the result. Subm
 **Step 1 — Discover the path.** Given a target and identifier, the Commons returns which submission endpoint to call:
 
 ```bash
-curl "https://api.neighborhood-commons.org/api/v1/service/verifications/path?\
+curl "https://neighborhood-commons.org/api/v1/service/verifications/path?\
 target_type=organization&target_id=ORG_UUID&\
 identifier_type=email&identifier_value=manager@bubs.example" \
   -H "X-API-Key: $NC_KEY"
@@ -688,7 +688,7 @@ Three possible response shapes:
 Used when path returned `domain_email_loop`. Issue a code; the Commons emails it from your `brand_config` sender:
 
 ```bash
-curl -X POST "https://api.neighborhood-commons.org/api/v1/service/verifications/challenges" \
+curl -X POST "https://neighborhood-commons.org/api/v1/service/verifications/challenges" \
   -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
   -d '{
     "targetType": "organization",
@@ -700,7 +700,7 @@ curl -X POST "https://api.neighborhood-commons.org/api/v1/service/verifications/
 # Response: { "challengeId": "...", "expiresAt": "..." }
 
 # User pastes the code in your UI; you submit
-curl -X POST "https://api.neighborhood-commons.org/api/v1/service/verifications/challenges/CHALLENGE_ID/confirm" \
+curl -X POST "https://neighborhood-commons.org/api/v1/service/verifications/challenges/CHALLENGE_ID/confirm" \
   -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
   -d '{ "code": "123456" }'
 
@@ -715,7 +715,7 @@ Codes are six digits. Challenges expire after 30 minutes. Five wrong attempts on
 Used when path returned `manual_review`. Submit evidence; if your key has `verification_authority` covering the method, it auto-approves; otherwise it queues for admin review:
 
 ```bash
-curl -X POST "https://api.neighborhood-commons.org/api/v1/service/verifications/manual" \
+curl -X POST "https://neighborhood-commons.org/api/v1/service/verifications/manual" \
   -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
   -d '{
     "targetType": "organization",
@@ -756,13 +756,13 @@ Apps without authority can still submit manual-review evidence — those submiss
 Every approval includes the approving app's stable name (snapshot of `brand_config.app_name` at approval time). The reputation graph is public:
 
 ```bash
-curl "https://api.neighborhood-commons.org/api/v1/verifiers"
+curl "https://neighborhood-commons.org/api/v1/verifiers"
 
 # Returns one entry per app with: appName, firstApprovalAt, approvalCount,
 # activeCount, revokedCount, methods used.
 
 # Audit a specific verifier's recent work
-curl "https://api.neighborhood-commons.org/api/v1/verifiers/Holler/recent_approvals"
+curl "https://neighborhood-commons.org/api/v1/verifiers/Holler/recent_approvals"
 ```
 
 Apps reading the Commons compose `verified_by` filters that match their own trust policy. Sloppy verification is filtered out by other apps. Market discipline replaces central authority — and approving apps have a direct economic incentive to verify carefully, since their approvals being filtered means the businesses they onboarded lose reach across the rest of the ecosystem.
@@ -778,7 +778,7 @@ Subscribe to push notifications instead of polling. Each delivery is HMAC-SHA256
 Subscribe with a service-tier API key:
 
 ```bash
-curl -X POST "https://api.neighborhood-commons.org/api/v1/webhooks" \
+curl -X POST "https://neighborhood-commons.org/api/v1/webhooks" \
   -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
   -d '{
     "url": "https://yourapp.example/webhooks/commons",
@@ -789,15 +789,15 @@ curl -X POST "https://api.neighborhood-commons.org/api/v1/webhooks" \
 # All deliveries to this subscription are signed with this secret.
 
 # Test the endpoint with a synthetic delivery
-curl -X POST "https://api.neighborhood-commons.org/api/v1/webhooks/SUBSCRIPTION_ID/test" \
+curl -X POST "https://neighborhood-commons.org/api/v1/webhooks/SUBSCRIPTION_ID/test" \
   -H "X-API-Key: $NC_KEY"
 
 # Inspect recent delivery attempts
-curl "https://api.neighborhood-commons.org/api/v1/webhooks/SUBSCRIPTION_ID/deliveries" \
+curl "https://neighborhood-commons.org/api/v1/webhooks/SUBSCRIPTION_ID/deliveries" \
   -H "X-API-Key: $NC_KEY"
 
 # Unsubscribe
-curl -X DELETE "https://api.neighborhood-commons.org/api/v1/webhooks/SUBSCRIPTION_ID" \
+curl -X DELETE "https://neighborhood-commons.org/api/v1/webhooks/SUBSCRIPTION_ID" \
   -H "X-API-Key: $NC_KEY"
 ```
 
@@ -901,12 +901,12 @@ The spec is the contract. Whatever you generate from it is as canonical as what 
 
 ```bash
 # TypeScript types only (matches what we publish)
-npx openapi-typescript https://api.neighborhood-commons.org/openapi.json -o ./types.ts
+npx openapi-typescript https://neighborhood-commons.org/openapi.json -o ./types.ts
 
 # Full clients in any supported language
-openapi-generator-cli generate -i https://api.neighborhood-commons.org/openapi.json -g python  -o ./client
-openapi-generator-cli generate -i https://api.neighborhood-commons.org/openapi.json -g go      -o ./client
-openapi-generator-cli generate -i https://api.neighborhood-commons.org/openapi.json -g rust    -o ./client
+openapi-generator-cli generate -i https://neighborhood-commons.org/openapi.json -g python  -o ./client
+openapi-generator-cli generate -i https://neighborhood-commons.org/openapi.json -g go      -o ./client
+openapi-generator-cli generate -i https://neighborhood-commons.org/openapi.json -g rust    -o ./client
 ```
 
 The published npm package version aligns with the spec version. Major version bumps follow the spec (rare); minor versions land additively as the spec grows.

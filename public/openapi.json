@@ -10,13 +10,13 @@
     },
     "contact": {
       "name": "Neighborhood Commons",
-      "url": "https://api.neighborhood-commons.org",
+      "url": "https://neighborhood-commons.org",
       "email": "hi@neighborhood-commons.org"
     }
   },
   "servers": [
     {
-      "url": "https://api.neighborhood-commons.org/api/v1",
+      "url": "https://neighborhood-commons.org/api/v1",
       "description": "Production"
     }
   ],
@@ -228,8 +228,8 @@
     "/events/changes": {
       "servers": [
         {
-          "url": "https://api.neighborhood-commons.org/api",
-          "description": "Changes feed lives OUTSIDE the /v1 prefix. Full URL: https://api.neighborhood-commons.org/api/events/changes"
+          "url": "https://neighborhood-commons.org/api",
+          "description": "Changes feed lives OUTSIDE the /v1 prefix. Full URL: https://neighborhood-commons.org/api/events/changes"
         }
       ],
       "get": {

@@ -677,7 +677,7 @@ export async function rssHandler(req: import('express').Request, res: import('ex
 
     const deduped = deduplicateSeries(visible);
     const page = deduped.slice(0, params.limit);
-    const baseUrl = 'https://api.neighborhood-commons.org';
+    const baseUrl = 'https://neighborhood-commons.org';
     const feedTitle = buildFeedTitle(params);
 
     // Build the self-referencing URL with query params preserved
