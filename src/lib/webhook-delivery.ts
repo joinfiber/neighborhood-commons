@@ -84,7 +84,8 @@ export type ImageProcessedErrorCode =
   | 'DOWNLOAD_FAILED'
   | 'INVALID_FORMAT'
   | 'ENCODE_FAILED'
-  | 'UPLOAD_FAILED';
+  | 'UPLOAD_FAILED'
+  | 'NOT_PERMITTED';
 
 export interface ImageProcessedPayload {
   event_type: 'event.image_processed';

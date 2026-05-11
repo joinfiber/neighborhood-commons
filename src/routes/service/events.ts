@@ -324,6 +324,18 @@ router.post('/events', serviceLimiter, async (req, res, next) => {
 
     if (!account) throw createError('Account not found', 404, 'NOT_FOUND');
 
+    // Photo eligibility — see lib/contributor-policy.ts. Only claimed accounts
+    // (and, Phase 2, verified businesses) may contribute media bytes. Reject
+    // upfront with a clear status so clients get an actionable signal instead
+    // of a silent failure webhook.
+    if (data.image_url && !account.auth_user_id) {
+      throw createError(
+        'Photos may only be contributed by claimed accounts',
+        403,
+        'IMAGE_NOT_PERMITTED',
+      );
+    }
+
     const adminUserId = account.auth_user_id || getAdminUserId();
     const validatedTags = data.tags ? validateTags(data.tags, data.category) : [];
 

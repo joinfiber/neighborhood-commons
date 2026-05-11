@@ -16,6 +16,7 @@ import { createError } from '../middleware/error-handler.js';
 import { validateFeedUrl } from './url-validation.js';
 import { safeFetch } from './safe-fetch.js';
 import { dispatchImageProcessedWebhook, type ImageProcessedErrorCode } from './webhook-delivery.js';
+import { canContributePhotos } from './contributor-policy.js';
 
 export const SUPPORTED_MAGIC_BYTES: Record<string, string> = {
   'ffd8ff': 'image/jpeg',
@@ -81,6 +82,23 @@ export async function processAndUploadImage(entityId: string, base64: string, se
 export async function downloadAndAttachImage(eventId: string, imageUrl: string): Promise<void> {
   function emitFailure(code: ImageProcessedErrorCode): void {
     void dispatchImageProcessedWebhook(eventId, 'failed', null, code);
+  }
+
+  // Contributor policy gate (defense in depth). The Service API rejects this
+  // case upfront, but this function can also be invoked from contribute.ts
+  // and any future caller. Look up the event's creator and refuse the fetch
+  // if the account isn't authorized to contribute photos.
+  // See lib/contributor-policy.ts.
+  const { data: event } = await supabaseAdmin
+    .from('events')
+    .select('creator_account_id')
+    .eq('id', eventId)
+    .maybeSingle();
+
+  if (!event?.creator_account_id || !(await canContributePhotos(event.creator_account_id))) {
+    console.log(`[IMAGES] Refusing image fetch for event ${eventId}: contributor not authorized`);
+    emitFailure('NOT_PERMITTED');
+    return;
   }
 
   // SSRF protection: validate URL resolves to a public IP before fetching
