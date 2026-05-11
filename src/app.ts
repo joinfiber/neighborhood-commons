@@ -16,7 +16,7 @@ import helmet from 'helmet';
 import { config } from './config.js';
 import { supabaseAdmin } from './lib/supabase.js';
 import { errorHandler } from './middleware/error-handler.js';
-import { globalLimiter } from './middleware/rate-limit.js';
+import { globalLimiter, writeLimiter } from './middleware/rate-limit.js';
 
 // Routes
 import publicRoutes from './routes/public.js';
@@ -36,6 +36,8 @@ import developerRoutes from './routes/developers.js';
 import contributeRoutes from './routes/contribute.js';
 import serviceRoutes from './routes/service.js';
 import pageRoutes from './routes/pages.js';
+import dmcaRoutes, { dmcaHtmlHandler } from './routes/dmca.js';
+import reportRoutes from './routes/report.js';
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -246,6 +248,15 @@ export function createApp(): Express {
   // ─── Contribute API (external app writes) ─────────────────────
   app.use('/api/v1/contribute', contributeRoutes);
   app.use('/api/v1/service', serviceRoutes);
+
+  // ─── DMCA / takedown surfaces ─────────────────────────────────
+  // /dmca renders the human-readable HTML page; /api/v1/dmca returns
+  // the same content as JSON for tooling. /api/v1/report accepts
+  // public, captcha-gated takedown reports — anyone can file (no API
+  // key required), which is the right shape for safe-harbor.
+  app.get('/dmca', dmcaHtmlHandler);
+  app.use('/api/v1/dmca', dmcaRoutes);
+  app.use('/api/v1/report', writeLimiter, reportRoutes);
 
   // ─── Landing page (server-rendered, instant load, no JS) ───────────
   let cachedStats = {
