@@ -122,6 +122,14 @@ See the per-app migration briefs in `docs/migration-brief-*.md` for the full aud
 
 ## 2026-05-06 (SDK 1.0.0)
 
+- Canonical URL is now the apex `https://neighborhood-commons.org`. The previous `api.neighborhood-commons.org` host now 308-redirects every path to the apex (preserves method + body), so existing clients keep working. The OpenAPI spec, SDK default base URL, llms.txt, and README all point at the apex. CSP no longer needs to allowlist the api subdomain. One canonical host means the rendered `/spec` page can call its own server without cross-origin friction; future docs/UI never have to pick which subdomain to reference.
+- SDK 1.0.1: `DEFAULT_BASE_URL` is now `https://neighborhood-commons.org/api/v1`. Patch bump because consumers passing an explicit `baseUrl` are unaffected, and consumers relying on the default get transparently redirected to the same data via the 308 even on older SDK versions. Tag `sdk-v1.0.1` after merge to publish.
+- No spec field changes, no error-code changes, no rate-limit changes.
+
+---
+
+## 2026-05-06 (SDK 1.0.0)
+
 - SDK: published `neighborhood-commons@1.0.0` on npm, aligning the SDK major version with the spec major version. Generated types now reflect the corrected `first_party` semantics (server-computed, not caller-provided). No code changes from prior 0.0.4 generation other than the spec-driven type updates and the version bump itself. Per `sdk/RELEASING.md`: `git tag sdk-v1.0.0 && git push origin sdk-v1.0.0` on master after merge to trigger the publish workflow.
 - Fixed: `events.first_party` is now computed server-side at insert time from the organizer's verification state, never trusted from caller input. Pre-1.0 the portal route auto-set `first_party=true` on every portal-submitted event ("Portal events are always entered by the originator"), and the service-tier `ServiceEventInput` accepted it as a free-form boolean. Both were inherited from a time when verification didn't yet exist; in the new model, `first_party=true` means *the organizer is a verified business* and that's a fact about the system, not a claim a caller can self-issue.
 - Spec: removed `first_party` from `ServiceEventInput` (input shape). Still present on the `Event` and `ServiceEvent` output shapes; description updated to reflect server-computed semantics. Existing service-tier callers sending `first_party` now have it silently stripped by the input parser; no 4xx, no breakage.

@@ -322,7 +322,7 @@ All read endpoints are unauthenticated. Optional `X-API-Key` header bumps rate l
 | `GET` | `/v1/events/:id` | Single event by ID. |
 | `GET` | `/v1/events.ics` | iCalendar feed. |
 | `GET` | `/v1/events.rss` | RSS 2.0 feed. |
-| `GET` | `/api/events/changes?since=...` | Lightweight sync feed (events updated since a cursor). |
+| `GET` | `/api/events/changes?since=...` | Lightweight sync feed (events updated since a cursor). Lives outside `/v1` — full URL `https://neighborhood-commons.org/api/events/changes`. |
 | `GET` | `/v1/places` | Paginated place list. |
 | `GET` | `/v1/places/:id` | Single place. |
 | `GET` | `/v1/organizations` | Paginated organization list. |
@@ -458,7 +458,7 @@ curl -X POST "https://neighborhood-commons.org/api/v1/service/register/send-otp"
   -H "Content-Type: application/json" \
   -d '{ "email": "you@yourcompany.com" }'
 
-# Step 2 — submit the code along with your application
+# Step 2 — submit the code along with your application (8-digit code, expires in 10 minutes)
 curl -X POST "https://neighborhood-commons.org/api/v1/service/register/verify-otp" \
   -H "Content-Type: application/json" \
   -d '{
@@ -750,7 +750,16 @@ Acceptable evidence types depend on the organization. For community groups: byla
 
 ### 5.4 verification_authority
 
-A JSON array on each service key listing the verification methods the key may auto-approve. Set during activation, based on the verification process you described. Apps without authority can still submit manual-review evidence — those submissions just queue. Typical turnaround for admin review is one business day.
+A JSON array on each service key listing the verification methods the key may auto-approve. Set during activation, based on the verification process you described. Format: `method:context`.
+
+| Value | Meaning |
+|---|---|
+| `["manual_review:in_person"]` | Auto-approve manual reviews where `verifiedVia` is `in_person`. Queues for admin otherwise. |
+| `["manual_review:in_person", "manual_review:video_call"]` | Both methods auto-approve. |
+| `null` / `[]` | No authority. All manual submissions queue for admin review. |
+| `["*"]` | Operator/admin wildcard. Reserved for Studio. |
+
+Apps without authority can still submit manual-review evidence — those submissions just queue. Typical turnaround for admin review is one business day.
 
 ---
 
@@ -774,6 +783,10 @@ curl -X POST "https://neighborhood-commons.org/api/v1/webhooks" \
 
 # Test the endpoint with a synthetic delivery
 curl -X POST "https://neighborhood-commons.org/api/v1/webhooks/SUBSCRIPTION_ID/test" \
+  -H "X-API-Key: $NC_KEY"
+
+# Inspect recent delivery attempts
+curl "https://neighborhood-commons.org/api/v1/webhooks/SUBSCRIPTION_ID/deliveries" \
   -H "X-API-Key: $NC_KEY"
 
 # Unsubscribe
