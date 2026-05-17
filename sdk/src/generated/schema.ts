@@ -439,7 +439,7 @@ export interface paths {
         put?: never;
         /**
          * Issue API key (service/admin)
-         * @description Create a new API key. The key is the credential; the `account_id` it links to is the stable owner of any events it creates. Rotation: issue a new key with the same `account_id` as the old one, then revoke the old key — both keys can edit the same events while both are active. Non-service tiers REQUIRE `account_id` (without a linked account, PATCH/DELETE on created events would fail with KEY_NOT_LINKED). Returns the raw key string ONCE — store it immediately, it is unrecoverable.
+         * @description Create a new API key. v2: writeable scope (which organizations the key may publish for) is established separately via `POST /service/organizations/link` after issuance. The optional `account_id` field references an operational tenant portal_account but does not grant write authority on its own. Returns the raw key string ONCE — store it immediately, it is unrecoverable.
          */
         post: operations["serviceCreateApiKey"];
         delete?: never;
@@ -479,7 +479,13 @@ export interface paths {
         put?: never;
         /**
          * Activate a pending service-tier key (admin)
-         * @description Flip a self-registered service-tier API key from pending (`activated_at` NULL — reads only) to fully active (`activated_at` set — writes resume). Optionally sets `brand_config`, `verification_authority`, and `rate_limit_per_hour` in the same call. Admin service key required. Idempotent: returns `already_active: true` if the key was previously activated.
+         * @description Flip a self-registered service-tier API key from pending (`activated_at` NULL — reads only) to fully active (`activated_at` set — writes resume). Optionally sets `brand_config`, `verification_authority`, `rate_limit_per_hour`, and `provision_account` in the same call. Admin service key required. Idempotent: returns `already_active: true` if the key was previously activated.
+         *
+         *     **Atomic tenant provisioning (`provision_account`)**: tenant-umbrella consumers (Merrie, GoThere, etc.) include `provision_account` in their activation request email. The operator passes those values through to this endpoint, which atomically (a) flips the key to active, (b) creates the consumer's tenant portal_account, and (c) links the now-active key to it. The response includes the new `account.id` — the operator forwards it to the consumer alongside the activation confirmation. The consumer never makes a second round-trip for tenant provisioning.
+         *
+         *     This is the canonical activation path for tenant-umbrella consumers. Per-operator portable consumers omit `provision_account` and call `POST /service/accounts/link` per operator as those operators come online — both forms remain supported.
+         *
+         *     **Why atomic?** Pending keys are strictly read-only — no portal_account exists before activation. The `provision_account` body collapses the publisher-identity creation into the single quality-gate moment, so consumers never have a pre-activation footprint and admin's action is one call.
          */
         post: operations["serviceActivateApiKey"];
         delete?: never;
@@ -559,13 +565,13 @@ export interface paths {
         };
         /**
          * List approved domains
-         * @description List domains on the Contribute API allowlist. Admin service key required.
+         * @description List domains on the Service API URL allowlist (used for sanitizing event link URLs and similar). Admin service key required.
          */
         get: operations["serviceListApprovedDomains"];
         put?: never;
         /**
          * Add an approved domain
-         * @description Add a domain to the Contribute API allowlist. Resolves any pending approval request for the same domain. Admin service key required.
+         * @description Add a domain to the Service API URL allowlist. Resolves any pending approval request for the same domain. Admin service key required.
          */
         post: operations["serviceAddApprovedDomain"];
         delete?: never;
@@ -586,7 +592,7 @@ export interface paths {
         post?: never;
         /**
          * Remove an approved domain
-         * @description Remove a domain from the allowlist. Future Contribute API submissions for this domain will queue for review. Admin service key required.
+         * @description Remove a domain from the allowlist. Future Service API submissions referencing URLs at this domain will queue for review. Admin service key required.
          */
         delete: operations["serviceRemoveApprovedDomain"];
         options?: never;
@@ -603,7 +609,7 @@ export interface paths {
         };
         /**
          * List domain approval requests
-         * @description Review queue of Contribute API URL submissions whose domain is not yet on the allowlist. Admin service key required.
+         * @description Review queue of Service API URL submissions whose domain is not yet on the allowlist. Admin service key required.
          */
         get: operations["serviceListDomainApprovalRequests"];
         put?: never;
@@ -728,7 +734,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/persons": {
+    "/publishers": {
         parameters: {
             query?: never;
             header?: never;
@@ -736,10 +742,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List persons
-         * @description Public read of Person records (DJs, performers, curators, individual organizers).
+         * List publishers
+         * @description Organizations that publish into the Commons — those with at least one event or active broadcast attributed to them. Same response shape as `/organizations`; the difference is a "has published" filter applied at the query layer. Replaces the legacy `/v1/accounts` route (which conflated publisher identity with user accounts).
          */
-        get: operations["listPersons"];
+        get: operations["listPublishers"];
         put?: never;
         post?: never;
         delete?: never;
@@ -748,15 +754,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/persons/{idOrSlug}": {
+    "/publishers/{idOrSlug}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get a single person */
-        get: operations["getPerson"];
+        /** Get a single publisher */
+        get: operations["getPublisher"];
         put?: never;
         post?: never;
         delete?: never;
@@ -831,46 +837,6 @@ export interface paths {
         };
         /** Get a single list */
         get: operations["getList"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/verifiers": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Reputation graph — list verifiers
-         * @description Public read of the verifier registry. Each entry summarizes one app's verification track record (count, active, revoked, methods). Apps reading the Commons can use this to compose verified_by filters that match their trust policy.
-         */
-        get: operations["listVerifiers"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/verifiers/{appName}/recent_approvals": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Recent approvals by a verifier
-         * @description Public spot-check of recent approvals issued by a specific verifier app. Maximum sunlight on the reputation graph — anyone can audit who's being verified by whom.
-         */
-        get: operations["listVerifierRecentApprovals"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1093,43 +1059,9 @@ export interface paths {
         head?: never;
         /**
          * Update an organization
-         * @description Service-tier callers can update organizations linked to their key (via api_key_account_links). Admin keys bypass the scoping check.
+         * @description Service-tier callers can update organizations linked to their key (via api_key_organization_links). Admin keys bypass the scoping check.
          */
         patch: operations["serviceUpdateOrganization"];
-        trace?: never;
-    };
-    "/service/persons": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Create a person */
-        post: operations["serviceCreatePerson"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/service/persons/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Update a person */
-        patch: operations["serviceUpdatePerson"];
         trace?: never;
     };
     "/service/broadcasts": {
@@ -1143,7 +1075,7 @@ export interface paths {
         put?: never;
         /**
          * Create a broadcast
-         * @description Create an ephemeral signal pinned to a Place. The Organization must be linked to the calling key (via api_key_account_links) unless the key has admin privileges. Verification is NOT required at create time — apps filter on verified status when surfacing.
+         * @description Create an ephemeral signal pinned to a Place. The Organization must be linked to the calling key (via api_key_organization_links) unless the key has admin privileges. Verification is NOT required at create time — apps filter on verified status when surfacing.
          */
         post: operations["serviceCreateBroadcast"];
         delete?: never;
@@ -1246,6 +1178,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/service/accounts/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Find-or-create a portal account by email (tenant claim)
+         * @description v2: operational tenant claim only. Establishes a portal_account row with the given email and marks it claimed by the calling app. Does NOT grant writeable scope — that flows through `api_key_organization_links`, established by `POST /service/organizations/link` or auto-linked when the calling key creates an organization via `POST /service/organizations`.
+         *
+         *     Idempotent: calling with the same email returns the existing account.
+         *
+         *     **Defense-in-depth on claim**: the endpoint refuses (409 CONFLICT) to claim an account that has `auth_user_id` set (a legacy Supabase Auth owner) or that has been claimed under a different `claimed_by` identifier than the request. Admin keys bypass both checks.
+         */
+        post: operations["serviceLinkAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/service/organizations/link": {
         parameters: {
             query?: never;
@@ -1320,8 +1276,12 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Assign organizer to event
-         * @description Set or remove the organizer of an event. Organizer is exactly one of an Organization or a Person. Pass nulls for both to clear (rare — events generally must have an organizer). Scoped to events whose current organizer is linked to the calling key.
+         * Re-attribute an event to a different organizer
+         * @description v2: re-attribute an event to a different organization. The Person primitive is gone — `organizerPersonId` is no longer accepted.
+         *
+         *     Authorization (non-admin keys): the caller's key must be linked to both the event's **current** `organizer_org_id` AND the **target** organization via `api_key_organization_links`. Re-attribution can't conjure events for an org the caller doesn't control. Witnessed-evidence keys (`source_method='witnessed'` + `witness_authority=true`) bypass the current-organizer link check.
+         *
+         *     Admin keys bypass all linkage checks.
          */
         patch: operations["serviceAssignEventOrganizer"];
         trace?: never;
@@ -1367,8 +1327,15 @@ export interface components {
             /** Format: uri */
             url?: string | null;
             images?: string[];
+            /** @description v2: organizer is always an organization reference. Post-migration 081, `events.organizer_org_id` is NOT NULL, so id/slug are always present. `verified` is hydrated from `organization_verifications`. `phone` is retained as a legacy field — always null in v2. */
             organizer?: {
-                name?: string;
+                /** Format: uuid */
+                id: string;
+                slug: string;
+                name: string;
+                /** @description True if the organizer has at least one active verification record. */
+                verified: boolean;
+                /** @description Legacy field. Always null in v2. */
                 phone?: string | null;
             };
             cost?: string | null;
@@ -1407,8 +1374,11 @@ export interface components {
             publisher: string;
             /** Format: date-time */
             collected_at: string;
-            /** @enum {string} */
-            method: "portal" | "import" | "api";
+            /**
+             * @description Provenance. `witnessed` (v2) is the collective-evidence path — a key with `witness_authority=true` writes events attributed to a collective publisher organization (e.g., "Fiber Community") with documentary evidence (typically OCR'd flyers).
+             * @enum {string}
+             */
+            method: "portal" | "import" | "api" | "witnessed";
             /** @description The app that contributed this data to the commons. Null for portal-submitted events. */
             contributor?: null | {
                 /** @description App/tool that contributed this data */
@@ -1487,31 +1457,19 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
-        /** @description A portal account as seen by service-tier callers — includes internal fields. Retained in 1.0.0 because GET /service/events/{id} still returns the linked account; the dedicated /v1/service/accounts/* paths are removed. */
+        /** @description v2: operational portal_account shell — email, claim state, status, timestamps. Business profile (name, address, logo, hours, etc.) lives on organizations now (migration 082). */
         ServiceAccount: {
             /** Format: uuid */
             id: string;
             /** Format: email */
             email: string;
-            business_name: string;
             auth_user_id?: string | null;
             /** @enum {string} */
             status: "active" | "suspended" | "pending" | "rejected";
-            default_venue_name?: string | null;
-            default_place_id?: string | null;
-            default_address?: string | null;
-            default_latitude?: number | null;
-            default_longitude?: number | null;
-            website?: string | null;
-            phone?: string | null;
-            description?: string | null;
-            /** Format: uri */
-            logo_url?: string | null;
-            /** Format: uri */
-            cover_image_url?: string | null;
-            operating_hours?: unknown[] | null;
             /** Format: date-time */
             claimed_at?: string | null;
+            /** @description Slug identifying which consumer app claimed this tenant row. */
+            claimed_by?: string | null;
             /** Format: date-time */
             last_login_at?: string | null;
             /** Format: date-time */
@@ -1555,10 +1513,23 @@ export interface components {
             /** Format: date-time */
             created_at?: string;
         };
-        /** @description Input schema for the Service API. Uses Neighborhood API friendly-shape field names (name, start, location, url, cost) — symmetric with the read schema. Recurrence is optional; omit for one-off events. */
+        /**
+         * @description Input schema for the Service API. Uses Neighborhood API friendly-shape field names (name, start, location, url, cost) — symmetric with the read schema. Recurrence is optional; omit for one-off events.
+         *
+         *     v2: `organizerOrganizationId` is required (the constrained-publishing authority anchor). The calling service key must be linked to that organization via `api_key_organization_links`, OR set `source_method='witnessed'` from a key with `witness_authority=true` (the collective-evidence path). The legacy `account_id` field is gone.
+         */
         ServiceEventInput: {
-            /** Format: uuid */
-            account_id: string;
+            /**
+             * Format: uuid
+             * @description v2: the organization this event is published for. Required. Caller's service key must be linked to this org via `api_key_organization_links` (or use the witnessed-evidence path).
+             */
+            organizerOrganizationId: string;
+            /**
+             * @description v2: caller-set provenance. `api` (default) requires `api_key_organization_links` linkage. `witnessed` is the collective-evidence path — requires `api_keys.witness_authority=true` and is attributed to a collective publisher organization (e.g., "Fiber Community").
+             * @default api
+             * @enum {string}
+             */
+            source_method: "api" | "witnessed";
             name: string;
             /**
              * Format: date-time
@@ -1627,10 +1598,11 @@ export interface components {
          *     - **Rate limit / quota**: `PAYLOAD_TOO_LARGE`, `RATE_LIMIT`, `SUBSCRIPTION_LIMIT`
          *     - **CSV / import**: `CSV_EMPTY`, `CSV_INVALID`, `CSV_TOO_LARGE`, `NO_VALID_ROWS`
          *     - **Verification**: `IDENTIFIER_DISPUTED`, `IMPOSTER_SIGNALS`, `INSUFFICIENT_EVIDENCE`, `OUT_OF_POLICY`, `WRONG_METHOD`
+         *     - **Media / content**: `IMAGE_NOT_PERMITTED`
          *     - **Server / infrastructure**: `DATABASE_ERROR`, `INTERNAL_ERROR`, `SERVER_ERROR`, `SERVICE_UNAVAILABLE`, `UPSTREAM_ERROR`
          * @enum {string}
          */
-        ErrorCode: "ACCESS_DENIED" | "ACCOUNT_DISABLED" | "ACCOUNT_REQUIRED" | "ALREADY_EXISTS" | "API_KEY_REQUIRED" | "BATCH_ALREADY_SUBMITTED" | "BLOCKED_HOSTNAME" | "CAPTCHA_FAILED" | "CONFLICT" | "CSV_EMPTY" | "CSV_INVALID" | "CSV_TOO_LARGE" | "DATABASE_ERROR" | "DOMAIN_PENDING_REVIEW" | "DUPLICATE" | "FORBIDDEN" | "IDENTIFIER_DISPUTED" | "IMPOSTER_SIGNALS" | "INSUFFICIENT_EVIDENCE" | "INSUFFICIENT_TIER" | "INTERNAL_ERROR" | "INVALID_API_KEY" | "INVALID_OTP" | "INVALID_SCHEME" | "INVALID_STATE" | "INVALID_URL" | "INVALID_WEBHOOK_URL" | "IP_LITERAL" | "KEY_NOT_LINKED" | "KEY_PENDING" | "NO_OWNER" | "NO_VALID_ROWS" | "NOT_FOUND" | "NOT_LINKED" | "OUT_OF_POLICY" | "PAYLOAD_TOO_LARGE" | "RATE_LIMIT" | "SERVER_ERROR" | "SERVICE_UNAVAILABLE" | "SUBSCRIPTION_LIMIT" | "UNAUTHORIZED" | "UPSTREAM_ERROR" | "URL_CREDENTIALS" | "VALIDATION_ERROR" | "WRONG_METHOD";
+        ErrorCode: "ACCESS_DENIED" | "ACCOUNT_DISABLED" | "ACCOUNT_REQUIRED" | "ALREADY_EXISTS" | "API_KEY_REQUIRED" | "BATCH_ALREADY_SUBMITTED" | "BLOCKED_HOSTNAME" | "CAPTCHA_FAILED" | "CONFLICT" | "CSV_EMPTY" | "CSV_INVALID" | "CSV_TOO_LARGE" | "DATABASE_ERROR" | "DOMAIN_PENDING_REVIEW" | "DUPLICATE" | "FORBIDDEN" | "IDENTIFIER_DISPUTED" | "IMAGE_NOT_PERMITTED" | "IMPOSTER_SIGNALS" | "INSUFFICIENT_EVIDENCE" | "INSUFFICIENT_TIER" | "INTERNAL_ERROR" | "INVALID_API_KEY" | "INVALID_OTP" | "INVALID_SCHEME" | "INVALID_STATE" | "INVALID_URL" | "INVALID_WEBHOOK_URL" | "IP_LITERAL" | "KEY_NOT_LINKED" | "KEY_PENDING" | "NO_OWNER" | "NO_VALID_ROWS" | "NOT_FOUND" | "NOT_LINKED" | "OUT_OF_POLICY" | "PAYLOAD_TOO_LARGE" | "RATE_LIMIT" | "SERVER_ERROR" | "SERVICE_UNAVAILABLE" | "SUBSCRIPTION_LIMIT" | "UNAUTHORIZED" | "UPSTREAM_ERROR" | "URL_CREDENTIALS" | "VALIDATION_ERROR" | "WRONG_METHOD";
         Error: {
             error: {
                 code: components["schemas"]["ErrorCode"];
@@ -1673,7 +1645,7 @@ export interface components {
             /** @description 24h time, e.g. "17:00" */
             closes?: string;
         };
-        /** @description Schema.org Place. A physical location. Identity is the address; verification is implicit via googlePlaceId resolution. */
+        /** @description Schema.org Place. A physical location. Identity is the address; the stable cross-source key is `googlePlaceId` (the one Google datum permitted indefinite storage). v2: categories come from OpenStreetMap (ODbL-licensed, attributed) — see `placeCategories` and `categorySource`. Google response data beyond `googlePlaceId` is never persisted into these columns. */
         Place: {
             /** Format: uuid */
             id: string;
@@ -1682,6 +1654,13 @@ export interface components {
             geo: components["schemas"]["GeoCoordinates"];
             /** @description External IDs. Common entry: { propertyID: "googlePlaceId", value: "ChIJ..." } */
             identifier?: components["schemas"]["IdentifierValue"][];
+            /** @description v2: place categorization (e.g., "cafe", "live_music_venue"). Sourced from OpenStreetMap by default; never from Google response data. */
+            placeCategories?: string[];
+            /**
+             * @description v2: provenance of `placeCategories`. `osm` (default), `admin_review` (operator added), `publisher_declaration` (verified publisher refined).
+             * @enum {string|null}
+             */
+            categorySource?: "osm" | "admin_review" | "publisher_declaration" | null;
             /** @description Slug of the region this place falls within, if any */
             region_slug?: string | null;
             /** Format: date-time */
@@ -1697,7 +1676,7 @@ export interface components {
             address?: components["schemas"]["PostalAddress"];
             geo: components["schemas"]["GeoCoordinates"];
         };
-        /** @description Verification block exposed on verified Organization or Person responses. Public read includes method, verification time, and approving app — the reputation graph is intentionally transparent. */
+        /** @description Verification block exposed on verified Organization responses. v2: anchors Type A authority on organizations only (the cross-app reputation graph was retired). */
         Verification: {
             /** @enum {string} */
             method: "domain_email_loop" | "manual_review";
@@ -1711,13 +1690,12 @@ export interface components {
             /** @description Stable app name (snapshot at approval time, immune to key rotation). */
             verifiedByApp: string;
         };
-        /** @description A specific verified identifier on a target. Service-tier responses include full value; public responses may mask. */
+        /** @description A specific verified identifier on an organization. Service-tier responses include full value; public responses may mask. v2: dropped `identifierDomain` (the v2 `organization_verifications` table stores normalized values without a domain column). */
         VerifiedIdentifier: {
             /** @enum {string} */
             identifierType: "email";
             /** @description Full value for service-tier reads; null or partial for public reads. */
             identifierValue?: string | null;
-            identifierDomain?: string | null;
             /** @enum {string} */
             method: "domain_email_loop" | "manual_review";
             /** Format: date-time */
@@ -1726,7 +1704,7 @@ export interface components {
             /** @enum {string} */
             status?: "active" | "revoked";
         };
-        /** @description Schema.org Organization. Discriminated by `kind`: `local_business` and `business` are heavy-verification subtypes; `community_group`, `nonprofit`, `curator`, `collective` use light verification (control of identifier). */
+        /** @description Schema.org Organization. v2: the unified entity primitive — businesses, community groups, nonprofits, collectives, solo operators (organizations-of-one). Classification emerges from `tags` (descriptive labels), `commercial` (for-profit boolean), and structural signals (primary place, event history). The legacy `kind` enum was retired in v2 because it mixed structural facts, vibes, and legal status into one false choice. `additionalType` is derived structurally — `LocalBusiness` when a primary place is set, plain `Organization` otherwise. */
         Organization: {
             /** Format: uuid */
             id: string;
@@ -1734,11 +1712,13 @@ export interface components {
             name: string;
             /** @description Official registered name. Optional, primarily for verified businesses. */
             legalName?: string | null;
-            /** @enum {string} */
-            kind: "local_business" | "business" | "community_group" | "nonprofit" | "curator" | "collective";
+            /** @description Descriptive labels — free-form within format rules. Recommended starter vocabulary at `/v1/meta/tags` (when shipped). Not a hard taxonomy; consumer apps filter on whatever tags appear in practice. */
+            tags: string[];
+            /** @description For-profit (true) vs. non-profit/community (false). Null = unspecified. Replaces the structural-axis component of the legacy `kind` enum. */
+            commercial?: boolean | null;
             /**
              * Format: uri
-             * @description Schema.org type URL aligned with kind (e.g., https://schema.org/LocalBusiness, https://schema.org/NGO, https://schema.org/Organization).
+             * @description Schema.org type URL derived from structural data: `https://schema.org/LocalBusiness` when the organization has a primary place, `https://schema.org/Organization` otherwise. Apps wanting richer subtyping derive from `tags` or `place_categories`.
              */
             additionalType?: string;
             description?: string | null;
@@ -1764,13 +1744,16 @@ export interface components {
             /** Format: date-time */
             updated_at?: string;
         };
+        /** @description Input shape for creating or updating an Organization. v2: no `kind` field — classify via `tags` + `commercial` instead. Calling key auto-links to the new organization on create via `api_key_organization_links`; use `POST /service/organizations/link` to link to an existing org. */
         OrganizationInput: {
             name: string;
             /** @description Optional; auto-generated from name if omitted. */
             slug?: string;
             legalName?: string;
-            /** @enum {string} */
-            kind: "local_business" | "business" | "community_group" | "nonprofit" | "curator" | "collective";
+            /** @description Descriptive labels. Free-form within format rules; see `/v1/meta/tags` for a recommended starter vocabulary. */
+            tags?: string[];
+            /** @description For-profit (true) vs. non-profit/community (false). Null = unspecified. */
+            commercial?: boolean | null;
             description?: string;
             /** Format: uri */
             url?: string;
@@ -1786,47 +1769,9 @@ export interface components {
             openingHoursSpecification?: components["schemas"]["OpeningHoursEntry"][];
             /**
              * Format: uuid
-             * @description Reference to a Place row. Required for kind=local_business; optional otherwise.
+             * @description Reference to a Place row. Optional — drives `additionalType` derivation (`LocalBusiness` if set, plain `Organization` otherwise).
              */
             primaryPlaceId?: string;
-        };
-        /** @description Schema.org Person. Used for individuals — DJs, performers, curators, individual organizers. Light verification (control of email). */
-        Person: {
-            /** Format: uuid */
-            id: string;
-            slug: string;
-            name: string;
-            givenName?: string | null;
-            familyName?: string | null;
-            /** @description Stage names, aliases */
-            alternateName?: string | null;
-            description?: string | null;
-            /** Format: uri */
-            image?: string | null;
-            /** Format: uri */
-            url?: string | null;
-            sameAs?: string[];
-            jobTitle?: string | null;
-            verified?: boolean;
-            verification?: components["schemas"]["Verification"] | null;
-            /** Format: date-time */
-            created_at?: string;
-            /** Format: date-time */
-            updated_at?: string;
-        };
-        PersonInput: {
-            name: string;
-            slug?: string;
-            givenName?: string;
-            familyName?: string;
-            alternateName?: string;
-            description?: string;
-            /** Format: uri */
-            image?: string;
-            /** Format: uri */
-            url?: string;
-            sameAs?: string[];
-            jobTitle?: string;
         };
         /** @description Ephemeral real-time signal from an Organization, pinned to a Place. Maximum lifetime 24h. No direct Schema.org analog; conventions borrowed from SpecialAnnouncement (`datePosted`, `expires`). */
         Broadcast: {
@@ -1863,15 +1808,15 @@ export interface components {
             /** @description Curator's optional commentary on this item. */
             curatorNote?: string | null;
         };
-        /** @description Schema.org ItemList. A curatorial selection by an Organization or Person — "this weekend's picks," "best park benches in Fishtown," etc. */
+        /** @description Schema.org ItemList. A curatorial selection by an Organization — "this weekend's picks," "best park benches in Fishtown," etc. v2: curator is always an organization (the Person primitive is gone). */
         List: {
             /** Format: uuid */
             id: string;
             slug: string;
             name: string;
             description?: string | null;
-            /** @description The Person or Organization that maintains this list. */
-            curator: components["schemas"]["Person"] | components["schemas"]["Organization"];
+            /** @description The Organization that maintains this list. */
+            curator: components["schemas"]["Organization"];
             /**
              * @default Ascending
              * @enum {string}
@@ -1884,16 +1829,16 @@ export interface components {
             /** Format: date-time */
             updated_at?: string;
         };
+        /** @description Input for creating a list. v2: curator is always an organization (curatorOrganizationId is required). The legacy `curator: {type, id}` shape is gone. */
         ListInput: {
             name: string;
             slug?: string;
             description?: string;
-            curator: {
-                /** @enum {string} */
-                type: "organization" | "person";
-                /** Format: uuid */
-                id: string;
-            };
+            /**
+             * Format: uuid
+             * @description Organization that curates this list. The calling service key must be linked to this org via `api_key_organization_links`.
+             */
+            curatorOrganizationId: string;
         };
         ListItemInput: {
             position: number;
@@ -1903,40 +1848,13 @@ export interface components {
             itemId: string;
             curatorNote?: string;
         };
-        /** @description Reputation-graph entry. One per app that has ever issued a verification. */
-        Verifier: {
-            appName: string;
-            /** Format: date-time */
-            firstApprovalAt?: string | null;
-            /** @description Total approvals issued by this app, ever. */
-            approvalCount: number;
-            /** @description Approvals still active (not revoked). */
-            activeCount: number;
-            revokedCount: number;
-            /** @description Methods this app has approved with (e.g. "manual_review:in_person"). */
-            methods?: string[];
-        };
-        /** @description An approval by a verifier, surfaced for spot-checking on the reputation graph. */
-        VerifierApproval: {
-            /** Format: date-time */
-            verifiedAt?: string;
-            method?: string;
-            /** @enum {string} */
-            targetType?: "organization" | "person";
-            /** Format: uuid */
-            targetId?: string;
-            targetName?: string;
-            /** @enum {string} */
-            status?: "active" | "revoked";
-        };
+        /** @description v2: only organizations verify; targetType is gone. */
         VerificationPathRequest: {
-            /** @enum {string} */
-            targetType: "organization" | "person";
             /** Format: uuid */
-            targetId: string;
+            organization_id: string;
             /** @enum {string} */
-            identifierType: "email";
-            identifierValue: string;
+            identifier_type: "email";
+            identifier_value: string;
         };
         /** @description Result of /service/verifications/path. The Commons dictates which submission endpoint to call next; apps follow. */
         VerificationPathResponse: {
@@ -1951,11 +1869,10 @@ export interface components {
             /** @description Populated when alreadyVerified=true. */
             existingIdentifier?: components["schemas"]["VerifiedIdentifier"] | null;
         };
+        /** @description v2: only organizations verify; targetType is gone. */
         VerificationChallengeInput: {
-            /** @enum {string} */
-            targetType: "organization" | "person";
             /** Format: uuid */
-            targetId: string;
+            organizationId: string;
             /** @enum {string} */
             identifierType: "email";
             /** Format: email */
@@ -1971,7 +1888,7 @@ export interface components {
             /** @description One-time code delivered via verification email. */
             code: string;
         };
-        /** @description Result of a verification submission. Status `verified` means the row landed in account_verified_identifiers; `pending` means manual review queued; `rejected` means the submission failed policy. */
+        /** @description Result of a verification submission. Status `verified` means the row landed in organization_verifications; `pending` means manual review queued; `rejected` means the submission failed policy. */
         VerificationOutcome: {
             /** @enum {string} */
             status: "verified" | "pending" | "rejected";
@@ -1987,12 +1904,10 @@ export interface components {
             /** @description Set when status=rejected. */
             reason?: string | null;
         };
-        /** @description Submission for the manual-review path. Evidence is structured and required fields enforced at submit. Apps with verification_authority for the matching method auto-approve; others queue. */
+        /** @description Submission for the manual-review path. Evidence is structured and required fields enforced at submit. Apps with verification_authority for the matching method auto-approve; others queue. v2: only organizations verify; targetType is gone. */
         VerificationManualInput: {
-            /** @enum {string} */
-            targetType: "organization" | "person";
             /** Format: uuid */
-            targetId: string;
+            organizationId: string;
             /** @enum {string} */
             identifierType: "email";
             /** Format: email */
@@ -2009,14 +1924,15 @@ export interface components {
                 supportingNotes?: string;
             };
         };
-        /** @description An item in the verification review queue (admin-tier endpoints). */
+        /** @description An item in the verification review queue (admin-tier endpoints). v2: targets are always organizations. */
         PendingReview: {
             /** Format: uuid */
             id: string;
-            /** @enum {string} */
-            targetType: "organization" | "person";
-            /** Format: uuid */
-            targetId: string;
+            /**
+             * Format: uuid
+             * @description v2: only organizations verify; this replaces the legacy targetType/targetId pair.
+             */
+            organizationId: string;
             identifierType: string;
             identifierValue: string;
             method: string;
@@ -2032,10 +1948,10 @@ export interface components {
             reason: "INSUFFICIENT_EVIDENCE" | "IDENTIFIER_DISPUTED" | "IMPOSTER_SIGNALS" | "OUT_OF_POLICY";
             note?: string;
         };
-        /** @description Records a dispute against a verified target, identifier, or other data record. v1 stores for operator review only — no automated action. */
+        /** @description Records a dispute against a verified target, identifier, or other data record. v2 stores for operator review only — no automated action. The `person` target type was dropped in v2. */
         DisputeInput: {
             /** @enum {string} */
-            targetType: "organization" | "person" | "verified_identifier";
+            targetType: "organization" | "verified_identifier";
             /** Format: uuid */
             targetId: string;
             reason: string;
@@ -2119,8 +2035,12 @@ export interface operations {
                 group_id?: string;
                 /** @description Filter recurring (true) or one-off (false) events */
                 recurring?: "true" | "false";
-                /** @description Filter by contributor account slug */
+                /** @description Filter by organizer organization slug. v2: resolves against `organizations.slug` → `events.organizer_org_id` (replaces the legacy `portal_accounts.slug` lookup). */
                 contributor?: string;
+                /** @description v2: filter to events whose organizer is for-profit (`commercial=true`) vs. non-commercial (`commercial=false`). Joins through `organizations.commercial`. */
+                commercial?: "true" | "false";
+                /** @description v2: filter to events at places with the given OSM-sourced category (e.g., `cafe`, `live_music_venue`). Joins through `places.place_categories`. */
+                place_category?: string;
                 /** @description Filter to all showings of a film (clusters film-category events across theaters and dates). Pair with `?category=film` for clean results. */
                 tmdb_id?: string;
                 /** @description Filter by authorship tier. `true` = events posted by the verified business itself (first-party). `false` = events aggregated from public sources (scrapers, feeds, ingestion pipelines). Omit for both. The Commons separates information *from* a business from information *about* a business; apps choose what tier to surface. */
@@ -3176,7 +3096,7 @@ export interface operations {
                     contributor_tier?: "pending" | "verified" | "trusted" | "service";
                     /**
                      * Format: uuid
-                     * @description Required for non-service tiers. The portal_account that owns events created with this key.
+                     * @description Optional. Operational reference to a portal_account the key represents (tenant claim tracking). Does not grant write authority — that flows through `api_key_organization_links`.
                      */
                     account_id?: string;
                     /** Format: uri */
@@ -3214,7 +3134,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description Validation error or ACCOUNT_REQUIRED for non-service tiers without account_id */
+            /** @description Validation error */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -3309,11 +3229,23 @@ export interface operations {
                     /** @description Methods this key may auto-approve, e.g. ["manual_review:in_person"]. */
                     verification_authority?: string[];
                     rate_limit_per_hour?: number;
+                    /** @description Optional tenant-account provisioning bundled with activation. Creates a portal_account with the supplied identity and links the now-active key to it. Omit for per-operator portable consumers. */
+                    provision_account?: {
+                        /**
+                         * Format: email
+                         * @description Sentinel email on a domain the consumer controls (e.g. `tenant@no-reply.consumer-app.com`). Never used for OTP claim; identifies the publisher row.
+                         */
+                        email: string;
+                        /** @description Public-facing tenant name. Surfaces as `source.publisher` on events when no other publisher is set. */
+                        business_name: string;
+                        /** @description Short slug recording which app claimed this account. Defaults to `"api"`. Future link attempts under a different slug are refused with 409 CONFLICT. */
+                        claimed_by?: string;
+                    };
                 };
             };
         };
         responses: {
-            /** @description Key activated, or already active */
+            /** @description Key activated, or already active. If `provision_account` was supplied on a fresh activation, the response also includes `account`, `account_created`, and `account_linked`. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -3326,10 +3258,14 @@ export interface operations {
                         already_active?: boolean;
                         /** Format: date-time */
                         activated_at?: string | null;
+                        account?: components["schemas"]["ServiceAccount"];
+                        /** @description True if the tenant account was created during this call; false if it was found-and-linked to an existing row by email. */
+                        account_created?: boolean;
+                        account_linked?: boolean;
                     };
                 };
             };
-            /** @description Key is not service tier */
+            /** @description Key is not service tier, or `provision_account` body failed validation */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -3345,6 +3281,13 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["NotFound"];
+            /** @description `provision_account` matched an existing account that is already claimed by a different consumer or has a Supabase Auth owner. The key is still activated; resolve the account manually and link via `POST /service/accounts/link`. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     serviceRegisterSendOtp: {
@@ -3830,11 +3773,20 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
-    listPersons: {
+    listPublishers: {
         parameters: {
             query?: {
-                verified?: boolean;
+                /** @description Filter by organization tag. Repeatable for AND semantics. */
+                tag?: string | string[];
+                commercial?: "true" | "false";
+                /** @description Filter to publishers whose primary place has the given OSM-sourced category. */
+                place_category?: string;
+                verified?: "true" | "false";
                 verified_by?: string;
+                not_verified_by?: string;
+                /** @description lat,lng pair. Pairs with radius_km. */
+                near?: string;
+                radius_km?: number;
                 q?: string;
                 limit?: number;
                 offset?: number;
@@ -3845,7 +3797,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Paginated person list */
+            /** @description Paginated publisher list */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -3853,14 +3805,14 @@ export interface operations {
                 content: {
                     "application/json": {
                         meta: components["schemas"]["Meta"];
-                        persons: components["schemas"]["Person"][];
+                        publishers: components["schemas"]["Organization"][];
                     };
                 };
             };
             429: components["responses"]["RateLimited"];
         };
     };
-    getPerson: {
+    getPublisher: {
         parameters: {
             query?: never;
             header?: never;
@@ -3871,14 +3823,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Person */
+            /** @description Publisher (organization shape) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        person: components["schemas"]["Person"];
+                        publisher: components["schemas"]["Organization"];
                     };
                 };
             };
@@ -3995,56 +3947,6 @@ export interface operations {
                 content: {
                     "application/json": {
                         list: components["schemas"]["List"];
-                    };
-                };
-            };
-            404: components["responses"]["NotFound"];
-        };
-    };
-    listVerifiers: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Verifier registry */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        verifiers: components["schemas"]["Verifier"][];
-                    };
-                };
-            };
-            429: components["responses"]["RateLimited"];
-        };
-    };
-    listVerifierRecentApprovals: {
-        parameters: {
-            query?: {
-                limit?: number;
-            };
-            header?: never;
-            path: {
-                appName: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Recent approvals */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        approvals: components["schemas"]["VerifierApproval"][];
                     };
                 };
             };
@@ -4442,79 +4344,6 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
-    serviceCreatePerson: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PersonInput"];
-            };
-        };
-        responses: {
-            /** @description Person created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        person: components["schemas"]["Person"];
-                    };
-                };
-            };
-            400: components["responses"]["ValidationError"];
-            401: components["responses"]["Unauthorized"];
-            /** @description Slug already in use */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    serviceUpdatePerson: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PersonInput"];
-            };
-        };
-        responses: {
-            /** @description Updated */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        person: components["schemas"]["Person"];
-                    };
-                };
-            };
-            400: components["responses"]["ValidationError"];
-            401: components["responses"]["Unauthorized"];
-            /** @description Not linked to this person */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            404: components["responses"]["NotFound"];
-        };
-    };
     serviceCreateBroadcast: {
         parameters: {
             query?: never;
@@ -4724,6 +4553,64 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    serviceLinkAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * Format: email
+                     * @description Email identifier for the operational tenant row. Use a sentinel address on a domain you control (e.g. `tenant@no-reply.your-domain.com`). Lookup is case-insensitive.
+                     */
+                    email: string;
+                    /** @description Short slug recording which app claimed this account. Persisted on first claim; subsequent link attempts under a different `claimed_by` are refused with 409 CONFLICT. Defaults to `"api"` if omitted. */
+                    claimed_by?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Account existed; claim is in place (idempotent re-claim) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        account: components["schemas"]["ServiceAccount"];
+                        /** @enum {boolean} */
+                        created: false;
+                    };
+                };
+            };
+            /** @description Account created and claimed */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        account: components["schemas"]["ServiceAccount"];
+                        /** @enum {boolean} */
+                        created: true;
+                    };
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Account is already claimed under a different `claimed_by` or has an authenticated owner (`auth_user_id` set). Admin keys bypass these checks. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     serviceLinkOrganization: {
         parameters: {
             query?: never;
@@ -4861,9 +4748,7 @@ export interface operations {
             content: {
                 "application/json": {
                     /** Format: uuid */
-                    organizerOrganizationId?: string | null;
-                    /** Format: uuid */
-                    organizerPersonId?: string | null;
+                    organizerOrganizationId: string;
                 };
             };
         };
@@ -4877,7 +4762,7 @@ export interface operations {
             };
             400: components["responses"]["ValidationError"];
             401: components["responses"]["Unauthorized"];
-            /** @description Not linked to this event or its current organizer */
+            /** @description Caller's key is not linked to the event's current organizer organization OR not linked to the target organization. */
             403: {
                 headers: {
                     [name: string]: unknown;

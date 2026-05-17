@@ -81,7 +81,7 @@ function futureDate(daysAhead = 1): string {
 const FUTURE_START = `${futureDate(1)}T21:00:00.000Z`;
 const FUTURE_END = `${futureDate(1)}T23:00:00.000Z`;
 
-/** A realistic event row as it comes from the database (with joined portal_accounts) */
+/** v2 event row shape with joined organizations (replacing the legacy portal_accounts join). */
 function makeDbRow(overrides: Record<string, unknown> = {}) {
   return {
     id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
@@ -103,9 +103,15 @@ function makeDbRow(overrides: Record<string, unknown> = {}) {
     event_image_url: 'https://images.example.com/taproom.jpg',
     created_at: '2026-03-10T12:00:00.000Z',
     creator_account_id: 'acc-uuid-1',
+    organizer_org_id: 'org-uuid-tap',
     series_id: null,
     first_party: false,
-    portal_accounts: { business_name: 'The Fishtown Taproom' },
+    organizations: {
+      id: 'org-uuid-tap',
+      slug: 'the-fishtown-taproom',
+      name: 'The Fishtown Taproom',
+      portal_accounts: null,
+    },
     ...overrides,
   };
 }
@@ -608,63 +614,64 @@ describe('series deduplication', () => {
 });
 
 // =============================================================================
-// ACCOUNTS — SPEC-COMPLIANT EVENT EMBEDDING
+// PUBLISHERS — v2 read endpoint replaces /v1/accounts
 // =============================================================================
+//
+// v2 retired /v1/accounts and replaced it with /v1/publishers — a focused
+// slice of /v1/organizations that filters to orgs with at least one
+// published event or active broadcast. The legacy "embed events on the
+// account" pattern is gone; consumers fetch events via /v1/events?contributor=<slug>.
 
-describe('Accounts API — spec-compliant event embedding', () => {
-  it('returns events through toNeighborhoodEvent transform', async () => {
-    // Mock account lookup
-    mockResponses.set('portal_accounts', {
+describe('Publishers API (v2)', () => {
+  it('returns publisher (organization shape) for a known slug', async () => {
+    mockResponses.set('organizations', {
       data: {
-        id: 'acc-uuid-1', business_name: 'Test Bar', slug: 'test-bar',
-        phone: null, website: null, logo_url: null, cover_image_url: null,
-        description: null, default_venue_name: 'Test Bar', default_place_id: null,
-        default_address: '123 Main St', default_latitude: 39.97, default_longitude: -75.13,
-        operating_hours: null, status: 'active', claimed_at: null,
-        created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+        id: 'org-uuid-1',
+        slug: 'test-bar',
+        name: 'Test Bar',
+        legal_name: null,
+        description: 'A neighborhood bar.',
+        url: 'https://test-bar.test',
+        logo_url: null,
+        image_url: null,
+        telephone: null,
+        email: null,
+        same_as: [],
+        keywords: [],
+        opening_hours_specification: null,
+        tags: ['neighborhood-bar'],
+        commercial: true,
+        primary_place_id: null,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
       },
       error: null,
     });
-    // Mock events for the account — include a one-off (recurrence='none') and a recurring
-    mockResponses.set('events', {
-      data: [
-        makeDbRow({
-          id: 'one-off-evt', recurrence: 'none', series_id: null,
-          creator_account_id: 'acc-uuid-1',
-        }),
-        makeDbRow({
-          id: 'recurring-evt', recurrence: 'weekly', series_id: 'series-1',
-          series_instance_number: 1, creator_account_id: 'acc-uuid-1',
-        }),
-      ],
-      error: null,
-    });
+    // The publisher set is built from events.organizer_org_id ∪ broadcasts.organization_id.
+    // Mock at least one event for this org so it qualifies as a publisher.
+    mockResponses.set('events', { data: [{ organizer_org_id: 'org-uuid-1' }], error: null });
+    mockResponses.set('broadcasts', { data: [], error: null });
+    mockResponses.set('organization_verifications', { data: [], error: null });
 
-    const res = await fetch(`${baseUrl}/api/v1/accounts/acc-uuid-1`);
+    const res = await fetch(`${baseUrl}/api/v1/publishers/test-bar`);
     expect(res.status).toBe(200);
     const body = await res.json();
 
-    // One-off events (recurrence='none') should appear in upcoming_events, not regular_programming
-    expect(body.account.upcoming_events.length).toBe(1);
-    expect(body.account.upcoming_events[0].id).toBe('one-off-evt');
+    expect(body.publisher).toBeDefined();
+    expect(body.publisher.id).toBe('org-uuid-1');
+    expect(body.publisher.slug).toBe('test-bar');
+    expect(body.publisher.name).toBe('Test Bar');
+    // v2 organization shape — no kind, has tags + commercial
+    expect(body.publisher).not.toHaveProperty('kind');
+    expect(body.publisher.tags).toEqual(['neighborhood-bar']);
+    expect(body.publisher.commercial).toBe(true);
+  });
 
-    // Recurring events should appear in regular_programming
-    expect(body.account.regular_programming.length).toBe(1);
-    expect(body.account.regular_programming[0].id).toBe('recurring-evt');
-
-    // Events should have spec-compliant shape (via toNeighborhoodEvent)
-    const evt = body.account.upcoming_events[0];
-    expect(evt).toHaveProperty('name');       // not 'content'
-    expect(evt).toHaveProperty('timezone');
-    expect(evt).toHaveProperty('source');
-    expect(evt).toHaveProperty('organizer');
-    expect(evt.source).toHaveProperty('license', 'CC BY 4.0');
-    expect(evt.location).toHaveProperty('address');
-    expect(evt.recurrence).toBeNull(); // 'none' transformed to null
-    // Should NOT have raw DB field names
-    expect(evt).not.toHaveProperty('content');
-    expect(evt).not.toHaveProperty('image_url');
-    expect(evt).not.toHaveProperty('link_url');
-    expect(evt).not.toHaveProperty('price');
+  it('returns 404 for unknown publisher slug', async () => {
+    mockResponses.set('organizations', { data: null, error: null });
+    mockResponses.set('events', { data: [], error: null });
+    mockResponses.set('broadcasts', { data: [], error: null });
+    const res = await fetch(`${baseUrl}/api/v1/publishers/no-such-publisher`);
+    expect(res.status).toBe(404);
   });
 });

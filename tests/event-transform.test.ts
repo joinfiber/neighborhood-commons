@@ -14,6 +14,9 @@ import { validateTags } from '../src/lib/tags.js';
 // Fixtures
 // ---------------------------------------------------------------------------
 
+// v2 fixture: the legacy `portal_accounts: { business_name, wheelchair_accessible }`
+// join is replaced by `organizations: { id, slug, name, portal_accounts: { status } }`.
+// Organizer name comes from `organizations.name`; wheelchair_accessible is event-only.
 function makeRow(overrides: Partial<PortalEventRow> = {}): PortalEventRow {
   return {
     id: '123e4567-e89b-12d3-a456-426614174000',
@@ -46,7 +49,14 @@ function makeRow(overrides: Partial<PortalEventRow> = {}): PortalEventRow {
     source_contributor_url: null,
     source_contributor_name: null,
     first_party: false,
-    portal_accounts: { business_name: 'South Jazz Kitchen', wheelchair_accessible: null },
+    tmdb_id: null,
+    organizer_org_id: 'org-uuid-jazz',
+    organizations: {
+      id: 'org-uuid-jazz',
+      slug: 'south-jazz-kitchen',
+      name: 'South Jazz Kitchen',
+      portal_accounts: null,
+    },
     ...overrides,
   };
 }
@@ -108,17 +118,27 @@ describe('toNeighborhoodEvent', () => {
     expect(event.images).toEqual([]);
   });
 
-  it('includes organizer with phone: null', () => {
+  it('includes organizer with v2 shape (id, slug, name, verified, phone)', () => {
     const event = toNeighborhoodEvent(makeRow());
     expect(event.organizer).toEqual({
+      id: 'org-uuid-jazz',
+      slug: 'south-jazz-kitchen',
       name: 'South Jazz Kitchen',
+      verified: false,
       phone: null,
     });
   });
 
-  it('falls back to place_name for organizer when no portal account', () => {
-    const event = toNeighborhoodEvent(makeRow({ portal_accounts: null }));
+  it('falls back to place_name for organizer when organizations join is null (pre-migration-081 data)', () => {
+    const event = toNeighborhoodEvent(makeRow({ organizations: null, organizer_org_id: null }));
     expect(event.organizer.name).toBe('South Jazz Kitchen');
+    expect(event.organizer.id).toBe('');
+    expect(event.organizer.slug).toBe('');
+  });
+
+  it('marks organizer.verified=true when the organizer is in the hydrated verified set', () => {
+    const event = toNeighborhoodEvent(makeRow(), new Set(['org-uuid-jazz']));
+    expect(event.organizer.verified).toBe(true);
   });
 
   it('includes series_id and series_instance_number when present', () => {
@@ -180,8 +200,16 @@ describe('toNeighborhoodEvent', () => {
     });
   });
 
-  it('falls back to "Neighborhood Commons" for publisher when no account', () => {
-    const event = toNeighborhoodEvent(makeRow({ portal_accounts: null }));
+  it('falls back to "Neighborhood Commons" for publisher when nothing is set', () => {
+    // v2: publisher = source_publisher (if api/import/witnessed) OR organizer name
+    // OR source_publisher OR 'Neighborhood Commons'. With no organization,
+    // no place_name, and no source_publisher → 'Neighborhood Commons'.
+    const event = toNeighborhoodEvent(makeRow({
+      organizations: null,
+      organizer_org_id: null,
+      place_name: '',
+      source_publisher: null,
+    }));
     expect(event.source.publisher).toBe('Neighborhood Commons');
   });
 
@@ -452,45 +480,20 @@ describe('validateTags', () => {
 // ---------------------------------------------------------------------------
 
 describe('toNeighborhoodEvent — wheelchair_accessible', () => {
-  it('returns null when both event and account are null', () => {
+  // v2: wheelchair_accessible is event-level only. The legacy fallback
+  // to portal_accounts.wheelchair_accessible was retired with migration 082.
+  it('returns null when the event-level value is null', () => {
     const event = toNeighborhoodEvent(makeRow());
     expect(event.wheelchair_accessible).toBeNull();
   });
 
-  it('uses event-level value when set', () => {
+  it('uses event-level true when set', () => {
     const event = toNeighborhoodEvent(makeRow({ wheelchair_accessible: true }));
     expect(event.wheelchair_accessible).toBe(true);
   });
 
-  it('falls back to account-level value when event is null', () => {
-    const event = toNeighborhoodEvent(makeRow({
-      wheelchair_accessible: null,
-      portal_accounts: { business_name: 'Test', wheelchair_accessible: true },
-    }));
-    expect(event.wheelchair_accessible).toBe(true);
-  });
-
-  it('event false overrides account true', () => {
-    const event = toNeighborhoodEvent(makeRow({
-      wheelchair_accessible: false,
-      portal_accounts: { business_name: 'Test', wheelchair_accessible: true },
-    }));
+  it('uses event-level false when set', () => {
+    const event = toNeighborhoodEvent(makeRow({ wheelchair_accessible: false }));
     expect(event.wheelchair_accessible).toBe(false);
-  });
-
-  it('event true overrides account false', () => {
-    const event = toNeighborhoodEvent(makeRow({
-      wheelchair_accessible: true,
-      portal_accounts: { business_name: 'Test', wheelchair_accessible: false },
-    }));
-    expect(event.wheelchair_accessible).toBe(true);
-  });
-
-  it('returns null when no portal account and event is null', () => {
-    const event = toNeighborhoodEvent(makeRow({
-      wheelchair_accessible: null,
-      portal_accounts: null,
-    }));
-    expect(event.wheelchair_accessible).toBeNull();
   });
 });
