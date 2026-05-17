@@ -1,18 +1,24 @@
 /**
- * Verification hydration helper.
+ * Verification hydration helper (v2).
  *
- * Looks up active verified identifiers for a set of targets (organizations
- * or persons) in one query and returns a Map keyed by target_id with the
- * primary verification block — the most recent active identifier.
+ * Looks up active verifications for a set of organizations in one query and
+ * returns a Map keyed by organization_id with the primary verification
+ * block — the most recent active record.
  *
- * Used by all read endpoints that surface a `verification` field.
+ * Used by read endpoints that surface a `verification` field on
+ * organizations or `verified` on event organizers.
+ *
+ * v2 changes from v1:
+ *   - Queries `organization_verifications` (the simplified v2 table) instead
+ *     of `account_verified_identifiers` (which was dropped in migration 082).
+ *   - Drops the polymorphic target_type abstraction; only organizations verify.
+ *   - The function signature no longer takes a target_type parameter.
  */
 
 import { supabaseAdmin } from './supabase.js';
 
 export type VerificationBlock = {
   method: string;
-  verifiedVia: string | null;
   verifiedAt: string;
   verifiedByApp: string;
 };
@@ -20,22 +26,20 @@ export type VerificationBlock = {
 export type VerificationByTarget = Map<string, VerificationBlock>;
 
 /**
- * Returns a map of target_id → primary verification block (most recent active).
- * Empty map if no targets passed.
+ * Returns a map of organization_id → primary verification block (most recent active).
+ * Empty map if no organization ids passed.
  */
 export async function hydrateVerificationsFor(
-  targetType: 'organization' | 'person',
-  ids: string[]
+  organizationIds: string[]
 ): Promise<VerificationByTarget> {
   const result = new Map<string, VerificationBlock>();
-  if (ids.length === 0) return result;
+  if (organizationIds.length === 0) return result;
 
   const { data, error } = await supabaseAdmin
-    .from('account_verified_identifiers')
-    .select('target_id, method, evidence, verified_at, approved_by_app')
-    .eq('target_type', targetType)
+    .from('organization_verifications')
+    .select('organization_id, method, verified_at, approved_by_app')
     .eq('status', 'active')
-    .in('target_id', ids)
+    .in('organization_id', organizationIds)
     .order('verified_at', { ascending: false });
 
   if (error) {
@@ -43,14 +47,12 @@ export async function hydrateVerificationsFor(
     return result;
   }
 
-  // Most recent first → keep first per target_id
+  // Most recent first → keep first per organization_id
   for (const row of data || []) {
-    const tid = row.target_id as string;
-    if (result.has(tid)) continue;
-    const evidence = (row.evidence || {}) as Record<string, unknown>;
-    result.set(tid, {
+    const orgId = row.organization_id as string;
+    if (result.has(orgId)) continue;
+    result.set(orgId, {
       method: row.method as string,
-      verifiedVia: (evidence.verifiedVia as string) || null,
       verifiedAt: row.verified_at as string,
       verifiedByApp: row.approved_by_app as string,
     });
@@ -61,19 +63,15 @@ export async function hydrateVerificationsFor(
 
 /**
  * Resolves verified / verified_by / not_verified_by query params into an
- * include/exclude set of target IDs that the caller can apply to the main
- * SQL query. This pushes verification filtering INTO SQL instead of doing
- * it post-fetch, so meta.total reflects the filtered count and pagination
- * is correct.
+ * include/exclude set of organization IDs that the caller can apply to the
+ * main SQL query. Pushes verification filtering INTO SQL so meta.total
+ * reflects the filtered count and pagination is correct.
  *
  * Returns:
  *   - { empty: true }                     — filters guarantee zero results
  *   - { includeIds: [...] }               — caller does query.in('id', ids)
  *   - { excludeIds: [...] }               — caller does query.not('id','in',...)
  *   - {}                                  — no verification filters set
- *
- * Caller passes target_type ('organization' | 'person') and the three
- * query params (any may be undefined).
  */
 export type VerificationIdFilter =
   | { empty: true }
@@ -82,7 +80,6 @@ export type VerificationIdFilter =
   | Record<string, never>;
 
 export async function resolveVerificationIdFilter(
-  targetType: 'organization' | 'person',
   params: {
     verified?: 'true' | 'false';
     verified_by?: string;
@@ -96,61 +93,57 @@ export async function resolveVerificationIdFilter(
   if (!hasVerified && !hasVerifiedBy && !hasNotVerifiedBy) return {};
 
   const { data: rows } = await supabaseAdmin
-    .from('account_verified_identifiers')
-    .select('target_id, approved_by_app')
-    .eq('target_type', targetType)
+    .from('organization_verifications')
+    .select('organization_id, approved_by_app')
     .eq('status', 'active');
 
-  // Map of target_id → set of approving apps
-  const verifiersByTarget = new Map<string, Set<string>>();
+  // Map of organization_id → set of approving apps
+  const verifiersByOrg = new Map<string, Set<string>>();
   for (const r of rows || []) {
-    const tid = r.target_id as string;
-    if (!verifiersByTarget.has(tid)) verifiersByTarget.set(tid, new Set());
-    verifiersByTarget.get(tid)!.add(r.approved_by_app as string);
+    const orgId = r.organization_id as string;
+    if (!verifiersByOrg.has(orgId)) verifiersByOrg.set(orgId, new Set());
+    verifiersByOrg.get(orgId)!.add(r.approved_by_app as string);
   }
 
-  // Start from "all verified targets" if verified=true, else "all targets"
-  // (we represent "all targets" as a sentinel — applied at the SQL layer
-  // via no .in() call, then refined by exclusions).
+  // Start from "all verified orgs" if verified=true, else "all orgs"
   let allowed: Set<string> | 'all' = 'all';
   if (params.verified === 'true') {
-    allowed = new Set(verifiersByTarget.keys());
+    allowed = new Set(verifiersByOrg.keys());
   }
 
-  // Inclusive verified_by — narrows the allowed set to targets verified by
+  // Inclusive verified_by — narrows the allowed set to orgs verified by
   // at least one of the listed apps.
   if (hasVerifiedBy) {
     const allowedApps = new Set(params.verified_by!.split(',').map(s => s.trim()).filter(Boolean));
     const narrowed = new Set<string>();
-    for (const [tid, apps] of verifiersByTarget) {
-      if (allowed === 'all' || allowed.has(tid)) {
+    for (const [orgId, apps] of verifiersByOrg) {
+      if (allowed === 'all' || allowed.has(orgId)) {
         for (const a of apps) {
-          if (allowedApps.has(a)) { narrowed.add(tid); break; }
+          if (allowedApps.has(a)) { narrowed.add(orgId); break; }
         }
       }
     }
     allowed = narrowed;
   }
 
-  // Exclusive — verified=false drops everything in verifiersByTarget;
-  // not_verified_by drops targets whose approving-apps set intersects the
-  // blocked apps.
+  // Exclusive — verified=false drops everything in verifiersByOrg;
+  // not_verified_by drops orgs whose approving-apps set intersects.
   const exclude = new Set<string>();
   if (params.verified === 'false') {
-    for (const tid of verifiersByTarget.keys()) exclude.add(tid);
+    for (const orgId of verifiersByOrg.keys()) exclude.add(orgId);
   }
   if (hasNotVerifiedBy) {
     const blockedApps = new Set(params.not_verified_by!.split(',').map(s => s.trim()).filter(Boolean));
-    for (const [tid, apps] of verifiersByTarget) {
+    for (const [orgId, apps] of verifiersByOrg) {
       for (const a of apps) {
-        if (blockedApps.has(a)) { exclude.add(tid); break; }
+        if (blockedApps.has(a)) { exclude.add(orgId); break; }
       }
     }
   }
 
   // Combine. If we have a concrete allowed set, intersect with exclude.
   if (allowed !== 'all') {
-    for (const tid of exclude) allowed.delete(tid);
+    for (const orgId of exclude) allowed.delete(orgId);
     if (allowed.size === 0) return { empty: true };
     return { includeIds: Array.from(allowed) };
   }
@@ -160,44 +153,25 @@ export async function resolveVerificationIdFilter(
     return { excludeIds: Array.from(exclude) };
   }
 
-  // No filters effective.
   return {};
 }
 
 /**
- * Returns true if the given organizer (org or person) has at least one
- * active verified identifier. Used by event write paths to compute
- * first_party server-side: an event is first-party iff its organizer
- * is verified at insert time.
+ * Returns true if the given organization has at least one active verification.
+ * Used by event write paths to compute first_party server-side: an event is
+ * first-party iff its organizer is verified at insert time.
  *
- * If both ids are null/undefined, returns false. If both are provided,
- * returns true if EITHER is verified (xor is enforced elsewhere).
+ * v2 simplification: only organizations are verifiable (persons primitive gone).
  */
 export async function isFirstPartyByOrganizer(
   organizerOrgId: string | null | undefined,
-  organizerPersonId: string | null | undefined,
 ): Promise<boolean> {
-  if (!organizerOrgId && !organizerPersonId) return false;
+  if (!organizerOrgId) return false;
 
-  if (organizerOrgId) {
-    const { count } = await supabaseAdmin
-      .from('account_verified_identifiers')
-      .select('id', { count: 'exact', head: true })
-      .eq('target_type', 'organization')
-      .eq('target_id', organizerOrgId)
-      .eq('status', 'active');
-    if ((count ?? 0) > 0) return true;
-  }
-
-  if (organizerPersonId) {
-    const { count } = await supabaseAdmin
-      .from('account_verified_identifiers')
-      .select('id', { count: 'exact', head: true })
-      .eq('target_type', 'person')
-      .eq('target_id', organizerPersonId)
-      .eq('status', 'active');
-    if ((count ?? 0) > 0) return true;
-  }
-
-  return false;
+  const { count } = await supabaseAdmin
+    .from('organization_verifications')
+    .select('id', { count: 'exact', head: true })
+    .eq('organization_id', organizerOrgId)
+    .eq('status', 'active');
+  return (count ?? 0) > 0;
 }

@@ -43,7 +43,7 @@ async function computeServiceEventFirstParty(portalAccountId: string): Promise<b
     .eq('owner_account_id', portalAccountId)
     .maybeSingle();
   if (!org) return false;
-  return isFirstPartyByOrganizer(org.id as string, null);
+  return isFirstPartyByOrganizer(org.id as string);
 }
 
 const router: ReturnType<typeof Router> = Router();
@@ -318,17 +318,21 @@ router.post('/events', serviceLimiter, async (req, res, next) => {
     // Verify account exists and fetch its venue coordinates
     const { data: account } = await supabaseAdmin
       .from('portal_accounts')
-      .select('id, auth_user_id, business_name, default_address, default_latitude, default_longitude')
+      .select('id, auth_user_id, claimed_at, business_name, default_address, default_latitude, default_longitude')
       .eq('id', data.account_id)
       .maybeSingle();
 
     if (!account) throw createError('Account not found', 404, 'NOT_FOUND');
 
-    // Photo eligibility — see lib/contributor-policy.ts. Only claimed accounts
-    // (and, Phase 2, verified businesses) may contribute media bytes. Reject
-    // upfront with a clear status so clients get an actionable signal instead
-    // of a silent failure webhook.
-    if (data.image_url && !account.auth_user_id) {
+    // Photo eligibility — only claimed accounts may contribute media bytes,
+    // where "claimed" means either (a) Supabase Auth claim (`auth_user_id`)
+    // or (b) service-key claim via /accounts/link or atomic activation
+    // (`claimed_at` is set). Synthetic/scraper-created accounts — neither
+    // signal present — cannot contribute images by design. Phase 2 may
+    // tighten this further to require verified-business accounts for events
+    // whose organizer is a business. See docs/consumer-guide.md "Copyright
+    // and image rights" for the contributor-warranty model that backs this.
+    if (data.image_url && !account.auth_user_id && !account.claimed_at) {
       throw createError(
         'Photos may only be contributed by claimed accounts',
         403,
@@ -622,6 +626,145 @@ router.patch('/events/:id', serviceLimiter, async (req, res, next) => {
     if (data.status === 'published' && !wasPublished) {
       dispatchEventWebhookById('event.created', updated.id);
     }
+
+    res.json({ event: toPortalEvent(updated) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// PATCH /service/events/:id/organizer
+//
+// Assign or clear the organizer of an event. Organizer is exactly one of an
+// Organization or a Person; mutual exclusivity is enforced at the route.
+//
+// Auth disjunction (non-admin keys):
+//   1. Caller's key is linked to event.creator_account_id, OR
+//   2. Event currently has organizer_org_id and caller's key is linked to it.
+//
+// The first arm covers the first-set case (event just created, organizer is
+// NULL — only the creator can assign the initial organizer). The second arm
+// covers re-attribution by the current organizer. When the current organizer
+// is a Person, only admin keys can re-assign until person-link semantics ship.
+// ---------------------------------------------------------------------------
+
+export const assignOrganizerSchema = z
+  .object({
+    organizerOrganizationId: z.string().uuid().nullable().optional(),
+    organizerPersonId: z.string().uuid().nullable().optional(),
+  })
+  .refine(
+    (d) => !(d.organizerOrganizationId != null && d.organizerPersonId != null),
+    {
+      message: 'organizerOrganizationId and organizerPersonId are mutually exclusive — provide at most one non-null value',
+      path: ['organizerOrganizationId'],
+    },
+  );
+
+router.patch('/events/:id/organizer', serviceLimiter, async (req, res, next) => {
+  try {
+    validateUuidParam(req.params.id, 'event ID');
+    const body = validateRequest(assignOrganizerSchema, req.body);
+
+    const { data: event } = await supabaseAdmin
+      .from('events')
+      .select('id, creator_account_id, organizer_org_id, organizer_person_id')
+      .eq('id', req.params.id)
+      .maybeSingle();
+
+    if (!event) throw createError('Event not found', 404, 'NOT_FOUND');
+
+    // Auth disjunction. Admin keys bypass entirely.
+    if (!req.apiKeyInfo?.isAdmin) {
+      const keyId = req.apiKeyInfo!.id;
+      let authorized = false;
+
+      // Arm 1: caller linked to event's creator account.
+      if (event.creator_account_id) {
+        const { data: accLink } = await supabaseAdmin
+          .from('api_key_account_links')
+          .select('portal_account_id')
+          .eq('api_key_id', keyId)
+          .eq('portal_account_id', event.creator_account_id)
+          .maybeSingle();
+        if (accLink) authorized = true;
+      }
+
+      // Arm 2: caller linked to event's current organizer org.
+      if (!authorized && event.organizer_org_id) {
+        const { data: orgLink } = await supabaseAdmin
+          .from('api_key_organization_links')
+          .select('organization_id')
+          .eq('api_key_id', keyId)
+          .eq('organization_id', event.organizer_org_id)
+          .maybeSingle();
+        if (orgLink) authorized = true;
+      }
+
+      // Person organizers: no person-link semantics yet, admin-only re-assign.
+      if (!authorized) {
+        throw createError(
+          'This API key is not linked to the event\'s creator account or current organizer. Use POST /accounts/link or POST /organizations/link first.',
+          403,
+          'NOT_LINKED',
+        );
+      }
+    }
+
+    // Verify target organization exists if non-null.
+    if (body.organizerOrganizationId) {
+      const { data: org } = await supabaseAdmin
+        .from('organizations')
+        .select('id')
+        .eq('id', body.organizerOrganizationId)
+        .maybeSingle();
+      if (!org) throw createError('Organization not found', 404, 'NOT_FOUND');
+    }
+
+    // Verify target person exists if non-null.
+    if (body.organizerPersonId) {
+      const { data: person } = await supabaseAdmin
+        .from('persons')
+        .select('id')
+        .eq('id', body.organizerPersonId)
+        .maybeSingle();
+      if (!person) throw createError('Person not found', 404, 'NOT_FOUND');
+    }
+
+    // Build update — only touch fields explicitly present in the body, so a
+    // caller that sends only organizerOrganizationId doesn't accidentally clear
+    // organizer_person_id (and vice versa). Mutual-exclusivity guarantees we
+    // can't end up with both non-null after this.
+    const dbUpdate: Record<string, unknown> = {};
+    if (body.organizerOrganizationId !== undefined) {
+      dbUpdate.organizer_org_id = body.organizerOrganizationId;
+      // Clear the other side when setting this one to satisfy app-layer XOR.
+      if (body.organizerOrganizationId !== null) dbUpdate.organizer_person_id = null;
+    }
+    if (body.organizerPersonId !== undefined) {
+      dbUpdate.organizer_person_id = body.organizerPersonId;
+      if (body.organizerPersonId !== null) dbUpdate.organizer_org_id = null;
+    }
+
+    if (Object.keys(dbUpdate).length === 0) {
+      throw createError('No organizer fields provided', 400, 'VALIDATION_ERROR');
+    }
+
+    const { data: updated, error } = await supabaseAdmin
+      .from('events')
+      .update(dbUpdate)
+      .eq('id', req.params.id)
+      .select(PORTAL_SELECT)
+      .single();
+
+    if (error) {
+      console.error('[SERVICE] Assign organizer error:', error.message);
+      throw createError('Failed to assign organizer', 500, 'SERVER_ERROR');
+    }
+
+    // Organizer change is a meaningful metadata update — notify subscribers.
+    dispatchEventWebhookById('event.updated', updated.id);
 
     res.json({ event: toPortalEvent(updated) });
   } catch (err) {

@@ -18,7 +18,7 @@ import { optionalApiKey } from '../middleware/api-key.js';
 import { hydrateVerificationsFor } from '../lib/verification-hydrate.js';
 import { formatPlace } from './v1-places.js';
 import { formatOrganization } from './v1-organizations.js';
-import { formatPerson } from './v1-persons.js';
+// v2: formatPerson import removed — persons primitive dropped, curator is always an organization
 import { toNeighborhoodEvent, type PortalEventRow } from '../lib/event-transform.js';
 
 const router: ReturnType<typeof Router> = Router();
@@ -40,16 +40,12 @@ const LIST_SELECT = `
 `;
 
 const ORG_SELECT_INLINE = `
-  id, slug, name, legal_name, kind, description, url, logo_url, image_url,
+  id, slug, name, legal_name, description, url, logo_url, image_url,
   telephone, email, same_as, keywords, opening_hours_specification,
-  primary_place_id, created_at, updated_at
+  tags, commercial, primary_place_id, created_at, updated_at
 `;
 
-const PERSON_SELECT_INLINE = `
-  id, slug, name, given_name, family_name, alternate_name,
-  description, image_url, url, same_as, job_title,
-  created_at, updated_at
-`;
+// v2: PERSON_SELECT_INLINE removed (persons primitive dropped).
 
 const PLACE_SELECT_INLINE = `
   id, google_place_id, name,
@@ -159,7 +155,9 @@ router.get('/:idOrSlug', async (req, res, next) => {
 async function formatList(row: Record<string, unknown>, opts: { hydrateItems: boolean }) {
   const id = row.id as string;
 
-  // Hydrate curator (one of org or person)
+  // v2: curator is always an organization. The curator_person_id branch
+  // is dead code (column dropped in migration 082); kept here only until
+  // the v1-lists route is fully refactored.
   let curator: Record<string, unknown> | null = null;
   if (row.curator_org_id) {
     const { data: orgRow } = await supabaseAdmin
@@ -168,18 +166,8 @@ async function formatList(row: Record<string, unknown>, opts: { hydrateItems: bo
       .eq('id', row.curator_org_id)
       .maybeSingle();
     if (orgRow) {
-      const verifs = await hydrateVerificationsFor('organization', [orgRow.id as string]);
+      const verifs = await hydrateVerificationsFor([orgRow.id as string]);
       curator = formatOrganization(orgRow, new Map(), verifs);
-    }
-  } else if (row.curator_person_id) {
-    const { data: pRow } = await supabaseAdmin
-      .from('persons')
-      .select(PERSON_SELECT_INLINE)
-      .eq('id', row.curator_person_id)
-      .maybeSingle();
-    if (pRow) {
-      const verifs = await hydrateVerificationsFor('person', [pRow.id as string]);
-      curator = formatPerson(pRow, verifs);
     }
   }
 
@@ -216,7 +204,7 @@ async function formatList(row: Record<string, unknown>, opts: { hydrateItems: bo
     const orgsById = new Map((orgsRes.data || []).map(o => [o.id as string, o]));
     const placesById = new Map((placesRes.data || []).map(p => [p.id as string, p]));
 
-    const orgVerifs = await hydrateVerificationsFor('organization', orgIds);
+    const orgVerifs = await hydrateVerificationsFor(orgIds);
 
     itemListElement = items.map(it => {
       let item: Record<string, unknown> | null = null;

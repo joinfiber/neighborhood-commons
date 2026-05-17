@@ -86,7 +86,7 @@ async function fetchOrgWithExtras(id: string) {
       .maybeSingle();
     if (place) placesById.set(place.id as string, place);
   }
-  const verifs = await hydrateVerificationsFor('organization', [id]);
+  const verifs = await hydrateVerificationsFor([id]);
   return formatOrganization(org, placesById, verifs);
 }
 

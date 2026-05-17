@@ -24,17 +24,18 @@
 import { Router } from 'express';
 import { requireServiceApiKey } from '../../middleware/api-key.js';
 
+// v2: dropped persons (no longer a primitive) and groups (groups table dropped;
+// use organizations instead). accounts kept for now — operational tenant claims
+// via /accounts/link still rely on portal_accounts.
 import registerRoutes from './register.js';
 import accountsRoutes from './accounts.js';
 import eventsRoutes from './events.js';
 import seriesRoutes from './series.js';
 import imagesRoutes from './images.js';
-import groupsRoutes from './groups.js';
 import adminOpsRoutes from './admin-ops.js';
-// 1.0.0 type-system service routes
+// v2 type-system service routes
 import placesRoutes from './places.js';
 import organizationsRoutes from './organizations.js';
-import personsRoutes from './persons.js';
 import broadcastsRoutes from './broadcasts.js';
 import listsRoutes from './lists.js';
 import verificationsRoutes from './verifications.js';
@@ -57,14 +58,12 @@ router.use(verificationsRoutes);
 router.use(disputesRoutes);
 router.use(placesRoutes);
 router.use(organizationsRoutes);
-router.use(personsRoutes);
 router.use(broadcastsRoutes);
 router.use(listsRoutes);
 router.use(seriesRoutes);
 router.use(accountsRoutes);
 router.use(eventsRoutes);
 router.use(imagesRoutes);
-router.use(groupsRoutes);
 router.use(adminOpsRoutes);
 
 export default router;

@@ -36,6 +36,8 @@ const SCHEMA: Record<string, string[]> = {
     'brand_config', 'verification_authority',
     // Added in migration 075 (self-service service-key registration)
     'activated_at', 'application_metadata',
+    // Added in migration 078 (v2 — witnessed-evidence authority path)
+    'witness_authority',
   ],
   audit_logs: [
     'id', 'action', 'actor_hash', 'resource_id', 'metadata', 'endpoint',
@@ -56,32 +58,21 @@ const SCHEMA: Record<string, string[]> = {
     'group_id',
     'tmdb_id',
     // Added in migration 067 (1.0.0 organizer + place FKs)
-    'location_place_id', 'organizer_org_id', 'organizer_person_id',
+    'location_place_id', 'organizer_org_id',
+    // Added in migration 078 (v2 — internal dedup mechanism)
+    'match_key',
     'created_at', 'updated_at',
-  ],
-  groups: [
-    'id', 'name', 'slug', 'description', 'type',
-    'category_tags', 'neighborhood', 'city', 'address', 'latitude', 'longitude',
-    'avatar_url', 'hero_image_url', 'links', 'phone', 'website',
-    'operating_hours', 'status', 'claimed',
-    'source_publisher', 'source_method', 'portal_account_id',
-    'created_at', 'updated_at',
-  ],
-  group_venues: [
-    'id', 'group_id', 'place_id', 'venue_name', 'venue_address',
-    'latitude', 'longitude', 'is_primary', 'created_at',
   ],
   event_series: [
     'id', 'creator_account_id', 'recurrence', 'base_event_data',
     'created_at', 'updated_at', 'user_id', 'recurrence_rule', 'ends_at',
   ],
+  // Narrowed in migration 082 — business-profile columns moved to organizations.
+  // Operational columns only: identity, claim status, status, timestamps.
   portal_accounts: [
-    'id', 'auth_user_id', 'email', 'business_name', 'phone', 'website',
-    'default_venue_name', 'default_address', 'default_place_id',
-    'default_latitude', 'default_longitude', 'logo_url', 'cover_image_url', 'description',
-    'status', 'claimed_at', 'claimed_by', 'created_at', 'updated_at', 'last_login_at',
-    'wheelchair_accessible', 'slug', 'operating_hours',
-    'organization_name', 'contributor_type', 'data_description',
+    'id', 'auth_user_id', 'email',
+    'status', 'claimed_at', 'claimed_by',
+    'created_at', 'updated_at', 'last_login_at',
   ],
   regions: [
     'id', 'name', 'slug', 'type', 'parent_id', 'bounds', 'centroid',
@@ -95,9 +86,6 @@ const SCHEMA: Record<string, string[]> = {
     'id', 'api_key_id', 'url', 'signing_secret', 'signing_secret_encrypted',
     'event_types', 'consecutive_failures', 'disabled_at', 'created_at',
     'updated_at', 'status', 'last_success_at', 'last_failure_at', 'last_failure_reason',
-  ],
-  developer_otps: [
-    'id', 'email', 'code', 'expires_at', 'created_at',
   ],
   category_mappings: [
     'id', 'source_term', 'canonical_category', 'confidence',
@@ -118,42 +106,41 @@ const SCHEMA: Record<string, string[]> = {
     'id', 'proposed_name', 'justification', 'fallback_category',
     'contributor_account_id', 'batch_id', 'status', 'created_at',
   ],
-  api_key_account_links: [
-    'api_key_id', 'portal_account_id', 'linked_at',
-  ],
-  // ----- 1.0.0 type system additions (migrations 064-073) -----
+  // ----- v2 type system (migrations 064-073 set up; 078-082 finalize) -----
   places: [
     'id', 'google_place_id', 'name',
     'street_address', 'address_locality', 'address_region', 'postal_code', 'address_country',
     'latitude', 'longitude', 'region_id',
+    // Added in migration 078 (v2 — OSM-sourced categorization)
+    'place_categories', 'category_source', 'category_reviewed_at', 'category_reviewed_by',
     'created_at', 'updated_at',
   ],
+  // Migration 082 dropped `kind`; replaced by `tags` + `commercial` (added in 078).
   organizations: [
-    'id', 'slug', 'name', 'legal_name', 'kind',
+    'id', 'slug', 'name', 'legal_name',
     'description', 'url', 'logo_url', 'image_url', 'telephone', 'email',
     'same_as', 'keywords', 'opening_hours_specification',
     'primary_place_id', 'owner_account_id',
+    // Added in migration 078 (v2)
+    'tags', 'commercial',
     'created_at', 'updated_at',
   ],
   organization_places: [
     'organization_id', 'place_id', 'is_primary', 'relationship', 'created_at',
   ],
-  persons: [
-    'id', 'slug', 'name', 'given_name', 'family_name', 'alternate_name',
-    'description', 'image_url', 'url', 'same_as', 'job_title',
-    'owner_account_id', 'created_at', 'updated_at',
-  ],
+  // Migration 082 dropped person_id; performer_name added as free-form fallback.
   event_performers: [
-    'id', 'event_id', 'person_id', 'organization_id',
+    'id', 'event_id', 'organization_id', 'performer_name',
     'performer_role', 'position', 'created_at',
   ],
   broadcasts: [
     'id', 'organization_id', 'place_id', 'message',
     'expires_at', 'status', 'retracted_at', 'source', 'created_at',
   ],
+  // Migration 082 dropped curator_person_id; curator_org_id is now NOT NULL.
   lists: [
     'id', 'slug', 'name', 'description',
-    'curator_org_id', 'curator_person_id',
+    'curator_org_id',
     'created_at', 'updated_at',
   ],
   list_items: [
@@ -161,10 +148,11 @@ const SCHEMA: Record<string, string[]> = {
     'event_id', 'organization_id', 'place_id',
     'curator_note', 'added_at',
   ],
-  account_verified_identifiers: [
-    'id', 'target_type', 'target_id',
-    'identifier_type', 'identifier_value', 'identifier_domain',
-    'method', 'verified_at', 'evidence',
+  // V2 verification storage. Replaces account_verified_identifiers (dropped in 082).
+  organization_verifications: [
+    'id', 'organization_id',
+    'identifier_type', 'identifier_value',
+    'method', 'evidence', 'verified_at',
     'approved_by_app', 'approved_by_key',
     'status', 'revoked_at', 'revoked_reason',
     'created_at',
@@ -192,8 +180,15 @@ const SCHEMA: Record<string, string[]> = {
     'id', 'domain', 'requested_via_api_key', 'requested_url', 'event_context',
     'status', 'requested_at', 'reviewed_at', 'reviewed_by',
   ],
+  // ----- Tables dropped in v2 (migration 082): -----
+  //   persons                        — solo operators are now organizations
+  //   account_verified_identifiers   — replaced by organization_verifications
+  //   groups, group_venues           — legacy; data lives on organizations + organization_places
+  //   api_key_account_links          — replaced by api_key_organization_links
+  //   developer_otps                 — operational table no longer used
+  //
   // Ingestion tables (newsletter_sources, newsletter_emails, event_candidates,
-  // feed_sources) were dropped by migration 060. Ingestion now lives in Fiber.
+  // feed_sources) were dropped by migration 060. Ingestion now lives in Fiber/Studio.
 };
 
 // ---------------------------------------------------------------------------
