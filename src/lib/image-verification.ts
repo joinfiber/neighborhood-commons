@@ -1,9 +1,13 @@
 /**
  * Image URL Verification — Neighborhood Commons
  *
- * Checks that event and account image URLs are reachable.
+ * Checks that event and organization image URLs are reachable.
  * Flags broken URLs so they can be cleared or re-uploaded.
  * Called by the verify-images cron job.
+ *
+ * v2 (migration 082): profile images moved from portal_accounts to
+ * organizations. verifyAccountImages now scans organizations.logo_url
+ * and organizations.image_url.
  */
 
 import { supabaseAdmin } from './supabase.js';
@@ -81,16 +85,19 @@ export async function verifyEventImages(): Promise<VerifyResult> {
 }
 
 /**
- * Check all account image URLs (logo + cover) are reachable.
+ * Check all organization image URLs (logo + hero image) are reachable.
+ *
+ * v2: organizations.logo_url and organizations.image_url replace the
+ * legacy portal_accounts.logo_url and cover_image_url (migration 082).
  */
 export async function verifyAccountImages(): Promise<VerifyResult> {
-  const { data: accounts } = await supabaseAdmin
-    .from('portal_accounts')
-    .select('id, logo_url, cover_image_url')
-    .or('logo_url.not.is.null,cover_image_url.not.is.null')
+  const { data: orgs } = await supabaseAdmin
+    .from('organizations')
+    .select('id, logo_url, image_url')
+    .or('logo_url.not.is.null,image_url.not.is.null')
     .limit(BATCH_SIZE);
 
-  if (!accounts || accounts.length === 0) {
+  if (!orgs || orgs.length === 0) {
     return { checked: 0, broken: 0, cleared: 0, broken_urls: [] };
   }
 
@@ -99,15 +106,15 @@ export async function verifyAccountImages(): Promise<VerifyResult> {
   let cleared = 0;
   const broken_urls: VerifyResult['broken_urls'] = [];
 
-  for (const account of accounts) {
-    for (const field of ['logo_url', 'cover_image_url'] as const) {
-      const url = account[field] as string | null;
+  for (const org of orgs) {
+    for (const field of ['logo_url', 'image_url'] as const) {
+      const url = org[field] as string | null;
       if (!url) continue;
       checked++;
 
       // SSRF protection: validate URL resolves to a public IP before probing
       try { await validateFeedUrl(url); } catch {
-        console.log(`[IMAGES] Skipping SSRF-blocked ${field} for account ${account.id}: ${url}`);
+        console.log(`[IMAGES] Skipping SSRF-blocked ${field} for org ${org.id}: ${url}`);
         continue;
       }
 
@@ -120,20 +127,20 @@ export async function verifyAccountImages(): Promise<VerifyResult> {
 
         if (!response.ok) {
           broken++;
-          broken_urls.push({ id: `${account.id}/${field}`, url, status: response.status });
+          broken_urls.push({ id: `${org.id}/${field}`, url, status: response.status });
 
           if (response.status === 404 || response.status === 410) {
             await supabaseAdmin
-              .from('portal_accounts')
+              .from('organizations')
               .update({ [field]: null })
-              .eq('id', account.id);
+              .eq('id', org.id);
             cleared++;
-            console.log(`[IMAGES] Cleared broken ${field} for account ${account.id}: ${response.status}`);
+            console.log(`[IMAGES] Cleared broken ${field} for org ${org.id}: ${response.status}`);
           }
         }
       } catch (err) {
         broken++;
-        broken_urls.push({ id: `${account.id}/${field}`, url, status: null });
+        broken_urls.push({ id: `${org.id}/${field}`, url, status: null });
       }
     }
   }

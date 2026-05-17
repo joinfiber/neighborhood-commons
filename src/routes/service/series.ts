@@ -20,7 +20,8 @@ import { dispatchEventWebhookById } from '../../lib/webhook-delivery.js';
 import { serviceLimiter } from '../../middleware/rate-limit.js';
 import { fromTimestamptz } from '../../lib/event-operations.js';
 import { deleteSeriesEvents, updateSeriesFutureInstances } from '../../lib/event-series.js';
-import { assertLinkedAccount, assertLinkedEvent } from './helpers.js';
+import { assertLinkedEvent } from './helpers.js';
+import { assertLinkedOrganization } from './helpers-v1.js';
 import { updateEventSchema } from './events.js';
 
 const router: ReturnType<typeof Router> = Router();
@@ -39,17 +40,17 @@ router.patch('/events/series/:seriesId', serviceLimiter, async (req, res, next) 
       instance_count: z.number().int().min(0).max(52).optional(),
     }), req.body);
 
-    // Ownership: non-admin keys must be linked to the creator_account_id of the series.
+    // Ownership: non-admin keys must be linked to the organizer_org_id of the series.
     const { data: sample } = await supabaseAdmin
       .from('events')
-      .select('id, creator_account_id, event_timezone')
+      .select('id, organizer_org_id, event_timezone')
       .eq('series_id', req.params.seriesId)
       .limit(1)
       .maybeSingle();
     if (!sample) throw createError('Series not found', 404, 'NOT_FOUND');
     if (!req.apiKeyInfo?.isAdmin) {
-      if (!sample.creator_account_id) throw createError('Series has no owner; admin access required', 403, 'FORBIDDEN');
-      await assertLinkedAccount(req, sample.creator_account_id);
+      if (!sample.organizer_org_id) throw createError('Series has no organizer; admin access required', 403, 'FORBIDDEN');
+      await assertLinkedOrganization(req, sample.organizer_org_id as string);
     }
 
     const tz = data.timezone || (sample.event_timezone as string) || 'America/New_York';

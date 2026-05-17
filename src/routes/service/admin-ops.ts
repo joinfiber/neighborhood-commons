@@ -24,9 +24,6 @@ import { createError } from '../../middleware/error-handler.js';
 import { validateRequest, validateUuidParam } from '../../lib/helpers.js';
 import { serviceLimiter } from '../../middleware/rate-limit.js';
 import { MANAGED_SOURCES } from '../../lib/event-operations.js';
-import { processAndUploadImage } from '../../lib/image-processing.js';
-import { validateFeedUrl } from '../../lib/url-validation.js';
-import { safeFetch } from '../../lib/safe-fetch.js';
 import { invalidateApprovedDomainsCache } from '../../lib/url-sanitizer.js';
 import { config } from '../../config.js';
 
@@ -238,18 +235,13 @@ router.post('/api-keys', serviceLimiter, async (req, res, next) => {
 
     if (insertError || !newKey) throw createError('Failed to create API key', 500, 'SERVER_ERROR');
 
-    if (data.account_id) {
-      const { error: linkError } = await supabaseAdmin
-        .from('api_key_account_links')
-        .insert({ api_key_id: newKey.id, portal_account_id: data.account_id });
-      if (linkError) {
-        // Roll back the key — partial state is worse than failure
-        await supabaseAdmin.from('api_keys').delete().eq('id', newKey.id);
-        throw createError('Failed to link API key to account', 500, 'SERVER_ERROR');
-      }
-    }
+    // v2: api_key_account_links was dropped in migration 082. Authority
+    // scope now lives in api_key_organization_links. Consumers should
+    // call POST /service/organizations/link (or use the auto-link
+    // path on POST /service/organizations) after key issuance to
+    // establish writeable scope.
 
-    console.log(`[SERVICE] API key ${newKey.id} created (${newKey.contributor_tier}) linked to account ${data.account_id || '<none>'}`);
+    console.log(`[SERVICE] API key ${newKey.id} created (${newKey.contributor_tier})${data.account_id ? ` (tenant account ref: ${data.account_id})` : ''}`);
     res.status(201).json({
       api_key: { ...newKey, account_id: data.account_id || null },
       key: rawKey,
@@ -298,8 +290,21 @@ router.patch('/api-keys/:id', serviceLimiter, async (req, res, next) => {
  * in the same transaction; otherwise those stay at whatever was on the row
  * (typically NULL for self-registered keys).
  *
- * No-op (returns 200 with `already_active: true`) if the key is already active —
- * activation is idempotent.
+ * If `provision_account` is provided, ALSO creates the consumer app's tenant
+ * portal_account (or finds an existing one) and links the now-active key to
+ * it in the same call. This is the canonical path for tenant-umbrella
+ * consumers — the UUID arrives in the activation response, the consumer
+ * never makes a second round-trip. Per-operator portable consumers omit
+ * `provision_account` and continue to call /service/accounts/link per
+ * operator as those operators onboard.
+ *
+ * Pending keys remain strictly read-only — no portal_account is created
+ * before activation. The atomicity here is the point: the account exists
+ * exactly from the moment writes are authorized, never before.
+ *
+ * No-op (returns 200 with `already_active: true`) if the key is already
+ * active — activation is idempotent. `provision_account` is ignored on
+ * re-call; use POST /service/accounts/link to add accounts post-activation.
  */
 router.post('/api-keys/:id/activate', serviceLimiter, async (req, res, next) => {
   try {
@@ -311,6 +316,10 @@ router.post('/api-keys/:id/activate', serviceLimiter, async (req, res, next) => 
       brand_config: z.record(z.unknown()).optional(),
       verification_authority: z.array(z.string()).optional(),
       rate_limit_per_hour: z.number().int().min(1).max(100000).optional(),
+      provision_account: z.object({
+        email: z.string().email().max(254).transform((e) => e.toLowerCase().trim()),
+        claimed_by: z.string().max(50).optional(),
+      }).optional(),
     });
     const updates = validateRequest(schema, req.body ?? {});
 
@@ -345,6 +354,78 @@ router.post('/api-keys/:id/activate', serviceLimiter, async (req, res, next) => 
     if (updateError) throw createError('Failed to activate API key', 500, 'SERVER_ERROR');
 
     console.log(`[SERVICE] API key ${req.params.id} activated for live writes`);
+
+    // Optional: provision the consumer's tenant portal_account atomically.
+    // Mirrors the /accounts/link find-or-create logic with the same
+    // defense-in-depth — refuse to claim an account that's owned by Supabase
+    // Auth (auth_user_id set) or claimed by a different consumer.
+    //
+    // v2: this no longer inserts api_key_account_links (table dropped in
+    // migration 082). Writeable scope is established separately via
+    // POST /service/organizations/link.
+    if (updates.provision_account) {
+      const p = updates.provision_account;
+      try {
+        let { data: account } = await supabaseAdmin
+          .from('portal_accounts')
+          .select('id, email, status, claimed_at, claimed_by, auth_user_id, created_at, updated_at')
+          .ilike('email', p.email)
+          .maybeSingle();
+
+        let created = false;
+
+        if (account) {
+          if (account.auth_user_id) {
+            throw createError(
+              'Account exists and has an authenticated owner; cannot link via activation. Resolve manually.',
+              409,
+              'CONFLICT',
+            );
+          }
+          if (account.claimed_at && account.claimed_by && p.claimed_by
+            && account.claimed_by !== p.claimed_by) {
+            throw createError(
+              `Account is already claimed by "${account.claimed_by}"; refusing to link under "${p.claimed_by}".`,
+              409,
+              'CONFLICT',
+            );
+          }
+        } else {
+          const nowIso = new Date().toISOString();
+          const { data: newAccount, error: insertError } = await supabaseAdmin
+            .from('portal_accounts')
+            .insert({
+              email: p.email,
+              status: 'active',
+              claimed_at: nowIso,
+              claimed_by: p.claimed_by ?? 'api',
+            })
+            .select('id, email, status, claimed_at, claimed_by, auth_user_id, created_at, updated_at')
+            .single();
+          if (insertError) {
+            console.error('[SERVICE] Activate-with-provision insert error:', insertError.message);
+            throw createError('Failed to provision tenant account during activation', 500, 'SERVER_ERROR');
+          }
+          account = newAccount;
+          created = true;
+        }
+
+        console.log(`[SERVICE] Provisioned tenant account ${account!.id} (created=${created}) for activated key`);
+        res.json({
+          api_key: activated,
+          already_active: false,
+          account,
+          account_created: created,
+        });
+        return;
+      } catch (provisionErr) {
+        // Activation already succeeded. Bubble the provision error so the
+        // operator sees what went wrong; they can call /accounts/link to
+        // recover without re-activating.
+        throw provisionErr;
+      }
+    }
+
     res.json({ api_key: activated, already_active: false });
   } catch (err) {
     next(err);
@@ -370,65 +451,12 @@ router.post('/migrate-image-urls', serviceLimiter, async (req, res, next) => {
     }
 
     const r2Base = config.r2.publicUrl;
-    const results = { accounts: { logo: 0, cover: 0, rehosted: 0 }, events: 0, errors: [] as string[] };
+    const results = { events: 0, errors: [] as string[] };
 
-    // --- Migrate portal_accounts ---
-    const { data: accounts } = await supabaseAdmin
-      .from('portal_accounts')
-      .select('id, logo_url, cover_image_url')
-      .or('logo_url.not.is.null,cover_image_url.not.is.null');
-
-    for (const account of accounts || []) {
-      const update: Record<string, string | null> = {};
-
-      for (const [field, r2Type] of [['logo_url', 'logo'], ['cover_image_url', 'cover']] as const) {
-        const url = account[field] as string | null;
-        if (!url) continue;
-
-        // Already an R2 public URL — skip
-        if (url.startsWith(r2Base)) continue;
-
-        // Portal proxy URL — rewrite to direct R2 URL
-        const portalMatch = url.match(/\/api\/portal\/accounts\/([^/]+)\/(logo|cover)$/);
-        if (portalMatch) {
-          // The R2 key is portal-events/accounts/{id}/{type}/image
-          update[field] = `${r2Base}/portal-events/accounts/${portalMatch[1]}/${portalMatch[2]}/image`;
-          if (r2Type === 'logo') results.accounts.logo++;
-          else results.accounts.cover++;
-          continue;
-        }
-
-        // External URL (Google, gstatic, etc.) — download, re-encode, upload to R2
-        if (url.startsWith('http')) {
-          try {
-            // SSRF protection: these URLs come from portal_accounts rows that
-            // were populated from external sources; treat as untrusted input.
-            await validateFeedUrl(url);
-            const response = await safeFetch(url, {
-              headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NeighborhoodCommons/1.0)' },
-              signal: AbortSignal.timeout(10_000),
-            });
-            if (!response.ok) {
-              results.errors.push(`${account.id}/${r2Type}: download failed (${response.status})`);
-              continue;
-            }
-            const buffer = Buffer.from(await response.arrayBuffer());
-            const base64 = buffer.toString('base64');
-            const newUrl = await processAndUploadImage(`accounts/${account.id}/${r2Type}`, base64);
-            update[field] = newUrl;
-            results.accounts.rehosted++;
-            console.log(`[SERVICE] Re-hosted ${r2Type} for account ${account.id}: ${url} → ${newUrl}`);
-          } catch (err) {
-            results.errors.push(`${account.id}/${r2Type}: ${err instanceof Error ? err.message : 'unknown'}`);
-          }
-          continue;
-        }
-      }
-
-      if (Object.keys(update).length > 0) {
-        await supabaseAdmin.from('portal_accounts').update(update).eq('id', account.id);
-      }
-    }
+    // v2 (migration 082): logo_url and cover_image_url were dropped from
+    // portal_accounts; profile images live on organizations now. Account
+    // image migration is therefore a no-op in v2. If needed, run a
+    // separate migration against the `organizations` table.
 
     // --- Migrate events ---
     const { data: events } = await supabaseAdmin

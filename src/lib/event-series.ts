@@ -132,7 +132,7 @@ export async function createEventSeries(
       // Build template from first instance
       const { data: templateRow } = await supabaseAdmin
         .from('events')
-        .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name)`)
+        .select(`${PORTAL_SELECT}, organizations!events_organizer_org_id_fkey(id, slug, name)`)
         .eq('id', publishedEvents[0]!.id)
         .maybeSingle();
       if (templateRow) {
@@ -648,7 +648,7 @@ export async function dispatchSeriesWebhooks(events: Array<{ id: string }>): Pro
     try {
       const { data: row } = await supabaseAdmin
         .from('events')
-        .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name)`)
+        .select(`${PORTAL_SELECT}, organizations!events_organizer_org_id_fkey(id, slug, name)`)
         .eq('id', e.id)
         .maybeSingle();
       if (!row) continue;

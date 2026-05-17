@@ -53,7 +53,7 @@ const PLACE_SELECT_INLINE = `
   latitude, longitude, region_id, created_at, updated_at
 `;
 
-const EVENT_SELECT_INLINE = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, event_image_focal_y, created_at, creator_account_id, series_id, series_instance_number, open_window, capacity, rsvp, tags, wheelchair_accessible, source_method, source_publisher, source_contributor_name, source_contributor_url, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible)';
+const EVENT_SELECT_INLINE = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, event_image_focal_y, created_at, creator_account_id, organizer_org_id, series_id, series_instance_number, open_window, capacity, rsvp, tags, wheelchair_accessible, source_method, source_publisher, source_contributor_name, source_contributor_url, organizations!events_organizer_org_id_fkey(id, slug, name)';
 
 const listSchema = z.object({
   curator_id: z.string().uuid().optional(),
@@ -79,15 +79,10 @@ router.get('/', async (req, res, next) => {
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
-    if (params.curator_id && params.curator_type === 'organization') {
+    // v2: lists are always curated by an organization (curator_org_id NOT NULL).
+    // The legacy `curator_type=person` filter is a no-op now.
+    if (params.curator_id) {
       query = query.eq('curator_org_id', params.curator_id);
-    } else if (params.curator_id && params.curator_type === 'person') {
-      query = query.eq('curator_person_id', params.curator_id);
-    } else if (params.curator_id) {
-      // No type given — check both
-      query = query.or(
-        `curator_org_id.eq.${params.curator_id},curator_person_id.eq.${params.curator_id}`
-      );
     }
 
     if (params.q) {

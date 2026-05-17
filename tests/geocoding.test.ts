@@ -120,43 +120,22 @@ describe('geocodeEventIfNeeded', () => {
   });
 
   it('skips when coordinates already exist', async () => {
-    await geocodeEventIfNeeded('evt-1', '123 Main St', 39.95, -75.16, null);
+    await geocodeEventIfNeeded('evt-1', '123 Main St', 39.95, -75.16);
     // Should not call supabaseAdmin.from at all
     expect(mockFrom).not.toHaveBeenCalled();
   });
 
   it('skips when address is null', async () => {
-    await geocodeEventIfNeeded('evt-2', null, null, null, null);
+    await geocodeEventIfNeeded('evt-2', null, null, null);
     expect(mockFrom).not.toHaveBeenCalled();
   });
 
   it('skips when address is empty string', async () => {
-    await geocodeEventIfNeeded('evt-3', '   ', null, null, null);
+    await geocodeEventIfNeeded('evt-3', '   ', null, null);
     expect(mockFrom).not.toHaveBeenCalled();
   });
 
-  it('uses account default coordinates when available', async () => {
-    mockSelect.mockReturnValue({
-      eq: vi.fn().mockReturnValue({
-        maybeSingle: vi.fn().mockResolvedValue({
-          data: { default_latitude: 39.9526, default_longitude: -75.1652 },
-        }),
-      }),
-    });
-
-    const updateEq = vi.fn().mockResolvedValue({ error: null });
-    mockUpdate.mockReturnValue({ eq: updateEq });
-
-    await geocodeEventIfNeeded('evt-4', '123 Main St', null, null, 'account-1');
-
-    // Should have queried portal_accounts for defaults
-    expect(mockFrom).toHaveBeenCalledWith('portal_accounts');
-    // Should have updated the event
-    expect(mockFrom).toHaveBeenCalledWith('events');
-    expect(mockUpdate).toHaveBeenCalledWith({
-      latitude: 39.9526,
-      longitude: -75.1652,
-      approximate_location: 'POINT(-75.1652 39.9526)',
-    });
-  });
+  // v2 (migration 082): the account default-coords tier is gone — that data
+  // lived on portal_accounts.default_latitude/longitude which were dropped.
+  // Defaults now come from the organizer's primary_place at the write path.
 });

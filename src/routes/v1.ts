@@ -77,15 +77,18 @@ const EVENTS_SELECT = 'id, content, description, place_name, venue_address, plac
 type ListParams = z.infer<typeof listSchema>;
 
 /**
- * Resolve a contributor slug to account ID(s). Returns null if no match.
- * Looks up portal_accounts by slug (exact match, case-insensitive).
+ * Resolve a contributor slug to organizer organization ID(s). Returns
+ * null if no match.
+ *
+ * v2: contributor identity lives on organizations (organizations.slug),
+ * not on portal_accounts. The events filter then matches on
+ * events.organizer_org_id.
  */
-async function resolveContributorAccountIds(slug: string): Promise<string[] | null> {
+async function resolveContributorOrgIds(slug: string): Promise<string[] | null> {
   const { data } = await supabaseAdmin
-    .from('portal_accounts')
+    .from('organizations')
     .select('id')
-    .eq('slug', slug.toLowerCase())
-    .eq('status', 'active');
+    .eq('slug', slug.toLowerCase());
   if (!data || data.length === 0) return null;
   return data.map((r: { id: string }) => r.id);
 }
@@ -112,12 +115,12 @@ async function queryFilteredEvents(params: ListParams, opts?: {
   const defaultCutoff = new Date(Date.now() - lookbackMs).toISOString();
   const cutoff = opts?.cutoffOverride ?? defaultCutoff;
 
-  // Contributor filter: resolve slug → account IDs before building query
-  let contributorAccountIds: string[] | null = null;
+  // Contributor filter: resolve slug → organizer org IDs before building query
+  let contributorOrgIds: string[] | null = null;
   if (params.contributor) {
-    contributorAccountIds = await resolveContributorAccountIds(params.contributor);
-    if (!contributorAccountIds) {
-      // No matching account — return empty result
+    contributorOrgIds = await resolveContributorOrgIds(params.contributor);
+    if (!contributorOrgIds) {
+      // No matching organization — return empty result
       return { events: [], count: 0 };
     }
   }
@@ -131,11 +134,11 @@ async function queryFilteredEvents(params: ListParams, opts?: {
     .range(params.offset, params.offset + fetchLimit - 1);
 
   // Contributor filter
-  if (contributorAccountIds) {
-    if (contributorAccountIds.length === 1) {
-      query = query.eq('creator_account_id', contributorAccountIds[0] as string);
+  if (contributorOrgIds) {
+    if (contributorOrgIds.length === 1) {
+      query = query.eq('organizer_org_id', contributorOrgIds[0] as string);
     } else {
-      query = query.in('creator_account_id', contributorAccountIds);
+      query = query.in('organizer_org_id', contributorOrgIds);
     }
   }
 

@@ -57,9 +57,11 @@ async function main(): Promise<void> {
   });
 
   // 1. Identify unclaimed portal_accounts.
+  // v2 (migration 082): business_name moved to organizations. We only need
+  // the account id for this scrub, so the narrower SELECT works post-082.
   const { data: accounts, error: acctErr } = await supabase
     .from('portal_accounts')
-    .select('id, business_name')
+    .select('id')
     .is('auth_user_id', null);
 
   if (acctErr || !accounts) {

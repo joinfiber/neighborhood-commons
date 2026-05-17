@@ -73,6 +73,7 @@ import { createApp } from '../src/app.js';
 
 const SERVICE_KEY = 'nc_service_key_0123456789abcdef';
 const ACCOUNT_ID = '11111111-1111-1111-1111-111111111111';
+const ORG_ID = '22222222-2222-2222-2222-222222222222';
 const NEW_EVENT_ID = '22222222-2222-2222-2222-222222222222';
 
 let server: Server;
@@ -101,21 +102,31 @@ beforeEach(() => {
     data: { id: 'svc-key-uuid', contributor_tier: 'service', is_admin: true, raw_key_hash: '', activated_at: '2025-01-01T00:00:00Z' },
     error: null,
   });
-  mockResponses.set('portal_accounts', {
+  // v2: organizer comes from organizations; portal_accounts holds only
+  // the auth/claim state for photo eligibility.
+  mockResponses.set('organizations', {
     data: {
-      id: ACCOUNT_ID,
-      auth_user_id: 'auth-user-1',
-      business_name: 'Johnny\'s Bar',
-      default_address: null,
-      default_latitude: null,
-      default_longitude: null,
+      id: ORG_ID,
+      name: 'Johnny\'s Bar',
+      owner_account_id: ACCOUNT_ID,
+      primary_place_id: null,
     },
     error: null,
+  });
+  mockResponses.set('portal_accounts', {
+    data: { id: ACCOUNT_ID, auth_user_id: 'auth-user-1', claimed_at: '2026-01-01T00:00:00Z' },
+    error: null,
+  });
+  mockResponses.set('places', { data: null, error: null });
+  // assertLinkedOrganization → api_key_organization_links lookup
+  mockResponses.set('api_key_organization_links', {
+    data: { organization_id: ORG_ID }, error: null,
   });
   mockResponses.set('events', {
     data: { id: NEW_EVENT_ID, content: 'Open Mic', event_timezone: 'America/New_York' },
     error: null,
   });
+  mockResponses.set('organization_verifications', { data: null, count: 0, error: null });
   mockRpcResponses.set('find_user_region', { data: null, error: null });
 });
 
@@ -127,7 +138,7 @@ function futureIso(daysAhead = 7): string {
 }
 
 const BASE_PAYLOAD = {
-  account_id: ACCOUNT_ID,
+  organizerOrganizationId: ORG_ID,
   name: 'Open Mic Night',
   timezone: 'America/New_York',
   category: 'live_music',
