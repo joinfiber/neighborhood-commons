@@ -180,12 +180,16 @@ const SCHEMA: Record<string, string[]> = {
     'id', 'domain', 'requested_via_api_key', 'requested_url', 'event_context',
     'status', 'requested_at', 'reviewed_at', 'reviewed_by',
   ],
+  // Restored by migration 083 (the 082 drop was incorrect — /v1/service/register
+  // and lib/developer-otp.ts both still depend on it).
+  developer_otps: [
+    'id', 'email', 'code', 'expires_at', 'created_at',
+  ],
   // ----- Tables dropped in v2 (migration 082): -----
   //   persons                        — solo operators are now organizations
   //   account_verified_identifiers   — replaced by organization_verifications
   //   groups, group_venues           — legacy; data lives on organizations + organization_places
   //   api_key_account_links          — replaced by api_key_organization_links
-  //   developer_otps                 — operational table no longer used
   //
   // Ingestion tables (newsletter_sources, newsletter_emails, event_candidates,
   // feed_sources) were dropped by migration 060. Ingestion now lives in Fiber/Studio.
@@ -262,6 +266,20 @@ function extractColumnRefs(filePath: string): ColumnRef[] {
     if (lineNum - currentTableLine > 30) {
       currentTable = null;
       continue;
+    }
+
+    // Reset on chain-terminator: a closing paren ending in `;` typically
+    // marks the end of an inner await chain (e.g., a subquery built and
+    // resolved inline). Subsequent calls on outer-scope variables (`query`)
+    // would otherwise pick up the inner subquery's table context.
+    if (/^\s*\)?\s*;\s*$/.test(line) || /\)\s*;\s*$/.test(line.trimEnd())) {
+      // Only reset if we're NOT in the middle of a chained call (next line
+      // could continue with `.something(...)`). Look ahead one line.
+      const next = (lines[i + 1] || '').trimStart();
+      if (!next.startsWith('.')) {
+        currentTable = null;
+        continue;
+      }
     }
 
     // Match .select('col1, col2, ...') — extract individual column names

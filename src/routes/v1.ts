@@ -33,7 +33,7 @@ export const v1Limiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 1000,
   keyGenerator: (req) => req.apiKeyInfo?.id || req.ip || 'unknown',
-  message: { error: { code: 'RATE_LIMIT', message: 'Rate limit exceeded (1000/hr). Register for an API key at /api/v1/developers for a dedicated limit bucket.' } },
+  message: { error: { code: 'RATE_LIMIT', message: 'Rate limit exceeded (1000/hr). Register for a service-tier API key at /api/v1/service/register/send-otp for a dedicated limit bucket.' } },
   standardHeaders: true,
   legacyHeaders: false,
   skip: () => process.env.INTEGRATION_TEST === 'true',

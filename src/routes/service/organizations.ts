@@ -21,12 +21,11 @@ import { assertLinkedOrganization } from './helpers-v1.js';
 
 const router: ReturnType<typeof Router> = Router();
 
-const ORG_KINDS = ['local_business', 'business', 'community_group', 'nonprofit', 'curator', 'collective'] as const;
-
 const ORG_SELECT = `
-  id, slug, name, legal_name, kind,
+  id, slug, name, legal_name,
   description, url, logo_url, image_url, telephone, email,
   same_as, keywords, opening_hours_specification,
+  tags, commercial,
   primary_place_id, owner_account_id,
   created_at, updated_at
 `;
@@ -41,7 +40,9 @@ const orgCreateSchema = z.object({
   name: z.string().min(1).max(200),
   slug: z.string().max(100).optional(),
   legalName: z.string().max(200).optional(),
-  kind: z.enum(ORG_KINDS),
+  // v2: kind enum retired (migration 082). Classify via tags + commercial.
+  tags: z.array(z.string().max(50)).max(15).optional(),
+  commercial: z.boolean().nullable().optional(),
   description: z.string().max(2000).optional(),
   url: z.string().url().max(2000).optional(),
   logo: z.string().url().max(2000).optional(),
@@ -109,7 +110,8 @@ router.post('/organizations', async (req, res, next) => {
         slug,
         name: body.name,
         legal_name: body.legalName || null,
-        kind: body.kind,
+        tags: body.tags || [],
+        commercial: body.commercial ?? null,
         description: body.description || null,
         url: body.url || null,
         logo_url: body.logo || null,
@@ -166,7 +168,8 @@ router.patch('/organizations/:id', async (req, res, next) => {
     if (body.name !== undefined) update.name = body.name;
     if (body.slug !== undefined) update.slug = body.slug;
     if (body.legalName !== undefined) update.legal_name = body.legalName;
-    if (body.kind !== undefined) update.kind = body.kind;
+    if (body.tags !== undefined) update.tags = body.tags;
+    if (body.commercial !== undefined) update.commercial = body.commercial;
     if (body.description !== undefined) update.description = body.description;
     if (body.url !== undefined) update.url = body.url;
     if (body.logo !== undefined) update.logo_url = body.logo;

@@ -32,7 +32,6 @@ import v1ListsRoutes, { listsLimiter } from './routes/v1-lists.js';
 import webhookRoutes from './routes/webhooks.js';
 import metaRoutes from './routes/meta.js';
 import cronRoutes from './routes/cron.js';
-import developerRoutes from './routes/developers.js';
 import serviceRoutes from './routes/service.js';
 import pageRoutes from './routes/pages.js';
 import dmcaRoutes, { dmcaHtmlHandler } from './routes/dmca.js';
@@ -153,7 +152,6 @@ export function createApp(): Express {
   app.use('/api/v1', publicCors);
   app.use('/api/meta', publicCors);
   app.use('/.well-known', publicCors);
-  app.use('/api/developers', publicCors);
   app.use('/llms.txt', publicCors);
   // Widget JS and badges must load from any origin
   app.use('/widget', publicCors);
@@ -242,12 +240,11 @@ export function createApp(): Express {
   // ─── Cron jobs ───────────────────────────────────────────────────
   app.use('/api/cron', cronRoutes);
 
-  // ─── Developer Registration ─────────────────────────────────────
-  app.use('/api/v1/developers', developerRoutes);
-
   // ─── Service API (external app writes) ─────────────────────
-  // v2: /api/v1/contribute (wild-west publishing) retired. All writes
-  // go through /api/v1/service/* with organizer authority enforcement.
+  // v2: /api/v1/contribute (wild-west publishing) and the legacy
+  // /api/v1/developers OTP flow are both retired. All registrations go
+  // through /api/v1/service/register/*; all writes through
+  // /api/v1/service/* with organizer authority enforcement.
   app.use('/api/v1/service', serviceRoutes);
 
   // ─── DMCA / takedown surfaces ─────────────────────────────────
