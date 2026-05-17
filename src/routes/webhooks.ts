@@ -287,7 +287,7 @@ router.post('/:id/test', writeLimiter, async (req, res, next) => {
       url: null,
       images: [],
       event_image_focal_y: 0.5,
-      organizer: { name: 'Neighborhood Commons', phone: null as null },
+      organizer: { id: '', slug: '', name: 'Neighborhood Commons', verified: false, phone: null as null },
       cost: null,
       series_id: null,
       series_instance_number: null,

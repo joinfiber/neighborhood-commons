@@ -18,7 +18,7 @@ import { optionalApiKey } from '../middleware/api-key.js';
 import { hydrateVerificationsFor } from '../lib/verification-hydrate.js';
 import { formatPlace } from './v1-places.js';
 import { formatOrganization } from './v1-organizations.js';
-import { formatPerson } from './v1-persons.js';
+// v2: formatPerson import removed — persons primitive dropped, curator is always an organization
 import { toNeighborhoodEvent, type PortalEventRow } from '../lib/event-transform.js';
 
 const router: ReturnType<typeof Router> = Router();
@@ -40,16 +40,12 @@ const LIST_SELECT = `
 `;
 
 const ORG_SELECT_INLINE = `
-  id, slug, name, legal_name, kind, description, url, logo_url, image_url,
+  id, slug, name, legal_name, description, url, logo_url, image_url,
   telephone, email, same_as, keywords, opening_hours_specification,
-  primary_place_id, created_at, updated_at
+  tags, commercial, primary_place_id, created_at, updated_at
 `;
 
-const PERSON_SELECT_INLINE = `
-  id, slug, name, given_name, family_name, alternate_name,
-  description, image_url, url, same_as, job_title,
-  created_at, updated_at
-`;
+// v2: PERSON_SELECT_INLINE removed (persons primitive dropped).
 
 const PLACE_SELECT_INLINE = `
   id, google_place_id, name,
@@ -57,7 +53,7 @@ const PLACE_SELECT_INLINE = `
   latitude, longitude, region_id, created_at, updated_at
 `;
 
-const EVENT_SELECT_INLINE = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, event_image_focal_y, created_at, creator_account_id, series_id, series_instance_number, open_window, capacity, rsvp, tags, wheelchair_accessible, source_method, source_publisher, source_contributor_name, source_contributor_url, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible)';
+const EVENT_SELECT_INLINE = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, event_image_focal_y, created_at, creator_account_id, organizer_org_id, series_id, series_instance_number, open_window, capacity, rsvp, tags, wheelchair_accessible, source_method, source_publisher, source_contributor_name, source_contributor_url, organizations!events_organizer_org_id_fkey(id, slug, name)';
 
 const listSchema = z.object({
   curator_id: z.string().uuid().optional(),
@@ -83,15 +79,10 @@ router.get('/', async (req, res, next) => {
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
-    if (params.curator_id && params.curator_type === 'organization') {
+    // v2: lists are always curated by an organization (curator_org_id NOT NULL).
+    // The legacy `curator_type=person` filter is a no-op now.
+    if (params.curator_id) {
       query = query.eq('curator_org_id', params.curator_id);
-    } else if (params.curator_id && params.curator_type === 'person') {
-      query = query.eq('curator_person_id', params.curator_id);
-    } else if (params.curator_id) {
-      // No type given — check both
-      query = query.or(
-        `curator_org_id.eq.${params.curator_id},curator_person_id.eq.${params.curator_id}`
-      );
     }
 
     if (params.q) {
@@ -159,7 +150,9 @@ router.get('/:idOrSlug', async (req, res, next) => {
 async function formatList(row: Record<string, unknown>, opts: { hydrateItems: boolean }) {
   const id = row.id as string;
 
-  // Hydrate curator (one of org or person)
+  // v2: curator is always an organization. The curator_person_id branch
+  // is dead code (column dropped in migration 082); kept here only until
+  // the v1-lists route is fully refactored.
   let curator: Record<string, unknown> | null = null;
   if (row.curator_org_id) {
     const { data: orgRow } = await supabaseAdmin
@@ -168,18 +161,8 @@ async function formatList(row: Record<string, unknown>, opts: { hydrateItems: bo
       .eq('id', row.curator_org_id)
       .maybeSingle();
     if (orgRow) {
-      const verifs = await hydrateVerificationsFor('organization', [orgRow.id as string]);
+      const verifs = await hydrateVerificationsFor([orgRow.id as string]);
       curator = formatOrganization(orgRow, new Map(), verifs);
-    }
-  } else if (row.curator_person_id) {
-    const { data: pRow } = await supabaseAdmin
-      .from('persons')
-      .select(PERSON_SELECT_INLINE)
-      .eq('id', row.curator_person_id)
-      .maybeSingle();
-    if (pRow) {
-      const verifs = await hydrateVerificationsFor('person', [pRow.id as string]);
-      curator = formatPerson(pRow, verifs);
     }
   }
 
@@ -216,7 +199,7 @@ async function formatList(row: Record<string, unknown>, opts: { hydrateItems: bo
     const orgsById = new Map((orgsRes.data || []).map(o => [o.id as string, o]));
     const placesById = new Map((placesRes.data || []).map(p => [p.id as string, p]));
 
-    const orgVerifs = await hydrateVerificationsFor('organization', orgIds);
+    const orgVerifs = await hydrateVerificationsFor(orgIds);
 
     itemListElement = items.map(it => {
       let item: Record<string, unknown> | null = null;

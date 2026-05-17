@@ -40,6 +40,7 @@ field/
 !scripts/sdk-health.ts
 !scripts/check-migration-1.0.0.sql
 !scripts/smoke-test-1.0.0.sh
+!scripts/scrub-unclaimed-creator-photos.ts
 
 # Internal docs (kept locally, not in public repo)
 ECOSYSTEM.md

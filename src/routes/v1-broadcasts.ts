@@ -71,7 +71,7 @@ router.get('/', async (req, res, next) => {
     // Pre-resolve verification filters into the set of organization IDs
     // whose broadcasts are allowed/disallowed. Pushes the filter into SQL
     // so meta.total reflects the filtered count.
-    const verifFilter = await resolveVerificationIdFilter('organization', {
+    const verifFilter = await resolveVerificationIdFilter({
       verified: params.verified,
       verified_by: params.verified_by,
       not_verified_by: params.not_verified_by,
@@ -115,7 +115,7 @@ router.get('/', async (req, res, next) => {
     const orgIds = Array.from(new Set(
       (broadcasts || []).map(b => (b as Record<string, unknown>).organization_id as string)
     ));
-    const verifications = await hydrateVerificationsFor('organization', orgIds);
+    const verifications = await hydrateVerificationsFor(orgIds);
 
     let formatted = (broadcasts || []).map(b => formatBroadcast(b as Record<string, unknown>, verifications));
 
@@ -171,7 +171,7 @@ router.get('/:id', async (req, res, next) => {
     }
 
     const orgId = (broadcast as Record<string, unknown>).organization_id as string;
-    const verifications = await hydrateVerificationsFor('organization', [orgId]);
+    const verifications = await hydrateVerificationsFor([orgId]);
 
     res.set('Cache-Control', 'public, max-age=15');
     res.json({ broadcast: formatBroadcast(broadcast as Record<string, unknown>, verifications) });

@@ -1,5 +1,5 @@
 /**
- * Verification library — Neighborhood Commons 1.0.0
+ * Verification library — Neighborhood Commons v2
  *
  * Shared logic for the verification flow:
  *   - Personal-email domain detection (routing signal, not rejection)
@@ -7,7 +7,11 @@
  *   - Routing decisions (which submission endpoint applies for an identifier)
  *   - Authority checks (does the calling key auto-approve manual reviews?)
  *
- * The Commons routes; apps follow.
+ * v2 (migration 082): Only organizations verify. The Person target is gone.
+ * `organizations.kind` was dropped — heavy-rigor classification now uses the
+ * `commercial` boolean (replaces the legacy local_business/business/nonprofit
+ * kinds). Identifier storage moved from `account_verified_identifiers` to
+ * `organization_verifications`.
  */
 
 import { createHash, randomBytes } from 'crypto';
@@ -16,10 +20,8 @@ import { supabaseAdmin } from './supabase.js';
 
 /**
  * Personal-email providers. Identifiers at these domains are routed to
- * manual review when the target is a heavy-rigor Organization (local_business,
- * business, nonprofit). For light-rigor targets (community_group, curator,
- * collective, person), personal emails are accepted via the auto-track
- * email loop — we just need to prove control.
+ * manual review when the target is a heavy-rigor Organization (commercial).
+ * Otherwise personal emails are accepted via the auto-track email loop.
  */
 export const PERSONAL_EMAIL_DOMAINS = new Set<string>([
   'gmail.com', 'googlemail.com',
@@ -47,14 +49,13 @@ export function isPersonalEmailDomain(email: string): boolean {
   return PERSONAL_EMAIL_DOMAINS.has(extractDomain(email));
 }
 
-/** Heavy-rigor organization kinds — manual review required for personal-email identifiers. */
-export const HEAVY_RIGOR_ORG_KINDS = new Set<string>([
-  'local_business', 'business', 'nonprofit',
-]);
-
 /**
- * Decide which verification path applies for a target+identifier pair.
+ * Decide which verification path applies for an organization+identifier pair.
  * Returns the prescribed method and the endpoint apps should call next.
+ *
+ * v2: commercial=true organizations are heavy-rigor; non-commercial are
+ * light-rigor (the legacy local_business/business/nonprofit vs.
+ * community_group/curator/collective split).
  */
 export type VerificationPathDecision = {
   requiredMethod: 'domain_email_loop' | 'manual_review';
@@ -63,34 +64,22 @@ export type VerificationPathDecision = {
 };
 
 export async function decideVerificationPath(
-  targetType: 'organization' | 'person',
-  targetId: string,
+  organizationId: string,
   _identifierType: 'email',
   identifierValue: string,
 ): Promise<VerificationPathDecision | null> {
   const domain = extractDomain(identifierValue);
   if (!domain) return null;
 
-  // Person targets: always light-rigor (any email loop)
-  if (targetType === 'person') {
-    return {
-      requiredMethod: 'domain_email_loop',
-      endpoint: '/v1/service/verifications/challenges',
-      reason: 'person_target',
-    };
-  }
-
-  // Organization: rigor depends on kind
   const { data: org } = await supabaseAdmin
     .from('organizations')
-    .select('kind')
-    .eq('id', targetId)
+    .select('commercial')
+    .eq('id', organizationId)
     .maybeSingle();
 
   if (!org) return null;
 
-  const kind = org.kind as string;
-  const isHeavyRigor = HEAVY_RIGOR_ORG_KINDS.has(kind);
+  const isHeavyRigor = org.commercial === true;
   const isPersonalDomain = PERSONAL_EMAIL_DOMAINS.has(domain);
 
   if (isHeavyRigor && isPersonalDomain) {
@@ -109,20 +98,20 @@ export async function decideVerificationPath(
 }
 
 /**
- * Look up an existing active verified identifier matching the (target, identifier)
- * pair. Returns null if not yet verified.
+ * Look up an existing active verified identifier for an organization.
+ * Returns null if not yet verified.
+ *
+ * v2: organization-only; the legacy target_type/target_id is gone.
  */
 export async function findExistingVerifiedIdentifier(
-  targetType: 'organization' | 'person',
-  targetId: string,
+  organizationId: string,
   identifierType: 'email',
   identifierValue: string,
 ) {
   const { data } = await supabaseAdmin
-    .from('account_verified_identifiers')
-    .select('identifier_type, identifier_value, identifier_domain, method, verified_at, approved_by_app, status')
-    .eq('target_type', targetType)
-    .eq('target_id', targetId)
+    .from('organization_verifications')
+    .select('identifier_type, identifier_value, method, verified_at, approved_by_app, status')
+    .eq('organization_id', organizationId)
     .eq('identifier_type', identifierType)
     .eq('identifier_value', identifierValue.toLowerCase())
     .eq('status', 'active')

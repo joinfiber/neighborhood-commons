@@ -1,13 +1,16 @@
 /**
- * Service API — Events
+ * Service API — Events (v2)
  *
  * Single-event CRUD (list, get, create, patch, delete) and batch update.
  * Series operations (patch/delete across all future instances) live in
- * service/series.ts; event↔group linking lives in service/groups.ts.
+ * service/series.ts.
  *
  * Auth: all routes inherit requireServiceApiKey from service/index.ts.
- * Scoping: mutations require the calling key to be linked to the event's
- * owner account (via assertLinkedEvent). Admin keys bypass this check.
+ *
+ * Scoping (v2 constrained-publishing): every event write either has a
+ * service key linked to the organizer organization via
+ * api_key_organization_links, OR uses source_method='witnessed' from a
+ * key with witness_authority=true. Admin keys bypass.
  */
 
 import { Router } from 'express';
@@ -28,22 +31,53 @@ import { downloadAndAttachImage } from '../../lib/image-processing.js';
 import { nominatimGeocode } from '../../lib/geocoding.js';
 import { isFirstPartyByOrganizer } from '../../lib/verification-hydrate.js';
 import { config } from '../../config.js';
-import { assertLinkedAccount, assertLinkedEvent } from './helpers.js';
+import { assertLinkedEvent } from './helpers.js';
+import { assertLinkedOrganization } from './helpers-v1.js';
 
 /**
- * Compute first_party for a service-created event. The flag is true iff
- * the event's organizer (the org owned by the linked portal account) has
- * an active verified identifier at insert time. Until verifications start
- * landing, every service-created event is public-facts.
+ * Resolve the publishing organization to (a) its name (source_publisher
+ * fallback), (b) its owner_account_id (carries the operational claim
+ * state for the legacy creator_account_id column and photo eligibility),
+ * and (c) coordinates from its primary_place if available.
+ *
+ * Throws 404 NOT_FOUND if the organization doesn't exist.
  */
-async function computeServiceEventFirstParty(portalAccountId: string): Promise<boolean> {
+async function resolveOrganizerContext(organizationId: string): Promise<{
+  name: string;
+  ownerAccountId: string | null;
+  primaryPlaceCoords: { lat: number | null; lng: number | null; address: string | null };
+}> {
   const { data: org } = await supabaseAdmin
     .from('organizations')
-    .select('id')
-    .eq('owner_account_id', portalAccountId)
+    .select('id, name, owner_account_id, primary_place_id')
+    .eq('id', organizationId)
     .maybeSingle();
-  if (!org) return false;
-  return isFirstPartyByOrganizer(org.id as string, null);
+
+  if (!org) throw createError('Organization not found', 404, 'NOT_FOUND');
+
+  let coords: { lat: number | null; lng: number | null; address: string | null } = {
+    lat: null, lng: null, address: null,
+  };
+  if (org.primary_place_id) {
+    const { data: place } = await supabaseAdmin
+      .from('places')
+      .select('latitude, longitude, street_address')
+      .eq('id', org.primary_place_id)
+      .maybeSingle();
+    if (place) {
+      coords = {
+        lat: place.latitude as number | null,
+        lng: place.longitude as number | null,
+        address: place.street_address as string | null,
+      };
+    }
+  }
+
+  return {
+    name: org.name as string,
+    ownerAccountId: (org.owner_account_id as string | null) ?? null,
+    primaryPlaceCoords: coords,
+  };
 }
 
 const router: ReturnType<typeof Router> = Router();
@@ -64,9 +98,8 @@ export const locationSchema = z.object({
 // Per-event contributor override (migration 062). Decoupled from
 // source_publisher so a Service-API caller can attribute an event to an
 // app/tool (e.g. "Go There") without moving the subscribable publisher
-// off the linked account's business_name. Omitted → contributor falls
-// back to the legacy source_publisher-on-api derivation in
-// event-transform.ts.
+// off the organizer's name. Omitted → contributor falls back to the
+// legacy source_publisher-on-api derivation in event-transform.ts.
 const contributorSchema = z.object({
   name: z.string().min(1).max(200).trim(),
   url: z.preprocess(
@@ -75,8 +108,14 @@ const contributorSchema = z.object({
   ),
 });
 
+// v2: source_method is constrained on input. 'portal' and 'import' are
+// not caller-set (legacy / pipeline use). Callers choose 'api' (default)
+// or 'witnessed' (collective-evidence path — requires witness_authority).
+const callerSourceMethod = z.enum(['api', 'witnessed']).default('api');
+
 export const createEventSchema = z.object({
-  account_id: z.string().uuid(),
+  organizerOrganizationId: z.string().uuid(),
+  source_method: callerSourceMethod.optional(),
   name: z.string().min(1).max(200),
   start: z.string().datetime({ offset: true }),
   end: z.string().datetime({ offset: true }).optional(),
@@ -104,22 +143,18 @@ export const createEventSchema = z.object({
   rsvp: z.enum(['recommended', 'required']).nullable().default(null),
   open_window: z.boolean().default(false),
   image_focal_y: z.number().min(0).max(1).optional(),
-  // source_method is NOT caller-overridable — hardcoded to 'api' on the Service path.
-  // source_publisher is NOT caller-overridable — derived from the linked account's business_name.
+  // source_publisher is NOT caller-overridable — derived from the organizer organization name.
   // first_party is NOT caller-overridable — computed server-side at insert time
-  // from the organizer's verification state (the flag means "posted by a
-  // verified business," and that's a fact about the system, not a claim
-  // the caller can self-issue).
+  // from the organizer's verification state.
   // contributor IS caller-overridable (migration 062) — per-event "who ran this"
   // attribution, distinct from the subscribable publisher. Optional.
   contributor: contributorSchema.optional(),
-  venue_id: z.string().uuid().optional(),
   external_id: z.string().max(500).optional(),
   tmdb_id: z.string().max(50).optional(),
 });
 
 export const updateEventSchema = z.object({
-  account_id: z.string().uuid().optional(),
+  organizerOrganizationId: z.string().uuid().optional(),
   name: z.string().min(1).max(200).optional(),
   start: z.string().datetime({ offset: true }).optional(),
   end: z.string().datetime({ offset: true }).optional().nullable(),
@@ -142,13 +177,8 @@ export const updateEventSchema = z.object({
   rsvp: z.enum(['recommended', 'required']).nullable().optional(),
   open_window: z.boolean().optional(),
   image_focal_y: z.number().min(0).max(1).optional(),
-  // Pass `contributor: null` to clear an existing override and fall back to
-  // the legacy source_publisher-on-api derivation.
+  // Pass `contributor: null` to clear an existing override.
   contributor: contributorSchema.nullable().optional(),
-  // first_party is computed server-side at insert from the organizer's
-  // verification state. Not a writable PATCH input — the only legitimate
-  // way to change it post-insert is to recompute (which a future endpoint
-  // can expose if needed; for now, recreate the event).
   status: z.enum(['published', 'pending_review', 'suspended', 'unpublished']).optional(),
   tmdb_id: z.string().max(50).nullable().optional(),
 });
@@ -194,7 +224,7 @@ export function friendlyToPortalInput(
       capacity: data.capacity,
       rsvp: data.rsvp,
       image_focal_y: data.image_focal_y,
-      source_method: 'api',
+      source_method: (data.source_method ?? 'api') as 'api' | 'portal' | 'feed' | 'admin' | 'merrie',
       source_publisher: sourcePublisher ?? undefined,
       source_contributor_name: data.contributor?.name ?? null,
       source_contributor_url:
@@ -226,7 +256,10 @@ router.get('/events', serviceLimiter, async (req, res, next) => {
 
     let query = supabaseAdmin
       .from('events')
-      .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name, email)`, { count: 'exact' })
+      .select(
+        `${PORTAL_SELECT}, organizations!events_organizer_org_id_fkey(id, slug, name)`,
+        { count: 'exact' },
+      )
       .in('source', [...MANAGED_SOURCES]);
 
     // Status filter (validated by schema)
@@ -281,7 +314,7 @@ router.get('/events', serviceLimiter, async (req, res, next) => {
 
     const result = paged.map((e) => {
       const pe = toPortalEvent(e);
-      pe.portal_accounts = e.portal_accounts;
+      pe.organizer = (e as Record<string, unknown>).organizations;
       return pe;
     });
 
@@ -291,70 +324,123 @@ router.get('/events', serviceLimiter, async (req, res, next) => {
   }
 });
 
-/** GET /service/events/:id — Single event with account */
+/** GET /service/events/:id — Single event with organizer */
 router.get('/events/:id', serviceLimiter, async (req, res, next) => {
   try {
     validateUuidParam(req.params.id, 'event ID');
 
     const { data: event, error } = await supabaseAdmin
       .from('events')
-      .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(id, email, business_name, status)`)
+      .select(`${PORTAL_SELECT}, organizations!events_organizer_org_id_fkey(id, slug, name)`)
       .eq('id', req.params.id)
       .maybeSingle();
 
     if (error || !event) throw createError('Event not found', 404, 'NOT_FOUND');
-    res.json({ event: toPortalEvent(event), account: event.portal_accounts || null });
+    res.json({
+      event: toPortalEvent(event),
+      organizer: (event as Record<string, unknown>).organizations || null,
+    });
   } catch (err) {
     next(err);
   }
 });
 
-/** POST /service/events — Create event (scoped to linked accounts) */
+/** POST /service/events — Create event (organizer-scoped) */
 router.post('/events', serviceLimiter, async (req, res, next) => {
   try {
     const data = validateRequest(createEventSchema, req.body);
-    await assertLinkedAccount(req, data.account_id);
+    const sourceMethod = data.source_method ?? 'api';
+    const witnessed = sourceMethod === 'witnessed';
 
-    // Verify account exists and fetch its venue coordinates
-    const { data: account } = await supabaseAdmin
-      .from('portal_accounts')
-      .select('id, auth_user_id, business_name, default_address, default_latitude, default_longitude')
-      .eq('id', data.account_id)
-      .maybeSingle();
+    // Authority gate. Witnessed-evidence keys bypass the org-link check
+    // (publisher is the collective; the witness has the receipts). All
+    // other paths require an api_key_organization_links row.
+    if (witnessed) {
+      if (!req.apiKeyInfo?.isAdmin && !req.apiKeyInfo?.witnessAuthority) {
+        throw createError(
+          'source_method=witnessed requires a key with witness_authority granted at activation.',
+          403,
+          'INSUFFICIENT_TIER',
+        );
+      }
+    } else {
+      await assertLinkedOrganization(req, data.organizerOrganizationId);
+    }
 
-    if (!account) throw createError('Account not found', 404, 'NOT_FOUND');
+    // Resolve organizer name + owner account + default coords from
+    // primary_place (post-082 these no longer live on portal_accounts).
+    const orgCtx = await resolveOrganizerContext(data.organizerOrganizationId);
 
-    const adminUserId = account.auth_user_id || getAdminUserId();
+    // Photo eligibility — only events whose organizer has a claimed owner
+    // account may contribute media bytes. Witnessed evidence bypasses
+    // (the collective is the warrantor). "Claimed" means either
+    // (a) Supabase Auth claim (`auth_user_id`) or (b) service-key claim
+    // via /accounts/link / atomic activation (`claimed_at` is set).
+    if (data.image_url && !witnessed) {
+      if (!orgCtx.ownerAccountId) {
+        throw createError(
+          'Photos may only be contributed by organizations with a claimed owner account.',
+          403,
+          'IMAGE_NOT_PERMITTED',
+        );
+      }
+      const { data: ownerAccount } = await supabaseAdmin
+        .from('portal_accounts')
+        .select('auth_user_id, claimed_at')
+        .eq('id', orgCtx.ownerAccountId)
+        .maybeSingle();
+      if (!ownerAccount || (!ownerAccount.auth_user_id && !ownerAccount.claimed_at)) {
+        throw createError(
+          'Photos may only be contributed by claimed accounts',
+          403,
+          'IMAGE_NOT_PERMITTED',
+        );
+      }
+    }
+
+    // adminUserId: prefer the org owner's auth_user_id (preserves legacy
+    // creator-attribution invariants) and fall back to the platform admin.
+    let adminUserId = getAdminUserId();
+    if (orgCtx.ownerAccountId) {
+      const { data: owner } = await supabaseAdmin
+        .from('portal_accounts')
+        .select('auth_user_id')
+        .eq('id', orgCtx.ownerAccountId)
+        .maybeSingle();
+      if (owner?.auth_user_id) adminUserId = owner.auth_user_id as string;
+    }
     const validatedTags = data.tags ? validateTags(data.tags, data.category) : [];
 
     const { portal, event_date: eventDate, start_time: startTime, end_time: endTime }
-      = friendlyToPortalInput(data, (account.business_name as string | null) ?? null);
+      = friendlyToPortalInput(data, orgCtx.name);
     portal.tags = validatedTags;
-    // first_party is server-computed at insert from the organizer's
-    // verification state. Today this is false for every account (no orgs
-    // verified yet); once an org's verified identifier lands, future
-    // events from that account flip to true automatically.
-    portal.first_party = await computeServiceEventFirstParty(data.account_id);
+    portal.first_party = await isFirstPartyByOrganizer(data.organizerOrganizationId);
 
-    const insert = portalInputToInsert(portal, data.account_id, adminUserId);
+    const insert = portalInputToInsert(portal, orgCtx.ownerAccountId, adminUserId);
+    // Stamp the organizer FK directly — it's the load-bearing authority anchor.
+    insert.organizer_org_id = data.organizerOrganizationId;
 
-    // Resolve coordinates: explicit > venue account > geocode
+    // Resolve coordinates: explicit > organizer's primary_place > geocode
     let lat = data.location.lat ?? null;
     let lng = data.location.lng ?? null;
     const address = data.location.address;
 
-    // If no explicit coordinates, inherit from venue account when address matches
-    if (lat == null && lng == null && account.default_latitude != null && account.default_longitude != null) {
+    // If no explicit coordinates, inherit from organizer's primary_place
+    // when the event address matches (or is absent).
+    if (
+      lat == null && lng == null
+      && orgCtx.primaryPlaceCoords.lat != null
+      && orgCtx.primaryPlaceCoords.lng != null
+    ) {
       const eventAddr = (address || '').toLowerCase().trim();
-      const venueAddr = (account.default_address || '').toLowerCase().trim();
-      // Use venue coords if: no event address, or event address matches venue address
-      if (!eventAddr || !venueAddr || eventAddr === venueAddr) {
-        lat = account.default_latitude;
-        lng = account.default_longitude;
+      const placeAddr = (orgCtx.primaryPlaceCoords.address || '').toLowerCase().trim();
+      if (!eventAddr || !placeAddr || eventAddr === placeAddr) {
+        lat = orgCtx.primaryPlaceCoords.lat;
+        lng = orgCtx.primaryPlaceCoords.lng;
         insert.latitude = lat;
         insert.longitude = lng;
         insert.approximate_location = `POINT(${lng} ${lat})`;
-        console.log(`[SERVICE] Using venue account coordinates for "${data.name}": ${lat}, ${lng}`);
+        console.log(`[SERVICE] Using organizer primary_place coordinates for "${data.name}": ${lat}, ${lng}`);
       }
     }
 
@@ -457,7 +543,7 @@ router.post('/events', serviceLimiter, async (req, res, next) => {
 /** PATCH /service/events/batch — Bulk update events (scoped) */
 router.patch('/events/batch', serviceLimiter, async (req, res, next) => {
   try {
-    // Scoping: verify all events belong to linked accounts
+    // Scoping: verify all events belong to organizations linked to this key
     if (!req.apiKeyInfo?.isAdmin) {
       const body = req.body as { ids?: string[] };
       if (body.ids) {
@@ -507,7 +593,7 @@ router.patch('/events/batch', serviceLimiter, async (req, res, next) => {
   }
 });
 
-/** PATCH /service/events/:id — Update single event (scoped) */
+/** PATCH /service/events/:id — Update single event (organizer-scoped) */
 router.patch('/events/:id', serviceLimiter, async (req, res, next) => {
   try {
     validateUuidParam(req.params.id, 'event ID');
@@ -518,7 +604,7 @@ router.patch('/events/:id', serviceLimiter, async (req, res, next) => {
     // wall-clock semantics on a timezone-only PATCH (S6).
     const { data: existing } = await supabaseAdmin
       .from('events')
-      .select('id, status, event_timezone, event_at, end_time, creator_account_id')
+      .select('id, status, event_timezone, event_at, end_time, organizer_org_id')
       .eq('id', req.params.id)
       .maybeSingle();
 
@@ -527,15 +613,15 @@ router.patch('/events/:id', serviceLimiter, async (req, res, next) => {
     const wasPublished = existing.status === 'published';
     const dbUpdate: Record<string, unknown> = {};
 
-    // Reassign event to a different account (for merging duplicates)
-    if (data.account_id !== undefined) {
-      const { data: newAccount } = await supabaseAdmin
-        .from('portal_accounts')
-        .select('id')
-        .eq('id', data.account_id)
-        .maybeSingle();
-      if (!newAccount) throw createError('Target account not found', 404, 'NOT_FOUND');
-      dbUpdate.creator_account_id = data.account_id;
+    // Reassign event to a different organizer (for merging duplicates / cleanup).
+    // Caller must be linked to the TARGET org as well — re-attribution can't
+    // hand the event off to an org the caller doesn't control.
+    if (data.organizerOrganizationId !== undefined) {
+      await assertLinkedOrganization(req, data.organizerOrganizationId);
+      const orgCtx = await resolveOrganizerContext(data.organizerOrganizationId);
+      dbUpdate.organizer_org_id = data.organizerOrganizationId;
+      // Keep creator_account_id consistent with the new organizer's owner.
+      dbUpdate.creator_account_id = orgCtx.ownerAccountId;
     }
 
     if (data.status !== undefined) dbUpdate.status = data.status;
@@ -617,7 +703,74 @@ router.patch('/events/:id', serviceLimiter, async (req, res, next) => {
   }
 });
 
-/** DELETE /service/events/:id — Delete event (scoped) */
+// ---------------------------------------------------------------------------
+// PATCH /service/events/:id/organizer
+//
+// Re-attribute an event to a different organization. Under v2's
+// constrained-publishing model, only organizations may organize events
+// (the Person primitive is gone). Auth: caller must be linked to the
+// event's current organizer (or admin). The target org must exist and be
+// linked to the caller (so handoff can't conjure events for orgs you
+// don't control).
+// ---------------------------------------------------------------------------
+
+export const assignOrganizerSchema = z.object({
+  organizerOrganizationId: z.string().uuid(),
+});
+
+router.patch('/events/:id/organizer', serviceLimiter, async (req, res, next) => {
+  try {
+    validateUuidParam(req.params.id, 'event ID');
+    const body = validateRequest(assignOrganizerSchema, req.body);
+
+    const { data: event } = await supabaseAdmin
+      .from('events')
+      .select('id, organizer_org_id, source_method')
+      .eq('id', req.params.id)
+      .maybeSingle();
+
+    if (!event) throw createError('Event not found', 404, 'NOT_FOUND');
+
+    // Auth: caller must be linked to the CURRENT organizer (or admin /
+    // witness-authority on witnessed events). assertLinkedEvent enforces
+    // this disjunction.
+    await assertLinkedEvent(req, req.params.id);
+
+    // Verify the target organization exists.
+    const { data: org } = await supabaseAdmin
+      .from('organizations')
+      .select('id')
+      .eq('id', body.organizerOrganizationId)
+      .maybeSingle();
+    if (!org) throw createError('Organization not found', 404, 'NOT_FOUND');
+
+    // Caller must also be linked to the target organization. Re-attribution
+    // can't conjure events for an org the caller doesn't control. Admin
+    // bypass applies via assertLinkedOrganization.
+    await assertLinkedOrganization(req, body.organizerOrganizationId);
+
+    const { data: updated, error } = await supabaseAdmin
+      .from('events')
+      .update({ organizer_org_id: body.organizerOrganizationId })
+      .eq('id', req.params.id)
+      .select(PORTAL_SELECT)
+      .single();
+
+    if (error) {
+      console.error('[SERVICE] Assign organizer error:', error.message);
+      throw createError('Failed to assign organizer', 500, 'SERVER_ERROR');
+    }
+
+    // Organizer change is a meaningful metadata update — notify subscribers.
+    dispatchEventWebhookById('event.updated', updated.id);
+
+    res.json({ event: toPortalEvent(updated) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** DELETE /service/events/:id — Delete event (organizer-scoped) */
 router.delete('/events/:id', serviceLimiter, async (req, res, next) => {
   try {
     validateUuidParam(req.params.id, 'event ID');

@@ -86,6 +86,7 @@ function makeEventRow(overrides: Record<string, unknown> = {}) {
     event_image_url: 'https://images.example.com/jazz.jpg',
     created_at: '2026-03-10T12:00:00.000Z',
     creator_account_id: 'acc-uuid-1',
+    organizer_org_id: 'org-uuid-1',
     series_id: null,
     series_instance_number: null,
     open_window: false,
@@ -95,23 +96,33 @@ function makeEventRow(overrides: Record<string, unknown> = {}) {
     wheelchair_accessible: true,
     source_method: 'portal',
     source_publisher: null,
-    portal_accounts: { business_name: 'The Jazz Spot', wheelchair_accessible: true },
+    organizations: { id: 'org-uuid-1', slug: 'the-jazz-spot', name: 'The Jazz Spot' },
     ...overrides,
   };
 }
 
-function makeAccountRow(overrides: Record<string, unknown> = {}) {
+// v2: venue pages resolve via organizations.slug; the legacy portal_accounts
+// shape (business_name, default_*, etc.) is gone post-082.
+function makeOrgRow(overrides: Record<string, unknown> = {}) {
   return {
-    id: 'acc-uuid-1',
-    business_name: 'The Jazz Spot',
+    id: 'org-uuid-1',
     slug: 'the-jazz-spot',
+    name: 'The Jazz Spot',
     description: 'Live jazz in the heart of Fishtown.',
-    website: 'https://thejazzspot.com',
+    url: 'https://thejazzspot.com',
     logo_url: null,
-    default_address: '123 Main St, Philadelphia, PA',
-    default_latitude: 39.9743,
-    default_longitude: -75.1340,
-    status: 'active',
+    primary_place_id: 'place-uuid-1',
+    owner_account_id: 'acc-uuid-1',
+    ...overrides,
+  };
+}
+
+function makePlaceRow(overrides: Record<string, unknown> = {}) {
+  return {
+    street_address: '123 Main St',
+    address_locality: 'Philadelphia',
+    address_region: 'PA',
+    postal_code: '19125',
     ...overrides,
   };
 }
@@ -258,12 +269,13 @@ describe('GET /events/:id', () => {
 
 describe('GET /venues/:slug', () => {
   it('returns HTML with venue details and event list', async () => {
-    const account = makeAccountRow();
     const events = [
       makeEventRow({ id: 'evt-1', content: 'Jazz Night' }),
       makeEventRow({ id: 'evt-2', content: 'Blues Brunch', category: 'food_drink' }),
     ];
-    mockResponses.set('portal_accounts', { data: account, error: null });
+    mockResponses.set('organizations', { data: makeOrgRow(), error: null });
+    mockResponses.set('portal_accounts', { data: { status: 'active' }, error: null });
+    mockResponses.set('places', { data: makePlaceRow(), error: null });
     mockResponses.set('events', { data: events, error: null });
 
     const res = await fetch(`${baseUrl}/venues/the-jazz-spot`);
@@ -278,7 +290,8 @@ describe('GET /venues/:slug', () => {
     expect(html).toContain('Live jazz in the heart of Fishtown.');
 
     // Address
-    expect(html).toContain('123 Main St, Philadelphia, PA');
+    expect(html).toContain('123 Main St');
+    expect(html).toContain('Philadelphia');
 
     // Website link
     expect(html).toContain('thejazzspot.com');
@@ -304,7 +317,7 @@ describe('GET /venues/:slug', () => {
   });
 
   it('returns 404 for non-existent venue', async () => {
-    mockResponses.set('portal_accounts', { data: null, error: null });
+    mockResponses.set('organizations', { data: null, error: null });
 
     const res = await fetch(`${baseUrl}/venues/nonexistent-venue`);
     expect(res.status).toBe(404);
@@ -313,7 +326,9 @@ describe('GET /venues/:slug', () => {
   });
 
   it('shows empty state when venue has no events', async () => {
-    mockResponses.set('portal_accounts', { data: makeAccountRow(), error: null });
+    mockResponses.set('organizations', { data: makeOrgRow(), error: null });
+    mockResponses.set('portal_accounts', { data: { status: 'active' }, error: null });
+    mockResponses.set('places', { data: makePlaceRow(), error: null });
     mockResponses.set('events', { data: [], error: null });
 
     const res = await fetch(`${baseUrl}/venues/the-jazz-spot`);
@@ -330,7 +345,6 @@ describe('GET /venues/:slug', () => {
 
 describe('GET /venues/:slug/events.ics', () => {
   it('returns valid iCal feed for venue', async () => {
-    const account = makeAccountRow();
     const events = [
       {
         id: 'evt-1', content: 'Jazz Night', description: 'Live jazz',
@@ -340,7 +354,7 @@ describe('GET /venues/:slug/events.ics', () => {
         link_url: 'https://example.com', recurrence: 'none',
       },
     ];
-    mockResponses.set('portal_accounts', { data: account, error: null });
+    mockResponses.set('organizations', { data: { id: 'org-uuid-1', name: 'The Jazz Spot' }, error: null });
     mockResponses.set('events', { data: events, error: null });
 
     const res = await fetch(`${baseUrl}/venues/the-jazz-spot/events.ics`);
@@ -366,14 +380,14 @@ describe('GET /venues/:slug/events.ics', () => {
   });
 
   it('returns 404 for non-existent venue', async () => {
-    mockResponses.set('portal_accounts', { data: null, error: null });
+    mockResponses.set('organizations', { data: null, error: null });
 
     const res = await fetch(`${baseUrl}/venues/nonexistent/events.ics`);
     expect(res.status).toBe(404);
   });
 
   it('returns empty calendar when venue has no events', async () => {
-    mockResponses.set('portal_accounts', { data: makeAccountRow(), error: null });
+    mockResponses.set('organizations', { data: { id: 'org-uuid-1', name: 'The Jazz Spot' }, error: null });
     mockResponses.set('events', { data: [], error: null });
 
     const res = await fetch(`${baseUrl}/venues/the-jazz-spot/events.ics`);

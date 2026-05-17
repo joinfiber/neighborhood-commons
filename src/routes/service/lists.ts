@@ -1,5 +1,5 @@
 /**
- * Service-tier Lists API — Neighborhood Commons 1.0.0
+ * Service-tier Lists API — Neighborhood Commons v2
  *
  * Endpoints:
  *   POST    /service/lists                          — create
@@ -7,9 +7,8 @@
  *   POST    /service/lists/:id/items                — add item
  *   DELETE  /service/lists/:id/items/:position      — remove item by position
  *
- * Org-curated lists: scoped via assertLinkedListCurator.
- * Person-curated lists: admin-only edit in 1.0.0 (person-link semantics
- * land in a later minor version).
+ * v2: lists are always curated by an organization (curator_org_id is
+ * NOT NULL after migration 082). The Person primitive is gone.
  */
 
 import { Router } from 'express';
@@ -23,20 +22,15 @@ const router: ReturnType<typeof Router> = Router();
 
 const LIST_SELECT = `
   id, slug, name, description,
-  curator_org_id, curator_person_id,
+  curator_org_id,
   created_at, updated_at
 `;
-
-const curatorRefSchema = z.object({
-  type: z.enum(['organization', 'person']),
-  id: z.string().uuid(),
-});
 
 const listCreateSchema = z.object({
   name: z.string().min(1).max(200),
   slug: z.string().max(100).optional(),
   description: z.string().max(2000).optional(),
-  curator: curatorRefSchema,
+  curatorOrganizationId: z.string().uuid(),
 });
 
 const listUpdateSchema = z.object({
@@ -71,23 +65,13 @@ router.post('/lists', async (req, res, next) => {
     const slug = body.slug || deriveSlug(body.name);
     if (!slug) throw createError('Could not derive valid slug', 400, 'VALIDATION_ERROR');
 
-    if (body.curator.type === 'organization') {
-      await assertLinkedOrganization(req, body.curator.id);
-    } else if (!req.apiKeyInfo?.isAdmin) {
-      // Person-curated lists require admin in 1.0.0
-      throw createError(
-        'Person-curated lists require an admin service key in 1.0.0.',
-        403,
-        'INSUFFICIENT_TIER',
-      );
-    }
+    await assertLinkedOrganization(req, body.curatorOrganizationId);
 
     const insertRow = {
       slug,
       name: body.name,
       description: body.description || null,
-      curator_org_id: body.curator.type === 'organization' ? body.curator.id : null,
-      curator_person_id: body.curator.type === 'person' ? body.curator.id : null,
+      curator_org_id: body.curatorOrganizationId,
     };
 
     const { data: created, error } = await supabaseAdmin
@@ -234,8 +218,6 @@ function formatListMetadata(row: Record<string, unknown>) {
     description: row.description || null,
     curator: row.curator_org_id
       ? { type: 'organization', id: row.curator_org_id }
-      : row.curator_person_id
-      ? { type: 'person', id: row.curator_person_id }
       : null,
     created_at: row.created_at,
     updated_at: row.updated_at,

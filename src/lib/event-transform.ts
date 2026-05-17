@@ -18,7 +18,19 @@ import { config } from '../config.js';
 // TYPES
 // =============================================================================
 
-/** Events table row with portal_accounts join (for public API / webhook use) */
+/**
+ * Events table row with organizations join (for public API / webhook use).
+ *
+ * v2: organizer comes from the joined `organizations` row via
+ * `organizer_org_id`. The legacy `portal_accounts` join (which used to
+ * supply `business_name` as the organizer name) is gone — that column
+ * was dropped from portal_accounts in migration 082.
+ *
+ * The suspended-status visibility check now traverses
+ * organizations.owner_account_id → portal_accounts.status. Organizations
+ * without an owning portal account (e.g., admin-created via Studio) skip
+ * the suspension check entirely.
+ */
 export interface PortalEventRow {
   id: string;
   content: string;
@@ -45,16 +57,25 @@ export interface PortalEventRow {
   link_url: string | null;
   event_image_url: string | null;
   created_at: string;
-  // Contributor tracking (migration 020, 045, 062)
+  // Contributor tracking (migrations 020, 045, 062)
   source_method: string | null;
   source_publisher: string | null;
   source_contributor_url: string | null;
   source_contributor_name: string | null;
-  // First-party flag (migration 054)
+  // First-party flag (migration 054; semantics finalized in 73c4bce)
   first_party: boolean;
   // TMDB film ID for cross-theater clustering (migration 063)
   tmdb_id: string | null;
-  portal_accounts: { business_name: string; wheelchair_accessible?: boolean | null } | null;
+  // v2: organizer derived from organizations join via organizer_org_id (migration 067).
+  // The nested portal_accounts (via owner_account_id) is for the suspended-status
+  // visibility check; it's not exposed in the public response.
+  organizer_org_id: string | null;
+  organizations: {
+    id: string;
+    slug: string;
+    name: string;
+    portal_accounts: { status: string } | null;
+  } | null;
 }
 
 export interface NeighborhoodEvent {
@@ -76,8 +97,15 @@ export interface NeighborhoodEvent {
   images: string[];
   event_image_focal_y: number;
   organizer: {
-    name: string;
-    phone: null;
+    // v2: organizer is always an organization reference (no Person variant).
+    // Post-migration 081, events.organizer_org_id is NOT NULL, so id and slug
+    // are always present in the response. The "Unknown Organizer" placeholder
+    // catches any historical orphans.
+    id: string;              // org UUID, always present
+    slug: string;             // org slug, always present
+    name: string;             // org name (falls back to place_name only in pre-migration data)
+    verified: boolean;        // hydrated from organization_verifications
+    phone: null;              // legacy field, kept for backward compat; always null
   };
   cost: string | null;
   series_id: string | null;
@@ -94,7 +122,8 @@ export interface NeighborhoodEvent {
   source: {
     publisher: string;
     collected_at: string;
-    method: 'portal' | 'import' | 'api';
+    // v2: extended to include 'witnessed' for the Fiber Community OCR path
+    method: 'portal' | 'import' | 'api' | 'witnessed';
     contributor: { name: string; url: string | null } | null;
     license: 'CC BY 4.0';
   };
@@ -190,10 +219,34 @@ export function toRRule(recurrence: string, count?: number): string | null {
 // NEIGHBORHOOD API TRANSFORM
 // =============================================================================
 
-/** Transform an events table row (with portal_accounts join) to Neighborhood API v0.2 format */
-export function toNeighborhoodEvent(row: PortalEventRow): NeighborhoodEvent {
+/**
+ * Transform an events table row (with organizations join) to Neighborhood API format.
+ *
+ * v2 changes from v1:
+ *   - organizer is derived from the joined `organizations` row, not from
+ *     portal_accounts.business_name (which was dropped in migration 082)
+ *   - organizer.{id, slug, verified} are new fields; phone stays as null
+ *     for backward compat with consumers reading {name, phone}
+ *   - source.method extended to include 'witnessed' (Fiber Community OCR path)
+ *
+ * The `verifiedOrgIds` parameter is an optional Set of organization UUIDs
+ * known to be verified. Callers that hydrate verifications in batch pass
+ * this; callers that don't get `verified: false` on every organizer.
+ */
+export function toNeighborhoodEvent(
+  row: PortalEventRow,
+  verifiedOrgIds?: ReadonlySet<string>,
+): NeighborhoodEvent {
   const tz = row.event_timezone || 'America/New_York';
   const rrule = toRRule(row.recurrence);
+  const org = row.organizations;
+  // Post-migration 081 every event has an organizer. The empty-string fallbacks
+  // here are belt-and-suspenders for the brief window when 081 hasn't applied yet;
+  // they'll never trigger in production once v2 ships.
+  const organizerId = org?.id ?? '';
+  const organizerSlug = org?.slug ?? '';
+  const organizerName = org?.name || row.place_name;
+  const isVerified = !!(org?.id && verifiedOrgIds?.has(org.id));
   return {
     id: row.id,
     name: row.content,
@@ -213,7 +266,10 @@ export function toNeighborhoodEvent(row: PortalEventRow): NeighborhoodEvent {
     images: row.event_image_url ? [resolveEventImageUrl(row.event_image_url, config.apiBaseUrl) as string] : [],
     event_image_focal_y: (row as unknown as { event_image_focal_y?: number }).event_image_focal_y ?? 0.5,
     organizer: {
-      name: row.portal_accounts?.business_name || row.place_name,
+      id: organizerId,
+      slug: organizerSlug,
+      name: organizerName,
+      verified: isVerified,
       phone: null,
     },
     cost: row.price || null,
@@ -224,23 +280,22 @@ export function toNeighborhoodEvent(row: PortalEventRow): NeighborhoodEvent {
     capacity: row.capacity ?? null,
     rsvp: row.rsvp ?? null,
     tags: row.tags || [],
-    wheelchair_accessible: row.wheelchair_accessible ?? row.portal_accounts?.wheelchair_accessible ?? null,
+    wheelchair_accessible: row.wheelchair_accessible ?? null,
     first_party: row.first_party,
     tmdb_id: row.tmdb_id ?? null,
     recurrence: rrule ? { rrule } : null,
     source: {
-      // API/import events: source_publisher is the canonical publisher (the external source).
-      // Portal events: business_name is the publisher (the venue operator).
+      // API/import/witnessed events: source_publisher is the canonical publisher (the external source).
+      // Portal events: organization name is the publisher.
       publisher: (row.source_method && row.source_method !== 'portal' && row.source_publisher)
         ? row.source_publisher
-        : (row.portal_accounts?.business_name || row.source_publisher || 'Neighborhood Commons'),
+        : (organizerName || row.source_publisher || 'Neighborhood Commons'),
       collected_at: row.created_at,
-      method: (row.source_method || 'portal') as 'portal' | 'import' | 'api',
+      method: (row.source_method || 'portal') as 'portal' | 'import' | 'api' | 'witnessed',
       // Contributor fallback chain (migration 062):
       //   1. Explicit per-event override via source_contributor_name
       //      (Service API `contributor: { name, url }` input)
       //   2. Legacy derivation: source_publisher on api-method events
-      //      (contribute.ts path, where source_publisher was the app name)
       //   3. null
       contributor: row.source_contributor_name
         ? { name: row.source_contributor_name, url: row.source_contributor_url || null }

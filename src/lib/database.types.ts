@@ -72,24 +72,17 @@ export type Database = {
         Update: any;
       };
       portal_accounts: {
+        // v2 (migration 082): narrowed to operational columns only. The
+        // business-profile data (business_name, default_*, logo_url, etc.)
+        // moved to organizations. portal_accounts holds the tenant email
+        // and claim state.
         Row: {
           id: string;
           auth_user_id: string | null;
           email: string;
-          business_name: string;
-          phone: string | null;
-          website: string | null;
-          default_venue_name: string | null;
-          default_address: string | null;
-          default_place_id: string | null;
-          default_latitude: number | null;
-          default_longitude: number | null;
-          logo_url: string | null;
-          description: string | null;
           status: string;
-          slug: string | null;
           claimed_at: string | null;
-          wheelchair_accessible: boolean | null;
+          claimed_by: string | null;
           last_login_at: string | null;
           created_at: string;
           updated_at: string;

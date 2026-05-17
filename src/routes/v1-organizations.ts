@@ -1,10 +1,15 @@
 /**
- * Public Organizations API — Neighborhood Commons 1.0.0
+ * Public Organizations API — Neighborhood Commons v2
  *
- * Read-only public API for Schema.org Organization records.
- * Subtypes via `kind`: local_business, business, community_group, nonprofit,
- * curator, collective. Heavy verification rigor for business kinds; light
- * for community/curator kinds.
+ * Read-only public API for Schema.org Organization records — the unified
+ * entity primitive. Anything that publishes or organizes is an organization,
+ * regardless of how many humans operate it.
+ *
+ * v2 changes from v1:
+ *   - No `kind` discriminator. Classification emerges from `tags` (descriptive)
+ *     + `commercial` (binary) + structural signals (place_categories, events).
+ *   - `additionalType` is derived from structural data: LocalBusiness if the
+ *     org has a primary_place_id, plain Organization otherwise.
  *
  * No authentication required. Optional API key for dedicated rate limit.
  *
@@ -33,12 +38,11 @@ export const organizationsLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-const ORG_KINDS = ['local_business', 'business', 'community_group', 'nonprofit', 'curator', 'collective'] as const;
-
-const ORG_SELECT = `
-  id, slug, name, legal_name, kind,
+export const ORG_SELECT = `
+  id, slug, name, legal_name,
   description, url, logo_url, image_url, telephone, email,
   same_as, keywords, opening_hours_specification,
+  tags, commercial,
   primary_place_id,
   created_at, updated_at
 `;
@@ -47,11 +51,15 @@ const PLACE_SELECT_INLINE = `
   id, google_place_id, name,
   street_address, address_locality, address_region, postal_code, address_country,
   latitude, longitude, region_id,
+  place_categories, category_source,
   created_at, updated_at
 `;
 
 const listSchema = z.object({
-  kind: z.enum(ORG_KINDS).optional(),
+  // v2: kind filter gone. Use tag + commercial + place_category for classification.
+  tag: z.union([z.string().max(50), z.array(z.string().max(50))]).optional(),
+  commercial: z.enum(['true', 'false']).optional(),
+  place_category: z.string().max(50).optional(),
   verified: z.enum(['true', 'false']).optional(),
   verified_by: z.string().max(500).optional(),
   not_verified_by: z.string().max(500).optional(),
@@ -62,6 +70,9 @@ const listSchema = z.object({
   limit: z.coerce.number().min(1).max(200).optional(),
   offset: z.coerce.number().min(0).optional(),
 });
+
+export type OrgListParams = z.infer<typeof listSchema>;
+export { listSchema as orgListSchema };
 
 // ---------------------------------------------------------------------------
 // GET /api/v1/organizations
@@ -77,7 +88,7 @@ router.get('/', async (req, res, next) => {
     // can apply them. This is what makes meta.total reflect the FILTERED
     // count — the older post-fetch approach reported the unfiltered total
     // and confused paginating consumers.
-    const verifFilter = await resolveVerificationIdFilter('organization', {
+    const verifFilter = await resolveVerificationIdFilter({
       verified: params.verified,
       verified_by: params.verified_by,
       not_verified_by: params.not_verified_by,
@@ -100,7 +111,31 @@ router.get('/', async (req, res, next) => {
       query = query.not('id', 'in', `(${verifFilter.excludeIds.join(',')})`);
     }
 
-    if (params.kind) query = query.eq('kind', params.kind);
+    // v2 filters: tag, commercial, place_category (replaces kind)
+    if (params.tag) {
+      const tags = Array.isArray(params.tag) ? params.tag : [params.tag];
+      if (tags.length > 0) query = query.contains('tags', tags);
+    }
+
+    if (params.commercial === 'true') query = query.eq('commercial', true);
+    else if (params.commercial === 'false') query = query.eq('commercial', false);
+
+    if (params.place_category) {
+      // Filter to orgs whose primary_place has the given category.
+      // Two-step: find matching places, then filter orgs by primary_place_id.
+      const { data: matchingPlaces } = await supabaseAdmin
+        .from('places')
+        .select('id')
+        .contains('place_categories', [params.place_category]);
+      const matchingPlaceIds = (matchingPlaces || []).map(p => p.id as string);
+      if (matchingPlaceIds.length === 0) {
+        // No matching places; result must be empty.
+        res.set('Cache-Control', 'public, max-age=60');
+        res.json({ meta: buildMeta(0, limit, offset), organizations: [] });
+        return;
+      }
+      query = query.in('primary_place_id', matchingPlaceIds);
+    }
 
     if (params.q) {
       const sanitized = sanitizeSearchInput(params.q);
@@ -134,7 +169,7 @@ router.get('/', async (req, res, next) => {
 
     // Hydrate verifications (still needed for the `verification` block on each org)
     const orgIds = (orgs || []).map(o => o.id as string);
-    const verifications = await hydrateVerificationsFor('organization', orgIds);
+    const verifications = await hydrateVerificationsFor(orgIds);
 
     let formatted = (orgs || []).map(o => formatOrganization(o, placesById, verifications));
 
@@ -200,7 +235,7 @@ router.get('/:idOrSlug', async (req, res, next) => {
       if (place) placesById.set(place.id as string, place);
     }
 
-    const verifications = await hydrateVerificationsFor('organization', [org.id as string]);
+    const verifications = await hydrateVerificationsFor([org.id as string]);
 
     res.set('Cache-Control', 'public, max-age=60');
     res.json({ organization: formatOrganization(org, placesById, verifications) });
@@ -213,14 +248,17 @@ router.get('/:idOrSlug', async (req, res, next) => {
 // Format Organization for API response
 // ---------------------------------------------------------------------------
 
-const KIND_TO_SCHEMA_TYPE: Record<string, string> = {
-  local_business: 'https://schema.org/LocalBusiness',
-  business: 'https://schema.org/Organization',
-  community_group: 'https://schema.org/Organization',
-  nonprofit: 'https://schema.org/NGO',
-  curator: 'https://schema.org/Organization',
-  collective: 'https://schema.org/Organization',
-};
+/**
+ * v2: derive additionalType from structural data instead of a kind enum.
+ * Has primary_place_id → LocalBusiness. Otherwise → Organization.
+ * Apps that want richer Schema.org subtyping can derive from tags or
+ * place_categories on their side.
+ */
+function deriveAdditionalType(hasPrimaryPlace: boolean): string {
+  return hasPrimaryPlace
+    ? 'https://schema.org/LocalBusiness'
+    : 'https://schema.org/Organization';
+}
 
 export function formatOrganization(
   row: Record<string, unknown>,
@@ -238,8 +276,7 @@ export function formatOrganization(
     slug: row.slug,
     name: row.name,
     legalName: row.legal_name || null,
-    kind: row.kind,
-    additionalType: KIND_TO_SCHEMA_TYPE[row.kind as string] || 'https://schema.org/Organization',
+    additionalType: deriveAdditionalType(!!placeRow),
     description: row.description || null,
     url: row.url || null,
     logo: row.logo_url || null,
@@ -248,6 +285,8 @@ export function formatOrganization(
     email: row.email || null,
     sameAs: row.same_as || [],
     keywords: row.keywords || [],
+    tags: row.tags || [],
+    commercial: row.commercial ?? null,
     openingHoursSpecification: row.opening_hours_specification || null,
     location: placeRow ? formatPlace(placeRow) : null,
     verified: !!v,
@@ -257,7 +296,7 @@ export function formatOrganization(
   };
 }
 
-function buildMeta(total: number, limit: number, offset: number) {
+export function buildMeta(total: number, limit: number, offset: number) {
   return {
     total,
     limit,
@@ -267,4 +306,5 @@ function buildMeta(total: number, limit: number, offset: number) {
   };
 }
 
+export { PLACE_SELECT_INLINE };
 export default router;

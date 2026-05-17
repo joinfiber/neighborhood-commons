@@ -14,7 +14,113 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
-## 2026-05-06 (latest)
+## 2026-05-17 — v2.0.0
+
+The v2 release. Coherent bundle of breaking changes that simplify the substrate around a tighter conceptual model. Documented in full in [`docs/v2-migration-plan.md`](docs/v2-migration-plan.md) and articulated in [`CLAUDE.md`](CLAUDE.md). The substrate is now defined around **Type A (durable profile data, first-party only)** vs **Type B (transactional/episodic, constrained publishing)** with three valid authority paths: entity-runs-it, pipeline-proxies, witnessed-with-evidence.
+
+### Schema
+
+- Migration 078: additive v2 columns — `organizations.tags`, `organizations.commercial`, `places.place_categories`, `places.category_source`, `places.category_reviewed_{at,by}`, `events.match_key`, `api_keys.witness_authority`. Extended `events.source_method` enum to include `'witnessed'`. All non-breaking; defaults / nullables.
+- Migration 079: migrated `persons` rows to `organizations` (preserved UUIDs; PII-flavored fields like `given_name`/`family_name` not copied). Re-pointed `events.organizer_person_id`, `lists.curator_person_id`, and `account_verified_identifiers.target_type='person'` references to the migrated organizations.
+- Migration 080: created `organization_verifications` table (the v2 replacement for `account_verified_identifiers` — no polymorphic `target_type`, no `identifier_domain`). Migrated active `target_type='organization'` rows.
+- Migration 081: backfilled `events.organizer_org_id` for any remaining orphans via location_place_id and creator_account_id chains; placeholder "Unknown Organizer" org for unresolvable rows; added NOT NULL constraint on `events.organizer_org_id`.
+- Migration 082: dropped deprecated schema. Tables: `persons`, `account_verified_identifiers`, `groups`, `group_venues`, `api_key_account_links`, `developer_otps`. Columns: `events.organizer_person_id`, `lists.curator_person_id`, `organizations.kind`, `event_performers.person_id`. Added `event_performers.performer_name` for free-form fallback. Narrowed `portal_accounts` to operational columns only (email, claim, status, timestamps) — business-profile data lives on organizations.
+
+### API
+
+- `BREAKING:` Removed `/v1/accounts` and `/v1/accounts/:idOrSlug`. Replaced by `/v1/publishers` and `/v1/publishers/:idOrSlug` reading from organizations.
+- `BREAKING:` Removed `/v1/persons` and `/v1/persons/:idOrSlug`. Solo performers/DJs/individual hosts are now organizations.
+- `BREAKING:` Removed `/v1/verifiers` and `/v1/verifiers/:appName/recent_approvals`. The cross-app reputation graph was overengineered and not load-bearing under the v2 model. Verification's job narrowed to anchoring Type A authority for organizations only.
+- `BREAKING:` Removed `/api/v1/contribute` (and `/contribute/batch`, `/contribute/mine`, `/contribute/:id`). The wild-west publishing path is gone. All event writes go through `/v1/service/events` with organizer authority enforcement.
+- `BREAKING:` Removed `/v1/service/persons`.
+- `BREAKING:` Service API event writes (`POST /v1/service/events`, `PATCH /v1/service/events/:id`) now require `organizer_org_id`. The calling service key must be linked to that organization via `api_key_organization_links`, OR have `witness_authority=true` with `source_method='witnessed'`. Cross-organization writes return `403 NOT_LINKED`.
+- `BREAKING:` Service API list writes constrain to reference-only — list items must reference existing primitives.
+- `BREAKING:` Verification submission API drops the `targetType` field; only organizations verify.
+- `BREAKING:` Event response `organizer` is always an organization reference (no Person variant). Same for list `curator`.
+- `BREAKING:` Organization response drops `kind` field. Replaced by `tags` (text[]) and `commercial` (boolean | null).
+- New: `GET /v1/publishers` and `GET /v1/publishers/:idOrSlug` — organizations that publish, with verification status hydrated.
+- New: `GET /v1/meta/tags` — recommended organization tag starter vocabulary.
+- New: `/v1/events` filters extended — `first_party=true|false` (authority tier), `tag=` (organization tags), `commercial=true|false`, `place_category=` (OSM-sourced).
+- New: Event response gains `organizer.{id, slug, verified}` and `place.{placeCategories, categorySource}`.
+- New: Webhook event payloads carry the same enriched organizer block, including `verified` — consumer tier-rendering can use it directly without a separate verification lookup.
+
+### Spec + SDK
+
+- `BREAKING:` `public/openapi.json` bumped to 2.0.0, rewritten for the v2 surface. All removed endpoints documented as gone; new endpoints and field additions documented.
+- `BREAKING:` SDK `neighborhood-commons@2.0.0` published. Types regenerated from the new spec — no Person, no kind enum, single organizer shape, etc. Push `sdk-v2.0.0` tag to trigger publish workflow per `sdk/RELEASING.md`.
+
+### Documentation
+
+- `CLAUDE.md` rewritten for v2. Mission framed plainly: public store of public facts about neighborhoods. Type A/B framing as the load-bearing distinction. No-users principle explicit. Three authority paths (entity-runs-it, pipeline-proxies, witnessed-with-evidence). Verification scope narrowed. Funding pathways acknowledged as multiple — classifieds is the designed mechanism; grants are one path; foundation partnerships and participant cost-sharing are others.
+- `public/llms.txt` rewritten to match. Five typed atoms (no more six). Pillars reframed (Trusted → Authoritative). Section 5 (Verification) narrowed substantially. New Section 8 (Sustainability) pointing at the classifieds design doc.
+- `public/index.html` updated for v2 across both marketing and docs sections.
+- `docs/classifieds.md` (new): sustainability story design. Anti-monopolistic two-sided market (publications set rates AND accepted categories), anti-surveillance by app-affinity targeting, two-layer grant pathway as one option.
+- `docs/future-considerations.md` (new): deferred decisions and their reasoning (identity claims layer, match-key clustering algorithm, OSM contribute-back, stewardship attestation, etc.).
+- `docs/v2-migration-plan.md` (new): formalized phased migration plan.
+- `docs/consumer-guide.md`: thinned to a pointer document; canonical Guide is now `llms.txt`.
+- Four per-app migration briefs in `docs/migration-brief-{fiber,merrie,holler,studio}.md` for use by Claude Code sessions in those repos.
+
+### Place categorization — new policy
+
+- Google's Places API can be consulted at runtime; only `google_place_id` is permitted indefinite storage under Google's terms.
+- Place categorization comes from OpenStreetMap (ODbL, attributed in licensing notes) stored in `places.place_categories`.
+- Admin review and publisher self-declaration are alternate sources, tracked via `places.category_source`.
+- Studio's contribute-back-to-OSM workflow (future, post-v2) acts only on `admin_review` and `publisher_declaration` rows — never on data sourced from Google.
+
+### Migration guide for consumers
+
+The Commons currently has one consumer ecosystem (Fiber, Merrie, Holler, Studio — all operator-owned). Per-app migration impact:
+
+- **Fiber** (~0.5 day) — v2-clean by construction; mechanical updates only.
+- **Merrie** (~3-4 days code + voices product transition) — retire curator/list-maker role; enforce organizer_org_id on writes.
+- **Holler** (~2-3 days) — simplify verification messaging; endpoint renames.
+- **Studio** (~13 days) — includes ~7-day Google compliance scrub (pre-existing gap surfaced by v2 planning).
+
+See the per-app migration briefs in `docs/migration-brief-*.md` for the full audit shape.
+
+---
+
+## 2026-05-14
+
+- New: `POST /service/api-keys/{id}/activate` now accepts an optional `provision_account` body — atomically (a) flips the pending key to active, (b) creates the consumer's tenant `portal_account`, and (c) links the now-active key to it. The activation response includes the new `account.id`. Tenant-umbrella consumers (Merrie, GoThere, etc.) include `provision_account` in their activation request email; the operator passes it through; the consumer receives their UUID in the activation reply with no second round-trip required. Per-operator portable consumers omit the field and continue to call `/service/accounts/link` per operator — strictly additive change.
+- Architectural principle, made explicit: pending service-tier keys are strictly read-only. No portal_account, no organization, no event can be created before activation. The atomic `provision_account` path exists precisely so consumers never have a pre-activation footprint that might pressure the activation review — review remains the single quality gate.
+- Spec: 409 CONFLICT added to the activate endpoint responses, raised when `provision_account` matches an existing account with `auth_user_id` set or claimed under a different `claimed_by`. The activation itself still succeeds in those cases; only the bundled provision step fails, and admin can resolve via `/service/accounts/link` after the fact.
+- Documentation: `docs/consumer-guide.md` "Getting a service key" section reframed. Activation is positioned as a substantive review of the consumer's use case and data quality plan, not an SLA-driven turnaround. The activation request template now asks for the `provision_account` block directly. The "Setup (one-time)" section under Consumer patterns documents the atomic-provisioning flow as the canonical tenant-umbrella path; `/service/accounts/link` remains documented for per-operator portable consumers.
+- Documentation: `docs/consumer-guide.md` gained a "Growing from reader to contributor" section walking the read → webhook → contribute progression explicitly, and a "Writing isn't reading: how publisher reputation actually works" section articulating the consumer-filter mechanic. The latter is the philosophical anchor: **the Commons gives you write access; it doesn't give you readership.** Both sections mirrored to `public/llms.txt` (§4.0 and §4.0.1) so AI assistants reading the canonical guide can articulate the design + reasoning. Webhook section now flags the self-feedback loop (your own writes generate webhooks back to you). Email contact aligned across docs to `hi@neighborhood-commons.org`.
+- Documentation + policy: new "Copyright and image rights" section in `docs/consumer-guide.md` and mirrored as §4.13 in `public/llms.txt`. Covers the contributor-warranty model (you upload, you warrant, you indemnify), the takedown procedure (`copyright@neighborhood-commons.org`, 48-hour turnaround for substantiated claims), the repeat-infringer policy (1st: warning; 2nd: suspension; 3rd: revocation), and explicit guidance for both contributors (safe vs unsafe content) and consumers (filter for confidence, handle 404s gracefully, no rights certificates promised). LICENSE section reframed to distinguish CC BY 4.0 on data (which we hold the right to license) from images (where the license is asserted in good faith based on contributor warranties). Activation request template expanded to require an explicit image-sourcing plan from the consumer.
+- Bug fix: `IMAGE_NOT_PERMITTED` photo-eligibility gate previously rejected service-key-claimed accounts (the entire tenant-umbrella pattern we just shipped). The check used `account.auth_user_id` as a proxy for "claimed", but service-key-claimed tenant accounts have `claimed_at` set and `auth_user_id` null. Gate now accepts either signal; `lib/contributor-policy.ts` helper updated to match. Without this, Merrie's tenant could not have uploaded a single event poster.
+- Spec: `IMAGE_NOT_PERMITTED` added to the `ErrorCode` enum in `public/openapi.json` and to the description's "Media / content" group. The code has been throwing it from the service-events handler since at least migration 048, but the spec hadn't documented it — closing a quiet contract gap.
+- Test fix: `tests/contract-drift.test.ts` regex for `createError(...)` calls didn't match the multi-line form with a trailing comma after the code string (which is the form the rest of the codebase actually uses). That's how `IMAGE_NOT_PERMITTED` slipped past the ErrorCode-enum guard. Regex now accepts an optional comma between the code and the closing paren, with a comment explaining why.
+- Legal: registered a Designated DMCA Agent with the U.S. Copyright Office, effective today (Registration No. DMCA-1072738). The Commons now has formal safe-harbor standing under 17 U.S.C. § 512(c). Agent of record: Zachary Benjamin, 937 N 2nd St 3F, Philadelphia, PA 19123, 503-449-5572, `dmca@neighborhood-commons.org`. Published in `docs/consumer-guide.md` and `public/llms.txt` § 4.13 as the law requires. The designation reflects the current posture of the Commons as operated by an individual; a formal entity is expected to succeed this filing once funded under grant-supported legal counsel.
+- The registered agent email is `dmca@neighborhood-commons.org`, a role-based address that forwards to the operator's inbox. Routing the federal channel through a project-branded address rather than a personal one keeps the operator's personal email off the public-facing DMCA surface entirely; the personal email never appears on `neighborhood-commons.org`. Recommended setup for any consumer or partner project mirroring this pattern.
+- Followup deferred: linking the DMCA agent disclosure from the homepage footer (rather than only from `docs/consumer-guide.md` and `llms.txt`) is a polish item for when the homepage gets its next pass.
+
+---
+
+## 2026-05-12
+
+- New: `PATCH /api/v1/service/events/{id}/organizer` is now implemented (the endpoint was previously in the Spec but not the runtime). Body: `{ organizerOrganizationId?: string | null, organizerPersonId?: string | null }`. Sets exactly one of `events.organizer_org_id` / `events.organizer_person_id`; sending both non-null returns 400 VALIDATION_ERROR. Sending both null clears the organizer.
+- Tightened: Spec language for the organizer endpoint to reflect the actual auth rule. Authorization for non-admin keys: caller's key is linked to **either** the event's `creator_account_id` (covers the initial-set case where organizer is NULL on a brand-new event) **or** its current `organizer_org_id` (covers re-attribution by the current organizer). When the current organizer is a Person, only admin keys can re-assign until person-link semantics ship. The previous "scoped to events whose current organizer is linked to the calling key" wording didn't cover the first-set case and would have failed every Merrie golden-path call.
+- Hardened: `POST /service/accounts/link` now refuses (409 CONFLICT) to link an account that has `auth_user_id` set (Supabase Auth owner) or has been claimed under a different `claimed_by` identifier. Admin keys bypass. Defense-in-depth alongside the tenant-umbrella pattern, where a sentinel email is the primary defense against unwanted claim attempts.
+- New: `OrganizationInput` schema description now documents the parallel model explicitly — `account_id` (on events) and `organizerOrganizationId` are parallel fields, not hierarchical; authorization flows through two separate key-link tables (`api_key_account_links` and `api_key_organization_links`). No `owner_account_id` input field on org create — never was, now documented.
+- New: `docs/consumer-guide.md` "Consumer patterns" section walks through the two consumer postures — tenant umbrella (one shared `account_id`, organizations under it, used by publishing platforms like Merrie) vs per-operator portable (one account per operator, claimable, used by business-operator tools like Holler). Tenant umbrella is recommended default; per-operator opt-in when portability is the value being sold.
+- SDK 1.1.0: new `assertPublicPayload(body, allowedKeys, label?)` runtime helper exported from `neighborhood-commons`. Defensive PII-boundary check for consumer apps publishing under the tenant-umbrella pattern — throws synchronously on the first disallowed key in the payload. Tag `sdk-v1.1.0` after merge to publish.
+- Documented: `POST /service/accounts/link` is now in `public/openapi.json` (was runtime-only since the 1.0.0 transition). The endpoint is the canonical self-service entry point for both consumer patterns — tenant-umbrella apps call it once with a sentinel email; per-operator-portable apps call it per operator. Typed SDK clients (`commons.POST("/service/accounts/link", ...)`) now work without raw fetch. No runtime behavior change; closing a contract gap.
+- Documented: `docs/consumer-guide.md` now includes a "Getting a service key" section walking through the full key lifecycle — self-service OTP registration → development against a pending key → emailing `hello@neighborhood-commons.org` for activation → `POST /service/accounts/link` for tenant provisioning. Closes the "what do I do between getting a pending key and being able to write" gap; previously implicit, now explicit.
+- Provisioning script: `scripts/provision-merrie-tenant.ts` clarified as an operator-only one-shot for the Merrie case (operator and Merrie operator are the same person) and the rare pre-activation-provisioning case. Third-party consumers should use `POST /service/accounts/link` instead.
+- Known downstream gap: the public API's `organizer.name` is still derived from `portal_accounts.business_name` (creator account), not from `organizer_org_id`. Setting an organizer via the new PATCH endpoint correctly persists the column but won't surface in `GET /v1/events/{id}` responses until `event-transform.ts` is updated to read the linked organization. Separate fix; tracked for the verification-aware transform pass.
+
+---
+
+## 2026-05-06
+
+- Canonical URL is now the apex `https://neighborhood-commons.org`. The previous `api.neighborhood-commons.org` host now 308-redirects every path to the apex (preserves method + body), so existing clients keep working. The OpenAPI spec, SDK default base URL, llms.txt, and README all point at the apex. CSP no longer needs to allowlist the api subdomain. One canonical host means the rendered `/spec` page can call its own server without cross-origin friction; future docs/UI never have to pick which subdomain to reference.
+- SDK 1.0.1: `DEFAULT_BASE_URL` is now `https://neighborhood-commons.org/api/v1`. Patch bump because consumers passing an explicit `baseUrl` are unaffected, and consumers relying on the default get transparently redirected to the same data via the 308 even on older SDK versions. Tag `sdk-v1.0.1` after merge to publish.
+- No spec field changes, no error-code changes, no rate-limit changes.
+
+---
+
+## 2026-05-06 (SDK 1.0.0)
 
 - Canonical URL is now the apex `https://neighborhood-commons.org`. The previous `api.neighborhood-commons.org` host now 308-redirects every path to the apex (preserves method + body), so existing clients keep working. The OpenAPI spec, SDK default base URL, llms.txt, and README all point at the apex. CSP no longer needs to allowlist the api subdomain. One canonical host means the rendered `/spec` page can call its own server without cross-origin friction; future docs/UI never have to pick which subdomain to reference.
 - SDK 1.0.1: `DEFAULT_BASE_URL` is now `https://neighborhood-commons.org/api/v1`. Patch bump because consumers passing an explicit `baseUrl` are unaffected, and consumers relying on the default get transparently redirected to the same data via the 308 even on older SDK versions. Tag `sdk-v1.0.1` after merge to publish.

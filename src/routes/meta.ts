@@ -46,9 +46,14 @@ router.get('/', (_req, res) => {
         description: 'Events ingested from iCal feeds and external sources.',
       },
       {
-        name: 'Contribute API',
+        name: 'Service API',
         method: 'api',
-        description: 'Events pushed by third-party apps via the write API.',
+        description: 'Events pushed by third-party apps via the Service API write path.',
+      },
+      {
+        name: 'Witnessed',
+        method: 'witnessed',
+        description: 'Events captured from public flyers and other documentary evidence by a collective publisher.',
       },
     ],
     resources: ['events'],

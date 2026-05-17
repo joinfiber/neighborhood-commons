@@ -4,11 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Neighborhood Commons — open neighborhood data infrastructure</title>
-  <meta name="description" content="Open infrastructure for neighborhood data. Events, organizations, places, broadcasts, curated lists. Schema.org-aligned, verified contributors, public reputation graph. Read free. Build with confidence. CC BY 4.0.">
+  <meta name="description" content="Open infrastructure for neighborhood data. Five typed atoms — events, organizations, places, broadcasts, lists — that any app can read, mix, and remix. Schema.org-aligned. Verified first-party authority. Read free. Build with confidence. CC BY 4.0.">
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+  <!-- Self-hosted fonts: DM Sans / DM Mono / DM Serif Display, latin
+       subsets. Eliminates the Google Fonts round trip (FOUT on first
+       paint, third-party privacy ping, extra DNS). Preload only the body
+       font — it's the largest visible text surface, so it's the one a
+       late swap would be most jarring on. The other two faces inherit
+       font-display: swap and arrive over the same HTTP/2 connection. -->
+  <link rel="preload" href="/fonts/dm-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
 
   <style>
     /*
@@ -18,6 +22,49 @@
      * (≤640px), no flex sticky-footer, no grid 1fr foot guns, no /pages.css
      * dependency. The page is a document, not a web app.
      */
+
+    /* ── Font faces ────────────────────────────────────────
+       DM Sans is shipped as a single woff2 covering weights 400–700.
+       Four @font-face declarations point at the same file so the
+       browser loads it once but treats each weight as a distinct face.
+       (Same trick Google Fonts uses on its CSS — variable axes inside
+       a single file.) DM Mono ships as two separate weights.
+       font-display: swap is safe here because the file is on the same
+       origin, served over HTTP/2 with a 1y immutable cache; the body
+       font is preloaded, so by the time the browser is ready to paint,
+       DM Sans is already in the cache and no swap is observable. */
+    @font-face {
+      font-family: 'DM Sans'; font-style: normal; font-weight: 400; font-display: swap;
+      src: url('/fonts/dm-sans-latin.woff2') format('woff2');
+    }
+    @font-face {
+      font-family: 'DM Sans'; font-style: normal; font-weight: 500; font-display: swap;
+      src: url('/fonts/dm-sans-latin.woff2') format('woff2');
+    }
+    @font-face {
+      font-family: 'DM Sans'; font-style: normal; font-weight: 600; font-display: swap;
+      src: url('/fonts/dm-sans-latin.woff2') format('woff2');
+    }
+    @font-face {
+      font-family: 'DM Sans'; font-style: normal; font-weight: 700; font-display: swap;
+      src: url('/fonts/dm-sans-latin.woff2') format('woff2');
+    }
+    @font-face {
+      font-family: 'DM Mono'; font-style: normal; font-weight: 400; font-display: swap;
+      src: url('/fonts/dm-mono-400-latin.woff2') format('woff2');
+    }
+    @font-face {
+      font-family: 'DM Mono'; font-style: normal; font-weight: 500; font-display: swap;
+      src: url('/fonts/dm-mono-500-latin.woff2') format('woff2');
+    }
+    @font-face {
+      font-family: 'DM Serif Display'; font-style: normal; font-weight: 400; font-display: swap;
+      src: url('/fonts/dm-serif-display-regular-latin.woff2') format('woff2');
+    }
+    @font-face {
+      font-family: 'DM Serif Display'; font-style: italic; font-weight: 400; font-display: swap;
+      src: url('/fonts/dm-serif-display-italic-latin.woff2') format('woff2');
+    }
 
     :root {
       --bg:      #f7f7f5;
@@ -592,7 +639,7 @@
     <!-- Status strip — document metadata -->
     <div class="nc-status-strip">
       <div class="nc-status-inner">
-        <span><strong>Specification 1.0.0</strong></span>
+        <span><strong>Specification 2.0.0</strong></span>
         <span><span class="nc-status-dot"></span>Stable</span>
         <span>Additive-only stability</span>
         <span>CC&nbsp;BY&nbsp;4.0</span>
@@ -643,7 +690,7 @@
       </div>
 
       <p class="nc-atoms">
-        Six typed atoms: <strong>events</strong> · <strong>organizations</strong> · <strong>places</strong> · <strong>persons</strong> · <strong>broadcasts</strong> · <strong>lists</strong>. Schema.org-aligned. Read free, no key required.
+        Five typed atoms: <strong>events</strong> · <strong>organizations</strong> · <strong>places</strong> · <strong>broadcasts</strong> · <strong>lists</strong>. Schema.org-aligned. Read free, no key required.
       </p>
 
       {{statsLine}}
@@ -655,8 +702,8 @@
         </div>
         <div class="nc-hero-curls"><span class="nc-curl-prompt">$</span> curl <span class="nc-curl-string">"{{baseUrl}}/api/v1/events?near=39.97,-75.14&amp;radius_km=2"</span>
 
-<span class="nc-curl-comment"># Verified businesses near a point</span>
-<span class="nc-curl-prompt">$</span> curl <span class="nc-curl-string">"{{baseUrl}}/api/v1/organizations?kind=local_business&amp;verified=true"</span>
+<span class="nc-curl-comment"># Verified organizations near a point</span>
+<span class="nc-curl-prompt">$</span> curl <span class="nc-curl-string">"{{baseUrl}}/api/v1/organizations?verified=true&amp;near=39.97,-75.14&amp;radius_km=2"</span>
 
 <span class="nc-curl-comment"># What's being broadcast right now</span>
 <span class="nc-curl-prompt">$</span> curl <span class="nc-curl-string">"{{baseUrl}}/api/v1/broadcasts?near=39.97,-75.14&amp;radius_km=1"</span></div>
@@ -699,7 +746,7 @@
     <section class="nc-thesis">
       <div class="nc-thesis-eyebrow">The deal</div>
       <h2>Cooperate on data. Compete on <em>experience</em>.</h2>
-      <p>The Commons is the public floor — typed atoms, verification work, reputation graph. That floor is shared, free to read, and durable. Your app is what stands on it.</p>
+      <p>The Commons is the public floor — typed atoms, verified first-party authority, faithful attribution. That floor is shared, free to read, and durable. Your app is what stands on it.</p>
       <p>Apps don't fragment the data; they enrich it. <strong>You compete on editorial</strong> — what to surface, how to curate, who you build for, what users can do once they're inside your app. <strong>You don't compete on owning the record</strong> of what a neighborhood is, or who the verified actors in it are.</p>
       <p>This is infrastructure for an ecosystem, not a platform with a captive market. Every additional app makes the data more useful. Every verification one app does makes every other app's job a little easier. The growth dynamic is shared rather than zero-sum.</p>
     </section>
@@ -721,7 +768,6 @@
         <a href="#types">Overview</a>
         <a href="#type-place">Place</a>
         <a href="#type-organization">Organization</a>
-        <a href="#type-person">Person</a>
         <a href="#type-event">Event</a>
         <a href="#type-broadcast">Broadcast</a>
         <a href="#type-list">List</a>
@@ -742,7 +788,6 @@
         <div class="nc-docs-nav-section">Verification</div>
         <a href="#verification">Flow</a>
         <a href="#verification-authority">Authority</a>
-        <a href="#verification-reputation">Reputation graph</a>
 
         <div class="nc-docs-nav-section">Real-time</div>
         <a href="#webhooks">Webhooks</a>
@@ -764,17 +809,17 @@
         <pre>$ curl "{{baseUrl}}/api/v1/events?near=39.97,-75.14&amp;radius_km=2&amp;limit=5"</pre>
         <p>Returns up to five published events within 2&nbsp;km of the supplied coordinates. Response shape: <code>{ meta, events }</code>. Every event is self-contained — no further joins required to render it.</p>
 
-        <h3>Filter by type and verification</h3>
-        <pre>$ curl "{{baseUrl}}/api/v1/organizations?kind=local_business&amp;verified=true"</pre>
-        <p>Returns organizations whose <code>kind</code> is <code>local_business</code> and which have at least one active verified identifier. Add <code>verified_by=Holler,Merrie</code> to restrict to verifications issued by specific apps.</p>
+        <h3>Filter by verification</h3>
+        <pre>$ curl "{{baseUrl}}/api/v1/organizations?verified=true&amp;near=39.97,-75.14&amp;radius_km=2"</pre>
+        <p>Returns organizations within 2 km of the supplied coordinates that have at least one active verification.</p>
+
+        <h3>Filter events by authority tier</h3>
+        <pre>$ curl "{{baseUrl}}/api/v1/events?first_party=true"</pre>
+        <p>Returns only events posted by the verified organization itself — the authority tier. Filter to <code>first_party=false</code> for events aggregated from public sources.</p>
 
         <h3>Read what's broadcasting right now</h3>
         <pre>$ curl "{{baseUrl}}/api/v1/broadcasts?near=39.97,-75.14&amp;radius_km=1"</pre>
         <p>Active broadcasts only — expired and retracted broadcasts are filtered server-side. Response includes the embedded <code>organization</code> and <code>location</code> for each broadcast.</p>
-
-        <h3>Inspect the reputation graph</h3>
-        <pre>$ curl "{{baseUrl}}/api/v1/verifiers"</pre>
-        <p>Returns one entry per app that has ever issued a verification: approval count, active count, revoked count, methods used. Use this output to compose your own <code>verified_by</code> trust policy.</p>
 
         <h3>Calendar feed</h3>
         <pre>{{baseUrl}}/api/v1/events.ics</pre>
@@ -786,17 +831,16 @@
 
         <!-- ─── 2. Types ─── -->
         <h2 id="types"><span class="nc-section-num">2</span>Types</h2>
-        <p>The 1.0 substrate is six typed atoms. Each maps to a Schema.org concept. Every response shape is self-contained — no implicit knowledge, no extra joins required to interpret a record. Field names follow Schema.org canonical (camelCase) on output; database columns underlying them are snake_case.</p>
+        <p>The substrate is five typed atoms. Each maps to a Schema.org concept. Every response shape is self-contained — no implicit knowledge, no extra joins required to interpret a record. Field names follow Schema.org canonical (camelCase) on output; database columns underlying them are snake_case.</p>
 
         <table>
           <thead><tr><th>Type</th><th>Schema.org</th><th>What it represents</th></tr></thead>
           <tbody>
             <tr><td><a href="#type-place"><code>Place</code></a></td><td>Place</td><td>Physical location — venue, park, address.</td></tr>
-            <tr><td><a href="#type-organization"><code>Organization</code></a></td><td>Organization · LocalBusiness</td><td>Collective entity — business, community group, nonprofit, curator.</td></tr>
-            <tr><td><a href="#type-person"><code>Person</code></a></td><td>Person</td><td>Individual — DJ, performer, curator, organizer.</td></tr>
-            <tr><td><a href="#type-event"><code>Event</code></a></td><td>Event</td><td>Activity at a specific time, hosted by an Organization or Person, at a Place.</td></tr>
+            <tr><td><a href="#type-organization"><code>Organization</code></a></td><td>Organization · LocalBusiness</td><td>The unified entity primitive — business, community group, nonprofit, collective, solo operator.</td></tr>
+            <tr><td><a href="#type-event"><code>Event</code></a></td><td>Event</td><td>Activity at a specific time, organized by an Organization, at a Place.</td></tr>
             <tr><td><a href="#type-broadcast"><code>Broadcast</code></a></td><td>(novel)</td><td>Ephemeral signal from an Organization, pinned to a Place, max 24h lifetime.</td></tr>
-            <tr><td><a href="#type-list"><code>List</code></a></td><td>ItemList</td><td>Curatorial selection of events, organizations, or places.</td></tr>
+            <tr><td><a href="#type-list"><code>List</code></a></td><td>ItemList</td><td>Editorial selection of events, organizations, or places.</td></tr>
           </tbody>
         </table>
 
@@ -835,17 +879,21 @@
         </div>
 
         <h3 id="type-organization">Organization</h3>
-        <p>Schema.org <code>Organization</code>. The <code>kind</code> discriminator narrows to one of six subtypes; rigor of verification differs by kind.</p>
+        <p>Schema.org <code>Organization</code>. The unified entity primitive — anything that publishes or organizes is an organization, regardless of how many humans operate it. A touring DJ is an organization-of-one; a chess club is an organization-of-many. Same primitive.</p>
 
         <table>
-          <thead><tr><th><code>kind</code></th><th>Used for</th><th>Verification rigor</th></tr></thead>
+          <thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
           <tbody>
-            <tr><td><code>local_business</code></td><td>Business at a fixed physical location.</td><td>Heavy — business email loop or manual review.</td></tr>
-            <tr><td><code>business</code></td><td>Business with no fixed location (touring, online).</td><td>Heavy.</td></tr>
-            <tr><td><code>community_group</code></td><td>Birders of Philadelphia, running clubs, informal collectives.</td><td>Light — control of any email.</td></tr>
-            <tr><td><code>nonprofit</code></td><td>Registered nonprofits.</td><td>Heavy.</td></tr>
-            <tr><td><code>curator</code></td><td>Editorial curators, list-makers.</td><td>Light.</td></tr>
-            <tr><td><code>collective</code></td><td>Collaborative groups, art collectives.</td><td>Light.</td></tr>
+            <tr><td><code>id</code>, <code>slug</code>, <code>name</code></td><td>required</td><td>Identity.</td></tr>
+            <tr><td><code>legalName</code></td><td>optional</td><td>Registered legal name for businesses, nonprofits.</td></tr>
+            <tr><td><code>description</code>, <code>url</code>, <code>logo</code>, <code>image</code>, <code>telephone</code>, <code>email</code></td><td>optional</td><td>Public-facing profile data.</td></tr>
+            <tr><td><code>sameAs</code></td><td>string[]</td><td>Canonical URLs (Wikipedia, Wikidata, social profiles).</td></tr>
+            <tr><td><code>keywords</code></td><td>string[]</td><td>Searchable terms.</td></tr>
+            <tr><td><code>tags</code></td><td>string[]</td><td>Descriptive labels. Free-form within rules; a recommended starter vocabulary is published at <code>/v1/meta/tags</code>.</td></tr>
+            <tr><td><code>commercial</code></td><td>boolean | null</td><td>True for for-profit; false for non-profit/community; null for unspecified.</td></tr>
+            <tr><td><code>openingHoursSpecification</code></td><td>object[]</td><td>Schema.org <code>OpeningHoursSpecification</code> array.</td></tr>
+            <tr><td><code>location</code></td><td>Place | null</td><td>Primary place reference, fully hydrated.</td></tr>
+            <tr><td><code>verified</code>, <code>verification</code></td><td>boolean, object</td><td>If verified: <code>{ method, verifiedAt, verifiedByApp }</code>.</td></tr>
           </tbody>
         </table>
 
@@ -853,8 +901,6 @@
   "id": "...",
   "slug": "bubs",
   "name": "Bubs",
-  "kind": "local_business",
-  "additionalType": "https://schema.org/LocalBusiness",
   "description": "Community board game shop",
   "url": "https://bubs.example",
   "logo": "https://...",
@@ -862,48 +908,28 @@
   "email": "hi@bubs.example",
   "sameAs": ["https://instagram.com/bubs"],
   "keywords": ["board games", "community"],
+  "tags": ["retail", "games", "all-ages"],
+  "commercial": true,
   "openingHoursSpecification": [
     { "dayOfWeek": "Monday", "opens": "12:00", "closes": "22:00" }
   ],
   "location": { "id": "...", "name": "Bubs", "address": {...}, "geo": {...} },
   "verified": true,
   "verification": {
-    "method": "manual_review",
-    "verifiedVia": "in_person",
+    "method": "domain_email_loop",
     "verifiedAt": "...",
     "verifiedByApp": "Holler"
   }
 }</pre>
 
-        <p>An Organization may have a single <code>location</code> (the primary place) and additional places via the <code>organization_places</code> link table — chains, pop-ups, shared spaces. Verification attaches to the Organization, not to any place.</p>
+        <p>An Organization may have a single <code>location</code> (the primary place) and additional places via the <code>organization_places</code> link table — chains, pop-ups, shared spaces.</p>
 
-        <h3 id="type-person">Person</h3>
-        <p>Schema.org <code>Person</code>. Individuals — performers, curators, organizers. Distinct from Organization for cases where the actor is one human, not a collective.</p>
-
-        <table>
-          <thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
-          <tbody>
-            <tr><td><code>id</code>, <code>slug</code>, <code>name</code></td><td>required</td><td>Identity.</td></tr>
-            <tr><td><code>givenName</code>, <code>familyName</code>, <code>alternateName</code></td><td>optional</td><td>Stage names live in <code>alternateName</code>.</td></tr>
-            <tr><td><code>description</code>, <code>image</code>, <code>url</code>, <code>sameAs</code>, <code>jobTitle</code></td><td>optional</td><td>Standard Schema.org Person properties.</td></tr>
-            <tr><td><code>verified</code>, <code>verification</code></td><td>optional</td><td>Light-rigor verification only — any-domain email loop.</td></tr>
-          </tbody>
-        </table>
-
-        <pre>{
-  "id": "...",
-  "slug": "dj-karma",
-  "name": "DJ Karma",
-  "alternateName": "DJ K",
-  "description": "Philly-based DJ specializing in soul and disco.",
-  "image": "https://...",
-  "sameAs": ["https://soundcloud.com/djkarma"],
-  "jobTitle": "DJ",
-  "verified": true
-}</pre>
+        <div class="nc-callout">
+          <p><strong>No <code>kind</code> discriminator.</strong> Earlier versions had a <code>kind</code> enum (local_business, community_group, curator, etc.). That field is gone — the values mixed structural facts with vibes with legal status, and forced false choices that narrowed reach. Use <code>tags</code> for descriptive classification and <code>commercial</code> for the for-profit / non-profit signal. Consumer apps derive richer classification from structural signals: the org's place (with OSM categories), events it has posted over time, tags, and description text.</p>
+        </div>
 
         <h3 id="type-event">Event</h3>
-        <p>Schema.org <code>Event</code>. Activity at a specific time, at a Place, hosted by an Organization or Person. Events are the most-used type in the substrate and have the longest list of properties — the table below covers the core; the full schema is in <a href="/openapi.json">openapi.json</a>.</p>
+        <p>Schema.org <code>Event</code>. Activity at a specific time, at a Place, organized by an Organization. Events are the most-used type in the substrate and have the longest list of properties — the table below covers the core; the full schema is in <a href="/openapi.json">openapi.json</a>.</p>
 
         <table>
           <thead><tr><th>Field</th><th>Notes</th></tr></thead>
@@ -911,13 +937,14 @@
             <tr><td><code>id</code>, <code>name</code>, <code>description</code></td><td>Standard.</td></tr>
             <tr><td><code>start</code>, <code>end</code>, <code>timezone</code></td><td>ISO 8601 with timezone offset. Field name is <code>start</code> (not <code>startDate</code>) per the upstream Neighborhood API spec.</td></tr>
             <tr><td><code>location</code></td><td>Embedded Place reference.</td></tr>
-            <tr><td><code>organizer</code></td><td>Embedded Organization or Person reference.</td></tr>
-            <tr><td><code>performer</code>[]</td><td>Array of performers (Person or Organization). Optional.</td></tr>
+            <tr><td><code>organizer</code></td><td>Embedded Organization reference (always an organization).</td></tr>
+            <tr><td><code>performer</code>[]</td><td>Array of performers, each a <code>{ organization?, performerName?, role? }</code>. Free-form <code>performerName</code> allowed for performers without a Commons organization. Optional.</td></tr>
             <tr><td><code>category</code>, <code>tags</code></td><td>Categorization.</td></tr>
             <tr><td><code>cost</code>, <code>url</code>, <code>images</code></td><td>Practical fields.</td></tr>
             <tr><td><code>recurrence</code>, <code>series_id</code>, <code>series_instance_number</code>, <code>series_instance_count</code></td><td>RRULE-based recurrence; series link.</td></tr>
             <tr><td><code>open_window</code>, <code>capacity</code>, <code>rsvp</code>, <code>wheelchair_accessible</code></td><td>Visibility and access metadata.</td></tr>
-            <tr><td><code>source</code></td><td>Provenance: <code>{ publisher, method, contributor, collected_at, license }</code>.</td></tr>
+            <tr><td><code>first_party</code></td><td>Boolean. True iff the organizer had an active verification at the time of writing — the authority signal. Server-computed; not a caller input.</td></tr>
+            <tr><td><code>source</code></td><td>Provenance: <code>{ publisher, method, contributor, collected_at, license }</code>. <code>method</code> includes <code>portal</code>, <code>api</code>, <code>import</code>, <code>witnessed</code>.</td></tr>
           </tbody>
         </table>
 
@@ -935,17 +962,17 @@
   "source": { "publisher": "bubs", "method": "service", "contributor": "Holler", "collected_at": "..." }
 }</pre>
 
-        <p>Broadcast creation is not gated on the organization being verified — apps decide whether to surface unverified broadcasts in their feeds. <code>verified=true</code> + <code>verified_by=...</code> filters on <code>GET /v1/broadcasts</code> let consumer apps slice editorially.</p>
+        <p>Broadcast creation is not gated on the organization being verified — apps decide whether to surface unverified broadcasts in their feeds. Use <code>verified=true</code> filters on <code>GET /v1/broadcasts</code> to scope editorially.</p>
 
         <h3 id="type-list">List</h3>
-        <p>Schema.org <code>ItemList</code>. Curatorial selections by an Organization or Person. Items are polymorphic — a single list can hold events, organizations, places, or any mix.</p>
+        <p>Schema.org <code>ItemList</code>. Editorial selections by an Organization. Items are polymorphic — a single list can hold events, organizations, places, or any mix. Items reference existing primitives; lists do not create primitives.</p>
 
         <pre>{
   "id": "...",
   "slug": "this-weekends-picks",
   "name": "This Weekend's Picks",
   "description": "Five things worth your Saturday",
-  "curator": { "@type": "Person", "id": "...", "name": "Olive" },
+  "curator": { "@type": "Organization", "id": "...", "name": "Olive's Picks", "tags": ["curator"] },
   "itemListOrder": "Ascending",
   "numberOfItems": 5,
   "itemListElement": [
@@ -958,7 +985,7 @@
   ]
 }</pre>
 
-        <p>Lists are how curator workflows surface in the substrate. A curator (Organization or Person) builds a list; the items can be events they recommend, organizations worth watching, places worth knowing about — or all three in one list.</p>
+        <p>Lists are editorial overlays — a curator-organization selects events, organizations, or places that already exist in the Commons. Lists are not a publishing path; they reference primitives, they don't invent them.</p>
 
         <!-- ─── 3. Reading ─── -->
         <h2 id="reading"><span class="nc-section-num">3</span>Reading data</h2>
@@ -975,15 +1002,14 @@
             <tr><td><code>GET</code></td><td><code>/v1/places/:id</code></td><td>Single place.</td></tr>
             <tr><td><code>GET</code></td><td><code>/v1/organizations</code></td><td>Paginated organization list.</td></tr>
             <tr><td><code>GET</code></td><td><code>/v1/organizations/:idOrSlug</code></td><td>Single organization by id or slug.</td></tr>
-            <tr><td><code>GET</code></td><td><code>/v1/persons</code></td><td>Paginated person list.</td></tr>
-            <tr><td><code>GET</code></td><td><code>/v1/persons/:idOrSlug</code></td><td>Single person.</td></tr>
+            <tr><td><code>GET</code></td><td><code>/v1/publishers</code></td><td>Paginated list of organizations that publish (have at least one event or broadcast).</td></tr>
+            <tr><td><code>GET</code></td><td><code>/v1/publishers/:idOrSlug</code></td><td>Single publisher record.</td></tr>
             <tr><td><code>GET</code></td><td><code>/v1/broadcasts</code></td><td>Active broadcasts only.</td></tr>
             <tr><td><code>GET</code></td><td><code>/v1/broadcasts/:id</code></td><td>Single broadcast.</td></tr>
             <tr><td><code>GET</code></td><td><code>/v1/lists</code></td><td>Paginated list of lists.</td></tr>
             <tr><td><code>GET</code></td><td><code>/v1/lists/:idOrSlug</code></td><td>Single list with hydrated items.</td></tr>
-            <tr><td><code>GET</code></td><td><code>/v1/verifiers</code></td><td>Reputation graph — one entry per app.</td></tr>
-            <tr><td><code>GET</code></td><td><code>/v1/verifiers/:appName/recent_approvals</code></td><td>Recent approvals by a specific verifier.</td></tr>
             <tr><td><code>GET</code></td><td><code>/v1/meta</code></td><td>Spec metadata, regions, categories, stats.</td></tr>
+            <tr><td><code>GET</code></td><td><code>/v1/meta/tags</code></td><td>Recommended organization tag vocabulary.</td></tr>
           </tbody>
         </table>
 
@@ -993,23 +1019,31 @@
         <table>
           <thead><tr><th>Filter</th><th>Applies to</th><th>Effect</th></tr></thead>
           <tbody>
-            <tr><td><code>verified=true</code></td><td>organizations, persons, broadcasts</td><td>Only verified targets. Verification is computed from active rows in <code>account_verified_identifiers</code>.</td></tr>
-            <tr><td><code>verified_by=app1,app2</code></td><td>organizations, persons, broadcasts</td><td>Verified by any of the listed apps. Use the <code>appName</code> from <code>GET /v1/verifiers</code>.</td></tr>
-            <tr><td><code>not_verified_by=app-x</code></td><td>organizations, persons, broadcasts</td><td>Excludes targets verified only by the listed apps.</td></tr>
-            <tr><td><code>created_by_contributor=AppName</code></td><td>broadcasts, events</td><td>Filters to records whose <code>source.contributor</code> matches the supplied app name.</td></tr>
-            <tr><td><code>kind=local_business</code></td><td>organizations</td><td>Subtype filter. See the <a href="#type-organization">Organization kinds</a>.</td></tr>
+            <tr><td><code>first_party=true</code></td><td>events</td><td>Only events posted by the verified organization itself — the authority tier.</td></tr>
+            <tr><td><code>first_party=false</code></td><td>events</td><td>Only events aggregated from public sources (scrapers, feeds, witnessed-with-evidence).</td></tr>
+            <tr><td><code>verified=true</code> / <code>verified=false</code></td><td>organizations, publishers</td><td>Filter by verification status.</td></tr>
+            <tr><td><code>tag=slug</code></td><td>organizations, publishers, events</td><td>One or more tag matches. Multiple tags use AND semantics.</td></tr>
+            <tr><td><code>commercial=true</code> / <code>false</code></td><td>organizations, publishers</td><td>Filter by for-profit / non-profit signal.</td></tr>
+            <tr><td><code>place_category=slug</code></td><td>organizations, publishers, places</td><td>Filter by OSM-sourced place categorization (e.g., <code>cafe</code>, <code>live_music_venue</code>).</td></tr>
+            <tr><td><code>created_by_contributor=AppName</code></td><td>broadcasts, events</td><td>Filters to records whose <code>source.contributor</code> matches.</td></tr>
             <tr><td><code>near=lat,lng</code></td><td>events, places, organizations, broadcasts</td><td>Coordinates as <code>"39.97,-75.13"</code>. Pair with <code>radius_km</code>.</td></tr>
             <tr><td><code>radius_km=N</code></td><td>events, places, organizations, broadcasts</td><td>Proximity radius. Required when using <code>near</code>.</td></tr>
-            <tr><td><code>q=text</code></td><td>events, places, organizations, persons, lists</td><td>Text search across name and description.</td></tr>
+            <tr><td><code>q=text</code></td><td>events, places, organizations, lists</td><td>Text search across name and description.</td></tr>
             <tr><td><code>category=slug</code></td><td>events</td><td>Single category filter.</td></tr>
-            <tr><td><code>tag=slug</code></td><td>events</td><td>One or more tags. Multiple values: AND semantics.</td></tr>
             <tr><td><code>start_after</code>, <code>start_before</code></td><td>events</td><td>ISO 8601 date or datetime.</td></tr>
             <tr><td><code>collapse_series=true</code></td><td>events</td><td>Deduplicates recurring events to the next upcoming instance.</td></tr>
-            <tr><td><code>group_id=uuid</code></td><td>events</td><td>Filter to events with the given organizer (legacy field name; expects an Organization id).</td></tr>
+            <tr><td><code>series_id=uuid</code></td><td>events</td><td>Filter to events in a specific series.</td></tr>
           </tbody>
         </table>
 
-        <p>Filter composition is the editorial primitive. App C trusts a different verifier set than App B; both express that as URL parameters. There is no default firehose — apps construct their own slice.</p>
+        <p>Filter composition is the editorial primitive. App A surfaces only first-party events; App B surfaces everything but visually differentiates by authority tier. Both express that as URL parameters. There is no default firehose — apps construct their own slice.</p>
+
+        <p>The Commons holds two authority tiers on the same data substrate:</p>
+        <ul>
+          <li><strong>Public facts</strong> (<code>first_party=false</code>) — information <em>about</em> an organization, scraped from a venue's website, ingested from a partner feed, witnessed via OCR of a public flyer. Source-tracked, best-effort quality.</li>
+          <li><strong>First-party</strong> (<code>first_party=true</code>) — information <em>from</em> the organization, after they verify. Authoritative.</li>
+        </ul>
+        <p>Apps choose: maximum coverage (take everything), maximum authority (filter to <code>first_party=true</code>), or composed (surface both with visual differentiation).</p>
 
         <h3 id="reading-pagination">Pagination &amp; rate limits</h3>
         <p>List endpoints accept <code>limit</code> (1–200, default 50) and <code>offset</code> (default 0). Response shape:</p>
@@ -1020,7 +1054,7 @@
 
         <p>Rate limit: <strong>1,000 requests/hour</strong> per IP — or per API key when an <code>X-API-Key</code> header is sent. Limits are returned in standard <code>RateLimit-*</code> headers. <code>429</code> response indicates the current window is exhausted; backoff and retry after the window rolls over.</p>
 
-        <p>Cache hints: read responses include <code>Cache-Control: public, max-age=60</code> for events, organizations, persons, places, lists, and verifiers. Broadcasts use a shorter <code>max-age=15</code> because they're ephemeral. Honor these on the consumer side to keep both your costs and Commons load down.</p>
+        <p>Cache hints: read responses include <code>Cache-Control: public, max-age=60</code> for events, organizations, places, and lists. Broadcasts use a shorter <code>max-age=15</code> because they're ephemeral. Honor these on the consumer side to keep both your costs and Commons load down.</p>
 
         <!-- ─── 4. Writing ─── -->
         <h2 id="writing"><span class="nc-section-num">4</span>Writing data</h2>
@@ -1068,6 +1102,15 @@
           <li>Writes are scoped: an active service key can only create/update/delete data for organizations linked to it via <code>api_key_organization_links</code>.</li>
           <li>Cross-organization writes return <code>403 NOT_LINKED</code>.</li>
           <li>Admin keys (<code>is_admin=true</code>, currently used only by Studio) bypass scoping.</li>
+          <li>Witness-authority keys (<code>witness_authority=true</code>) can publish events with <code>source_method='witnessed'</code> attributed to their app-collective organization. Granted at activation for specific use cases (e.g., Fiber's OCR contribution path).</li>
+        </ul>
+
+        <h3>Three authority paths</h3>
+        <p>The Commons accepts writes from publishers with authority over what they publish. Three valid authority shapes:</p>
+        <ul>
+          <li><strong>Entity-runs-it.</strong> A verified organization publishing about itself. The service key writing must be linked to that organization via <code>api_key_organization_links</code>.</li>
+          <li><strong>Pipeline-proxies-an-authoritative-source.</strong> An ingestion pipeline (typically Studio) writes records lifted from an authoritative external source — a venue's website, a partner feed. <code>source.contributor</code> honestly attributes the original source.</li>
+          <li><strong>Witnessed-with-evidence.</strong> A service key with <code>witness_authority=true</code> writes records on behalf of a collective identity (e.g., "Fiber Community"), with evidence attached (e.g., a photo of a public flyer). Individual users are never identified.</li>
         </ul>
 
         <h3>Places — register a venue</h3>
@@ -1093,11 +1136,12 @@
   -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
   -d '{
     "name": "Bubs",
-    "kind": "local_business",
     "description": "Community board game shop",
     "url": "https://bubs.example",
     "telephone": "+12155550100",
     "email": "hi@bubs.example",
+    "tags": ["retail", "games", "all-ages"],
+    "commercial": true,
     "primaryPlaceId": "PLACE_UUID"
   }'
 
@@ -1112,28 +1156,30 @@ $ curl -X PATCH "{{baseUrl}}/api/v1/service/organizations/ORG_UUID" \
   -d '{ "description": "Updated bio.", "telephone": "+12155550101" }'</pre>
         <p>Image uploads (logo, hero image) are JSON-base64: <code>POST /v1/service/organizations/:id/logo</code> and <code>POST /v1/service/organizations/:id/image</code> with body <code>{ "image": "&lt;base64&gt;" }</code>. Magic-byte check, Sharp re-encoding, R2 upload — same pipeline as event images.</p>
 
-        <h3>Persons</h3>
-        <p>Create a Person record for performers, curators, or individual hosts. Person records are append-only for standard service keys in 1.0; per-Person edit semantics (analogous to <code>api_key_organization_links</code>) ship in a later minor version.</p>
-        <pre>$ curl -X POST "{{baseUrl}}/api/v1/service/persons" \
+        <h3>Events — using the organizer model</h3>
+        <p>Event creation requires <code>organizerOrganizationId</code>. The calling service key must be linked to that organization, OR have <code>witness_authority=true</code> with <code>source_method='witnessed'</code>.</p>
+        <pre>$ curl -X POST "{{baseUrl}}/api/v1/service/events" \
   -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
   -d '{
-    "name": "DJ Karma",
-    "alternateName": "DJ K",
-    "description": "Philly-based DJ specializing in soul and disco.",
-    "jobTitle": "DJ",
-    "sameAs": ["https://soundcloud.com/djkarma"]
-  }'</pre>
+    "organizerOrganizationId": "ORG_UUID",
+    "name": "Thursday Jazz Night",
+    "start": "2026-05-07T19:00:00-04:00",
+    "end": "2026-05-07T22:00:00-04:00",
+    "timezone": "America/New_York",
+    "category": "live-music",
+    "location": {
+      "name": "Bubs",
+      "address": "1234 Main St, Philadelphia PA",
+      "place_id": "ChIJ..."
+    },
+    "description": "Weekly jazz trio. BYOB.",
+    "cost": "Free"
+  }'
 
-        <h3>Events — using the new organizer model</h3>
-        <p>Event creation predates 1.0 and accepts the existing <code>ServiceEventInput</code> shape. The body field is named <code>account_id</code> for backward compatibility but expects an Organization id. After 1.0 you can also reassign an event's organizer:</p>
-        <pre>$ curl -X PATCH "{{baseUrl}}/api/v1/service/events/EVENT_UUID/organizer" \
-  -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
-  -d '{ "organizerOrganizationId": "ORG_UUID" }'
-
-# Or assign to a Person (mutually exclusive with organizerOrganizationId)
+# Reassign an event's organizer
 $ curl -X PATCH "{{baseUrl}}/api/v1/service/events/EVENT_UUID/organizer" \
   -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
-  -d '{ "organizerPersonId": "PERSON_UUID" }'</pre>
+  -d '{ "organizerOrganizationId": "ORG_UUID" }'</pre>
 
         <h3>Broadcasts — ephemeral signals</h3>
         <p>Maximum 24h lifetime. Body: <code>organizationId</code>, <code>placeId</code>, <code>message</code> (≤280 chars), <code>expires</code> (ISO 8601, must be future, &lt;=24h ahead).</p>
@@ -1151,18 +1197,18 @@ $ curl -X POST "{{baseUrl}}/api/v1/service/broadcasts/BROADCAST_UUID/retract" \
   -H "X-API-Key: $NC_KEY"</pre>
         <p>Verification gate: broadcast creation does <em>not</em> require the organization to be verified. Verification is a read-time consumer-app filter. Apps editorialize.</p>
 
-        <h3>Lists — curatorial workflows</h3>
-        <p>Two-step: create the list, then add items. Items are polymorphic — events, organizations, places, or any mix.</p>
-        <pre># Create the list (curator can be 'organization' or 'person')
+        <h3>Lists — editorial overlays</h3>
+        <p>Lists are editorial overlays over existing primitives. List items can only reference event/organization/place records that already exist; lists do not create new primitives.</p>
+        <pre># Create the list (curator is an Organization)
 $ curl -X POST "{{baseUrl}}/api/v1/service/lists" \
   -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
   -d '{
-    "name": "This Weekend's Picks",
+    "name": "This Weekend'\''s Picks",
     "description": "Five things worth your Saturday",
-    "curator": { "type": "person", "id": "PERSON_UUID" }
+    "curatorOrganizationId": "ORG_UUID"
   }'
 
-# Add an item by position
+# Add an existing event to the list by position
 $ curl -X POST "{{baseUrl}}/api/v1/service/lists/LIST_UUID/items" \
   -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
   -d '{
@@ -1175,67 +1221,64 @@ $ curl -X POST "{{baseUrl}}/api/v1/service/lists/LIST_UUID/items" \
 # Remove an item at position
 $ curl -X DELETE "{{baseUrl}}/api/v1/service/lists/LIST_UUID/items/3" \
   -H "X-API-Key: $NC_KEY"</pre>
-        <p>Person-curated lists need a one-time activation note in 1.0 — the <code>api_key_organization_links</code> pattern doesn't extend to Person yet. If your integration depends on Person curators editing their own lists, mention it during activation and we'll grant the key the necessary authority.</p>
 
         <h3>Disputes</h3>
-        <p>Used to flag a verified target as misattributed. Records the dispute for human review; no automated action in 1.0.</p>
+        <p>Used to flag a verified organization as misattributed. Records the dispute for human review.</p>
         <pre>$ curl -X POST "{{baseUrl}}/api/v1/service/disputes" \
   -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
   -d '{
-    "targetType": "organization",
-    "targetId": "ORG_UUID",
+    "organizationId": "ORG_UUID",
     "reason": "Imposter — verified email manager@bubs.example does not match the actual venue.",
     "submitterContact": "concerned@example.com"
   }'</pre>
 
         <!-- ─── 5. Verification ─── -->
         <h2 id="verification"><span class="nc-section-num">5</span>Verification</h2>
-        <p>Verification does two things at once. It establishes that an organization or person controls an identifier (an email, a domain, a phone). And it <strong>unlocks first-party publishing</strong> for that target — the ability for a business to post their own events, their own broadcasts, their own operating hours, with the authority signal that comes from "this came from the business itself."</p>
+        <p>Verification has one job: <strong>anchor first-party authority for an organization's profile data (Type A).</strong> Confirm that an organization claiming to be a real-world entity actually corresponds to it. That's the entirety of the load.</p>
 
-        <p>Until a target is verified, the Commons can still hold information about them — happy hours scraped from a flyer, events lifted from a venue's website, hours pulled from a public listing. That's the <em>public-facts</em> tier: source-tracked, possibly accurate, best-effort quality. Apps consume both tiers and filter to the one they need:</p>
+        <p>What verification is <em>not</em>: not a cross-app reputation graph; not an identifier portability mechanism; not a network-effect prize. The anti-extraction work is done by CC-BY plus many readers — not by verification machinery.</p>
+
+        <p>Until an organization is verified, the Commons can still hold information about them — happy hours scraped from a flyer, events lifted from a venue's website, hours pulled from a public listing. That's the <em>public-facts</em> tier. Apps consume both tiers and filter via <code>first_party=true|false</code>:</p>
 
         <pre># Everything the Commons knows about events near a point
 $ curl "{{baseUrl}}/api/v1/events?near=39.97,-75.14&amp;radius_km=2"
 
-# Only events posted by the verified business itself
+# Only events posted by the verified organization itself
 $ curl "{{baseUrl}}/api/v1/events?near=39.97,-75.14&amp;radius_km=2&amp;first_party=true"
 
-# Only events aggregated from public sources (scrapers, feeds)
+# Only events aggregated from public sources (scrapers, feeds, witnessed)
 $ curl "{{baseUrl}}/api/v1/events?near=39.97,-75.14&amp;radius_km=2&amp;first_party=false"</pre>
 
-        <p>The Commons orchestrates the verification process; apps consume the result. Submission endpoints reject mismatches with <code>409 WRONG_METHOD</code> pointing at the correct path.</p>
+        <p>The Commons orchestrates the verification process; apps surface the UI; the verified organization becomes the only valid editor of its Type A profile data.</p>
 
         <h3>The flow</h3>
 
-        <p><strong>Step 1 — Discover the path.</strong> Given a target and identifier, the Commons returns which submission endpoint to call:</p>
+        <p><strong>Step 1 — Discover the path.</strong> Given an organization and identifier, the Commons returns which submission endpoint to call:</p>
         <pre>$ curl "{{baseUrl}}/api/v1/service/verifications/path?\
-target_type=organization&amp;target_id=ORG_UUID&amp;\
+organization_id=ORG_UUID&amp;\
 identifier_type=email&amp;identifier_value=manager@bubs.example" \
   -H "X-API-Key: $NC_KEY"</pre>
 
         <p>Three possible response shapes:</p>
-        <pre>// Business-domain email on a heavy-rigor organization
+        <pre>// Business-domain email
 {
   "alreadyVerified": false,
   "requiredMethod": "domain_email_loop",
-  "endpoint": "/v1/service/verifications/challenges",
-  "reason": "business_email_domain"
+  "endpoint": "/v1/service/verifications/challenges"
 }
 
-// Personal-domain email (gmail, yahoo, etc.) on a heavy-rigor organization
+// Personal-domain email — needs evidence-based review
 {
   "alreadyVerified": false,
   "requiredMethod": "manual_review",
-  "endpoint": "/v1/service/verifications/manual",
-  "reason": "personal_email_domain"
+  "endpoint": "/v1/service/verifications/manual"
 }
 
 // Already verified — your UI should skip this and confirm the existing record
 {
   "alreadyVerified": true,
-  "existingIdentifier": {
-    "identifierType": "email",
-    "method": "manual_review",
+  "existingVerification": {
+    "method": "domain_email_loop",
     "verifiedAt": "...",
     "verifiedByApp": "Merrie"
   }
@@ -1245,8 +1288,7 @@ identifier_type=email&amp;identifier_value=manager@bubs.example" \
         <pre>$ curl -X POST "{{baseUrl}}/api/v1/service/verifications/challenges" \
   -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
   -d '{
-    "targetType": "organization",
-    "targetId": "ORG_UUID",
+    "organizationId": "ORG_UUID",
     "identifierType": "email",
     "identifierValue": "manager@bubs.example"
   }'
@@ -1258,60 +1300,32 @@ $ curl -X POST "{{baseUrl}}/api/v1/service/verifications/challenges/CHALLENGE_ID
   -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
   -d '{ "code": "123456" }'
 
-# Response on match: { "status": "verified", "verifiedAt": "...", "method": "domain_email_loop", "identifier": {...} }
+# Response on match:   { "status": "verified", "verifiedAt": "...", "method": "domain_email_loop" }
 # Response on mismatch: { "status": "rejected", "reason": "invalid_code" }</pre>
 
         <p>Codes are six digits. Challenges expire after 30 minutes. Five wrong attempts on the same challenge return <code>429 RATE_LIMIT</code>.</p>
 
-        <p><strong>Step 2b — Manual track (structured evidence).</strong> Used when the path returned <code>manual_review</code>. Submit evidence; if your key has <code>verification_authority</code> covering the method, it auto-approves; otherwise it queues for admin review:</p>
+        <p><strong>Step 2b — Manual track (structured evidence).</strong> Used when the path returned <code>manual_review</code> — for organizations without clean email-loop access (community groups, neighborhood associations, civic bodies). Submit evidence; if your key has <code>verification_authority</code> covering the method, it auto-approves; otherwise it queues for admin review:</p>
         <pre>$ curl -X POST "{{baseUrl}}/api/v1/service/verifications/manual" \
   -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
   -d '{
-    "targetType": "organization",
-    "targetId": "ORG_UUID",
+    "organizationId": "ORG_UUID",
     "identifierType": "email",
-    "identifierValue": "manager@gmail.com",
+    "identifierValue": "secretary@phillychessclub.org",
     "evidence": {
-      "phone": "+12155550100",
-      "verifiedVia": "in_person",
-      "reviewerAttestation": "Met owner Jane at the bar, confirmed identity via driver license; business address matches.",
-      "reviewerAccountId": "internal-reviewer-id",
-      "businessAddressObserved": true,
-      "idDocumentObserved": true
+      "verifiedVia": "documentation_review",
+      "reviewerAttestation": "Reviewed bylaws and meeting minutes; identifier matches secretary listed in 2024 filing.",
+      "reviewerAccountId": "internal-reviewer-id"
     }
   }'
 
-# With verification_authority: { "status": "verified", "verifiedAt": "...", "method": "manual_review", "identifier": {...} }
+# With verification_authority: { "status": "verified", "verifiedAt": "...", "method": "manual_review" }
 # Without:                     { "status": "pending", "reviewId": "..." }</pre>
 
-        <p>Required evidence fields: <code>phone</code>, <code>verifiedVia</code> (<code>in_person</code> | <code>video_call</code>), <code>reviewerAttestation</code>, <code>reviewerAccountId</code>, <code>businessAddressObserved</code>, <code>idDocumentObserved</code>. Missing or malformed fields return <code>400 VALIDATION_ERROR</code>; submission to the wrong path (e.g., business email through manual) returns <code>409 WRONG_METHOD</code>.</p>
+        <p>Acceptable evidence types depend on the organization. For community groups: bylaws, meeting minutes, listed contact in long-standing public materials. For businesses: business license, address verification, in-person visit. The reviewer attestation captures the reasoning for audit.</p>
 
         <h3 id="verification-authority">verification_authority</h3>
-        <p>A JSON array on each service key listing the verification methods the key may auto-approve. Set during activation, based on the verification process you described. Format: <code>method:context</code>. Examples:</p>
-
-        <table>
-          <thead><tr><th>Value</th><th>Meaning</th></tr></thead>
-          <tbody>
-            <tr><td><code>["manual_review:in_person"]</code></td><td>Auto-approve manual reviews where <code>verifiedVia</code> is <code>in_person</code>. Queues for admin otherwise.</td></tr>
-            <tr><td><code>["manual_review:in_person", "manual_review:video_call"]</code></td><td>Both methods auto-approve.</td></tr>
-            <tr><td><code>null</code> / <code>[]</code></td><td>No authority. All manual submissions queue for admin review.</td></tr>
-            <tr><td><code>["*"]</code></td><td>Operator/admin wildcard. Reserved for Studio.</td></tr>
-          </tbody>
-        </table>
-
-        <p>Apps without authority can still submit manual-review evidence — those submissions just queue. Typical turnaround for admin review is one business day.</p>
-
-        <h3 id="verification-reputation">Reputation graph</h3>
-        <p>Every approval includes the approving app's stable name (snapshot of <code>brand_config.app_name</code> at approval time). The reputation graph is public:</p>
-        <pre>$ curl "{{baseUrl}}/api/v1/verifiers"
-
-# Returns one entry per app with: appName, firstApprovalAt, approvalCount,
-# activeCount, revokedCount, methods used.
-
-# Audit a specific verifier's recent work
-$ curl "{{baseUrl}}/api/v1/verifiers/Holler/recent_approvals"</pre>
-
-        <p>Apps reading the Commons compose <code>verified_by</code> filters that match their own trust policy. Sloppy verification is filtered out by other apps. Market discipline replaces central authority — and approving apps have a direct economic incentive to verify carefully, since their approvals being filtered means the businesses they onboarded lose reach across the rest of the ecosystem.</p>
+        <p>A JSON array on each service key listing the verification methods the key may auto-approve. Set during activation, based on the verification process you described. Apps without authority can still submit manual-review evidence — those submissions just queue. Typical turnaround for admin review is one business day.</p>
 
         <!-- ─── 6. Webhooks ─── -->
         <h2 id="webhooks"><span class="nc-section-num">6</span>Webhooks</h2>
@@ -1407,9 +1421,9 @@ app.post('/webhooks/commons', express.raw({ type: 'application/json' }), (req, r
         <pre>npm install neighborhood-commons</pre>
         <p>The SDK is intentionally thin: generated types and a typed <code>fetch</code> wrapper. ~50 lines of runtime, zero opinions beyond the spec. Anything more would be a second source of truth that drifts.</p>
 
-        <h3>What it gets you in 2026</h3>
+        <h3>What it gets you</h3>
         <ul>
-          <li><strong>Version pinning.</strong> <code>neighborhood-commons@1.0.0</code> is a real artifact in <code>package.json</code>. Six months from now you know exactly which spec version your code targets. AI-generated code has no version semantics unless you write them down — the SDK writes them down for you.</li>
+          <li><strong>Version pinning.</strong> <code>neighborhood-commons@2.x</code> is a real artifact in <code>package.json</code>. Six months from now you know exactly which spec version your code targets. AI-generated code has no version semantics unless you write them down — the SDK writes them down for you.</li>
           <li><strong>CI determinism.</strong> Two engineers, same build. Your build today and your build in six months produce identical output if you don't bump the dep.</li>
           <li><strong>A canonical reference your AI assistant can anchor on.</strong> "Match the SDK pattern" is a higher-quality prompt than "implement this from scratch." The SDK's value proposition has shifted — it's less an ergonomic wrapper, more a stable reference document for whatever's editing your code.</li>
           <li><strong>An audit trail.</strong> Diffing two SDK versions shows exactly what moved in the API.</li>
@@ -1444,11 +1458,10 @@ $ openapi-generator-cli generate -i {{baseUrl}}/openapi.json -g rust    -o ./cli
             <tr><td><code>GET</code></td><td><code>/v1/events</code> · <code>/v1/events/:id</code> · <code>/v1/events.ics</code> · <code>/v1/events.rss</code></td></tr>
             <tr><td><code>GET</code></td><td><code>/v1/places</code> · <code>/v1/places/:id</code></td></tr>
             <tr><td><code>GET</code></td><td><code>/v1/organizations</code> · <code>/v1/organizations/:idOrSlug</code></td></tr>
-            <tr><td><code>GET</code></td><td><code>/v1/persons</code> · <code>/v1/persons/:idOrSlug</code></td></tr>
+            <tr><td><code>GET</code></td><td><code>/v1/publishers</code> · <code>/v1/publishers/:idOrSlug</code></td></tr>
             <tr><td><code>GET</code></td><td><code>/v1/broadcasts</code> · <code>/v1/broadcasts/:id</code></td></tr>
             <tr><td><code>GET</code></td><td><code>/v1/lists</code> · <code>/v1/lists/:idOrSlug</code></td></tr>
-            <tr><td><code>GET</code></td><td><code>/v1/verifiers</code> · <code>/v1/verifiers/:appName/recent_approvals</code></td></tr>
-            <tr><td><code>GET</code></td><td><code>/v1/meta</code> · <code>/v1/meta/regions</code> · <code>/v1/meta/categories</code></td></tr>
+            <tr><td><code>GET</code></td><td><code>/v1/meta</code> · <code>/v1/meta/regions</code> · <code>/v1/meta/categories</code> · <code>/v1/meta/tags</code></td></tr>
           </tbody>
         </table>
 
@@ -1460,7 +1473,6 @@ $ openapi-generator-cli generate -i {{baseUrl}}/openapi.json -g rust    -o ./cli
             <tr><td><code>POST</code> · <code>PATCH</code></td><td><code>/v1/service/organizations</code> · <code>/v1/service/organizations/:id</code></td></tr>
             <tr><td><code>POST</code></td><td><code>/v1/service/organizations/link</code></td></tr>
             <tr><td><code>POST</code></td><td><code>/v1/service/organizations/:id/logo</code> · <code>/v1/service/organizations/:id/image</code></td></tr>
-            <tr><td><code>POST</code> · <code>PATCH</code></td><td><code>/v1/service/persons</code> · <code>/v1/service/persons/:id</code></td></tr>
             <tr><td><code>POST</code></td><td><code>/v1/service/broadcasts</code> · <code>/v1/service/broadcasts/:id/retract</code></td></tr>
             <tr><td><code>POST</code> · <code>PATCH</code></td><td><code>/v1/service/lists</code> · <code>/v1/service/lists/:id</code></td></tr>
             <tr><td><code>POST</code> · <code>DELETE</code></td><td><code>/v1/service/lists/:id/items</code> · <code>/v1/service/lists/:id/items/:position</code></td></tr>
@@ -1493,6 +1505,7 @@ $ openapi-generator-cli generate -i {{baseUrl}}/openapi.json -g rust    -o ./cli
             <tr><td>400</td><td><code>INVALID_URL</code> · <code>INVALID_SCHEME</code> · <code>BLOCKED_HOSTNAME</code> · <code>IP_LITERAL</code> · <code>URL_CREDENTIALS</code></td><td>URL field failed safety/normalcy checks.</td></tr>
             <tr><td>400</td><td><code>DOMAIN_PENDING_REVIEW</code></td><td>URL's domain is not yet on the allowlist; queued for review. Soft/transient.</td></tr>
             <tr><td>401</td><td><code>UNAUTHORIZED</code> · <code>API_KEY_REQUIRED</code> · <code>INVALID_API_KEY</code></td><td>Auth required or invalid.</td></tr>
+            <tr><td>403</td><td><code>KEY_PENDING</code></td><td>Service key is pending activation — reads work, writes are blocked.</td></tr>
             <tr><td>403</td><td><code>NOT_LINKED</code></td><td>Service key is not linked to the target organization.</td></tr>
             <tr><td>403</td><td><code>INSUFFICIENT_TIER</code></td><td>Endpoint requires admin or higher tier than the calling key has.</td></tr>
             <tr><td>404</td><td><code>NOT_FOUND</code></td><td>Resource doesn't exist or isn't visible to the caller.</td></tr>
@@ -1508,7 +1521,7 @@ $ openapi-generator-cli generate -i {{baseUrl}}/openapi.json -g rust    -o ./cli
         <p>The complete <code>ErrorCode</code> enum is in <a href="/openapi.json">openapi.json</a>. Generated SDK clients receive it as a discriminated union, so error handling can <code>switch</code> on the code with full type-checking.</p>
 
         <h3 id="stability">Stability</h3>
-        <p>The 1.0.0 spec is stable. Future minor versions add types, fields, and endpoints additively without breaking existing consumers. Removals or renames require a 2.0.0 release with strong justification — measured in years, not months. Watch the <a href="https://github.com/joinfiber/neighborhood-commons/blob/master/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a> for every contract-affecting change.</p>
+        <p>The 2.0.0 spec is stable. Future minor versions add types, fields, and endpoints additively without breaking existing consumers. Removals or renames require a 3.0.0 release with strong justification — measured in years, not months. Watch the <a href="https://github.com/joinfiber/neighborhood-commons/blob/master/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a> for every contract-affecting change.</p>
 
         <p>If something in this Guide contradicts <a href="/openapi.json">openapi.json</a> on a matter of fact, trust the spec and <a href="https://github.com/joinfiber/neighborhood-commons/issues" target="_blank" rel="noopener">file an issue</a>. The Spec wins. The Guide explains. The Log dates.</p>
 

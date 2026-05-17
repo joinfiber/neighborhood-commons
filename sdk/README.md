@@ -94,6 +94,26 @@ type ServiceEventInput = components["schemas"]["ServiceEventInput"];
 type ListEventsQuery = paths["/events"]["get"]["parameters"]["query"];
 ```
 
+## PII boundary helper
+
+The Commons stores public facts. Consumer apps that publish on behalf of operators (the tenant-umbrella pattern — Merrie, GoThere, etc.) commit contractually to send no operator PII: no operator emails, phones, internal user IDs, or account IDs from the consumer's own system. `assertPublicPayload` is a cheap runtime check that surfaces violations before the payload hits the wire.
+
+```ts
+import { assertPublicPayload } from "neighborhood-commons";
+
+const ALLOWED_EVENT_KEYS = new Set([
+  "organizerOrganizationId", "name", "start", "end", "timezone", "category",
+  "location", "description", "cost", "url", "image_url", "tags",
+]);
+
+function syncEvent(body: Record<string, unknown>) {
+  assertPublicPayload(body, ALLOWED_EVENT_KEYS, "event");
+  return commons.POST("/service/events", { body });
+}
+```
+
+Throws synchronously on the first disallowed key. Useful as a defensive layer between your own sync code and the SDK call — the Spec itself doesn't reject unknown fields (Zod strips them silently), so this gives you a loud signal during development.
+
 ## Caveats
 
 - The `/events/changes` endpoint lives outside the `/v1` prefix. If you need it, create a second client with `baseUrl` pointed at `.../api` instead of `.../api/v1`, or call it directly with `fetch`.

@@ -97,8 +97,19 @@ describe('contract drift: ErrorCode enum coverage', () => {
     for (const file of getAllTsFiles(srcDir)) {
       const content = readFileSync(file, 'utf-8');
       // Match createError('msg', 400, 'CODE') across one or many lines.
-      // The regex tolerates multi-line, whitespace, and trailing commas.
-      const pattern = /createError\([^)]*?['"]([A-Z_]+)['"]\s*\)/g;
+      // The comment used to claim "trailing commas tolerated" but the old
+      // pattern `['"]([A-Z_]+)['"]\s*\)` required the closing paren to
+      // immediately follow the code string (modulo whitespace). That
+      // missed multi-line invocations like
+      //   createError(
+      //     'msg',
+      //     403,
+      //     'IMAGE_NOT_PERMITTED',
+      //   );
+      // because `'CODE',\n);` has a comma between the code and the paren.
+      // Allow an optional comma so the guard actually catches the form
+      // the rest of the codebase has been using.
+      const pattern = /createError\([^)]*?['"]([A-Z_]+)['"]\s*,?\s*\)/g;
       let m: RegExpExecArray | null;
       while ((m = pattern.exec(content)) !== null) {
         foundCodes.add(m[1]);
@@ -142,25 +153,25 @@ describe('contract drift: in-contract routes documented in openapi.json', () => 
     'v1.ts': '/events',
     'webhooks.ts': '/webhooks',
     'meta.ts': '/meta',
-    // 1.0.0 type system
+    // v2 type system
     'v1-places.ts': '/places',
     'v1-organizations.ts': '/organizations',
-    'v1-persons.ts': '/persons',
     'v1-broadcasts.ts': '/broadcasts',
     'v1-lists.ts': '/lists',
-    'v1-verifiers.ts': '/verifiers',
+    // v1-publishers.ts (new v2 route) and the removal of v1-persons.ts /
+    // v1-verifiers.ts get registered/de-registered when the openapi.json
+    // rewrite ships in Chunk B. Omitted from this list until then.
+    //
     // Service-tier write paths.
-    // service/images.ts hosts the legacy /service/accounts/:id/{cover-image,logo}
-    // upload paths that 1.0.0 removed from the spec; omitted from this list
-    // until consumer apps migrate to /service/organizations/:id/{logo,image}.
+    // service/images.ts is omitted from this list until v2's spec rewrite
+    // documents /service/events/:id/image (in Chunk B).
     'service/events.ts': '/service',
     'service/series.ts': '/service',
     'service/admin-ops.ts': '/service',
     'service/register.ts': '/service/register',
-    // 1.0.0 type-system service routes
+    // v2 type-system service routes (service/persons.ts retired)
     'service/places.ts': '/service',
     'service/organizations.ts': '/service',
-    'service/persons.ts': '/service',
     'service/broadcasts.ts': '/service',
     'service/lists.ts': '/service',
     'service/verifications.ts': '/service',

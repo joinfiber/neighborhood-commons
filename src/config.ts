@@ -70,6 +70,20 @@ const envSchema = z.object({
 
   // Default region for new portal events (UUID from regions table)
   DEFAULT_REGION_ID: z.string().uuid().optional(),
+
+  // Operator notification — who receives report/dispute alerts. If unset,
+  // notifications are skipped and only the audit_log entry is created.
+  COMMONS_OPERATOR_EMAIL: z.string().email().optional(),
+
+  // DMCA designated agent — surfaced at /dmca (HTML) and /api/v1/dmca (JSON).
+  // When the agent fields are unset, the endpoint reports status=pending_registration
+  // and points users at the operator email for interim takedown contact.
+  // Once registered with the U.S. Copyright Office, populate these fields
+  // from the registration record. The agent can be an individual or entity.
+  COMMONS_DMCA_AGENT_NAME: z.string().min(1).optional(),
+  COMMONS_DMCA_AGENT_EMAIL: z.string().email().optional(),
+  COMMONS_DMCA_AGENT_PHONE: z.string().min(1).optional(),
+  COMMONS_DMCA_AGENT_ADDRESS: z.string().min(1).optional(),
 });
 
 function loadConfig() {
@@ -176,4 +190,23 @@ export const config = {
   },
 
   defaultRegionId: env.DEFAULT_REGION_ID || null,
+
+  operator: {
+    email: env.COMMONS_OPERATOR_EMAIL || '',
+  },
+
+  // DMCA designated agent. `registered` is true when all fields are populated;
+  // false (with status='pending_registration' on the public endpoint) otherwise.
+  dmca: {
+    agentName: env.COMMONS_DMCA_AGENT_NAME || '',
+    agentEmail: env.COMMONS_DMCA_AGENT_EMAIL || '',
+    agentPhone: env.COMMONS_DMCA_AGENT_PHONE || '',
+    agentAddress: env.COMMONS_DMCA_AGENT_ADDRESS || '',
+    registered: !!(
+      env.COMMONS_DMCA_AGENT_NAME
+      && env.COMMONS_DMCA_AGENT_EMAIL
+      && env.COMMONS_DMCA_AGENT_PHONE
+      && env.COMMONS_DMCA_AGENT_ADDRESS
+    ),
+  },
 } as const;

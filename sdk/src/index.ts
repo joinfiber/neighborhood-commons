@@ -18,19 +18,20 @@ export function createCommonsClient(opts: CommonsClientOptions = {}): Client<pat
   });
 }
 
+export { assertPublicPayload } from "./assert-public-payload.js";
+
 export type { paths, components } from "./generated/schema.js";
 
 export type Meta = components["schemas"]["Meta"];
 export type Event = components["schemas"]["Event"];
 export type Source = components["schemas"]["Source"];
-// Legacy `Account` and `Group` types were removed from the spec in 1.0.0.
-// Use `ServiceAccount` for the service-tier portal-account read shape and
-// `Organization` for the new collective-entity type that supersedes Group.
+// v2 (2.0.0): Person, Verifier, VerifierApproval, Account, Group types
+// were retired. Use ServiceAccount for the operational portal-account shell
+// and Organization for the unified entity primitive.
 export type ServiceAccount = components["schemas"]["ServiceAccount"];
 export type ServiceEvent = components["schemas"]["ServiceEvent"];
 export type Place = components["schemas"]["Place"];
 export type Organization = components["schemas"]["Organization"];
-export type Person = components["schemas"]["Person"];
 export type Broadcast = components["schemas"]["Broadcast"];
 export type List = components["schemas"]["List"];
 export type Webhook = components["schemas"]["Webhook"];

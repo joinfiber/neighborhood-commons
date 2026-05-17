@@ -28,15 +28,6 @@ declare global {
         tier?: string;
         isAdmin?: boolean;
         /**
-         * The portal_account this key is linked to via api_key_account_links.
-         * For Contribute keys this is the stable ownership identity — it
-         * survives key rotation. Service keys may link to multiple accounts;
-         * `linkedAccountId` here is the first (or only) linked account, used
-         * by Contribute-style ownership checks. Service-tier code that needs
-         * the full set should query api_key_account_links directly.
-         */
-        linkedAccountId?: string;
-        /**
          * App branding for verification emails (1.0.0+).
          * Set by operator at issuance via api_keys.brand_config.
          */
@@ -52,6 +43,14 @@ declare global {
          * for admin review. Granted by operator after onboarding review.
          */
         verificationAuthority?: string[];
+        /**
+         * Collective-witnessing capability flag (v2). When true, this key
+         * may write events with `source_method='witnessed'` attributed to
+         * a collective publisher organization (e.g., "Fiber Community").
+         * The witnessed-evidence authority path bypasses
+         * api_key_organization_links scope. Granted at activation.
+         */
+        witnessAuthority?: boolean;
       };
     }
   }
@@ -116,19 +115,9 @@ export async function requireApiKey(req: Request, _res: Response, next: NextFunc
       return next(createError('Invalid or inactive API key', 401, 'INVALID_API_KEY'));
     }
 
-    // Resolve the key's linked portal account (if any). For Contribute keys
-    // this is the stable ownership identity — survives key rotation.
-    const { data: link } = await supabaseAdmin
-      .from('api_key_account_links')
-      .select('portal_account_id')
-      .eq('api_key_id', keyInfo.id)
-      .limit(1)
-      .maybeSingle();
-
     req.apiKeyInfo = {
       id: keyInfo.id,
       tier: keyInfo.contributor_tier,
-      linkedAccountId: link?.portal_account_id || undefined,
     };
     next();
   } catch {
@@ -154,7 +143,7 @@ export async function requireServiceApiKey(req: Request, _res: Response, next: N
     const keyHash = hashApiKey(apiKey);
     const { data: keyInfo } = await supabaseAdmin
       .from('api_keys')
-      .select('id, contributor_tier, is_admin, brand_config, verification_authority, activated_at')
+      .select('id, contributor_tier, is_admin, brand_config, verification_authority, witness_authority, activated_at')
       .eq('key_hash', keyHash)
       .eq('status', 'active')
       .maybeSingle();
@@ -183,6 +172,7 @@ export async function requireServiceApiKey(req: Request, _res: Response, next: N
       verificationAuthority: Array.isArray(keyInfo.verification_authority)
         ? (keyInfo.verification_authority as string[])
         : undefined,
+      witnessAuthority: keyInfo.witness_authority === true,
     };
     next();
   } catch {

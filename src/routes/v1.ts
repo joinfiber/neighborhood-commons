@@ -19,6 +19,7 @@ import { supabaseAdmin } from '../lib/supabase.js';
 import { createError } from '../middleware/error-handler.js';
 import { validateRequest, validateUuidParam, sanitizeSearchInput } from '../lib/helpers.js';
 import { toNeighborhoodEvent, toRRule, type PortalEventRow } from '../lib/event-transform.js';
+import { hydrateVerificationsFor } from '../lib/verification-hydrate.js';
 import { optionalApiKey } from '../middleware/api-key.js';
 import { icsEscape, icsSafeUrl } from '../lib/ical.js';
 
@@ -32,7 +33,7 @@ export const v1Limiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 1000,
   keyGenerator: (req) => req.apiKeyInfo?.id || req.ip || 'unknown',
-  message: { error: { code: 'RATE_LIMIT', message: 'Rate limit exceeded (1000/hr). Register for an API key at /api/v1/developers for a dedicated limit bucket.' } },
+  message: { error: { code: 'RATE_LIMIT', message: 'Rate limit exceeded (1000/hr). Register for a service-tier API key at /api/v1/service/register/send-otp for a dedicated limit bucket.' } },
   standardHeaders: true,
   legacyHeaders: false,
   skip: () => process.env.INTEGRATION_TEST === 'true',
@@ -64,7 +65,10 @@ const listSchema = z.object({
   offset: z.coerce.number().min(0).default(0),
 });
 
-const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, event_image_focal_y, created_at, creator_account_id, series_id, series_instance_number, open_window, capacity, rsvp, tags, wheelchair_accessible, first_party, source_method, source_publisher, source_contributor_name, source_contributor_url, tmdb_id, portal_accounts!events_creator_account_id_fkey(business_name, status, wheelchair_accessible)';
+// v2: organizer derives from the organizations join via organizer_org_id.
+// The nested portal_accounts (via organizations.owner_account_id) is for the
+// suspended-status visibility check; it's not exposed in the public response.
+const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, event_image_focal_y, created_at, creator_account_id, series_id, series_instance_number, open_window, capacity, rsvp, tags, wheelchair_accessible, first_party, source_method, source_publisher, source_contributor_name, source_contributor_url, tmdb_id, organizer_org_id, organizations!events_organizer_org_id_fkey(id, slug, name, portal_accounts!organizations_owner_account_id_fkey(status))';
 
 // =============================================================================
 // SHARED QUERY BUILDING
@@ -73,15 +77,18 @@ const EVENTS_SELECT = 'id, content, description, place_name, venue_address, plac
 type ListParams = z.infer<typeof listSchema>;
 
 /**
- * Resolve a contributor slug to account ID(s). Returns null if no match.
- * Looks up portal_accounts by slug (exact match, case-insensitive).
+ * Resolve a contributor slug to organizer organization ID(s). Returns
+ * null if no match.
+ *
+ * v2: contributor identity lives on organizations (organizations.slug),
+ * not on portal_accounts. The events filter then matches on
+ * events.organizer_org_id.
  */
-async function resolveContributorAccountIds(slug: string): Promise<string[] | null> {
+async function resolveContributorOrgIds(slug: string): Promise<string[] | null> {
   const { data } = await supabaseAdmin
-    .from('portal_accounts')
+    .from('organizations')
     .select('id')
-    .eq('slug', slug.toLowerCase())
-    .eq('status', 'active');
+    .eq('slug', slug.toLowerCase());
   if (!data || data.length === 0) return null;
   return data.map((r: { id: string }) => r.id);
 }
@@ -108,12 +115,12 @@ async function queryFilteredEvents(params: ListParams, opts?: {
   const defaultCutoff = new Date(Date.now() - lookbackMs).toISOString();
   const cutoff = opts?.cutoffOverride ?? defaultCutoff;
 
-  // Contributor filter: resolve slug → account IDs before building query
-  let contributorAccountIds: string[] | null = null;
+  // Contributor filter: resolve slug → organizer org IDs before building query
+  let contributorOrgIds: string[] | null = null;
   if (params.contributor) {
-    contributorAccountIds = await resolveContributorAccountIds(params.contributor);
-    if (!contributorAccountIds) {
-      // No matching account — return empty result
+    contributorOrgIds = await resolveContributorOrgIds(params.contributor);
+    if (!contributorOrgIds) {
+      // No matching organization — return empty result
       return { events: [], count: 0 };
     }
   }
@@ -127,11 +134,11 @@ async function queryFilteredEvents(params: ListParams, opts?: {
     .range(params.offset, params.offset + fetchLimit - 1);
 
   // Contributor filter
-  if (contributorAccountIds) {
-    if (contributorAccountIds.length === 1) {
-      query = query.eq('creator_account_id', contributorAccountIds[0] as string);
+  if (contributorOrgIds) {
+    if (contributorOrgIds.length === 1) {
+      query = query.eq('organizer_org_id', contributorOrgIds[0] as string);
     } else {
-      query = query.in('creator_account_id', contributorAccountIds);
+      query = query.in('organizer_org_id', contributorOrgIds);
     }
   }
 
@@ -231,9 +238,10 @@ async function queryFilteredEvents(params: ListParams, opts?: {
 
   // Visibility filtering (unless explicitly skipped)
   if (opts?.skipVisibility) {
-    // Still filter out suspended accounts
+    // Still filter out suspended accounts (via organizations.owner_account_id chain)
     const active = rows.filter((row) => {
-      const account = row.portal_accounts as Record<string, unknown> | null;
+      const org = row.organizations as Record<string, unknown> | null;
+      const account = org?.portal_accounts as Record<string, unknown> | null;
       return !account || account.status !== 'suspended';
     });
     return { events: active, count: count ?? null };
@@ -242,7 +250,10 @@ async function queryFilteredEvents(params: ListParams, opts?: {
   const OPEN_WINDOW_DEFAULT_HOURS = 3;
   const now = new Date();
   const visible = rows.filter((row) => {
-    const account = row.portal_accounts as Record<string, unknown> | null;
+    // v2: suspended-status check traverses organizations.owner_account_id → portal_accounts.status.
+    // Organizations with no owning portal account (e.g., admin-created via Studio) skip the check.
+    const org = row.organizations as Record<string, unknown> | null;
+    const account = org?.portal_accounts as Record<string, unknown> | null;
     if (account && account.status === 'suspended') return false;
 
     const openWindow = (row.open_window as boolean) ?? false;
@@ -312,6 +323,14 @@ router.get('/', async (req, res, next) => {
       }
     }
 
+    // v2: hydrate verifications for the organizer organizations in one query
+    // so the response includes organizer.verified for each event.
+    const organizerOrgIds = Array.from(new Set(
+      page.map((e) => (e as unknown as PortalEventRow).organizer_org_id).filter(Boolean) as string[]
+    ));
+    const verifications = await hydrateVerificationsFor(organizerOrgIds);
+    const verifiedOrgIds = new Set(verifications.keys());
+
     res.set('Cache-Control', 'public, max-age=30');
     res.json({
       meta: {
@@ -323,7 +342,7 @@ router.get('/', async (req, res, next) => {
         license: 'CC-BY-4.0',
       },
       events: page.map((e) => {
-        const transformed = toNeighborhoodEvent(e as unknown as PortalEventRow);
+        const transformed = toNeighborhoodEvent(e as unknown as PortalEventRow, verifiedOrgIds);
         const row = e as unknown as { series_id?: string | null; recurrence?: string | null };
         if (row.series_id && transformed.recurrence) {
           const ic = seriesCounts.get(row.series_id);
@@ -372,7 +391,7 @@ router.get('/:id', async (req, res, next) => {
 
     const { data: event, error } = await supabaseAdmin
       .from('events')
-      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, event_image_focal_y, created_at, creator_account_id, series_id, series_instance_number, open_window, capacity, rsvp, tags, wheelchair_accessible, first_party, source_method, source_publisher, source_contributor_name, source_contributor_url, portal_accounts!events_creator_account_id_fkey(business_name, status, wheelchair_accessible)')
+      .select(EVENTS_SELECT)
       .eq('id', id)
       .eq('status', 'published')
       .maybeSingle();
@@ -383,12 +402,20 @@ router.get('/:id', async (req, res, next) => {
     }
 
     // Exclude events from suspended accounts — don't leak existence
-    const account = (event as unknown as Record<string, unknown>)?.portal_accounts as Record<string, unknown> | null;
+    // (suspended status lives on portal_accounts via organizations.owner_account_id)
+    const orgRow = (event as unknown as Record<string, unknown>)?.organizations as Record<string, unknown> | null;
+    const account = orgRow?.portal_accounts as Record<string, unknown> | null;
     if (!event || (account && account.status === 'suspended')) {
       throw createError('Event not found', 404, 'NOT_FOUND');
     }
 
-    const transformed = toNeighborhoodEvent(event as unknown as PortalEventRow);
+    // v2: hydrate verification for this organizer (one lookup; cheap)
+    const eventRow = event as unknown as PortalEventRow;
+    const orgId = eventRow.organizer_org_id;
+    const verifications = orgId ? await hydrateVerificationsFor([orgId]) : new Map();
+    const verifiedOrgIds = new Set(verifications.keys());
+
+    const transformed = toNeighborhoodEvent(eventRow, verifiedOrgIds);
 
     // For series events, look up the instance count to produce a bounded RRULE
     const row = event as unknown as Record<string, unknown>;

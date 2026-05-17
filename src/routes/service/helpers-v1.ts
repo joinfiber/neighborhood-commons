@@ -44,6 +44,9 @@ export async function assertLinkedOrganization(
 /**
  * Assert that the calling service key is linked to the organization that
  * curates a given list. Admin keys bypass.
+ *
+ * v2 (migration 082): lists are always curated by an organization
+ * (curator_org_id NOT NULL). The Person primitive is gone.
  */
 export async function assertLinkedListCurator(
   req: Request,
@@ -53,24 +56,14 @@ export async function assertLinkedListCurator(
 
   const { data: list } = await supabaseAdmin
     .from('lists')
-    .select('curator_org_id, curator_person_id')
+    .select('curator_org_id')
     .eq('id', listId)
     .maybeSingle();
 
   if (!list) throw createError('List not found', 404, 'NOT_FOUND');
-
-  // Person-curated lists: scoping is by Person.owner_account_id linked to a key
-  // (an indirect path). For now, only org-curated lists are scope-checked here;
-  // person-curated list editing falls to admin until a clean owner-link path lands.
-  if (list.curator_org_id) {
-    await assertLinkedOrganization(req, list.curator_org_id as string);
-    return;
+  if (!list.curator_org_id) {
+    throw createError('List has no curator organization', 403, 'NO_OWNER');
   }
 
-  // Person-curated list: only admin can edit until person-link semantics ship.
-  throw createError(
-    'Person-curated lists can only be edited by admin keys in 1.0.0.',
-    403,
-    'INSUFFICIENT_TIER',
-  );
+  await assertLinkedOrganization(req, list.curator_org_id as string);
 }

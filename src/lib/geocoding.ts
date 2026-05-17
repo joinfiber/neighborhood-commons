@@ -1,12 +1,14 @@
 /**
  * Geocoding — Neighborhood Commons
  *
- * Two-tier address → coordinates resolution:
- * 1. Creator account default coordinates (no external call)
- * 2. Nominatim/OpenStreetMap geocoding (1 req/sec, free)
- *
- * Used fire-and-forget after event create/update to fill in
+ * Address → coordinates resolution via Nominatim/OpenStreetMap (1 req/sec,
+ * free). Used fire-and-forget after event create/update to fill in
  * latitude/longitude when only a street address is provided.
+ *
+ * v2 (migration 082): the legacy "account default coordinates" tier is
+ * gone — that data lived on portal_accounts.default_latitude/longitude,
+ * which were dropped. Defaults now come from the organizer's
+ * primary_place at the write-path resolver (see service/events.ts).
  */
 
 import { supabaseAdmin } from './supabase.js';
@@ -88,31 +90,11 @@ export async function nominatimGeocode(
 }
 
 // ---------------------------------------------------------------------------
-// Account default coordinates lookup
-// ---------------------------------------------------------------------------
-
-async function getAccountDefaultCoords(
-  accountId: string,
-): Promise<{ lat: number; lng: number } | null> {
-  const { data } = await supabaseAdmin
-    .from('portal_accounts')
-    .select('default_latitude, default_longitude')
-    .eq('id', accountId)
-    .maybeSingle();
-
-  if (data?.default_latitude != null && data?.default_longitude != null) {
-    return { lat: data.default_latitude as number, lng: data.default_longitude as number };
-  }
-  return null;
-}
-
-// ---------------------------------------------------------------------------
 // Main entry point — geocode an event if coordinates are missing
 // ---------------------------------------------------------------------------
 
 /**
- * Fire-and-forget geocoding for a single event.
- * Checks account defaults first, then Nominatim.
+ * Fire-and-forget geocoding for a single event via Nominatim.
  * Never overwrites existing coordinates.
  */
 export async function geocodeEventIfNeeded(
@@ -120,7 +102,6 @@ export async function geocodeEventIfNeeded(
   address: string | null | undefined,
   lat: number | null | undefined,
   lng: number | null | undefined,
-  creatorAccountId: string | null | undefined,
 ): Promise<void> {
   // Already has coordinates — nothing to do
   if (lat != null && lng != null) return;
@@ -128,24 +109,9 @@ export async function geocodeEventIfNeeded(
   if (!address || !address.trim()) return;
 
   try {
-    // Tier 1: account default coordinates
-    let coords: { lat: number; lng: number } | null = null;
-    if (creatorAccountId) {
-      coords = await getAccountDefaultCoords(creatorAccountId);
-      if (coords) {
-        console.log(`[GEOCODE] Using account defaults for event ${eventId}`);
-      }
-    }
-
-    // Tier 2: Nominatim
-    if (!coords) {
-      coords = await nominatimGeocode(address);
-      if (coords) {
-        console.log(`[GEOCODE] Nominatim resolved event ${eventId}: ${coords.lat}, ${coords.lng}`);
-      }
-    }
-
+    const coords = await nominatimGeocode(address);
     if (!coords) return;
+    console.log(`[GEOCODE] Nominatim resolved event ${eventId}: ${coords.lat}, ${coords.lng}`);
 
     // Update the event row — the PostGIS trigger handles `location` automatically
     const { error } = await supabaseAdmin
@@ -177,29 +143,15 @@ export async function geocodeSeriesEvents(
   address: string | null | undefined,
   lat: number | null | undefined,
   lng: number | null | undefined,
-  creatorAccountId: string | null | undefined,
 ): Promise<void> {
   if (lat != null && lng != null) return;
   if (!address || !address.trim()) return;
   if (eventIds.length === 0) return;
 
   try {
-    let coords: { lat: number; lng: number } | null = null;
-    if (creatorAccountId) {
-      coords = await getAccountDefaultCoords(creatorAccountId);
-      if (coords) {
-        console.log(`[GEOCODE] Using account defaults for ${eventIds.length} series events`);
-      }
-    }
-
-    if (!coords) {
-      coords = await nominatimGeocode(address);
-      if (coords) {
-        console.log(`[GEOCODE] Nominatim resolved ${eventIds.length} series events: ${coords.lat}, ${coords.lng}`);
-      }
-    }
-
+    const coords = await nominatimGeocode(address);
     if (!coords) return;
+    console.log(`[GEOCODE] Nominatim resolved ${eventIds.length} series events: ${coords.lat}, ${coords.lng}`);
 
     const { error } = await supabaseAdmin
       .from('events')
@@ -238,7 +190,7 @@ export async function geocodeBackfill(): Promise<{
 }> {
   const { data: events, error } = await supabaseAdmin
     .from('events')
-    .select('id, venue_address, creator_account_id')
+    .select('id, venue_address')
     .not('venue_address', 'is', null)
     .is('latitude', null)
     .limit(BACKFILL_BATCH_SIZE);
@@ -258,18 +210,7 @@ export async function geocodeBackfill(): Promise<{
 
   for (const event of events) {
     const address = event.venue_address as string;
-    const accountId = event.creator_account_id as string | null;
-
-    // Tier 1: account defaults
-    let coords: { lat: number; lng: number } | null = null;
-    if (accountId) {
-      coords = await getAccountDefaultCoords(accountId);
-    }
-
-    // Tier 2: Nominatim
-    if (!coords) {
-      coords = await nominatimGeocode(address);
-    }
+    const coords = await nominatimGeocode(address);
 
     if (coords) {
       const { error: updateErr } = await supabaseAdmin

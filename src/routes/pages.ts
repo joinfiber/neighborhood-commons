@@ -30,7 +30,7 @@ const router: ReturnType<typeof Router> = Router();
 const SITE_NAME = 'Neighborhood Commons';
 const SITE_DOMAIN = config.apiBaseUrl || 'https://neighborhood-commons.org';
 
-const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, series_id, series_instance_number, open_window, capacity, rsvp, tags, wheelchair_accessible, source_method, source_publisher, source_contributor_name, source_contributor_url, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible)';
+const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, organizer_org_id, series_id, series_instance_number, open_window, capacity, rsvp, tags, wheelchair_accessible, source_method, source_publisher, source_contributor_name, source_contributor_url, organizations!events_organizer_org_id_fkey(id, slug, name)';
 
 // =============================================================================
 // HTML HELPERS
@@ -205,10 +205,21 @@ ${ogImg}
 <meta name="twitter:description" content="${safeDesc}">
 ${ogImage ? `<meta name="twitter:image" content="${escapeAttr(ogImage)}">` : ''}
 
-<!-- Fonts -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<!-- Fonts: self-hosted (see public/index.html for rationale). pages.css
+     references DM Sans by name; the @font-face declarations below bind
+     that name to the woff2 we ship. Preload the body weight so it lands
+     before the browser tries to paint. -->
+<link rel="preload" href="${SITE_DOMAIN}/fonts/dm-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+  @font-face {
+    font-family: 'DM Sans'; font-style: normal; font-weight: 400; font-display: swap;
+    src: url('${SITE_DOMAIN}/fonts/dm-sans-latin.woff2') format('woff2');
+  }
+  @font-face {
+    font-family: 'DM Sans'; font-style: normal; font-weight: 500; font-display: swap;
+    src: url('${SITE_DOMAIN}/fonts/dm-sans-latin.woff2') format('woff2');
+  }
+</style>
 
 <!-- Styles -->
 <link rel="stylesheet" href="${SITE_DOMAIN}/pages.css">
@@ -301,8 +312,8 @@ router.get('/events/:id',async (req, res, next) => {
     const linkUrl = (row.link_url as string) || null;
     const tags = (row.tags as string[] | null) || [];
     const accessible = row.wheelchair_accessible as boolean | null;
-    const acct = row.portal_accounts as { business_name?: string } | null;
-    const publisher = (row.source_publisher as string) || acct?.business_name || SITE_NAME;
+    const org = row.organizations as { id?: string; slug?: string; name?: string } | null;
+    const publisher = (row.source_publisher as string) || org?.name || SITE_NAME;
     const method = (row.source_method as string) || 'portal';
 
     const dateDisplay = formatDate(row.event_at as string, tz);
@@ -340,17 +351,11 @@ router.get('/events/:id',async (req, res, next) => {
     // Google Calendar link
     const gcalUrl = googleCalendarUrl(name, startIso, endIso, fullLocation, desc);
 
-    // Venue link (if the event has a creator_account_id, try to link to venue page)
+    // Venue link — use the organizer's slug. v2: organizer org has a slug;
+    // the legacy portal_accounts.slug is gone.
     let venueLink = '';
-    if (row.creator_account_id) {
-      const { data: account } = await supabaseAdmin
-        .from('portal_accounts')
-        .select('slug')
-        .eq('id', row.creator_account_id as string)
-        .maybeSingle();
-      if (account?.slug) {
-        venueLink = `${SITE_DOMAIN}/venues/${account.slug}`;
-      }
+    if (org?.slug) {
+      venueLink = `${SITE_DOMAIN}/venues/${org.slug}`;
     }
 
     const head = `<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>`;
@@ -432,34 +437,64 @@ router.get('/venues/:slug',async (req, res, next) => {
       res.status(404).send(render404()); return;
     }
 
-    const { data: account, error: acctErr } = await supabaseAdmin
-      .from('portal_accounts')
-      .select('id, business_name, slug, description, website, logo_url, cover_image_url, default_address, default_latitude, default_longitude')
+    // v2: venue pages resolve via organizations.slug. Status check
+    // traverses owner_account_id → portal_accounts (active).
+    const { data: org, error: orgErr } = await supabaseAdmin
+      .from('organizations')
+      .select('id, slug, name, description, url, logo_url, primary_place_id, owner_account_id')
       .eq('slug', slug)
-      .eq('status', 'active')
       .maybeSingle();
 
-    if (acctErr || !account) {
+    if (orgErr || !org) {
       res.status(404).send(render404()); return;
     }
 
-    // Fetch upcoming events for this venue
+    // Suspended-owner gate: traverse organizations.owner_account_id → portal_accounts.status.
+    if (org.owner_account_id) {
+      const { data: owner } = await supabaseAdmin
+        .from('portal_accounts')
+        .select('status')
+        .eq('id', org.owner_account_id as string)
+        .maybeSingle();
+      if (owner && owner.status !== 'active') {
+        res.status(404).send(render404()); return;
+      }
+    }
+
+    // Address comes from the organization's primary_place.
+    let address = '';
+    if (org.primary_place_id) {
+      const { data: place } = await supabaseAdmin
+        .from('places')
+        .select('street_address, address_locality, address_region, postal_code')
+        .eq('id', org.primary_place_id as string)
+        .maybeSingle();
+      if (place) {
+        address = [
+          place.street_address,
+          place.address_locality,
+          place.address_region,
+          place.postal_code,
+        ].filter(Boolean).join(', ');
+      }
+    }
+
+    // Fetch upcoming events for this venue, scoped by organizer_org_id.
     const { data: events } = await supabaseAdmin
       .from('events')
       .select(EVENTS_SELECT)
-      .eq('creator_account_id', account.id)
+      .eq('organizer_org_id', org.id as string)
       .eq('status', 'published')
       .gte('event_at', new Date().toISOString())
       .order('event_at', { ascending: true })
       .limit(50);
 
     const venueEvents = events || [];
-    const venueName = account.business_name as string;
+    const venueName = org.name as string;
     const canonical = `${SITE_DOMAIN}/venues/${slug}`;
-    const bio = (account.description as string) || '';
-    const websiteUrl = (account.website as string) || '';
-    const address = (account.default_address as string) || '';
-    const logoUrl = resolveEventImageUrl(account.logo_url as string | null, SITE_DOMAIN);
+    const bio = (org.description as string) || '';
+    const websiteUrl = (org.url as string) || '';
+    const logoUrl = resolveEventImageUrl(org.logo_url as string | null, SITE_DOMAIN);
 
     // Structured data (Schema.org LocalBusiness)
     const jsonLd = {
@@ -546,28 +581,28 @@ router.get('/venues/:slug/events.ics',async (req, res, next) => {
   try {
     const slug = req.params.slug.toLowerCase();
 
-    const { data: account } = await supabaseAdmin
-      .from('portal_accounts')
-      .select('id, business_name')
+    // v2: lookup via organizations.slug.
+    const { data: org } = await supabaseAdmin
+      .from('organizations')
+      .select('id, name')
       .eq('slug', slug)
-      .eq('status', 'active')
       .maybeSingle();
 
-    if (!account) {
+    if (!org) {
       res.status(404).set('Content-Type', 'text/plain').send('Venue not found'); return;
     }
 
     const { data: events } = await supabaseAdmin
       .from('events')
       .select('id, content, description, place_name, venue_address, event_at, end_time, event_timezone, latitude, longitude, link_url, recurrence')
-      .eq('creator_account_id', account.id)
+      .eq('organizer_org_id', org.id as string)
       .eq('status', 'published')
       .gte('event_at', new Date().toISOString())
       .order('event_at', { ascending: true })
       .limit(200);
 
     const rows = events || [];
-    const venueName = account.business_name as string;
+    const venueName = org.name as string;
 
     const fmtDt = (iso: string) => {
       try {

@@ -29,7 +29,7 @@ const MAX_CONSECUTIVE_FAILURES = 10;
  *
  * Replaces the ~17 identical inline IIFEs that used to live in route
  * handlers across contribute/admin/service/portal. Each one rebuilt the
- * same "select the row with business_name join, transform, dispatch"
+ * same "select the row with organizations join, transform, dispatch"
  * flow. Centralizing means webhook payload bugs have one place to hide.
  *
  * Intentionally void-returning (caller doesn't await): webhook delivery
@@ -49,7 +49,7 @@ export function dispatchEventWebhookById(
     try {
       const { data: row } = await supabaseAdmin
         .from('events')
-        .select(`${PORTAL_SELECT}, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible)`)
+        .select(`${PORTAL_SELECT}, organizations!events_organizer_org_id_fkey(id, slug, name, portal_accounts!organizations_owner_account_id_fkey(status))`)
         .eq('id', eventId)
         .maybeSingle();
       if (!row) return;
@@ -84,7 +84,8 @@ export type ImageProcessedErrorCode =
   | 'DOWNLOAD_FAILED'
   | 'INVALID_FORMAT'
   | 'ENCODE_FAILED'
-  | 'UPLOAD_FAILED';
+  | 'UPLOAD_FAILED'
+  | 'NOT_PERMITTED';
 
 export interface ImageProcessedPayload {
   event_type: 'event.image_processed';
@@ -543,7 +544,7 @@ export async function retryFailedWebhooks(): Promise<number> {
       .eq('status', 'active'),
     supabaseAdmin
       .from('events')
-      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, series_id, series_instance_number, open_window, capacity, rsvp, tags, wheelchair_accessible, price, link_url, event_image_url, created_at, source_method, source_publisher, source_contributor_url, source_contributor_name, portal_accounts!events_creator_account_id_fkey(business_name, wheelchair_accessible)')
+      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, series_id, series_instance_number, open_window, capacity, rsvp, tags, wheelchair_accessible, price, link_url, event_image_url, created_at, first_party, source_method, source_publisher, source_contributor_url, source_contributor_name, organizer_org_id, tmdb_id, organizations!events_organizer_org_id_fkey(id, slug, name, portal_accounts!organizations_owner_account_id_fkey(status))')
       .in('id', eventIds),
   ]);
 

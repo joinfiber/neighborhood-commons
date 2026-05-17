@@ -16,26 +16,26 @@ import helmet from 'helmet';
 import { config } from './config.js';
 import { supabaseAdmin } from './lib/supabase.js';
 import { errorHandler } from './middleware/error-handler.js';
-import { globalLimiter } from './middleware/rate-limit.js';
+import { globalLimiter, writeLimiter } from './middleware/rate-limit.js';
 
 // Routes
+// v2: dropped v1-accounts (→ v1-publishers), v1-persons (no longer a primitive),
+// v1-verifiers (no cross-app reputation graph), v1-groups (groups table dropped),
+// contribute (wild-west publishing path retired).
 import publicRoutes from './routes/public.js';
 import v1Routes, { v1Limiter, icsHandler, rssHandler } from './routes/v1.js';
-import v1GroupRoutes, { groupsLimiter } from './routes/v1-groups.js';
-import v1AccountRoutes, { accountsLimiter } from './routes/v1-accounts.js';
 import v1PlacesRoutes, { placesLimiter as v1PlacesLimiter } from './routes/v1-places.js';
 import v1OrganizationsRoutes, { organizationsLimiter } from './routes/v1-organizations.js';
-import v1PersonsRoutes, { personsLimiter } from './routes/v1-persons.js';
+import v1PublishersRoutes, { publishersLimiter } from './routes/v1-publishers.js';
 import v1BroadcastsRoutes, { broadcastsLimiter } from './routes/v1-broadcasts.js';
 import v1ListsRoutes, { listsLimiter } from './routes/v1-lists.js';
-import v1VerifiersRoutes, { verifiersLimiter } from './routes/v1-verifiers.js';
 import webhookRoutes from './routes/webhooks.js';
 import metaRoutes from './routes/meta.js';
 import cronRoutes from './routes/cron.js';
-import developerRoutes from './routes/developers.js';
-import contributeRoutes from './routes/contribute.js';
 import serviceRoutes from './routes/service.js';
 import pageRoutes from './routes/pages.js';
+import dmcaRoutes, { dmcaHtmlHandler } from './routes/dmca.js';
+import reportRoutes from './routes/report.js';
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -152,7 +152,6 @@ export function createApp(): Express {
   app.use('/api/v1', publicCors);
   app.use('/api/meta', publicCors);
   app.use('/.well-known', publicCors);
-  app.use('/api/developers', publicCors);
   app.use('/llms.txt', publicCors);
   // Widget JS and badges must load from any origin
   app.use('/widget', publicCors);
@@ -214,16 +213,17 @@ export function createApp(): Express {
   // ─── Public Data API ─────────────────────────────────────────────
   app.use('/api/events', publicRoutes);
 
-  // ─── Neighborhood API v1 ─────────────────────────────────────────
+  // ─── Neighborhood API v2 ─────────────────────────────────────────
+  // v2 surface: 5 typed primitives (places, organizations, events,
+  // broadcasts, lists) plus the publishers view (organizations that
+  // have published something). Person, verifiers, groups, accounts,
+  // contribute routes were retired in v2.
   app.use('/api/v1/events', v1Limiter, v1Routes);
-  app.use('/api/v1/groups', groupsLimiter, v1GroupRoutes);
-  app.use('/api/v1/accounts', accountsLimiter, v1AccountRoutes);
   app.use('/api/v1/places', v1PlacesLimiter, v1PlacesRoutes);
   app.use('/api/v1/organizations', organizationsLimiter, v1OrganizationsRoutes);
-  app.use('/api/v1/persons', personsLimiter, v1PersonsRoutes);
+  app.use('/api/v1/publishers', publishersLimiter, v1PublishersRoutes);
   app.use('/api/v1/broadcasts', broadcastsLimiter, v1BroadcastsRoutes);
   app.use('/api/v1/lists', listsLimiter, v1ListsRoutes);
-  app.use('/api/v1/verifiers', verifiersLimiter, v1VerifiersRoutes);
 
   // iCal + RSS feeds (mounted at /api/v1/ level)
   app.get('/api/v1/events.ics', icsHandler);
@@ -240,12 +240,21 @@ export function createApp(): Express {
   // ─── Cron jobs ───────────────────────────────────────────────────
   app.use('/api/cron', cronRoutes);
 
-  // ─── Developer Registration ─────────────────────────────────────
-  app.use('/api/v1/developers', developerRoutes);
-
-  // ─── Contribute API (external app writes) ─────────────────────
-  app.use('/api/v1/contribute', contributeRoutes);
+  // ─── Service API (external app writes) ─────────────────────
+  // v2: /api/v1/contribute (wild-west publishing) and the legacy
+  // /api/v1/developers OTP flow are both retired. All registrations go
+  // through /api/v1/service/register/*; all writes through
+  // /api/v1/service/* with organizer authority enforcement.
   app.use('/api/v1/service', serviceRoutes);
+
+  // ─── DMCA / takedown surfaces ─────────────────────────────────
+  // /dmca renders the human-readable HTML page; /api/v1/dmca returns
+  // the same content as JSON for tooling. /api/v1/report accepts
+  // public, captcha-gated takedown reports — anyone can file (no API
+  // key required), which is the right shape for safe-harbor.
+  app.get('/dmca', dmcaHtmlHandler);
+  app.use('/api/v1/dmca', dmcaRoutes);
+  app.use('/api/v1/report', writeLimiter, reportRoutes);
 
   // ─── Landing page (server-rendered, instant load, no JS) ───────────
   let cachedStats = {
@@ -268,9 +277,10 @@ export function createApp(): Express {
         supabaseAdmin.from('organizations').select('id', { count: 'exact', head: true }),
         supabaseAdmin.from('places').select('id', { count: 'exact', head: true }),
         supabaseAdmin.from('regions').select('name').eq('is_active', true).limit(1).maybeSingle(),
-        supabaseAdmin.from('account_verified_identifiers').select('target_id').eq('target_type', 'organization').eq('status', 'active'),
+        // v2: query organization_verifications (replaces account_verified_identifiers).
+        supabaseAdmin.from('organization_verifications').select('organization_id').eq('status', 'active'),
       ]);
-      const verifiedOrgIds = new Set(((verifiedRows.data || []) as Array<{ target_id: string }>).map(r => r.target_id));
+      const verifiedOrgIds = new Set(((verifiedRows.data || []) as Array<{ organization_id: string }>).map(r => r.organization_id));
       cachedStats = {
         totalEvents: eventResult.count || 0,
         firstPartyEvents: firstPartyResult.count || 0,
@@ -360,6 +370,12 @@ export function createApp(): Express {
   const publicDir = path.resolve(__dirname, '../public');
   app.use('/pages.css', express.static(path.join(publicDir, 'pages.css'), { maxAge: '1d', immutable: true }));
   app.use('/widget', express.static(path.join(publicDir, 'widget'), { maxAge: '1h' }));
+  // Self-hosted woff2 fonts (DM Sans / DM Mono / DM Serif Display, latin
+  // subsets only). Filenames are stable — bumping a font version means
+  // replacing the file, which is rare. 1y immutable cache because the
+  // homepage CSS hard-references the filename, so any swap will show up
+  // as a `git diff` and be easy to reason about.
+  app.use('/fonts', express.static(path.join(publicDir, 'fonts'), { maxAge: '1y', immutable: true }));
 
   // ─── Public HTML pages (events, venues) ────────────────────────
   // Must be before portal SPA fallback so /events/:id and /venues/:slug

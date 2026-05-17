@@ -20,12 +20,18 @@ import { sanitizeUrl, checkApprovedDomain } from './url-sanitizer.js';
 // =============================================================================
 
 /** Columns to select when reading portal events from the events table */
-export const PORTAL_SELECT = 'id, user_id, content, description, place_name, place_id, approximate_location, event_at, end_time, event_image_url, event_image_focal_y, link_url, category, custom_category, event_timezone, venue_address, recurrence, price, latitude, longitude, creator_account_id, source, visibility, status, is_business, region_id, series_id, series_instance_number, open_window, tags, wheelchair_accessible, capacity, rsvp, first_party, source_method, source_publisher, source_feed_url, source_contributor_url, source_contributor_name, tmdb_id, created_at';
+export const PORTAL_SELECT = 'id, user_id, content, description, place_name, place_id, approximate_location, event_at, end_time, event_image_url, event_image_focal_y, link_url, category, custom_category, event_timezone, venue_address, recurrence, price, latitude, longitude, creator_account_id, organizer_org_id, source, visibility, status, is_business, region_id, series_id, series_instance_number, open_window, tags, wheelchair_accessible, capacity, rsvp, first_party, source_method, source_publisher, source_feed_url, source_contributor_url, source_contributor_name, tmdb_id, created_at';
 
 /** Sources that represent account-managed events (portal-created, imported, or API-submitted). */
 export const MANAGED_SOURCES = ['portal', 'import', 'api', 'csv'] as const;
 
-export const PORTAL_ACCOUNT_SELECT = 'id, email, business_name, auth_user_id, status, default_venue_name, default_place_id, default_address, default_latitude, default_longitude, website, phone, wheelchair_accessible, operating_hours, organization_name, contributor_type, data_description, last_login_at, created_at, updated_at';
+/**
+ * Operational columns on portal_accounts. v2 dropped the business-profile
+ * fields (business_name, default_*, logo_url, etc.) in migration 082 —
+ * that data lives on organizations now. portal_accounts holds the tenant
+ * email + claim state and nothing else.
+ */
+export const PORTAL_ACCOUNT_SELECT = 'id, email, auth_user_id, status, claimed_at, claimed_by, last_login_at, created_at, updated_at';
 
 // =============================================================================
 // ADMIN HELPERS
@@ -150,14 +156,14 @@ export function portalInputToInsert(
     capacity?: number | null | undefined;
     rsvp?: 'recommended' | 'required' | null | undefined;
     image_focal_y?: number | undefined;
-    source_method?: 'portal' | 'api' | 'feed' | 'admin' | 'merrie' | undefined;
+    source_method?: 'portal' | 'api' | 'feed' | 'admin' | 'merrie' | 'witnessed' | undefined;
     source_publisher?: string | undefined;
     source_contributor_name?: string | null | undefined;
     source_contributor_url?: string | null | undefined;
     first_party?: boolean | undefined;
     tmdb_id?: string | null | undefined;
   },
-  accountId: string,
+  accountId: string | null,
   adminUserId: string,
   accountStatus: string = 'active',
 ): Record<string, unknown> {

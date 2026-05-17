@@ -1,15 +1,15 @@
 /**
- * Service API — Image uploads
+ * Service API — Image uploads (v2)
  *
- * Three upload surfaces:
- *   - POST /service/events/:id/image       — event image (accepts base64, URL, or multipart)
- *   - POST /service/accounts/:id/cover-image — account cover image (base64 or URL)
- *   - POST /service/accounts/:id/logo        — account logo (base64 or URL)
+ * Event image upload. Event images live on the events table; profile
+ * images live on organizations now (migration 082 dropped logo_url and
+ * cover_image_url from portal_accounts). Use
+ * POST /service/organizations/:id/logo and /:id/image for org imagery.
  *
- * All three funnel through the shared Sharp pipeline in lib/image-processing.ts:
- * magic-byte check → Sharp re-encode (strips metadata, kills polyglots) → R2
- * upload → store public URL. URL-based inputs go through safeFetch (PR #2)
- * with SSRF-strict connect-hook defense.
+ * All uploads funnel through the shared Sharp pipeline in
+ * lib/image-processing.ts: magic-byte check → Sharp re-encode (strips
+ * metadata, kills polyglots) → R2 upload → store public URL. URL-based
+ * inputs go through safeFetch with SSRF-strict connect-hook defense.
  */
 
 import { Router, json as expressJson } from 'express';
@@ -18,10 +18,8 @@ import { createError } from '../../middleware/error-handler.js';
 import { validateUuidParam, resolveEventImageUrl } from '../../lib/helpers.js';
 import { serviceLimiter } from '../../middleware/rate-limit.js';
 import { processAndUploadImage, downloadAndAttachImage } from '../../lib/image-processing.js';
-import { validateFeedUrl } from '../../lib/url-validation.js';
-import { safeFetch } from '../../lib/safe-fetch.js';
 import { config } from '../../config.js';
-import { assertLinkedAccount, assertLinkedEvent } from './helpers.js';
+import { assertLinkedEvent } from './helpers.js';
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -119,103 +117,6 @@ router.post('/events/:id/image', imageBodyLimit, serviceLimiter, async (req, res
 
     } else {
       throw createError('Provide "image" (base64), "image_url" (URL), or a multipart file upload', 400, 'VALIDATION_ERROR');
-    }
-  } catch (err) {
-    next(err);
-  }
-});
-
-/**
- * POST /service/accounts/:id/cover-image — Upload account cover image
- * Accepts { "image": "<base64>" } or { "image_url": "https://..." }
- */
-router.post('/accounts/:id/cover-image', imageBodyLimit, serviceLimiter, async (req, res, next) => {
-  try {
-    validateUuidParam(req.params.id, 'account ID');
-    await assertLinkedAccount(req, req.params.id);
-    const accountId = req.params.id;
-
-    if (req.body?.image_url) {
-      const { image_url } = req.body;
-      if (typeof image_url !== 'string' || !image_url.startsWith('http')) {
-        throw createError('image_url must be a valid HTTP URL', 400, 'VALIDATION_ERROR');
-      }
-
-      // SSRF protection: upfront hostname/IP check + safeFetch for rebind defense.
-      await validateFeedUrl(image_url);
-
-      const response = await safeFetch(image_url, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NeighborhoodCommons/1.0)' },
-        signal: AbortSignal.timeout(10_000),
-      });
-      if (!response.ok) throw createError('Failed to download image', 400, 'VALIDATION_ERROR');
-
-      const buffer = Buffer.from(await response.arrayBuffer());
-      const base64 = buffer.toString('base64');
-      const imageUrl = await processAndUploadImage(`accounts/${accountId}/cover`, base64);
-
-      await supabaseAdmin.from('portal_accounts').update({ cover_image_url: imageUrl }).eq('id', accountId);
-      res.json({ cover_image_url: imageUrl });
-
-    } else if (req.body?.image) {
-      const image = req.body.image as string;
-      if (typeof image !== 'string' || image.length < 1) {
-        throw createError('image must be a non-empty base64 string', 400, 'VALIDATION_ERROR');
-      }
-
-      const imageUrl = await processAndUploadImage(`accounts/${accountId}/cover`, image);
-      await supabaseAdmin.from('portal_accounts').update({ cover_image_url: imageUrl }).eq('id', accountId);
-      res.json({ cover_image_url: imageUrl });
-
-    } else {
-      throw createError('Provide "image" (base64) or "image_url" (URL)', 400, 'VALIDATION_ERROR');
-    }
-  } catch (err) {
-    next(err);
-  }
-});
-
-/**
- * POST /service/accounts/:id/logo — Upload account logo
- * Same pipeline as cover-image: accepts { "image": "<base64>" } or { "image_url": "https://..." }
- */
-router.post('/accounts/:id/logo', imageBodyLimit, serviceLimiter, async (req, res, next) => {
-  try {
-    validateUuidParam(req.params.id, 'account ID');
-    await assertLinkedAccount(req, req.params.id);
-    const accountId = req.params.id;
-
-    if (req.body?.image_url) {
-      const { image_url } = req.body;
-      if (typeof image_url !== 'string' || !image_url.startsWith('http')) {
-        throw createError('image_url must be a valid HTTP URL', 400, 'VALIDATION_ERROR');
-      }
-
-      // SSRF protection: upfront hostname/IP check + safeFetch for rebind defense.
-      await validateFeedUrl(image_url);
-
-      const response = await safeFetch(image_url, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NeighborhoodCommons/1.0)' },
-        signal: AbortSignal.timeout(10_000),
-      });
-      if (!response.ok) throw createError('Failed to download image', 400, 'VALIDATION_ERROR');
-
-      const buffer = Buffer.from(await response.arrayBuffer());
-      const base64 = buffer.toString('base64');
-      const imageUrl = await processAndUploadImage(`accounts/${accountId}/logo`, base64);
-
-      await supabaseAdmin.from('portal_accounts').update({ logo_url: imageUrl }).eq('id', accountId);
-      res.json({ logo_url: imageUrl });
-
-    } else if (req.body?.image) {
-      const image = req.body.image as string;
-      const imageUrl = await processAndUploadImage(`accounts/${accountId}/logo`, image);
-
-      await supabaseAdmin.from('portal_accounts').update({ logo_url: imageUrl }).eq('id', accountId);
-      res.json({ logo_url: imageUrl });
-
-    } else {
-      throw createError('Provide "image" (base64) or "image_url" (URL)', 400, 'VALIDATION_ERROR');
     }
   } catch (err) {
     next(err);

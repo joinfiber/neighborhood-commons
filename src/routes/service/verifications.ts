@@ -1,5 +1,5 @@
 /**
- * Service-tier Verifications API — Neighborhood Commons 1.0.0
+ * Service-tier Verifications API — Neighborhood Commons v2
  *
  * Endpoints:
  *   GET   /service/verifications/path                       — routing authority
@@ -10,8 +10,10 @@
  *   POST  /service/verifications/pending/:id/approve        — admin approve
  *   POST  /service/verifications/pending/:id/reject         — admin reject
  *
- * The Commons routes; apps follow. Submission endpoints reject mismatches
- * with WRONG_METHOD pointing at the correct endpoint per /path discovery.
+ * v2: only organizations verify. The Person target is gone. Heavy-rigor
+ * rigor classification uses organizations.commercial (replaces the legacy
+ * kind enum). Verified identifiers land in organization_verifications
+ * (which replaced account_verified_identifiers in migration 080/082).
  */
 
 import { Router } from 'express';
@@ -26,9 +28,7 @@ import {
   generateVerificationCode,
   hashVerificationCode,
   hasVerificationAuthority,
-  extractDomain,
   isPersonalEmailDomain,
-  HEAVY_RIGOR_ORG_KINDS,
 } from '../../lib/verification.js';
 
 const router: ReturnType<typeof Router> = Router();
@@ -41,8 +41,7 @@ const MAX_CONFIRM_ATTEMPTS = 5;
 // ---------------------------------------------------------------------------
 
 const pathQuerySchema = z.object({
-  target_type: z.enum(['organization', 'person']),
-  target_id: z.string().uuid(),
+  organization_id: z.string().uuid(),
   identifier_type: z.enum(['email']),
   identifier_value: z.string().email(),
 });
@@ -53,8 +52,7 @@ router.get('/verifications/path', async (req, res, next) => {
     const value = params.identifier_value.toLowerCase();
 
     const existing = await findExistingVerifiedIdentifier(
-      params.target_type,
-      params.target_id,
+      params.organization_id,
       params.identifier_type,
       value,
     );
@@ -64,7 +62,6 @@ router.get('/verifications/path', async (req, res, next) => {
         existingIdentifier: {
           identifierType: existing.identifier_type,
           identifierValue: existing.identifier_value,
-          identifierDomain: existing.identifier_domain,
           method: existing.method,
           verifiedAt: existing.verified_at,
           verifiedByApp: existing.approved_by_app,
@@ -75,13 +72,12 @@ router.get('/verifications/path', async (req, res, next) => {
     }
 
     const decision = await decideVerificationPath(
-      params.target_type,
-      params.target_id,
+      params.organization_id,
       params.identifier_type,
       value,
     );
     if (!decision) {
-      throw createError('Target not found', 404, 'NOT_FOUND');
+      throw createError('Organization not found', 404, 'NOT_FOUND');
     }
 
     res.json({
@@ -100,8 +96,7 @@ router.get('/verifications/path', async (req, res, next) => {
 // ---------------------------------------------------------------------------
 
 const challengeInputSchema = z.object({
-  targetType: z.enum(['organization', 'person']),
-  targetId: z.string().uuid(),
+  organizationId: z.string().uuid(),
   identifierType: z.enum(['email']),
   identifierValue: z.string().email(),
 });
@@ -111,23 +106,21 @@ router.post('/verifications/challenges', async (req, res, next) => {
     const body = validateRequest(challengeInputSchema, req.body);
     const value = body.identifierValue.toLowerCase();
 
-    // Routing enforcement: heavy-rigor orgs with personal-email → must use manual path
-    if (body.targetType === 'organization') {
-      const { data: org } = await supabaseAdmin
-        .from('organizations')
-        .select('kind')
-        .eq('id', body.targetId)
-        .maybeSingle();
-      if (!org) throw createError('Organization not found', 404, 'NOT_FOUND');
+    // Routing enforcement: commercial (heavy-rigor) orgs with personal-email
+    // → must use manual path.
+    const { data: org } = await supabaseAdmin
+      .from('organizations')
+      .select('commercial')
+      .eq('id', body.organizationId)
+      .maybeSingle();
+    if (!org) throw createError('Organization not found', 404, 'NOT_FOUND');
 
-      const heavy = HEAVY_RIGOR_ORG_KINDS.has(org.kind as string);
-      if (heavy && isPersonalEmailDomain(value)) {
-        throw createError(
-          'Personal email domains require manual review for this organization. Submit via POST /v1/service/verifications/manual.',
-          409,
-          'WRONG_METHOD',
-        );
-      }
+    if (org.commercial === true && isPersonalEmailDomain(value)) {
+      throw createError(
+        'Personal email domains require manual review for commercial organizations. Submit via POST /v1/service/verifications/manual.',
+        409,
+        'WRONG_METHOD',
+      );
     }
 
     // Generate code + hash
@@ -137,8 +130,8 @@ router.post('/verifications/challenges', async (req, res, next) => {
     const { data: challenge, error } = await supabaseAdmin
       .from('verification_challenges')
       .insert({
-        target_type: body.targetType,
-        target_id: body.targetId,
+        target_type: 'organization',
+        target_id: body.organizationId,
         identifier_type: body.identifierType,
         identifier_value: value,
         code_hash: hash,
@@ -197,7 +190,7 @@ router.post('/verifications/challenges/:id/confirm', async (req, res, next) => {
 
     const { data: challenge } = await supabaseAdmin
       .from('verification_challenges')
-      .select('id, target_type, target_id, identifier_type, identifier_value, code_hash, expires_at, consumed_at, attempts, brand_key_id')
+      .select('id, target_id, identifier_type, identifier_value, code_hash, expires_at, consumed_at, attempts, brand_key_id')
       .eq('id', req.params.id)
       .maybeSingle();
 
@@ -236,30 +229,26 @@ router.post('/verifications/challenges/:id/confirm', async (req, res, next) => {
       .eq('id', req.params.id);
 
     const value = (challenge.identifier_value as string).toLowerCase();
-    const domain = extractDomain(value);
     const appName = req.apiKeyInfo?.brandConfig?.app_name || 'Neighborhood Commons';
 
     const { data: identifier, error: insertErr } = await supabaseAdmin
-      .from('account_verified_identifiers')
+      .from('organization_verifications')
       .insert({
-        target_type: challenge.target_type,
-        target_id: challenge.target_id,
+        organization_id: challenge.target_id,
         identifier_type: challenge.identifier_type,
         identifier_value: value,
-        identifier_domain: domain || null,
         method: 'domain_email_loop',
         approved_by_app: appName,
         approved_by_key: req.apiKeyInfo!.id,
       })
-      .select('id, verified_at, identifier_type, identifier_value, identifier_domain, method, approved_by_app, status')
+      .select('id, verified_at, identifier_type, identifier_value, method, approved_by_app, status')
       .single();
 
     if (insertErr) {
-      // If unique constraint hit, the (target, identifier) is already verified —
+      // If unique constraint hit, the (org, identifier) is already verified —
       // surface that as success rather than error.
       if (insertErr.code === '23505') {
         const existing = await findExistingVerifiedIdentifier(
-          challenge.target_type as 'organization' | 'person',
           challenge.target_id as string,
           challenge.identifier_type as 'email',
           value,
@@ -272,7 +261,6 @@ router.post('/verifications/challenges/:id/confirm', async (req, res, next) => {
             identifier: {
               identifierType: existing.identifier_type,
               identifierValue: existing.identifier_value,
-              identifierDomain: existing.identifier_domain,
               method: existing.method,
               verifiedAt: existing.verified_at,
               verifiedByApp: existing.approved_by_app,
@@ -293,7 +281,6 @@ router.post('/verifications/challenges/:id/confirm', async (req, res, next) => {
       identifier: {
         identifierType: identifier!.identifier_type,
         identifierValue: identifier!.identifier_value,
-        identifierDomain: identifier!.identifier_domain,
         method: identifier!.method,
         verifiedAt: identifier!.verified_at,
         verifiedByApp: identifier!.approved_by_app,
@@ -310,8 +297,7 @@ router.post('/verifications/challenges/:id/confirm', async (req, res, next) => {
 // ---------------------------------------------------------------------------
 
 const manualInputSchema = z.object({
-  targetType: z.enum(['organization', 'person']),
-  targetId: z.string().uuid(),
+  organizationId: z.string().uuid(),
   identifierType: z.enum(['email']),
   identifierValue: z.string().email(),
   evidence: z.object({
@@ -330,27 +316,19 @@ router.post('/verifications/manual', async (req, res, next) => {
     const body = validateRequest(manualInputSchema, req.body);
     const value = body.identifierValue.toLowerCase();
 
-    // Routing enforcement: business email + heavy-rigor target → should use challenges
-    if (body.targetType === 'organization') {
-      const { data: org } = await supabaseAdmin
-        .from('organizations')
-        .select('kind')
-        .eq('id', body.targetId)
-        .maybeSingle();
-      if (!org) throw createError('Organization not found', 404, 'NOT_FOUND');
+    // Routing enforcement: commercial org + business-email domain → should
+    // use auto-track challenge path. Manual is for heavy-rigor + personal-email.
+    const { data: org } = await supabaseAdmin
+      .from('organizations')
+      .select('commercial')
+      .eq('id', body.organizationId)
+      .maybeSingle();
+    if (!org) throw createError('Organization not found', 404, 'NOT_FOUND');
 
-      const heavy = HEAVY_RIGOR_ORG_KINDS.has(org.kind as string);
-      if (heavy && !isPersonalEmailDomain(value)) {
-        throw createError(
-          'Business email domains use the auto-track challenge path. Submit via POST /v1/service/verifications/challenges.',
-          409,
-          'WRONG_METHOD',
-        );
-      }
-    } else {
-      // Person targets always use challenge path; manual is for heavy-rigor orgs only
+    const heavy = org.commercial === true;
+    if (heavy && !isPersonalEmailDomain(value)) {
       throw createError(
-        'Person targets use the challenge path. Submit via POST /v1/service/verifications/challenges.',
+        'Business email domains use the auto-track challenge path. Submit via POST /v1/service/verifications/challenges.',
         409,
         'WRONG_METHOD',
       );
@@ -361,27 +339,23 @@ router.post('/verifications/manual', async (req, res, next) => {
     const appName = req.apiKeyInfo?.brandConfig?.app_name || 'unknown';
 
     if (autoApprove) {
-      // Insert directly into account_verified_identifiers — no review queue
-      const domain = extractDomain(value);
       const { data: identifier, error } = await supabaseAdmin
-        .from('account_verified_identifiers')
+        .from('organization_verifications')
         .insert({
-          target_type: body.targetType,
-          target_id: body.targetId,
+          organization_id: body.organizationId,
           identifier_type: body.identifierType,
           identifier_value: value,
-          identifier_domain: domain || null,
           method: 'manual_review',
           approved_by_app: appName,
           approved_by_key: req.apiKeyInfo!.id,
           evidence: body.evidence,
         })
-        .select('id, verified_at, method, identifier_type, identifier_value, identifier_domain, approved_by_app, status')
+        .select('id, verified_at, method, identifier_type, identifier_value, approved_by_app, status')
         .single();
 
       if (error) {
         if (error.code === '23505') {
-          throw createError('Identifier already verified for this target', 409, 'CONFLICT');
+          throw createError('Identifier already verified for this organization', 409, 'CONFLICT');
         }
         console.error('[SERVICE:VERIFICATIONS] Manual auto-approve insert error:', error.message);
         throw createError('Failed to record verified identifier', 500, 'SERVER_ERROR');
@@ -394,7 +368,6 @@ router.post('/verifications/manual', async (req, res, next) => {
         identifier: {
           identifierType: identifier!.identifier_type,
           identifierValue: identifier!.identifier_value,
-          identifierDomain: identifier!.identifier_domain,
           method: identifier!.method,
           verifiedAt: identifier!.verified_at,
           verifiedByApp: identifier!.approved_by_app,
@@ -408,8 +381,8 @@ router.post('/verifications/manual', async (req, res, next) => {
     const { data: review, error } = await supabaseAdmin
       .from('verification_pending_reviews')
       .insert({
-        target_type: body.targetType,
-        target_id: body.targetId,
+        target_type: 'organization',
+        target_id: body.organizationId,
         identifier_type: body.identifierType,
         identifier_value: value,
         method: 'manual_review',
@@ -480,8 +453,7 @@ router.get('/verifications/pending', async (req, res, next) => {
 
     const reviews = (data || []).map(r => ({
       id: r.id,
-      targetType: r.target_type,
-      targetId: r.target_id,
+      organizationId: r.target_id,
       identifierType: r.identifier_type,
       identifierValue: r.identifier_value,
       method: r.method,
@@ -503,7 +475,7 @@ router.post('/verifications/pending/:id/approve', async (req, res, next) => {
 
     const { data: review } = await supabaseAdmin
       .from('verification_pending_reviews')
-      .select('id, status, target_type, target_id, identifier_type, identifier_value, method, submitted_by_key, evidence')
+      .select('id, status, target_id, identifier_type, identifier_value, method, submitted_by_key, evidence')
       .eq('id', req.params.id)
       .maybeSingle();
 
@@ -513,22 +485,19 @@ router.post('/verifications/pending/:id/approve', async (req, res, next) => {
     // Resolve approving app name (snapshot)
     const appName = req.apiKeyInfo?.brandConfig?.app_name || 'Neighborhood Commons';
     const value = (review.identifier_value as string).toLowerCase();
-    const domain = extractDomain(value);
 
     const { data: identifier, error: insertErr } = await supabaseAdmin
-      .from('account_verified_identifiers')
+      .from('organization_verifications')
       .insert({
-        target_type: review.target_type,
-        target_id: review.target_id,
+        organization_id: review.target_id,
         identifier_type: review.identifier_type,
         identifier_value: value,
-        identifier_domain: domain || null,
         method: review.method,
         approved_by_app: appName,
         approved_by_key: req.apiKeyInfo!.id,
         evidence: review.evidence,
       })
-      .select('id, verified_at, method, identifier_type, identifier_value, identifier_domain, approved_by_app, status')
+      .select('id, verified_at, method, identifier_type, identifier_value, approved_by_app, status')
       .single();
 
     if (insertErr) {
@@ -555,7 +524,6 @@ router.post('/verifications/pending/:id/approve', async (req, res, next) => {
       identifier: {
         identifierType: identifier!.identifier_type,
         identifierValue: identifier!.identifier_value,
-        identifierDomain: identifier!.identifier_domain,
         method: identifier!.method,
         verifiedAt: identifier!.verified_at,
         verifiedByApp: identifier!.approved_by_app,

@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Neighborhood Commons API",
-    "description": "The Neighborhood Commons API: typed substrate for neighborhood-scale public facts. Schema.org-aligned types (Place, Organization, Person, Event, Broadcast, List), verification + reputation system, opt-in filter primitives. Read free, write through verified app integrations. CC BY 4.0.\n\n**This document is the Spec, part of the Commons Contract.** The Contract is three files together: the Spec (this document — machine-readable, authoritative), the Guide (`/llms.txt` — narrative companion), and the Log (`CHANGELOG.md` — dated record of every change). Rule when they disagree: Spec wins. Guide explains. Log dates.\n\n**1.0.0 commits** to additive-only stability. Future minor versions add types, fields, or endpoints without breaking existing consumers. Breaking changes require 2.0.0 and very strong justification.",
-    "version": "1.0.0",
+    "description": "The Neighborhood Commons API: typed substrate for neighborhood-scale public facts. Five Schema.org-aligned primitives (Place, Organization, Event, Broadcast, List), verification anchored on Type A profile authority, constrained-publishing model with three authority paths (entity-runs-it, pipeline-proxies, witnessed-with-evidence). Read free, write through linked organizations. CC BY 4.0.\n\n**This document is the Spec, part of the Commons Contract.** The Contract is three files together: the Spec (this document — machine-readable, authoritative), the Guide (`/llms.txt` — narrative companion), and the Log (`CHANGELOG.md` — dated record of every change). Rule when they disagree: Spec wins. Guide explains. Log dates.\n\n**2.0.0** is a coherent breaking-change bundle: persons primitive retired (solo operators are organizations-of-one), kind enum on organizations replaced by `tags` + `commercial`, cross-app verification reputation graph retired (verification anchors Type A authority only), `/v1/accounts` retired and replaced by `/v1/publishers`, `/api/v1/contribute` retired and write flow consolidated on `/v1/service/events` with organizer-org authority. After 2.0.0 the substrate is additive-only — future 2.x adds without removing. Breaking changes require 3.0.0 and very strong justification.",
+    "version": "2.0.0",
     "license": {
       "name": "CC-BY-4.0",
       "url": "https://creativecommons.org/licenses/by/4.0/"
@@ -148,7 +148,25 @@
             "schema": {
               "type": "string"
             },
-            "description": "Filter by contributor account slug"
+            "description": "Filter by organizer organization slug. v2: resolves against `organizations.slug` → `events.organizer_org_id` (replaces the legacy `portal_accounts.slug` lookup)."
+          },
+          {
+            "name": "commercial",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["true", "false"]
+            },
+            "description": "v2: filter to events whose organizer is for-profit (`commercial=true`) vs. non-commercial (`commercial=false`). Joins through `organizations.commercial`."
+          },
+          {
+            "name": "place_category",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 50
+            },
+            "description": "v2: filter to events at places with the given OSM-sourced category (e.g., `cafe`, `live_music_venue`). Joins through `places.place_categories`."
           },
           {
             "name": "tmdb_id",
@@ -2130,7 +2148,7 @@
       },
       "post": {
         "summary": "Issue API key (service/admin)",
-        "description": "Create a new API key. The key is the credential; the `account_id` it links to is the stable owner of any events it creates. Rotation: issue a new key with the same `account_id` as the old one, then revoke the old key — both keys can edit the same events while both are active. Non-service tiers REQUIRE `account_id` (without a linked account, PATCH/DELETE on created events would fail with KEY_NOT_LINKED). Returns the raw key string ONCE — store it immediately, it is unrecoverable.",
+        "description": "Create a new API key. v2: writeable scope (which organizations the key may publish for) is established separately via `POST /service/organizations/link` after issuance. The optional `account_id` field references an operational tenant portal_account but does not grant write authority on its own. Returns the raw key string ONCE — store it immediately, it is unrecoverable.",
         "operationId": "serviceCreateApiKey",
         "security": [
           {
@@ -2171,7 +2189,7 @@
                   "account_id": {
                     "type": "string",
                     "format": "uuid",
-                    "description": "Required for non-service tiers. The portal_account that owns events created with this key."
+                    "description": "Optional. Operational reference to a portal_account the key represents (tenant claim tracking). Does not grant write authority — that flows through `api_key_organization_links`."
                   },
                   "url": {
                     "type": "string",
@@ -2250,7 +2268,7 @@
             }
           },
           "400": {
-            "description": "Validation error or ACCOUNT_REQUIRED for non-service tiers without account_id"
+            "description": "Validation error"
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
@@ -2364,7 +2382,7 @@
     "/service/api-keys/{id}/activate": {
       "post": {
         "summary": "Activate a pending service-tier key (admin)",
-        "description": "Flip a self-registered service-tier API key from pending (`activated_at` NULL — reads only) to fully active (`activated_at` set — writes resume). Optionally sets `brand_config`, `verification_authority`, and `rate_limit_per_hour` in the same call. Admin service key required. Idempotent: returns `already_active: true` if the key was previously activated.",
+        "description": "Flip a self-registered service-tier API key from pending (`activated_at` NULL — reads only) to fully active (`activated_at` set — writes resume). Optionally sets `brand_config`, `verification_authority`, `rate_limit_per_hour`, and `provision_account` in the same call. Admin service key required. Idempotent: returns `already_active: true` if the key was previously activated.\n\n**Atomic tenant provisioning (`provision_account`)**: tenant-umbrella consumers (Merrie, GoThere, etc.) include `provision_account` in their activation request email. The operator passes those values through to this endpoint, which atomically (a) flips the key to active, (b) creates the consumer's tenant portal_account, and (c) links the now-active key to it. The response includes the new `account.id` — the operator forwards it to the consumer alongside the activation confirmation. The consumer never makes a second round-trip for tenant provisioning.\n\nThis is the canonical activation path for tenant-umbrella consumers. Per-operator portable consumers omit `provision_account` and call `POST /service/accounts/link` per operator as those operators come online — both forms remain supported.\n\n**Why atomic?** Pending keys are strictly read-only — no portal_account exists before activation. The `provision_account` body collapses the publisher-identity creation into the single quality-gate moment, so consumers never have a pre-activation footprint and admin's action is one call.",
         "operationId": "serviceActivateApiKey",
         "security": [
           {
@@ -2404,6 +2422,33 @@
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 100000
+                  },
+                  "provision_account": {
+                    "type": "object",
+                    "description": "Optional tenant-account provisioning bundled with activation. Creates a portal_account with the supplied identity and links the now-active key to it. Omit for per-operator portable consumers.",
+                    "required": [
+                      "email",
+                      "business_name"
+                    ],
+                    "properties": {
+                      "email": {
+                        "type": "string",
+                        "format": "email",
+                        "maxLength": 254,
+                        "description": "Sentinel email on a domain the consumer controls (e.g. `tenant@no-reply.consumer-app.com`). Never used for OTP claim; identifies the publisher row."
+                      },
+                      "business_name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200,
+                        "description": "Public-facing tenant name. Surfaces as `source.publisher` on events when no other publisher is set."
+                      },
+                      "claimed_by": {
+                        "type": "string",
+                        "maxLength": 50,
+                        "description": "Short slug recording which app claimed this account. Defaults to `\"api\"`. Future link attempts under a different slug are refused with 409 CONFLICT."
+                      }
+                    }
                   }
                 }
               }
@@ -2412,7 +2457,7 @@
         },
         "responses": {
           "200": {
-            "description": "Key activated, or already active",
+            "description": "Key activated, or already active. If `provision_account` was supplied on a fresh activation, the response also includes `account`, `account_created`, and `account_linked`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2434,6 +2479,16 @@
                         "null"
                       ],
                       "format": "date-time"
+                    },
+                    "account": {
+                      "$ref": "#/components/schemas/ServiceAccount"
+                    },
+                    "account_created": {
+                      "type": "boolean",
+                      "description": "True if the tenant account was created during this call; false if it was found-and-linked to an existing row by email."
+                    },
+                    "account_linked": {
+                      "type": "boolean"
                     }
                   }
                 }
@@ -2441,7 +2496,7 @@
             }
           },
           "400": {
-            "description": "Key is not service tier"
+            "description": "Key is not service tier, or `provision_account` body failed validation"
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
@@ -2451,6 +2506,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "`provision_account` matched an existing account that is already claimed by a different consumer or has a Supabase Auth owner. The key is still activated; resolve the account manually and link via `POST /service/accounts/link`."
           }
         }
       }
@@ -2709,7 +2767,7 @@
     "/service/approved-domains": {
       "get": {
         "summary": "List approved domains",
-        "description": "List domains on the Contribute API allowlist. Admin service key required.",
+        "description": "List domains on the Service API URL allowlist (used for sanitizing event link URLs and similar). Admin service key required.",
         "operationId": "serviceListApprovedDomains",
         "security": [
           {
@@ -2745,7 +2803,7 @@
       },
       "post": {
         "summary": "Add an approved domain",
-        "description": "Add a domain to the Contribute API allowlist. Resolves any pending approval request for the same domain. Admin service key required.",
+        "description": "Add a domain to the Service API URL allowlist. Resolves any pending approval request for the same domain. Admin service key required.",
         "operationId": "serviceAddApprovedDomain",
         "security": [
           {
@@ -2791,7 +2849,7 @@
     "/service/approved-domains/{domain}": {
       "delete": {
         "summary": "Remove an approved domain",
-        "description": "Remove a domain from the allowlist. Future Contribute API submissions for this domain will queue for review. Admin service key required.",
+        "description": "Remove a domain from the allowlist. Future Service API submissions referencing URLs at this domain will queue for review. Admin service key required.",
         "operationId": "serviceRemoveApprovedDomain",
         "security": [
           {
@@ -2824,7 +2882,7 @@
     "/service/domain-approval-requests": {
       "get": {
         "summary": "List domain approval requests",
-        "description": "Review queue of Contribute API URL submissions whose domain is not yet on the allowlist. Admin service key required.",
+        "description": "Review queue of Service API URL submissions whose domain is not yet on the allowlist. Admin service key required.",
         "operationId": "serviceListDomainApprovalRequests",
         "security": [
           {
@@ -3272,122 +3330,130 @@
         }
       }
     },
-    "/persons": {
+    "/publishers": {
       "get": {
-        "summary": "List persons",
-        "description": "Public read of Person records (DJs, performers, curators, individual organizers).",
-        "operationId": "listPersons",
+        "summary": "List publishers",
+        "description": "Organizations that publish into the Commons — those with at least one event or active broadcast attributed to them. Same response shape as `/organizations`; the difference is a \"has published\" filter applied at the query layer. Replaces the legacy `/v1/accounts` route (which conflated publisher identity with user accounts).",
+        "operationId": "listPublishers",
         "parameters": [
+          {
+            "name": "tag",
+            "in": "query",
+            "description": "Filter by organization tag. Repeatable for AND semantics.",
+            "schema": {
+              "oneOf": [
+                { "type": "string", "maxLength": 50 },
+                { "type": "array", "items": { "type": "string", "maxLength": 50 } }
+              ]
+            }
+          },
+          {
+            "name": "commercial",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["true", "false"]
+            }
+          },
+          {
+            "name": "place_category",
+            "in": "query",
+            "description": "Filter to publishers whose primary place has the given OSM-sourced category.",
+            "schema": { "type": "string", "maxLength": 50 }
+          },
           {
             "name": "verified",
             "in": "query",
-            "schema": {
-              "type": "boolean"
-            }
+            "schema": { "type": "string", "enum": ["true", "false"] }
           },
           {
             "name": "verified_by",
             "in": "query",
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string", "maxLength": 500 }
+          },
+          {
+            "name": "not_verified_by",
+            "in": "query",
+            "schema": { "type": "string", "maxLength": 500 }
+          },
+          {
+            "name": "near",
+            "in": "query",
+            "description": "lat,lng pair. Pairs with radius_km.",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "radius_km",
+            "in": "query",
+            "schema": { "type": "number", "minimum": 0.1, "maximum": 100 }
           },
           {
             "name": "q",
             "in": "query",
-            "schema": {
-              "type": "string",
-              "maxLength": 200
-            }
+            "schema": { "type": "string", "maxLength": 200 }
           },
           {
             "name": "limit",
             "in": "query",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 200,
-              "default": 50
-            }
+            "schema": { "type": "integer", "minimum": 1, "maximum": 200, "default": 50 }
           },
           {
             "name": "offset",
             "in": "query",
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "default": 0
-            }
+            "schema": { "type": "integer", "minimum": 0, "default": 0 }
           }
         ],
         "responses": {
           "200": {
-            "description": "Paginated person list",
+            "description": "Paginated publisher list",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "meta",
-                    "persons"
-                  ],
+                  "required": [ "meta", "publishers" ],
                   "properties": {
-                    "meta": {
-                      "$ref": "#/components/schemas/Meta"
-                    },
-                    "persons": {
+                    "meta": { "$ref": "#/components/schemas/Meta" },
+                    "publishers": {
                       "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/Person"
-                      }
+                      "items": { "$ref": "#/components/schemas/Organization" }
                     }
                   }
                 }
               }
             }
           },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          }
+          "429": { "$ref": "#/components/responses/RateLimited" }
         }
       }
     },
-    "/persons/{idOrSlug}": {
+    "/publishers/{idOrSlug}": {
       "get": {
-        "summary": "Get a single person",
-        "operationId": "getPerson",
+        "summary": "Get a single publisher",
+        "operationId": "getPublisher",
         "parameters": [
           {
             "name": "idOrSlug",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string"
-            }
+            "schema": { "type": "string" }
           }
         ],
         "responses": {
           "200": {
-            "description": "Person",
+            "description": "Publisher (organization shape)",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "person"
-                  ],
+                  "required": [ "publisher" ],
                   "properties": {
-                    "person": {
-                      "$ref": "#/components/schemas/Person"
-                    }
+                    "publisher": { "$ref": "#/components/schemas/Organization" }
                   }
                 }
               }
             }
           },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
+          "404": { "$ref": "#/components/responses/NotFound" }
         }
       }
     },
@@ -3657,92 +3723,6 @@
                   "properties": {
                     "list": {
                       "$ref": "#/components/schemas/List"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      }
-    },
-    "/verifiers": {
-      "get": {
-        "summary": "Reputation graph — list verifiers",
-        "description": "Public read of the verifier registry. Each entry summarizes one app's verification track record (count, active, revoked, methods). Apps reading the Commons can use this to compose verified_by filters that match their trust policy.",
-        "operationId": "listVerifiers",
-        "responses": {
-          "200": {
-            "description": "Verifier registry",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "verifiers"
-                  ],
-                  "properties": {
-                    "verifiers": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/Verifier"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          }
-        }
-      }
-    },
-    "/verifiers/{appName}/recent_approvals": {
-      "get": {
-        "summary": "Recent approvals by a verifier",
-        "description": "Public spot-check of recent approvals issued by a specific verifier app. Maximum sunlight on the reputation graph — anyone can audit who's being verified by whom.",
-        "operationId": "listVerifierRecentApprovals",
-        "parameters": [
-          {
-            "name": "appName",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100,
-              "default": 50
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Recent approvals",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "approvals"
-                  ],
-                  "properties": {
-                    "approvals": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/VerifierApproval"
-                      }
                     }
                   }
                 }
@@ -4291,7 +4271,7 @@
     "/service/organizations/{id}": {
       "patch": {
         "summary": "Update an organization",
-        "description": "Service-tier callers can update organizations linked to their key (via api_key_account_links). Admin keys bypass the scoping check.",
+        "description": "Service-tier callers can update organizations linked to their key (via api_key_organization_links). Admin keys bypass the scoping check.",
         "operationId": "serviceUpdateOrganization",
         "security": [
           {
@@ -4353,124 +4333,10 @@
         }
       }
     },
-    "/service/persons": {
-      "post": {
-        "summary": "Create a person",
-        "operationId": "serviceCreatePerson",
-        "security": [
-          {
-            "serviceApiKey": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PersonInput"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Person created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "person"
-                  ],
-                  "properties": {
-                    "person": {
-                      "$ref": "#/components/schemas/Person"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/ValidationError"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "409": {
-            "description": "Slug already in use"
-          }
-        }
-      }
-    },
-    "/service/persons/{id}": {
-      "patch": {
-        "summary": "Update a person",
-        "operationId": "serviceUpdatePerson",
-        "security": [
-          {
-            "serviceApiKey": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PersonInput"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Updated",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "person"
-                  ],
-                  "properties": {
-                    "person": {
-                      "$ref": "#/components/schemas/Person"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/ValidationError"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "403": {
-            "description": "Not linked to this person"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      }
-    },
     "/service/broadcasts": {
       "post": {
         "summary": "Create a broadcast",
-        "description": "Create an ephemeral signal pinned to a Place. The Organization must be linked to the calling key (via api_key_account_links) unless the key has admin privileges. Verification is NOT required at create time — apps filter on verified status when surfacing.",
+        "description": "Create an ephemeral signal pinned to a Place. The Organization must be linked to the calling key (via api_key_organization_links) unless the key has admin privileges. Verification is NOT required at create time — apps filter on verified status when surfacing.",
         "operationId": "serviceCreateBroadcast",
         "security": [
           {
@@ -4795,6 +4661,105 @@
         }
       }
     },
+    "/service/accounts/link": {
+      "post": {
+        "summary": "Find-or-create a portal account by email (tenant claim)",
+        "description": "v2: operational tenant claim only. Establishes a portal_account row with the given email and marks it claimed by the calling app. Does NOT grant writeable scope — that flows through `api_key_organization_links`, established by `POST /service/organizations/link` or auto-linked when the calling key creates an organization via `POST /service/organizations`.\n\nIdempotent: calling with the same email returns the existing account.\n\n**Defense-in-depth on claim**: the endpoint refuses (409 CONFLICT) to claim an account that has `auth_user_id` set (a legacy Supabase Auth owner) or that has been claimed under a different `claimed_by` identifier than the request. Admin keys bypass both checks.",
+        "operationId": "serviceLinkAccount",
+        "security": [
+          {
+            "serviceApiKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 254,
+                    "description": "Email identifier for the operational tenant row. Use a sentinel address on a domain you control (e.g. `tenant@no-reply.your-domain.com`). Lookup is case-insensitive."
+                  },
+                  "claimed_by": {
+                    "type": "string",
+                    "maxLength": 50,
+                    "description": "Short slug recording which app claimed this account. Persisted on first claim; subsequent link attempts under a different `claimed_by` are refused with 409 CONFLICT. Defaults to `\"api\"` if omitted."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Account existed; claim is in place (idempotent re-claim)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "account",
+                    "created"
+                  ],
+                  "properties": {
+                    "account": {
+                      "$ref": "#/components/schemas/ServiceAccount"
+                    },
+                    "created": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Account created and claimed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "account",
+                    "created"
+                  ],
+                  "properties": {
+                    "account": {
+                      "$ref": "#/components/schemas/ServiceAccount"
+                    },
+                    "created": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "409": {
+            "description": "Account is already claimed under a different `claimed_by` or has an authenticated owner (`auth_user_id` set). Admin keys bypass these checks."
+          }
+        }
+      }
+    },
     "/service/organizations/link": {
       "post": {
         "summary": "Link an existing organization to this service key",
@@ -5020,8 +4985,8 @@
     },
     "/service/events/{id}/organizer": {
       "patch": {
-        "summary": "Assign organizer to event",
-        "description": "Set or remove the organizer of an event. Organizer is exactly one of an Organization or a Person. Pass nulls for both to clear (rare — events generally must have an organizer). Scoped to events whose current organizer is linked to the calling key.",
+        "summary": "Re-attribute an event to a different organizer",
+        "description": "v2: re-attribute an event to a different organization. The Person primitive is gone — `organizerPersonId` is no longer accepted.\n\nAuthorization (non-admin keys): the caller's key must be linked to both the event's **current** `organizer_org_id` AND the **target** organization via `api_key_organization_links`. Re-attribution can't conjure events for an org the caller doesn't control. Witnessed-evidence keys (`source_method='witnessed'` + `witness_authority=true`) bypass the current-organizer link check.\n\nAdmin keys bypass all linkage checks.",
         "operationId": "serviceAssignEventOrganizer",
         "security": [
           {
@@ -5045,19 +5010,10 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "required": ["organizerOrganizationId"],
                 "properties": {
                   "organizerOrganizationId": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "format": "uuid"
-                  },
-                  "organizerPersonId": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
+                    "type": "string",
                     "format": "uuid"
                   }
                 }
@@ -5076,7 +5032,7 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "description": "Not linked to this event or its current organizer"
+            "description": "Caller's key is not linked to the event's current organizer organization OR not linked to the target organization."
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -5211,15 +5167,19 @@
           },
           "organizer": {
             "type": "object",
+            "description": "v2: organizer is always an organization reference. Post-migration 081, `events.organizer_org_id` is NOT NULL, so id/slug are always present. `verified` is hydrated from `organization_verifications`. `phone` is retained as a legacy field — always null in v2.",
+            "required": ["id", "slug", "name", "verified"],
             "properties": {
-              "name": {
-                "type": "string"
+              "id": { "type": "string", "format": "uuid" },
+              "slug": { "type": "string" },
+              "name": { "type": "string" },
+              "verified": {
+                "type": "boolean",
+                "description": "True if the organizer has at least one active verification record."
               },
               "phone": {
-                "type": [
-                  "string",
-                  "null"
-                ]
+                "type": ["string", "null"],
+                "description": "Legacy field. Always null in v2."
               }
             }
           },
@@ -5347,8 +5307,10 @@
             "enum": [
               "portal",
               "import",
-              "api"
-            ]
+              "api",
+              "witnessed"
+            ],
+            "description": "Provenance. `witnessed` (v2) is the collective-evidence path — a key with `witness_authority=true` writes events attributed to a collective publisher organization (e.g., \"Fiber Community\") with documentary evidence (typically OCR'd flyers)."
           },
           "contributor": {
             "oneOf": [
@@ -5599,11 +5561,10 @@
       },
       "ServiceAccount": {
         "type": "object",
-        "description": "A portal account as seen by service-tier callers — includes internal fields. Retained in 1.0.0 because GET /service/events/{id} still returns the linked account; the dedicated /v1/service/accounts/* paths are removed.",
+        "description": "v2: operational portal_account shell — email, claim state, status, timestamps. Business profile (name, address, logo, hours, etc.) lives on organizations now (migration 082).",
         "required": [
           "id",
           "email",
-          "business_name",
           "status",
           "created_at",
           "updated_at"
@@ -5616,9 +5577,6 @@
           "email": {
             "type": "string",
             "format": "email"
-          },
-          "business_name": {
-            "type": "string"
           },
           "auth_user_id": {
             "type": [
@@ -5635,80 +5593,16 @@
               "rejected"
             ]
           },
-          "default_venue_name": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "default_place_id": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "default_address": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "default_latitude": {
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "default_longitude": {
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "website": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "phone": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "description": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "logo_url": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "uri"
-          },
-          "cover_image_url": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "uri"
-          },
-          "operating_hours": {
-            "type": [
-              "array",
-              "null"
-            ]
-          },
           "claimed_at": {
             "type": [
               "string",
               "null"
             ],
             "format": "date-time"
+          },
+          "claimed_by": {
+            "type": ["string", "null"],
+            "description": "Slug identifying which consumer app claimed this tenant row."
           },
           "last_login_at": {
             "type": [
@@ -5833,9 +5727,9 @@
       },
       "ServiceEventInput": {
         "type": "object",
-        "description": "Input schema for the Service API. Uses Neighborhood API friendly-shape field names (name, start, location, url, cost) — symmetric with the read schema. Recurrence is optional; omit for one-off events.",
+        "description": "Input schema for the Service API. Uses Neighborhood API friendly-shape field names (name, start, location, url, cost) — symmetric with the read schema. Recurrence is optional; omit for one-off events.\n\nv2: `organizerOrganizationId` is required (the constrained-publishing authority anchor). The calling service key must be linked to that organization via `api_key_organization_links`, OR set `source_method='witnessed'` from a key with `witness_authority=true` (the collective-evidence path). The legacy `account_id` field is gone.",
         "required": [
-          "account_id",
+          "organizerOrganizationId",
           "name",
           "start",
           "timezone",
@@ -5843,9 +5737,16 @@
           "location"
         ],
         "properties": {
-          "account_id": {
+          "organizerOrganizationId": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "v2: the organization this event is published for. Required. Caller's service key must be linked to this org via `api_key_organization_links` (or use the witnessed-evidence path)."
+          },
+          "source_method": {
+            "type": "string",
+            "enum": ["api", "witnessed"],
+            "default": "api",
+            "description": "v2: caller-set provenance. `api` (default) requires `api_key_organization_links` linkage. `witnessed` is the collective-evidence path — requires `api_keys.witness_authority=true` and is attributed to a collective publisher organization (e.g., \"Fiber Community\")."
           },
           "name": {
             "type": "string",
@@ -6015,7 +5916,7 @@
       },
       "ErrorCode": {
         "type": "string",
-        "description": "Machine-readable error identifier. Groups:\n\n- **Auth**: `ACCESS_DENIED`, `ACCOUNT_DISABLED`, `ACCOUNT_REQUIRED`, `API_KEY_REQUIRED`, `CAPTCHA_FAILED`, `FORBIDDEN`, `INSUFFICIENT_TIER`, `INVALID_API_KEY`, `INVALID_OTP`, `KEY_NOT_LINKED`, `KEY_PENDING`, `NOT_LINKED`, `NO_OWNER`, `UNAUTHORIZED`\n- **Validation / resource**: `ALREADY_EXISTS`, `BATCH_ALREADY_SUBMITTED`, `CONFLICT`, `DUPLICATE`, `INVALID_STATE`, `NOT_FOUND`, `VALIDATION_ERROR`\n- **URL / domain**: `BLOCKED_HOSTNAME`, `DOMAIN_PENDING_REVIEW`, `INVALID_SCHEME`, `INVALID_URL`, `INVALID_WEBHOOK_URL`, `IP_LITERAL`, `URL_CREDENTIALS`\n- **Rate limit / quota**: `PAYLOAD_TOO_LARGE`, `RATE_LIMIT`, `SUBSCRIPTION_LIMIT`\n- **CSV / import**: `CSV_EMPTY`, `CSV_INVALID`, `CSV_TOO_LARGE`, `NO_VALID_ROWS`\n- **Verification**: `IDENTIFIER_DISPUTED`, `IMPOSTER_SIGNALS`, `INSUFFICIENT_EVIDENCE`, `OUT_OF_POLICY`, `WRONG_METHOD`\n- **Server / infrastructure**: `DATABASE_ERROR`, `INTERNAL_ERROR`, `SERVER_ERROR`, `SERVICE_UNAVAILABLE`, `UPSTREAM_ERROR`",
+        "description": "Machine-readable error identifier. Groups:\n\n- **Auth**: `ACCESS_DENIED`, `ACCOUNT_DISABLED`, `ACCOUNT_REQUIRED`, `API_KEY_REQUIRED`, `CAPTCHA_FAILED`, `FORBIDDEN`, `INSUFFICIENT_TIER`, `INVALID_API_KEY`, `INVALID_OTP`, `KEY_NOT_LINKED`, `KEY_PENDING`, `NOT_LINKED`, `NO_OWNER`, `UNAUTHORIZED`\n- **Validation / resource**: `ALREADY_EXISTS`, `BATCH_ALREADY_SUBMITTED`, `CONFLICT`, `DUPLICATE`, `INVALID_STATE`, `NOT_FOUND`, `VALIDATION_ERROR`\n- **URL / domain**: `BLOCKED_HOSTNAME`, `DOMAIN_PENDING_REVIEW`, `INVALID_SCHEME`, `INVALID_URL`, `INVALID_WEBHOOK_URL`, `IP_LITERAL`, `URL_CREDENTIALS`\n- **Rate limit / quota**: `PAYLOAD_TOO_LARGE`, `RATE_LIMIT`, `SUBSCRIPTION_LIMIT`\n- **CSV / import**: `CSV_EMPTY`, `CSV_INVALID`, `CSV_TOO_LARGE`, `NO_VALID_ROWS`\n- **Verification**: `IDENTIFIER_DISPUTED`, `IMPOSTER_SIGNALS`, `INSUFFICIENT_EVIDENCE`, `OUT_OF_POLICY`, `WRONG_METHOD`\n- **Media / content**: `IMAGE_NOT_PERMITTED`\n- **Server / infrastructure**: `DATABASE_ERROR`, `INTERNAL_ERROR`, `SERVER_ERROR`, `SERVICE_UNAVAILABLE`, `UPSTREAM_ERROR`",
         "enum": [
           "ACCESS_DENIED",
           "ACCOUNT_DISABLED",
@@ -6034,6 +5935,7 @@
           "DUPLICATE",
           "FORBIDDEN",
           "IDENTIFIER_DISPUTED",
+          "IMAGE_NOT_PERMITTED",
           "IMPOSTER_SIGNALS",
           "INSUFFICIENT_EVIDENCE",
           "INSUFFICIENT_TIER",
@@ -6200,7 +6102,7 @@
       },
       "Place": {
         "type": "object",
-        "description": "Schema.org Place. A physical location. Identity is the address; verification is implicit via googlePlaceId resolution.",
+        "description": "Schema.org Place. A physical location. Identity is the address; the stable cross-source key is `googlePlaceId` (the one Google datum permitted indefinite storage). v2: categories come from OpenStreetMap (ODbL-licensed, attributed) — see `placeCategories` and `categorySource`. Google response data beyond `googlePlaceId` is never persisted into these columns.",
         "required": [
           "id",
           "name",
@@ -6233,6 +6135,18 @@
             "items": {
               "$ref": "#/components/schemas/IdentifierValue"
             }
+          },
+          "placeCategories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "v2: place categorization (e.g., \"cafe\", \"live_music_venue\"). Sourced from OpenStreetMap by default; never from Google response data."
+          },
+          "categorySource": {
+            "type": ["string", "null"],
+            "enum": ["osm", "admin_review", "publisher_declaration", null],
+            "description": "v2: provenance of `placeCategories`. `osm` (default), `admin_review` (operator added), `publisher_declaration` (verified publisher refined)."
           },
           "region_slug": {
             "type": [
@@ -6279,7 +6193,7 @@
       },
       "Verification": {
         "type": "object",
-        "description": "Verification block exposed on verified Organization or Person responses. Public read includes method, verification time, and approving app — the reputation graph is intentionally transparent.",
+        "description": "Verification block exposed on verified Organization responses. v2: anchors Type A authority on organizations only (the cross-app reputation graph was retired).",
         "required": [
           "method",
           "verifiedAt",
@@ -6317,7 +6231,7 @@
       },
       "VerifiedIdentifier": {
         "type": "object",
-        "description": "A specific verified identifier on a target. Service-tier responses include full value; public responses may mask.",
+        "description": "A specific verified identifier on an organization. Service-tier responses include full value; public responses may mask. v2: dropped `identifierDomain` (the v2 `organization_verifications` table stores normalized values without a domain column).",
         "required": [
           "identifierType",
           "method",
@@ -6337,12 +6251,6 @@
               "null"
             ],
             "description": "Full value for service-tier reads; null or partial for public reads."
-          },
-          "identifierDomain": {
-            "type": [
-              "string",
-              "null"
-            ]
           },
           "method": {
             "type": "string",
@@ -6369,12 +6277,12 @@
       },
       "Organization": {
         "type": "object",
-        "description": "Schema.org Organization. Discriminated by `kind`: `local_business` and `business` are heavy-verification subtypes; `community_group`, `nonprofit`, `curator`, `collective` use light verification (control of identifier).",
+        "description": "Schema.org Organization. v2: the unified entity primitive — businesses, community groups, nonprofits, collectives, solo operators (organizations-of-one). Classification emerges from `tags` (descriptive labels), `commercial` (for-profit boolean), and structural signals (primary place, event history). The legacy `kind` enum was retired in v2 because it mixed structural facts, vibes, and legal status into one false choice. `additionalType` is derived structurally — `LocalBusiness` when a primary place is set, plain `Organization` otherwise.",
         "required": [
           "id",
           "slug",
           "name",
-          "kind"
+          "tags"
         ],
         "properties": {
           "id": {
@@ -6394,21 +6302,22 @@
             ],
             "description": "Official registered name. Optional, primarily for verified businesses."
           },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "local_business",
-              "business",
-              "community_group",
-              "nonprofit",
-              "curator",
-              "collective"
-            ]
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 50
+            },
+            "description": "Descriptive labels — free-form within format rules. Recommended starter vocabulary at `/v1/meta/tags` (when shipped). Not a hard taxonomy; consumer apps filter on whatever tags appear in practice."
+          },
+          "commercial": {
+            "type": ["boolean", "null"],
+            "description": "For-profit (true) vs. non-profit/community (false). Null = unspecified. Replaces the structural-axis component of the legacy `kind` enum."
           },
           "additionalType": {
             "type": "string",
             "format": "uri",
-            "description": "Schema.org type URL aligned with kind (e.g., https://schema.org/LocalBusiness, https://schema.org/NGO, https://schema.org/Organization)."
+            "description": "Schema.org type URL derived from structural data: `https://schema.org/LocalBusiness` when the organization has a primary place, `https://schema.org/Organization` otherwise. Apps wanting richer subtyping derive from `tags` or `place_categories`."
           },
           "description": {
             "type": [
@@ -6509,6 +6418,7 @@
       },
       "OrganizationInput": {
         "type": "object",
+        "description": "Input shape for creating or updating an Organization. v2: no `kind` field — classify via `tags` + `commercial` instead. Calling key auto-links to the new organization on create via `api_key_organization_links`; use `POST /service/organizations/link` to link to an existing org.",
         "required": [
           "name",
           "kind"
@@ -6528,16 +6438,18 @@
             "type": "string",
             "maxLength": 200
           },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "local_business",
-              "business",
-              "community_group",
-              "nonprofit",
-              "curator",
-              "collective"
-            ]
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 50
+            },
+            "maxItems": 15,
+            "description": "Descriptive labels. Free-form within format rules; see `/v1/meta/tags` for a recommended starter vocabulary."
+          },
+          "commercial": {
+            "type": ["boolean", "null"],
+            "description": "For-profit (true) vs. non-profit/community (false). Null = unspecified."
           },
           "description": {
             "type": "string",
@@ -6591,156 +6503,7 @@
           "primaryPlaceId": {
             "type": "string",
             "format": "uuid",
-            "description": "Reference to a Place row. Required for kind=local_business; optional otherwise."
-          }
-        }
-      },
-      "Person": {
-        "type": "object",
-        "description": "Schema.org Person. Used for individuals — DJs, performers, curators, individual organizers. Light verification (control of email).",
-        "required": [
-          "id",
-          "slug",
-          "name"
-        ],
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "slug": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "givenName": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "familyName": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "alternateName": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Stage names, aliases"
-          },
-          "description": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "image": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "uri"
-          },
-          "url": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "uri"
-          },
-          "sameAs": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "format": "uri"
-            }
-          },
-          "jobTitle": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "verified": {
-            "type": "boolean"
-          },
-          "verification": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/Verification"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time"
-          }
-        }
-      },
-      "PersonInput": {
-        "type": "object",
-        "required": [
-          "name"
-        ],
-        "properties": {
-          "name": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 200
-          },
-          "slug": {
-            "type": "string",
-            "maxLength": 100
-          },
-          "givenName": {
-            "type": "string",
-            "maxLength": 100
-          },
-          "familyName": {
-            "type": "string",
-            "maxLength": 100
-          },
-          "alternateName": {
-            "type": "string",
-            "maxLength": 100
-          },
-          "description": {
-            "type": "string",
-            "maxLength": 2000
-          },
-          "image": {
-            "type": "string",
-            "format": "uri",
-            "maxLength": 2000
-          },
-          "url": {
-            "type": "string",
-            "format": "uri",
-            "maxLength": 2000
-          },
-          "sameAs": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "format": "uri"
-            },
-            "maxItems": 20
-          },
-          "jobTitle": {
-            "type": "string",
-            "maxLength": 100
+            "description": "Reference to a Place row. Optional — drives `additionalType` derivation (`LocalBusiness` if set, plain `Organization` otherwise)."
           }
         }
       },
@@ -6859,7 +6622,7 @@
       },
       "List": {
         "type": "object",
-        "description": "Schema.org ItemList. A curatorial selection by an Organization or Person — \"this weekend's picks,\" \"best park benches in Fishtown,\" etc.",
+        "description": "Schema.org ItemList. A curatorial selection by an Organization — \"this weekend's picks,\" \"best park benches in Fishtown,\" etc. v2: curator is always an organization (the Person primitive is gone).",
         "required": [
           "id",
           "slug",
@@ -6885,15 +6648,8 @@
             ]
           },
           "curator": {
-            "description": "The Person or Organization that maintains this list.",
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/Person"
-              },
-              {
-                "$ref": "#/components/schemas/Organization"
-              }
-            ]
+            "description": "The Organization that maintains this list.",
+            "$ref": "#/components/schemas/Organization"
           },
           "itemListOrder": {
             "type": "string",
@@ -6925,9 +6681,10 @@
       },
       "ListInput": {
         "type": "object",
+        "description": "Input for creating a list. v2: curator is always an organization (curatorOrganizationId is required). The legacy `curator: {type, id}` shape is gone.",
         "required": [
           "name",
-          "curator"
+          "curatorOrganizationId"
         ],
         "properties": {
           "name": {
@@ -6943,25 +6700,10 @@
             "type": "string",
             "maxLength": 2000
           },
-          "curator": {
-            "type": "object",
-            "required": [
-              "type",
-              "id"
-            ],
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": [
-                  "organization",
-                  "person"
-                ]
-              },
-              "id": {
-                "type": "string",
-                "format": "uuid"
-              }
-            }
+          "curatorOrganizationId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Organization that curates this list. The calling service key must be linked to this org via `api_key_organization_links`."
           }
         }
       },
@@ -6995,107 +6737,26 @@
           }
         }
       },
-      "Verifier": {
-        "type": "object",
-        "description": "Reputation-graph entry. One per app that has ever issued a verification.",
-        "required": [
-          "appName",
-          "approvalCount",
-          "activeCount",
-          "revokedCount"
-        ],
-        "properties": {
-          "appName": {
-            "type": "string"
-          },
-          "firstApprovalAt": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "date-time"
-          },
-          "approvalCount": {
-            "type": "integer",
-            "description": "Total approvals issued by this app, ever."
-          },
-          "activeCount": {
-            "type": "integer",
-            "description": "Approvals still active (not revoked)."
-          },
-          "revokedCount": {
-            "type": "integer"
-          },
-          "methods": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Methods this app has approved with (e.g. \"manual_review:in_person\")."
-          }
-        }
-      },
-      "VerifierApproval": {
-        "type": "object",
-        "description": "An approval by a verifier, surfaced for spot-checking on the reputation graph.",
-        "properties": {
-          "verifiedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "method": {
-            "type": "string"
-          },
-          "targetType": {
-            "type": "string",
-            "enum": [
-              "organization",
-              "person"
-            ]
-          },
-          "targetId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "targetName": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "active",
-              "revoked"
-            ]
-          }
-        }
-      },
       "VerificationPathRequest": {
         "type": "object",
+        "description": "v2: only organizations verify; targetType is gone.",
         "required": [
-          "targetType",
-          "targetId",
-          "identifierType",
-          "identifierValue"
+          "organization_id",
+          "identifier_type",
+          "identifier_value"
         ],
         "properties": {
-          "targetType": {
-            "type": "string",
-            "enum": [
-              "organization",
-              "person"
-            ]
-          },
-          "targetId": {
+          "organization_id": {
             "type": "string",
             "format": "uuid"
           },
-          "identifierType": {
+          "identifier_type": {
             "type": "string",
             "enum": [
               "email"
             ]
           },
-          "identifierValue": {
+          "identifier_value": {
             "type": "string"
           }
         }
@@ -7151,21 +6812,14 @@
       },
       "VerificationChallengeInput": {
         "type": "object",
+        "description": "v2: only organizations verify; targetType is gone.",
         "required": [
-          "targetType",
-          "targetId",
+          "organizationId",
           "identifierType",
           "identifierValue"
         ],
         "properties": {
-          "targetType": {
-            "type": "string",
-            "enum": [
-              "organization",
-              "person"
-            ]
-          },
-          "targetId": {
+          "organizationId": {
             "type": "string",
             "format": "uuid"
           },
@@ -7212,7 +6866,7 @@
       },
       "VerificationOutcome": {
         "type": "object",
-        "description": "Result of a verification submission. Status `verified` means the row landed in account_verified_identifiers; `pending` means manual review queued; `rejected` means the submission failed policy.",
+        "description": "Result of a verification submission. Status `verified` means the row landed in organization_verifications; `pending` means manual review queued; `rejected` means the submission failed policy.",
         "required": [
           "status"
         ],
@@ -7267,23 +6921,15 @@
       },
       "VerificationManualInput": {
         "type": "object",
-        "description": "Submission for the manual-review path. Evidence is structured and required fields enforced at submit. Apps with verification_authority for the matching method auto-approve; others queue.",
+        "description": "Submission for the manual-review path. Evidence is structured and required fields enforced at submit. Apps with verification_authority for the matching method auto-approve; others queue. v2: only organizations verify; targetType is gone.",
         "required": [
-          "targetType",
-          "targetId",
+          "organizationId",
           "identifierType",
           "identifierValue",
           "evidence"
         ],
         "properties": {
-          "targetType": {
-            "type": "string",
-            "enum": [
-              "organization",
-              "person"
-            ]
-          },
-          "targetId": {
+          "organizationId": {
             "type": "string",
             "format": "uuid"
           },
@@ -7343,11 +6989,10 @@
       },
       "PendingReview": {
         "type": "object",
-        "description": "An item in the verification review queue (admin-tier endpoints).",
+        "description": "An item in the verification review queue (admin-tier endpoints). v2: targets are always organizations.",
         "required": [
           "id",
-          "targetType",
-          "targetId",
+          "organizationId",
           "identifierType",
           "identifierValue",
           "method",
@@ -7360,16 +7005,10 @@
             "type": "string",
             "format": "uuid"
           },
-          "targetType": {
+          "organizationId": {
             "type": "string",
-            "enum": [
-              "organization",
-              "person"
-            ]
-          },
-          "targetId": {
-            "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "v2: only organizations verify; this replaces the legacy targetType/targetId pair."
           },
           "identifierType": {
             "type": "string"
@@ -7416,7 +7055,7 @@
       },
       "DisputeInput": {
         "type": "object",
-        "description": "Records a dispute against a verified target, identifier, or other data record. v1 stores for operator review only — no automated action.",
+        "description": "Records a dispute against a verified target, identifier, or other data record. v2 stores for operator review only — no automated action. The `person` target type was dropped in v2.",
         "required": [
           "targetType",
           "targetId",
@@ -7427,7 +7066,6 @@
             "type": "string",
             "enum": [
               "organization",
-              "person",
               "verified_identifier"
             ]
           },

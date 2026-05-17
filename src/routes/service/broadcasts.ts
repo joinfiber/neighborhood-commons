@@ -50,7 +50,7 @@ async function formatBroadcastWithExtras(row: Record<string, unknown>) {
   const placeRow = row.places as Record<string, unknown> | null;
 
   const verifications = orgRow
-    ? await hydrateVerificationsFor('organization', [orgRow.id as string])
+    ? await hydrateVerificationsFor([orgRow.id as string])
     : new Map();
 
   return {
