@@ -26,6 +26,7 @@ import v1OrganizationsRoutes, { organizationsLimiter } from './routes/v1-organiz
 import v1PublishersRoutes, { publishersLimiter } from './routes/v1-publishers.js';
 import v1BroadcastsRoutes, { broadcastsLimiter } from './routes/v1-broadcasts.js';
 import v1ListsRoutes, { listsLimiter } from './routes/v1-lists.js';
+import v1ContributorsRoutes, { contributorsLimiter } from './routes/v1-contributors.js';
 import webhookRoutes from './routes/webhooks.js';
 import metaRoutes from './routes/meta.js';
 import cronRoutes from './routes/cron.js';
@@ -221,6 +222,7 @@ export function createApp(): Express {
   app.use('/api/v1/publishers', publishersLimiter, v1PublishersRoutes);
   app.use('/api/v1/broadcasts', broadcastsLimiter, v1BroadcastsRoutes);
   app.use('/api/v1/lists', listsLimiter, v1ListsRoutes);
+  app.use('/api/v1/contributors', contributorsLimiter, v1ContributorsRoutes);
 
   // iCal + RSS feeds (mounted at /api/v1/ level)
   app.get('/api/v1/events.ics', icsHandler);

@@ -83,6 +83,8 @@ function makeRow(overrides: Partial<PortalEventRow> = {}): PortalEventRow {
       name: 'Test Org',
       portal_accounts: null,
     },
+    contributor_profile_id: null,
+    contributor_profiles: null,
     ...overrides,
   };
 }

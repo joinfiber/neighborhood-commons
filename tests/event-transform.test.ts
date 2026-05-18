@@ -57,6 +57,8 @@ function makeRow(overrides: Partial<PortalEventRow> = {}): PortalEventRow {
       name: 'South Jazz Kitchen',
       portal_accounts: null,
     },
+    contributor_profile_id: null,
+    contributor_profiles: null,
     ...overrides,
   };
 }
@@ -229,7 +231,11 @@ describe('toNeighborhoodEvent', () => {
   // -------------------------------------------------------------------------
 
   describe('source.contributor', () => {
-    it('reads source_contributor_name + url when set', () => {
+    it('reads the legacy snapshot fields when no contributor profile is joined', () => {
+      // Pre-3.1 events (no contributor_profile_id linkage) fall back to the
+      // {source_contributor_name, source_contributor_url} snapshot columns.
+      // The profile-only fields (slug, logo_url, description, profile_url)
+      // come back null.
       const event = toNeighborhoodEvent(makeRow({
         source_method: 'self_asserted',
         source_contributor_name: 'Go There',
@@ -238,6 +244,10 @@ describe('toNeighborhoodEvent', () => {
       expect(event.source.contributor).toEqual({
         name: 'Go There',
         url: 'https://gothere.bike',
+        slug: null,
+        logo_url: null,
+        description: null,
+        profile_url: null,
       });
     });
 
@@ -247,15 +257,17 @@ describe('toNeighborhoodEvent', () => {
         source_contributor_name: 'Go There',
         source_contributor_url: null,
       }));
-      expect(event.source.contributor).toEqual({ name: 'Go There', url: null });
+      expect(event.source.contributor).toEqual({
+        name: 'Go There',
+        url: null,
+        slug: null,
+        logo_url: null,
+        description: null,
+        profile_url: null,
+      });
     });
 
-    it('returns null when source_contributor_name is null', () => {
-      // The legacy fallback that used source_publisher as a stand-in for
-      // contributor is retired — null is the honest answer when the column
-      // is null. service/events.ts auto-fills source_contributor_name on
-      // write from the calling key's brand identity, so this null state
-      // only persists on pre-cleanup rows.
+    it('returns null when neither a contributor profile nor a name snapshot exists', () => {
       const event = toNeighborhoodEvent(makeRow({
         source_method: 'self_asserted',
         source_contributor_name: null,
@@ -270,6 +282,55 @@ describe('toNeighborhoodEvent', () => {
         source_feed_url: 'https://philly.gov/calendar.rss',
       }));
       expect(event.source.contributor).toBeNull();
+    });
+
+    it('surfaces the full profile when contributor_profiles is joined', () => {
+      // 3.1+ events linked via events.contributor_profile_id surface the
+      // registered profile: slug, name, app_url, logo_url, description, and
+      // a profile_url consumers can tap through to render the splash card.
+      const event = toNeighborhoodEvent(makeRow({
+        source_method: 'self_asserted',
+        contributor_profile_id: 'profile-uuid-merrie',
+        contributor_profiles: {
+          id: 'profile-uuid-merrie',
+          slug: 'merrie',
+          name: 'Merrie',
+          tagline: 'Publish what your group is up to',
+          logo_url: 'https://r2.example/merrie-logo.png',
+          description: 'Merrie is a publishing tool for community groups.',
+          app_url: 'https://merrie.co',
+        },
+      }));
+      expect(event.source.contributor).toEqual({
+        name: 'Merrie',
+        url: 'https://merrie.co',
+        slug: 'merrie',
+        logo_url: 'https://r2.example/merrie-logo.png',
+        description: 'Merrie is a publishing tool for community groups.',
+        profile_url: '/v1/contributors/merrie',
+      });
+    });
+
+    it('prefers the joined profile over the legacy snapshot when both are present', () => {
+      // The profile is the source of truth post-3.1; snapshot columns only
+      // serve as fallback for events without a registered contributor.
+      const event = toNeighborhoodEvent(makeRow({
+        source_contributor_name: 'stale-snapshot',
+        source_contributor_url: 'https://old.example',
+        contributor_profile_id: 'profile-uuid',
+        contributor_profiles: {
+          id: 'profile-uuid',
+          slug: 'fresh',
+          name: 'Fresh Identity',
+          tagline: null,
+          logo_url: null,
+          description: null,
+          app_url: 'https://fresh.example',
+        },
+      }));
+      expect(event.source.contributor?.name).toBe('Fresh Identity');
+      expect(event.source.contributor?.slug).toBe('fresh');
+      expect(event.source.contributor?.url).toBe('https://fresh.example');
     });
   });
 

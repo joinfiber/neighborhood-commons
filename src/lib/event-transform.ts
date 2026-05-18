@@ -77,6 +77,20 @@ export interface PortalEventRow {
     name: string;
     portal_accounts: { status: string } | null;
   } | null;
+  // Contributor profile snapshot (migration 086). NULL for events written
+  // before consumer apps registered through the developer dashboard. When
+  // set, supplies the richer source.contributor splash data (slug, logo,
+  // description, profile URL).
+  contributor_profile_id: string | null;
+  contributor_profiles: {
+    id: string;
+    slug: string;
+    name: string;
+    tagline: string | null;
+    logo_url: string | null;
+    description: string | null;
+    app_url: string | null;
+  } | null;
 }
 
 export interface NeighborhoodEvent {
@@ -127,7 +141,19 @@ export interface NeighborhoodEvent {
     // organizer.name.
     method: 'self_asserted' | 'proxied' | 'witnessed';
     url: string | null;
-    contributor: { name: string; url: string | null } | null;
+    // 3.1: contributor gains `slug` and optional profile fields (logo_url,
+    // description, app_url, profile_url) when the event is linked to a
+    // registered contributor_profile via events.contributor_profile_id.
+    // The name+url fall back to the legacy snapshot columns when no
+    // profile is linked (pre-3.1 events or non-registered consumers).
+    contributor: {
+      name: string;
+      url: string | null;
+      slug: string | null;
+      logo_url: string | null;
+      description: string | null;
+      profile_url: string | null;
+    } | null;
     collected_at: string;
     license: 'CC BY 4.0';
   };
@@ -295,11 +321,49 @@ export function toNeighborhoodEvent(
       // events. No publisher field — organizer.name fills that role.
       method: row.source_method,
       url: row.source_method === 'proxied' ? (row.source_feed_url || null) : null,
-      contributor: row.source_contributor_name
-        ? { name: row.source_contributor_name, url: row.source_contributor_url || null }
-        : null,
+      contributor: buildContributor(row),
       collected_at: row.created_at,
       license: 'CC BY 4.0',
     },
   };
+}
+
+/**
+ * Build the source.contributor block. Two layers:
+ *
+ *   1. If the event is linked to a registered contributor_profile (via
+ *      events.contributor_profile_id, joined into row.contributor_profiles),
+ *      surface the full profile — slug, name, url, logo_url, description,
+ *      profile_url. This is the 3.1+ shape consumer apps render as the
+ *      "via X" splash card.
+ *
+ *   2. If no profile is linked but the legacy snapshot columns are set,
+ *      fall back to {name, url} with the rest as null. Covers pre-3.1
+ *      events and writes that came in before a contributor was registered.
+ *
+ *   3. If neither, contributor is null.
+ */
+function buildContributor(row: PortalEventRow): NeighborhoodEvent['source']['contributor'] {
+  const profile = row.contributor_profiles;
+  if (profile) {
+    return {
+      name: profile.name,
+      url: profile.app_url || null,
+      slug: profile.slug,
+      logo_url: profile.logo_url || null,
+      description: profile.description || null,
+      profile_url: `/v1/contributors/${profile.slug}`,
+    };
+  }
+  if (row.source_contributor_name) {
+    return {
+      name: row.source_contributor_name,
+      url: row.source_contributor_url || null,
+      slug: null,
+      logo_url: null,
+      description: null,
+      profile_url: null,
+    };
+  }
+  return null;
 }

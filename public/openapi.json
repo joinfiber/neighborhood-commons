@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Neighborhood Commons API",
-    "description": "The Neighborhood Commons API: typed substrate for neighborhood-scale public facts. Five Schema.org-aligned primitives (Place, Organization, Event, Broadcast, List), verification anchored on Type A profile authority, constrained-publishing model with three authority paths (entity-runs-it, pipeline-proxies, witnessed-with-evidence). Read free, write through linked organizations. CC BY 4.0.\n\n**This document is the Spec, part of the Commons Contract.** The Contract is three files together: the Spec (this document — machine-readable, authoritative), the Guide (`/llms.txt` — narrative companion), and the Log (`CHANGELOG.md` — dated record of every change). Rule when they disagree: Spec wins. Guide explains. Log dates.\n\n**3.0.0** establishes the standard four-role event provenance frame (`docs/four-roles.md`) and the type-general provenance method doctrine (`docs/provenance.md`). `source.publisher` is removed (the role is filled by `organizer.name`); `source.method` uses the standard vocabulary (`self_asserted` / `proxied` / `witnessed`); `source.url` carries the proxied source URL when applicable. Organizations, Broadcasts, and Lists gain a `method` field — Organizations admit `seeded` for bulk-imported, awaiting-uptake rows. This is the launch contract; from here forward the substrate is additive-only.",
-    "version": "3.0.0",
+    "description": "The Neighborhood Commons API: typed substrate for neighborhood-scale public facts. Five Schema.org-aligned primitives (Place, Organization, Event, Broadcast, List), verification anchored on Type A profile authority, constrained-publishing model with three authority paths (entity-runs-it, pipeline-proxies, witnessed-with-evidence). Read free, write through linked organizations. CC BY 4.0.\n\n**This document is the Spec, part of the Commons Contract.** The Contract is three files together: the Spec (this document — machine-readable, authoritative), the Guide (`/llms.txt` — narrative companion), and the Log (`CHANGELOG.md` — dated record of every change). Rule when they disagree: Spec wins. Guide explains. Log dates.\n\n**3.0.0** establishes the standard four-role event provenance frame (`docs/four-roles.md`) and the type-general provenance method doctrine (`docs/provenance.md`). `source.publisher` is removed (the role is filled by `organizer.name`); `source.method` uses the standard vocabulary (`self_asserted` / `proxied` / `witnessed`); `source.url` carries the proxied source URL when applicable. Organizations, Broadcasts, and Lists gain a `method` field — Organizations admit `seeded` for bulk-imported, awaiting-uptake rows. This is the launch contract; from here forward the substrate is additive-only.\n\n**3.1.0** (additive) adds Contributor Profiles — the public-facing identity of each contributing app. New public reads at `/v1/contributors` and `/v1/contributors/{idOrSlug}` surface the slug, name, tagline, description, logo, and app URL. Event responses gain `source.contributor.{slug, logo_url, description, profile_url}` when the event is linked to a registered contributor profile; pre-3.1 events fall back to the existing `name`/`url` snapshot fields. Foundation for the self-service developer dashboard at `/developers` (PRs 2–5).",
+    "version": "3.1.0",
     "license": {
       "name": "CC-BY-4.0",
       "url": "https://creativecommons.org/licenses/by/4.0/"
@@ -3569,6 +3569,97 @@
         }
       }
     },
+    "/contributors": {
+      "get": {
+        "summary": "List active contributor profiles",
+        "description": "Active contributor profiles — the public-facing identity of each app or pipeline routing data into the Commons. Use this to show \"who's contributing here\" pages, or to look up a contributor by category. Only `status = 'active'` profiles surface; pending/suspended live on the operational side.",
+        "operationId": "listContributors",
+        "parameters": [
+          {
+            "name": "category",
+            "in": "query",
+            "schema": { "type": "string", "maxLength": 50 },
+            "description": "Filter to profiles with the given category tag."
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": { "type": "string", "maxLength": 200 },
+            "description": "Free-text search over name, tagline, and description."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "minimum": 1, "maximum": 200, "default": 50 }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": { "type": "integer", "minimum": 0, "default": 0 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated contributor list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["meta", "contributors"],
+                  "properties": {
+                    "meta": { "$ref": "#/components/schemas/Meta" },
+                    "contributors": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/ContributorProfile" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/contributors/{idOrSlug}": {
+      "get": {
+        "summary": "Get a single contributor profile",
+        "description": "Fetch a single active contributor profile by UUID or slug. Used by consumer apps to render the tap-through splash card when a reader taps `via {contributor.name}` on an event.",
+        "operationId": "getContributor",
+        "parameters": [
+          {
+            "name": "idOrSlug",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Either the contributor's UUID or its stable slug."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Single contributor profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["contributor"],
+                  "properties": {
+                    "contributor": { "$ref": "#/components/schemas/ContributorProfile" }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No active contributor with this id/slug",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/lists": {
       "get": {
         "summary": "List curated lists",
@@ -5269,23 +5360,38 @@
               },
               {
                 "type": "object",
+                "required": ["name", "url", "slug", "logo_url", "description", "profile_url"],
                 "properties": {
                   "name": {
                     "type": "string",
                     "description": "Public-facing name of the contributing app/pipeline."
                   },
                   "url": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
+                    "type": ["string", "null"],
                     "format": "uri",
-                    "description": "Contributor website."
+                    "description": "Contributor website (`app_url` from the registered profile, or the legacy snapshot URL for pre-3.1 events)."
+                  },
+                  "slug": {
+                    "type": ["string", "null"],
+                    "description": "Stable cross-key slug from the registered contributor_profile. Use this to deep-link the tap-through splash card. Null for pre-3.1 events that fell back to the snapshot."
+                  },
+                  "logo_url": {
+                    "type": ["string", "null"],
+                    "format": "uri",
+                    "description": "Logo image for the splash card. Null when no profile is linked."
+                  },
+                  "description": {
+                    "type": ["string", "null"],
+                    "description": "Profile description (markdown-aware). Null when no profile is linked."
+                  },
+                  "profile_url": {
+                    "type": ["string", "null"],
+                    "description": "Relative URL of the public profile resource, e.g. `/v1/contributors/merrie`. Fetch for the full profile shape. Null when no profile is linked."
                   }
                 }
               }
             ],
-            "description": "The ecosystem participant that routed this event into the Commons. Editorial public-facing identity — separate from the operational API key. Null for legacy rows without contributor attribution."
+            "description": "The ecosystem participant that routed this event into the Commons. Editorial public-facing identity — separate from the operational API key. When linked to a registered `contributor_profiles` row (3.1+), surfaces the full profile (slug + name + url + logo_url + description + profile_url). Pre-3.1 events fall back to the legacy {name, url} snapshot with the new fields as null. Null entirely for legacy rows without any contributor attribution."
           },
           "collected_at": {
             "type": "string",
@@ -5294,6 +5400,59 @@
           "license": {
             "type": "string",
             "example": "CC BY 4.0"
+          }
+        }
+      },
+      "ContributorProfile": {
+        "type": "object",
+        "description": "The public-facing identity of a contributing app — the splash card data a consumer app renders when a reader taps `via {contributor.name}`. Profiles are registered via the developer dashboard at `/developers`; the slug is stable across api_key rotation. Only `status = 'active'` profiles surface here.",
+        "required": ["id", "slug", "name", "created_at", "updated_at"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "slug": {
+            "type": "string",
+            "description": "Lowercase alphanumeric + hyphens, 1-100 chars. Stable cross-key identifier."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "tagline": {
+            "type": ["string", "null"],
+            "description": "One-line description, ~80 chars."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Longer description, ~2000 chars. Markdown-aware on the rendering side."
+          },
+          "who_its_for": {
+            "type": ["string", "null"],
+            "description": "Audience description, ~500 chars."
+          },
+          "app_url": {
+            "type": ["string", "null"],
+            "format": "uri",
+            "description": "Public marketing or app URL the splash card links to."
+          },
+          "logo_url": {
+            "type": ["string", "null"],
+            "format": "uri",
+            "description": "R2-served logo image."
+          },
+          "category": {
+            "type": ["string", "null"],
+            "description": "Optional grouping tag (free-form)."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },

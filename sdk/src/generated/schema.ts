@@ -812,6 +812,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/contributors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List active contributor profiles
+         * @description Active contributor profiles — the public-facing identity of each app or pipeline routing data into the Commons. Use this to show "who's contributing here" pages, or to look up a contributor by category. Only `status = 'active'` profiles surface; pending/suspended live on the operational side.
+         */
+        get: operations["listContributors"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/contributors/{idOrSlug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a single contributor profile
+         * @description Fetch a single active contributor profile by UUID or slug. Used by consumer apps to render the tap-through splash card when a reader taps `via {contributor.name}` on an event.
+         */
+        get: operations["getContributor"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/lists": {
         parameters: {
             query?: never;
@@ -1388,20 +1428,62 @@ export interface components {
              * @description When method is `proxied`, the public URL the contributor extracted from (for transparency). Null otherwise.
              */
             url: string | null;
-            /** @description The ecosystem participant that routed this event into the Commons. Editorial public-facing identity — separate from the operational API key. Null for legacy rows without contributor attribution. */
+            /** @description The ecosystem participant that routed this event into the Commons. Editorial public-facing identity — separate from the operational API key. When linked to a registered `contributor_profiles` row (3.1+), surfaces the full profile (slug + name + url + logo_url + description + profile_url). Pre-3.1 events fall back to the legacy {name, url} snapshot with the new fields as null. Null entirely for legacy rows without any contributor attribution. */
             contributor: null | {
                 /** @description Public-facing name of the contributing app/pipeline. */
-                name?: string;
+                name: string;
                 /**
                  * Format: uri
-                 * @description Contributor website.
+                 * @description Contributor website (`app_url` from the registered profile, or the legacy snapshot URL for pre-3.1 events).
                  */
-                url?: string | null;
+                url: string | null;
+                /** @description Stable cross-key slug from the registered contributor_profile. Use this to deep-link the tap-through splash card. Null for pre-3.1 events that fell back to the snapshot. */
+                slug: string | null;
+                /**
+                 * Format: uri
+                 * @description Logo image for the splash card. Null when no profile is linked.
+                 */
+                logo_url: string | null;
+                /** @description Profile description (markdown-aware). Null when no profile is linked. */
+                description: string | null;
+                /** @description Relative URL of the public profile resource, e.g. `/v1/contributors/merrie`. Fetch for the full profile shape. Null when no profile is linked. */
+                profile_url: string | null;
             };
             /** Format: date-time */
             collected_at: string;
             /** @example CC BY 4.0 */
             license: string;
+        };
+        /** @description The public-facing identity of a contributing app — the splash card data a consumer app renders when a reader taps `via {contributor.name}`. Profiles are registered via the developer dashboard at `/developers`; the slug is stable across api_key rotation. Only `status = 'active'` profiles surface here. */
+        ContributorProfile: {
+            /** Format: uuid */
+            id: string;
+            /** @description Lowercase alphanumeric + hyphens, 1-100 chars. Stable cross-key identifier. */
+            slug: string;
+            /** @description Display name. */
+            name: string;
+            /** @description One-line description, ~80 chars. */
+            tagline?: string | null;
+            /** @description Longer description, ~2000 chars. Markdown-aware on the rendering side. */
+            description?: string | null;
+            /** @description Audience description, ~500 chars. */
+            who_its_for?: string | null;
+            /**
+             * Format: uri
+             * @description Public marketing or app URL the splash card links to.
+             */
+            app_url?: string | null;
+            /**
+             * Format: uri
+             * @description R2-served logo image.
+             */
+            logo_url?: string | null;
+            /** @description Optional grouping tag (free-form). */
+            category?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
         };
         /** @description Event response shape for service-tier and portal endpoints. Uses DB-flavored field names (title, event_date, start_time, etc.) — distinct from the public read Event shape. Returned by GET /service/events/{id}, PATCH /service/events/{id}, and the portal API. */
         ServiceEvent: {
@@ -3915,6 +3997,70 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+        };
+    };
+    listContributors: {
+        parameters: {
+            query?: {
+                /** @description Filter to profiles with the given category tag. */
+                category?: string;
+                /** @description Free-text search over name, tagline, and description. */
+                q?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated contributor list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        meta: components["schemas"]["Meta"];
+                        contributors: components["schemas"]["ContributorProfile"][];
+                    };
+                };
+            };
+        };
+    };
+    getContributor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Either the contributor's UUID or its stable slug. */
+                idOrSlug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Single contributor profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        contributor: components["schemas"]["ContributorProfile"];
+                    };
+                };
+            };
+            /** @description No active contributor with this id/slug */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     listLists: {
