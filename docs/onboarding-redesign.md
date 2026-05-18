@@ -405,7 +405,7 @@ Each is a concrete commit; collected here for reviewability.
 
 ### 10.1 Existing consumers (Merrie, Fiber, Holler, Studio)
 
-The bulk of the retrofit moves to PR 5. No per-consumer scripts, no SQL backfills run by hand between v2 close and PR 5 — with two specific exceptions covered in §10.1.1 below. The script in `feat/trusted-tenant` (`provision-merrie-tenant.ts`) is *not* run; it stays in the codebase only until PR 5 lands, then deletes.
+The bulk of the retrofit moves to PR 5. No per-consumer scripts, no SQL backfills run by hand between v2 close and PR 5 — with one specific exception covered in §10.1.1 below. The script in `feat/trusted-tenant` (`provision-merrie-tenant.ts`) is *not* run; it stays in the codebase only until PR 5 lands, then deletes.
 
 This is a deliberate trade. The cost is that Merrie's photo uploads stay blocked from v2 close until PR 5 ships (~1 week of focused build time). The benefits:
 
@@ -430,13 +430,16 @@ Per consumer:
 
 ### 10.1.1 What runs at v2 close
 
-Two specific operator actions complete the v2 substrate before the dashboard work begins. Everything else waits for PR 5.
+One operator action completes the v2 substrate before the dashboard work begins. Everything else waits for PR 5.
 
-**(a) Apply migration 084.** Idempotent and additive (`ADD COLUMN IF NOT EXISTS api_keys.tenant_account_id`). No data writes, no risk; just makes the column available for PR 5 to populate.
+**Apply migration 084.** Idempotent and additive (`ADD COLUMN IF NOT EXISTS api_keys.tenant_account_id`). No data writes, no risk; just makes the column available for PR 5 to populate.
 
-**(b) Run the legacy-contribute contributor backfill.** A one-shot UPDATE that restores `source.contributor` attribution on events created via the retired `/api/v1/contribute` path (where `source_publisher` was the app name, not the org name — distinct from v2 service events where `source_publisher` is the org name). Independent of any tenant binding; safe to run at any time:
+### 10.1.2 What we deliberately don't run
+
+**No legacy-contribute contributor backfill.** An earlier draft of this doc included a one-shot UPDATE intended to restore `source.contributor` on events created via the retired `/api/v1/contribute` path:
 
 ```sql
+-- DO NOT RUN
 UPDATE events
    SET source_contributor_name = source_publisher
  WHERE source_contributor_name IS NULL
@@ -444,7 +447,11 @@ UPDATE events
    AND source_feed_url LIKE 'api-key:%';
 ```
 
-The corresponding v2-service-events backfill (where `source_contributor_name` is null but the events came through `/v1/service/events`) is *not* run at v2 close — it depends on the tenant binding that PR 5 establishes. It's folded into PR 5's atomic retrofit instead.
+The premise — that `source_publisher` always held the app name for legacy-contribute events — is false. The legacy `/api/v1/contribute` API accepted `source_publisher` as an arbitrary string and stored it heterogeneously: for some consumers it was the app name (Merrie-shaped), for others it was the publisher's actual real-world name (e.g., events tagged PorchFest-2026 store `source_publisher='PorchFest Philadelphia'`).
+
+Running the backfill produces structurally wrong attribution for the second class — publisher and contributor end up identical, yielding nonsensical splash text like *"PorchFest Philadelphia, via PorchFest Philadelphia"*. Fiber's defensive UI correctly hides events whose `publisher == contributor`, which is why the affected events disappear from Fiber's feed when the backfill runs.
+
+The honest default — leaving `source_contributor_name` null on legacy-contribute events so the public transform returns `source.contributor: null` — is preferable to filling the slot with wrong data. Consumers that surface attribution can render legacy events without a "via" line; consumers that gate on it can skip them. The v2-service-events backfill folded into PR 5 stays as written (it operates on rows where `source_publisher` is verifiably the org name).
 
 ### 10.2 Existing key holders log in and edit
 
