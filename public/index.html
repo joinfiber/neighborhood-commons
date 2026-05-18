@@ -684,7 +684,6 @@
           <li>A guide that shows only events posted by the venues themselves — no scrapers, no aggregators.</li>
           <li>A live feed of what businesses are broadcasting on the next block over.</li>
           <li>A simple form a yoga teacher fills out once, and their class schedule appears in every neighborhood app that cares.</li>
-          <li>A weekend tool that maps the operating hours of yoga studios across the neighborhood.</li>
           <li>A civic dashboard tracking the vitality of a single district.</li>
           <li>An assistant that knows what's happening here, right now, and who's behind it.</li>
         </ul>
@@ -734,8 +733,8 @@
         </div>
         <div class="nc-pillar">
           <span class="nc-pillar-num">03 — Layered</span>
-          <h3>Two tiers of authority.</h3>
-          <p>The Commons separates information <em>about</em> an entity from information <em>from</em> that entity. An entity might be a venue, a community group, a yoga teacher, a corner store, a nonprofit — anyone who organizes, performs, or runs something in a neighborhood. Public facts come from scrapers, listings, and feeds — broad coverage, best-effort quality. First-party content comes from the entities themselves after they verify — authoritative, the entity stands behind it. Apps filter to the tier they need.</p>
+          <h3>Authority follows the entity.</h3>
+          <p>A chess club self-asserts: it exists because someone declares it does, on an app that lets them. A music venue's show schedule arrives as public facts proxied from their calendar page — and the venue can level up by claiming and verifying, enriching those facts with first-party detail that pays back as richer presentation across every participating app. A poster on a corner is witnessed — observed by a person, recorded with documentary evidence. Each method tells consumer apps something about authority; apps filter to the tier they trust.</p>
         </div>
       </div>
     </section>
@@ -1253,6 +1252,8 @@ $ curl "{{baseUrl}}/api/v1/events?near=39.97,-75.14&amp;radius_km=2&amp;first_pa
 $ curl "{{baseUrl}}/api/v1/events?near=39.97,-75.14&amp;radius_km=2&amp;first_party=false"</pre>
 
         <p>The Commons orchestrates the verification process; apps surface the UI; the verified organization becomes the only valid editor of its Type A profile data.</p>
+
+        <p><strong>Any app can verify any organization</strong>, through whichever method fits the relationship — domain email loop, manual document review, in-person attestation, stewardship vouches. The Commons records the attestation chain (which app verified, what method, when) but doesn't prescribe how an app does the work. Apps that verify carelessly hurt themselves: bad verifications surface as bad data downstream, and the ecosystem picks up their contributions less. The stakes are direct and self-enforcing — it's why the Commons doesn't need a central referee.</p>
 
         <h3>The flow</h3>
 
