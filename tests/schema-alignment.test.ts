@@ -40,6 +40,8 @@ const SCHEMA: Record<string, string[]> = {
     'witness_authority',
     // Added in migration 084 (v2.1 — trusted-tenant pattern; one tenant portal_account per service key)
     'tenant_account_id',
+    // Added in migration 086 (3.1 — contributor profiles + developer dashboard)
+    'contributor_profile_id', 'mfa_secret_encrypted', 'mfa_enrolled_at', 'mfa_backup_codes_hashed',
   ],
   audit_logs: [
     'id', 'action', 'actor_hash', 'resource_id', 'metadata', 'endpoint',
@@ -64,6 +66,8 @@ const SCHEMA: Record<string, string[]> = {
     'location_place_id', 'organizer_org_id',
     // Added in migration 078 (v2 — internal dedup mechanism)
     'match_key',
+    // Added in migration 086 (3.1 — contributor profiles snapshot at write time)
+    'contributor_profile_id',
     'created_at', 'updated_at',
   ],
   event_series: [
@@ -194,6 +198,25 @@ const SCHEMA: Record<string, string[]> = {
   // and lib/developer-otp.ts both still depend on it).
   developer_otps: [
     'id', 'email', 'code', 'expires_at', 'created_at',
+  ],
+  // ----- Contributor profiles + developer-dashboard primitives (migration 086, 3.1) -----
+  contributor_profiles: [
+    'id', 'slug', 'name', 'tagline', 'description', 'who_its_for',
+    'app_url', 'logo_url', 'category', 'status',
+    'created_at', 'updated_at',
+  ],
+  developer_sessions: [
+    'id', 'api_key_id', 'token_hash',
+    'mfa_verified_at', 'last_seen_at', 'expires_at', 'created_at',
+  ],
+  magic_login_tokens: [
+    'id', 'email', 'token_hash', 'expires_at', 'consumed_at', 'created_at',
+  ],
+  pending_registrations: [
+    'email', 'app_name', 'tagline', 'description', 'who_its_for',
+    'app_url', 'logo_url', 'category',
+    'what_youre_building', 'verification_process',
+    'expires_at', 'created_at',
   ],
   // ----- Tables dropped in v2 (migration 082): -----
   //   persons                        — solo operators are now organizations

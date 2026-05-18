@@ -116,6 +116,8 @@ function makeDbRow(overrides: Record<string, unknown> = {}) {
       name: 'The Fishtown Taproom',
       portal_accounts: null,
     },
+    contributor_profile_id: null,
+    contributor_profiles: null,
     ...overrides,
   };
 }

@@ -309,6 +309,30 @@ Schema.org `ItemList`. Editorial selections by an Organization. Items are polymo
 
 Lists are how curator workflows surface in the substrate. A curator-organization builds a list; the items are references to events, organizations, or places that already exist in the Commons. Lists are overlays, not a publishing path — see Section 4 for the constraints.
 
+### 2.6 ContributorProfile (3.1)
+
+The public-facing identity of each contributing app — the splash card data a consumer app like Fiber renders when a reader taps "via Merrie" on an event. Distinct from the organization that *organized* the event; this is the *app that routed it into the Commons* (the four-role frame's contributor slot — see `docs/four-roles.md`).
+
+```json
+{
+  "id": "...",
+  "slug": "merrie",
+  "name": "Merrie",
+  "tagline": "Publish what your group is up to",
+  "description": "Merrie is a publishing tool for community groups.",
+  "who_its_for": "Community organizers",
+  "app_url": "https://merrie.co",
+  "logo_url": "https://r2.example/merrie-logo.png",
+  "category": "publishing",
+  "created_at": "...",
+  "updated_at": "..."
+}
+```
+
+The slug is the stable identifier — survives api_key rotation. Profiles are registered through the developer dashboard at `/developers` (ships incrementally in subsequent releases). Only `status = 'active'` profiles surface on `GET /v1/contributors`; pending/suspended live on the operational side.
+
+When an event is published via a registered contributor's key, the event's `source.contributor` is enriched with `{slug, logo_url, description, profile_url}` in addition to the existing `{name, url}`. Pre-3.1 events fall back to the legacy `{name, url}` snapshot fields with the new fields as null. The expansion is additive — consumers that read only `name`/`url` continue to work unchanged.
+
 ---
 
 ## 3. Reading data
@@ -334,6 +358,8 @@ All read endpoints are unauthenticated. Optional `X-API-Key` header bumps rate l
 | `GET` | `/v1/broadcasts/:id` | Single broadcast. |
 | `GET` | `/v1/lists` | Paginated list of lists. |
 | `GET` | `/v1/lists/:idOrSlug` | Single list with hydrated items. |
+| `GET` | `/v1/contributors` | Paginated list of active contributor profiles (the public-facing identity of each app routing data into the Commons). |
+| `GET` | `/v1/contributors/:idOrSlug` | Single contributor profile. The "via X" splash card data, fetched by slug. |
 | `GET` | `/v1/meta` | Spec metadata, regions, categories, stats. |
 | `GET` | `/v1/meta/regions` | Active regions. |
 | `GET` | `/v1/meta/categories` | Event category vocabulary. |

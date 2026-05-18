@@ -25,6 +25,8 @@ export type { paths, components } from "./generated/schema.js";
 export type Meta = components["schemas"]["Meta"];
 export type Event = components["schemas"]["Event"];
 export type Source = components["schemas"]["Source"];
+// 3.1: public-facing identity of each contributing app.
+export type ContributorProfile = components["schemas"]["ContributorProfile"];
 // v2 (2.0.0): Person, Verifier, VerifierApproval, Account, Group types
 // were retired. Use ServiceAccount for the operational portal-account shell
 // and Organization for the unified entity primitive.

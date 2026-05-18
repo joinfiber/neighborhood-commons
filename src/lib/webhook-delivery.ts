@@ -544,7 +544,7 @@ export async function retryFailedWebhooks(): Promise<number> {
       .eq('status', 'active'),
     supabaseAdmin
       .from('events')
-      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, series_id, series_instance_number, open_window, capacity, rsvp, tags, wheelchair_accessible, price, link_url, event_image_url, created_at, first_party, source_method, source_feed_url, source_contributor_url, source_contributor_name, organizer_org_id, tmdb_id, organizations!events_organizer_org_id_fkey(id, slug, name, portal_accounts!organizations_owner_account_id_fkey(status))')
+      .select('id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, series_id, series_instance_number, open_window, capacity, rsvp, tags, wheelchair_accessible, price, link_url, event_image_url, created_at, first_party, source_method, source_feed_url, source_contributor_url, source_contributor_name, organizer_org_id, contributor_profile_id, tmdb_id, organizations!events_organizer_org_id_fkey(id, slug, name, portal_accounts!organizations_owner_account_id_fkey(status)), contributor_profiles!events_contributor_profile_id_fkey(id, slug, name, tagline, logo_url, description, app_url)')
       .in('id', eventIds),
   ]);
 

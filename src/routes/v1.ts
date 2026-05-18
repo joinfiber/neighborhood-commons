@@ -67,7 +67,7 @@ const listSchema = z.object({
 // Organizer derives from the organizations join via organizer_org_id.
 // The nested portal_accounts (via organizations.owner_account_id) is for the
 // suspended-status visibility check; it's not exposed in the public response.
-const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, event_image_focal_y, created_at, creator_account_id, series_id, series_instance_number, open_window, capacity, rsvp, tags, wheelchair_accessible, first_party, source_method, source_feed_url, source_contributor_name, source_contributor_url, tmdb_id, organizer_org_id, organizations!events_organizer_org_id_fkey(id, slug, name, portal_accounts!organizations_owner_account_id_fkey(status))';
+const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, event_image_focal_y, created_at, creator_account_id, series_id, series_instance_number, open_window, capacity, rsvp, tags, wheelchair_accessible, first_party, source_method, source_feed_url, source_contributor_name, source_contributor_url, tmdb_id, organizer_org_id, contributor_profile_id, organizations!events_organizer_org_id_fkey(id, slug, name, portal_accounts!organizations_owner_account_id_fkey(status)), contributor_profiles!events_contributor_profile_id_fkey(id, slug, name, tagline, logo_url, description, app_url)';
 
 // =============================================================================
 // SHARED QUERY BUILDING

@@ -14,6 +14,20 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-05-18 — 3.1.0 — contributor profiles (foundation for the developer dashboard)
+
+Additive. PR 1 of the onboarding-redesign build ([`docs/onboarding-redesign.md`](docs/onboarding-redesign.md) §12). Lays the schema and public read surface for the developer portal at `/developers`. Subsequent PRs add the dashboard UI; this one ships the foundation underneath.
+
+- **New public reads:** `GET /v1/contributors` and `GET /v1/contributors/{idOrSlug}`. Returns the public-facing identity of each contributing app — slug, name, tagline, description, logo, app URL. Only `status = 'active'` profiles surface. Use these to render the "via {contributor}" tap-through splash card.
+- **New schema:** [`ContributorProfile`](public/openapi.json) — the stable cross-key identity of one consumer app. Slug survives api_key rotation.
+- **Event response `source.contributor` expanded.** When an event is linked to a registered contributor_profile (via the new `events.contributor_profile_id` column), `source.contributor` now carries `{name, url, slug, logo_url, description, profile_url}`. Pre-3.1 events fall back to the legacy `{name, url}` snapshot with the new fields as null. The expansion is additive — existing consumers reading `contributor.name` / `contributor.url` continue to work unchanged.
+- **Migration 086:** new tables `contributor_profiles`, `developer_sessions`, `magic_login_tokens`, `pending_registrations`. New columns on `api_keys` (`contributor_profile_id`, `mfa_*`) and `events` (`contributor_profile_id`). RLS enabled (default-deny) on all new tables.
+- **SDK bumped to 3.1.0.** New `ContributorProfile` type export from [`neighborhood-commons`](sdk/src/index.ts).
+
+What's *not* in this release (PR 2–5): the registration form, magic-link login, MFA enrollment, profile management UI, operator activation page, retrofit script. Those land in subsequent PRs of the onboarding-redesign build.
+
+---
+
 ## 2026-05-18 — 3.0.0 — provenance doctrine and four-role event frame
 
 Pre-launch coherent fix. The 2.0.0 draft carried a confused `source.publisher` field whose contents were heterogeneous (sometimes app name, sometimes organizer name), producing real downstream bugs. The model is fixed before any external consumer builds against the contract. The 3.0.0 contract is the foundation the substrate launches with; additive-only stability begins from here.

@@ -20,7 +20,7 @@ import { sanitizeUrl, checkApprovedDomain } from './url-sanitizer.js';
 // =============================================================================
 
 /** Columns to select when reading portal events from the events table */
-export const PORTAL_SELECT = 'id, user_id, content, description, place_name, place_id, approximate_location, event_at, end_time, event_image_url, event_image_focal_y, link_url, category, custom_category, event_timezone, venue_address, recurrence, price, latitude, longitude, creator_account_id, organizer_org_id, source, visibility, status, region_id, series_id, series_instance_number, open_window, tags, wheelchair_accessible, capacity, rsvp, first_party, source_method, source_feed_url, source_contributor_url, source_contributor_name, tmdb_id, created_at';
+export const PORTAL_SELECT = 'id, user_id, content, description, place_name, place_id, approximate_location, event_at, end_time, event_image_url, event_image_focal_y, link_url, category, custom_category, event_timezone, venue_address, recurrence, price, latitude, longitude, creator_account_id, organizer_org_id, contributor_profile_id, source, visibility, status, region_id, series_id, series_instance_number, open_window, tags, wheelchair_accessible, capacity, rsvp, first_party, source_method, source_feed_url, source_contributor_url, source_contributor_name, tmdb_id, created_at';
 
 /**
  * Operational `events.source` filter values. Distinct from `source_method`
