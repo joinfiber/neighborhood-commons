@@ -46,27 +46,24 @@ UPDATE events
    SET source_method = 'proxied'
  WHERE source_method IN ('import', 'feed', 'csv');
 
--- Backstop for any unexpected legacy value: collapse to 'self_asserted'
--- (the most common case) and log the row count for review.
+-- Aggressive backstop: anything not exactly matching one of the three
+-- standard values — including NULL, whitespace variants, mixed case, or
+-- legacy values we didn't enumerate above — collapses to 'self_asserted'.
+-- source_method is operational metadata; over-correcting is preferable to
+-- migration failure. Log the count for after-the-fact review.
 DO $$
-DECLARE unexpected_count int;
+DECLARE coerced_count int;
 BEGIN
-  SELECT count(*) INTO unexpected_count FROM events
-   WHERE source_method IS NOT NULL
-     AND source_method NOT IN ('self_asserted', 'proxied', 'witnessed');
-  IF unexpected_count > 0 THEN
-    RAISE NOTICE 'Migration 085: % event rows had unexpected source_method values; coercing to self_asserted', unexpected_count;
+  SELECT count(*) INTO coerced_count FROM events
+   WHERE source_method IS NULL
+      OR source_method NOT IN ('self_asserted', 'proxied', 'witnessed');
+  IF coerced_count > 0 THEN
+    RAISE NOTICE 'Migration 085: coercing % event rows to source_method=self_asserted (unexpected legacy values or NULLs)', coerced_count;
     UPDATE events SET source_method = 'self_asserted'
-     WHERE source_method IS NOT NULL
-       AND source_method NOT IN ('self_asserted', 'proxied', 'witnessed');
+     WHERE source_method IS NULL
+        OR source_method NOT IN ('self_asserted', 'proxied', 'witnessed');
   END IF;
 END $$;
-
--- Backfill NULLs to the most common case. Every event must have a method
--- post-cleanup.
-UPDATE events
-   SET source_method = 'self_asserted'
- WHERE source_method IS NULL;
 
 ALTER TABLE events ALTER COLUMN source_method SET NOT NULL;
 ALTER TABLE events ALTER COLUMN source_method SET DEFAULT 'self_asserted';
