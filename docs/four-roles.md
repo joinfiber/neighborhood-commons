@@ -118,6 +118,7 @@ The three authority paths produce structurally different organizer ↔ contribut
 | `api` | Organizer is a third-party real-world entity; contributor is the app that routed it. Distinct entities. | `"{organizer.name} — via {contributor.name}"` |
 | `import` | Organizer is a real-world entity; contributor is the proxying pipeline. Distinct entities. | `"{organizer.name} — via {contributor.name}"` |
 | `witnessed` | Organizer is a collective constituted by the contributor. Same entity in two roles. | `"{organizer.name}"` — suppress "via" |
+| `portal` (legacy) | Organizer is the portal user's account; contributor is null (portal-submitted events predate the contributor concept). Legacy rows only — the portal write path is retired in 2.x. | `"{organizer.name}"` — no "via" (contributor is null on these rows) |
 
 This is rendering guidance, not enforcement. The Commons surfaces all four roles unconditionally; consumers choose. But this is the rule we recommend, and it's the rule the operator's own consumer apps (Fiber, Merrie) follow.
 
@@ -135,17 +136,17 @@ All three feel natural. The substrate stays uniform. The rendering judgment live
 
 This doctrine implies a small number of concrete things about how the Commons stores and surfaces provenance:
 
-1. **`source.publisher` does not exist as a public response field.** The role it tried to play — "who is this from" — is already filled by `organizer`. The legacy `events.source_publisher` column stays operational-only (not surfaced via the public API) until it can be retired cleanly.
+1. **`source.publisher` is deprecated in 2.x, retired in 3.0.0.** The field currently exists in the 2.x spec and is required. Under the four-role frame the role it tried to play — "who is this from" — is already filled by `organizer`, and the field's heterogeneous historical contents (sometimes app name, sometimes organizer name) make it structurally unreliable. The additive-only stability principle forbids removing it from the 2.x response; instead the spec gets a deprecation note pointing readers at `organizer.name`, the field continues to be populated for backwards compatibility, and removal is bundled into the next breaking-change release (3.0.0). New consumers should ignore it and read `organizer.name` directly.
 
-2. **The public event response carries `source.contributor` as a contributor-profile reference**, with `slug`, `name`, optional `logo_url` and `description`, and the URL of the profile resource. Not a flat string; an entity reference.
+2. **The public event response will carry `source.contributor` as a contributor-profile reference** — `slug`, `name`, optional `logo_url` and `description`, and the URL of the profile resource. The current 2.x response carries `{name, url}` as a thin string-pair; expanding it into a profile reference is an additive change (existing fields keep their meaning; new fields appear alongside). The contributor link itself is stored on `api_keys.contributor_profile_id` (planned, per the onboarding-redesign doc); event rows continue to carry a frozen snapshot in `source_contributor_name` / `source_contributor_url` so attribution survives key rotation.
 
-3. **`source.method` is part of the public response.** Consumers need it to render correctly. Values: `'api'`, `'import'`, `'witnessed'`.
+3. **`source.method` stays as-is in the public response.** Consumers need it to render correctly. Current enum values: `'portal'` (legacy), `'api'`, `'import'`, `'witnessed'`. New methods can be added additively if new authority paths emerge.
 
-4. **`source.url` is part of the public response when present**, for pipeline-proxy transparency. Null otherwise.
+4. **`source.url` is part of the public response when present**, for pipeline-proxy transparency. Null otherwise. (Adding it to the response shape, if not already present, is additive.)
 
-5. **`source.collected_at` and `source.license`** remain part of the response — they describe the provenance metadata, not a role.
+5. **`source.collected_at` and `source.license`** remain part of the response — they describe provenance metadata, not a role.
 
-6. **No defensive rendering logic** like `if (publisher == contributor) hide` should be needed in consumer apps. The four-role frame plus the `method` enum produces unambiguous rendering rules. If a consumer needs a defensive check, the substrate is leaking something it shouldn't.
+6. **No defensive rendering logic** like `if (publisher == contributor) hide` should be needed in consumer apps going forward. The four-role frame plus the `method` enum produces unambiguous rendering rules. Where current consumers carry such logic (as Fiber does today), it can be retired once they migrate to reading `organizer.name` directly instead of `source.publisher`.
 
 ## What this doctrine forbids
 
