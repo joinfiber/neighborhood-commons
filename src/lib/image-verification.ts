@@ -86,9 +86,6 @@ export async function verifyEventImages(): Promise<VerifyResult> {
 
 /**
  * Check all organization image URLs (logo + hero image) are reachable.
- *
- * v2: organizations.logo_url and organizations.image_url replace the
- * legacy portal_accounts.logo_url and cover_image_url (migration 082).
  */
 export async function verifyAccountImages(): Promise<VerifyResult> {
   const { data: orgs } = await supabaseAdmin

@@ -10,7 +10,7 @@ This is infrastructure designed to be cloned and run by any city. The data is th
 
 ## What's here
 
-- **Public API** — Neighborhood API spec compliant. No auth required to read. `GET /api/v1/events`, `/api/v1/groups`, `/api/v1/accounts`, plus `/api/v1/events/{id}`.
+- **Public API** — Neighborhood API spec compliant. No auth required to read. `GET /api/v1/events`, `/api/v1/organizations`, `/api/v1/publishers`, `/api/v1/places`, `/api/v1/broadcasts`, `/api/v1/lists`, plus `/api/v1/events/{id}`.
 - **Portal** — React SPA where venue operators and organizers sign up, post events, and manage their own listings. Also hosts the CSV contribution path for developers uploading bulk data, and self-service API key registration.
 - **Service API** — Full CRUD for trusted external tools (admin dashboards, import scripts, partner apps). Authenticated via service-tier API keys.
 - **Feeds** — iCal (`.ics`) and RSS (`.rss`) for calendar apps and feed readers.

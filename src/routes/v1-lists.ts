@@ -18,7 +18,6 @@ import { optionalApiKey } from '../middleware/api-key.js';
 import { hydrateVerificationsFor } from '../lib/verification-hydrate.js';
 import { formatPlace } from './v1-places.js';
 import { formatOrganization } from './v1-organizations.js';
-// v2: formatPerson import removed — persons primitive dropped, curator is always an organization
 import { toNeighborhoodEvent, type PortalEventRow } from '../lib/event-transform.js';
 
 const router: ReturnType<typeof Router> = Router();
@@ -35,17 +34,15 @@ export const listsLimiter = rateLimit({
 
 const LIST_SELECT = `
   id, slug, name, description,
-  curator_org_id, curator_person_id,
+  curator_org_id, method,
   created_at, updated_at
 `;
 
 const ORG_SELECT_INLINE = `
   id, slug, name, legal_name, description, url, logo_url, image_url,
   telephone, email, same_as, keywords, opening_hours_specification,
-  tags, commercial, primary_place_id, created_at, updated_at
+  tags, commercial, primary_place_id, method, created_at, updated_at
 `;
-
-// v2: PERSON_SELECT_INLINE removed (persons primitive dropped).
 
 const PLACE_SELECT_INLINE = `
   id, google_place_id, name,
@@ -57,7 +54,6 @@ const EVENT_SELECT_INLINE = 'id, content, description, place_name, venue_address
 
 const listSchema = z.object({
   curator_id: z.string().uuid().optional(),
-  curator_type: z.enum(['organization', 'person']).optional(),
   q: z.string().max(200).optional(),
   limit: z.coerce.number().min(1).max(100).optional(),
   offset: z.coerce.number().min(0).optional(),
@@ -79,8 +75,7 @@ router.get('/', async (req, res, next) => {
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
-    // v2: lists are always curated by an organization (curator_org_id NOT NULL).
-    // The legacy `curator_type=person` filter is a no-op now.
+    // Lists are always curated by an organization (curator_org_id NOT NULL).
     if (params.curator_id) {
       query = query.eq('curator_org_id', params.curator_id);
     }
@@ -150,9 +145,7 @@ router.get('/:idOrSlug', async (req, res, next) => {
 async function formatList(row: Record<string, unknown>, opts: { hydrateItems: boolean }) {
   const id = row.id as string;
 
-  // v2: curator is always an organization. The curator_person_id branch
-  // is dead code (column dropped in migration 082); kept here only until
-  // the v1-lists route is fully refactored.
+  // Curator is always an organization (curator_org_id NOT NULL).
   let curator: Record<string, unknown> | null = null;
   if (row.curator_org_id) {
     const { data: orgRow } = await supabaseAdmin

@@ -1,5 +1,5 @@
 /**
- * Service-tier Verifications API — Neighborhood Commons v2
+ * Service-tier Verifications API
  *
  * Endpoints:
  *   GET   /service/verifications/path                       — routing authority
@@ -10,10 +10,9 @@
  *   POST  /service/verifications/pending/:id/approve        — admin approve
  *   POST  /service/verifications/pending/:id/reject         — admin reject
  *
- * v2: only organizations verify. The Person target is gone. Heavy-rigor
- * rigor classification uses organizations.commercial (replaces the legacy
- * kind enum). Verified identifiers land in organization_verifications
- * (which replaced account_verified_identifiers in migration 080/082).
+ * Only organizations verify (no Person target). Heavy-rigor classification
+ * uses organizations.commercial. Verified identifiers land in
+ * organization_verifications.
  */
 
 import { Router } from 'express';

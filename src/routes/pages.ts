@@ -357,8 +357,7 @@ router.get('/events/:id',async (req, res, next) => {
     // Google Calendar link
     const gcalUrl = googleCalendarUrl(name, startIso, endIso, fullLocation, desc);
 
-    // Venue link — use the organizer's slug. v2: organizer org has a slug;
-    // the legacy portal_accounts.slug is gone.
+    // Venue link — use the organizer's slug.
     let venueLink = '';
     if (org?.slug) {
       venueLink = `${SITE_DOMAIN}/venues/${org.slug}`;
@@ -443,7 +442,7 @@ router.get('/venues/:slug',async (req, res, next) => {
       res.status(404).send(render404()); return;
     }
 
-    // v2: venue pages resolve via organizations.slug. Status check
+    // Venue pages resolve via organizations.slug. Status check
     // traverses owner_account_id → portal_accounts (active).
     const { data: org, error: orgErr } = await supabaseAdmin
       .from('organizations')
@@ -587,7 +586,7 @@ router.get('/venues/:slug/events.ics',async (req, res, next) => {
   try {
     const slug = req.params.slug.toLowerCase();
 
-    // v2: lookup via organizations.slug.
+    // Lookup via organizations.slug.
     const { data: org } = await supabaseAdmin
       .from('organizations')
       .select('id, name')

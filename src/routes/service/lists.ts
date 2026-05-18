@@ -1,5 +1,5 @@
 /**
- * Service-tier Lists API — Neighborhood Commons v2
+ * Service-tier Lists API
  *
  * Endpoints:
  *   POST    /service/lists                          — create
@@ -7,8 +7,7 @@
  *   POST    /service/lists/:id/items                — add item
  *   DELETE  /service/lists/:id/items/:position      — remove item by position
  *
- * v2: lists are always curated by an organization (curator_org_id is
- * NOT NULL after migration 082). The Person primitive is gone.
+ * Lists are always curated by an organization (curator_org_id NOT NULL).
  */
 
 import { Router } from 'express';

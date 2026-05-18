@@ -122,18 +122,35 @@ router.get('/api-keys', serviceLimiter, async (req, res, next) => {
     const eventStats: Record<string, { event_count: number; last_submitted_at: string | null; pending_count: number }> = {};
 
     if (keyIds.length > 0) {
-      // Fetch counts per key — use minimal select, the new compound index handles this efficiently
-      const sourceFeedUrls = keyIds.map((id) => `api-key:${id}`);
-      const { data: stats } = await supabaseAdmin
-        .from('events')
-        .select('source_feed_url, status, created_at')
-        .in('source_feed_url', sourceFeedUrls)
-        .eq('source_method', 'self_asserted')
-        .order('created_at', { ascending: false });
+      // Per-key event stats traverse api_key_organization_links → events.organizer_org_id.
+      // A key is "credited" with events organized by any organization it's linked to.
+      // (Admin keys span all orgs; for those, the link table is sparse — they show
+      // 0 here, which matches the operational reality of admin-tier actions.)
+      const { data: links } = await supabaseAdmin
+        .from('api_key_organization_links')
+        .select('api_key_id, organization_id')
+        .in('api_key_id', keyIds);
 
-      if (stats) {
-        for (const row of stats) {
-          const keyId = row.source_feed_url?.replace('api-key:', '');
+      const orgIdsByKey = new Map<string, string[]>();
+      const keyByOrgId = new Map<string, string>();
+      for (const link of links || []) {
+        const kid = link.api_key_id as string;
+        const oid = link.organization_id as string;
+        if (!orgIdsByKey.has(kid)) orgIdsByKey.set(kid, []);
+        orgIdsByKey.get(kid)!.push(oid);
+        keyByOrgId.set(oid, kid);
+      }
+
+      const linkedOrgIds = Array.from(keyByOrgId.keys());
+      if (linkedOrgIds.length > 0) {
+        const { data: stats } = await supabaseAdmin
+          .from('events')
+          .select('organizer_org_id, status, created_at')
+          .in('organizer_org_id', linkedOrgIds)
+          .order('created_at', { ascending: false });
+
+        for (const row of stats || []) {
+          const keyId = keyByOrgId.get(row.organizer_org_id as string);
           if (!keyId) continue;
           if (!eventStats[keyId]) eventStats[keyId] = { event_count: 0, last_submitted_at: null, pending_count: 0 };
           eventStats[keyId].event_count++;
@@ -235,9 +252,8 @@ router.post('/api-keys', serviceLimiter, async (req, res, next) => {
 
     if (insertError || !newKey) throw createError('Failed to create API key', 500, 'SERVER_ERROR');
 
-    // v2: api_key_account_links was dropped in migration 082. Authority
-    // scope now lives in api_key_organization_links. Consumers should
-    // call POST /service/organizations/link (or use the auto-link
+    // Authority scope lives in api_key_organization_links. Consumers
+    // should call POST /service/organizations/link (or use the auto-link
     // path on POST /service/organizations) after key issuance to
     // establish writeable scope.
 
@@ -358,11 +374,8 @@ router.post('/api-keys/:id/activate', serviceLimiter, async (req, res, next) => 
     // Optional: provision the consumer's tenant portal_account atomically.
     // Mirrors the /accounts/link find-or-create logic with the same
     // defense-in-depth — refuse to claim an account that's owned by Supabase
-    // Auth (auth_user_id set) or claimed by a different consumer.
-    //
-    // v2: this no longer inserts api_key_account_links (table dropped in
-    // migration 082). Writeable scope is established separately via
-    // POST /service/organizations/link.
+    // Auth (auth_user_id set) or claimed by a different consumer. Writeable
+    // scope is established separately via POST /service/organizations/link.
     if (updates.provision_account) {
       const p = updates.provision_account;
       try {

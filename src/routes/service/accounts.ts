@@ -1,8 +1,8 @@
 /**
- * Service API — Accounts (v2 operational shell)
+ * Service API — Accounts (operational shell)
  *
- * v2: portal_accounts holds tenant operational state — email, claim, status,
- * timestamps. Business-profile data lives on organizations (migration 082).
+ * portal_accounts holds tenant operational state — email, claim, status,
+ * timestamps. Business-profile data lives on organizations.
  *
  * Modifying an account requires the calling key to be linked to *some*
  * organization owned by the target account (or be admin). The /accounts/link
@@ -22,8 +22,9 @@ import { assertLinkedAccount } from './helpers.js';
 
 const router: ReturnType<typeof Router> = Router();
 
-// v2: account CRUD shrinks to operational state. Profile data is set via
-// the /service/organizations endpoints once an organization exists.
+// Account CRUD is operational only — claim state, status. Profile data
+// (name, address, hours, etc.) is set via the /service/organizations
+// endpoints once an organization exists.
 const createAccountSchema = z.object({
   email: z.string().email().max(254).transform((e) => e.toLowerCase().trim()),
   claimed_by: z.string().max(50).optional(),
@@ -38,10 +39,10 @@ const updateAccountSchema = z.object({
 // ACCOUNT LINKING — Consumer apps establish their tenant portal_account
 // =============================================================================
 //
-// v2: /accounts/link only manages the operational tenant row. Authority
-// scope (which orgs a key may write to) lives in api_key_organization_links
-// and is established via /service/organizations/link or by auto-link when
-// the key creates an organization.
+// /accounts/link manages the operational tenant row only. Authority scope
+// (which orgs a key may write to) lives in api_key_organization_links and
+// is established via /service/organizations/link or by auto-link when the
+// key creates an organization.
 
 const linkAccountSchema = z.object({
   email: z.string().email().max(254).transform((e) => e.toLowerCase().trim()),

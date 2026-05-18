@@ -19,9 +19,6 @@ import { errorHandler } from './middleware/error-handler.js';
 import { globalLimiter, writeLimiter } from './middleware/rate-limit.js';
 
 // Routes
-// v2: dropped v1-accounts (→ v1-publishers), v1-persons (no longer a primitive),
-// v1-verifiers (no cross-app reputation graph), v1-groups (groups table dropped),
-// contribute (wild-west publishing path retired).
 import publicRoutes from './routes/public.js';
 import v1Routes, { v1Limiter, icsHandler, rssHandler } from './routes/v1.js';
 import v1PlacesRoutes, { placesLimiter as v1PlacesLimiter } from './routes/v1-places.js';
@@ -241,9 +238,7 @@ export function createApp(): Express {
   app.use('/api/cron', cronRoutes);
 
   // ─── Service API (external app writes) ─────────────────────
-  // v2: /api/v1/contribute (wild-west publishing) and the legacy
-  // /api/v1/developers OTP flow are both retired. All registrations go
-  // through /api/v1/service/register/*; all writes through
+  // Registrations go through /api/v1/service/register/*; writes through
   // /api/v1/service/* with organizer authority enforcement.
   app.use('/api/v1/service', serviceRoutes);
 
@@ -277,7 +272,6 @@ export function createApp(): Express {
         supabaseAdmin.from('organizations').select('id', { count: 'exact', head: true }),
         supabaseAdmin.from('places').select('id', { count: 'exact', head: true }),
         supabaseAdmin.from('regions').select('name').eq('is_active', true).limit(1).maybeSingle(),
-        // v2: query organization_verifications (replaces account_verified_identifiers).
         supabaseAdmin.from('organization_verifications').select('organization_id').eq('status', 'active'),
       ]);
       const verifiedOrgIds = new Set(((verifiedRows.data || []) as Array<{ organization_id: string }>).map(r => r.organization_id));

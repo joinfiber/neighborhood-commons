@@ -122,15 +122,6 @@
             "description": "Filter to events in a specific series"
           },
           {
-            "name": "group_id",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "description": "Filter to events belonging to a specific group"
-          },
-          {
             "name": "recurring",
             "in": "query",
             "schema": {
@@ -148,7 +139,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Filter by organizer organization slug. v2: resolves against `organizations.slug` → `events.organizer_org_id` (replaces the legacy `portal_accounts.slug` lookup)."
+            "description": "Filter by organizer organization slug. Resolves against `organizations.slug` → `events.organizer_org_id`."
           },
           {
             "name": "commercial",
@@ -157,7 +148,7 @@
               "type": "string",
               "enum": ["true", "false"]
             },
-            "description": "v2: filter to events whose organizer is for-profit (`commercial=true`) vs. non-commercial (`commercial=false`). Joins through `organizations.commercial`."
+            "description": "Filter to events whose organizer is for-profit (`commercial=true`) vs. non-commercial (`commercial=false`). Joins through `organizations.commercial`."
           },
           {
             "name": "place_category",
@@ -166,7 +157,7 @@
               "type": "string",
               "maxLength": 50
             },
-            "description": "v2: filter to events at places with the given OSM-sourced category (e.g., `cafe`, `live_music_venue`). Joins through `places.place_categories`."
+            "description": "Filter to events at places with the given OSM-sourced category (e.g., `cafe`, `live_music_venue`). Joins through `places.place_categories`."
           },
           {
             "name": "tmdb_id",
@@ -513,15 +504,6 @@
             "description": "Proximity radius in km"
           },
           {
-            "name": "group_id",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "description": "Filter by group"
-          },
-          {
             "name": "start_after",
             "in": "query",
             "schema": {
@@ -627,15 +609,6 @@
               "type": "number"
             },
             "description": "Proximity radius in km"
-          },
-          {
-            "name": "group_id",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "description": "Filter by group"
           },
           {
             "name": "start_after",
@@ -2148,7 +2121,7 @@
       },
       "post": {
         "summary": "Issue API key (service/admin)",
-        "description": "Create a new API key. v2: writeable scope (which organizations the key may publish for) is established separately via `POST /service/organizations/link` after issuance. The optional `account_id` field references an operational tenant portal_account but does not grant write authority on its own. Returns the raw key string ONCE — store it immediately, it is unrecoverable.",
+        "description": "Create a new API key. Writeable scope (which organizations the key may publish for) is established separately via `POST /service/organizations/link` after issuance. The optional `account_id` field references an operational tenant portal_account but does not grant write authority on its own. Returns the raw key string ONCE — store it immediately, it is unrecoverable.",
         "operationId": "serviceCreateApiKey",
         "security": [
           {
@@ -3163,24 +3136,9 @@
     "/organizations": {
       "get": {
         "summary": "List organizations",
-        "description": "Public read of Organization records. Filters compose for opt-in consumption: `kind` for subtype, `verified` and `verified_by` for trust, `near`/`radius_km` for proximity, `created_by_contributor` for app-source slicing.",
+        "description": "Public read of Organization records. Filters compose for opt-in consumption: `commercial` for the for-profit signal, `tag` for descriptive labels, `verified` and `verified_by` for trust, `near`/`radius_km` for proximity, `created_by_contributor` for app-source slicing. Classification (business vs. community group vs. collective etc.) is derived by consumers from `tags`, `commercial`, and structural signals — there is no `kind` enum.",
         "operationId": "listOrganizations",
         "parameters": [
-          {
-            "name": "kind",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "local_business",
-                "business",
-                "community_group",
-                "nonprofit",
-                "curator",
-                "collective"
-              ]
-            }
-          },
           {
             "name": "verified",
             "in": "query",
@@ -3333,7 +3291,7 @@
     "/publishers": {
       "get": {
         "summary": "List publishers",
-        "description": "Organizations that publish into the Commons — those with at least one event or active broadcast attributed to them. Same response shape as `/organizations`; the difference is a \"has published\" filter applied at the query layer. Replaces the legacy `/v1/accounts` route (which conflated publisher identity with user accounts).",
+        "description": "Organizations that publish into the Commons — those with at least one event or active broadcast attributed to them. Same response shape as `/organizations`; the difference is a \"has published\" filter applied at the query layer.",
         "operationId": "listPublishers",
         "parameters": [
           {
@@ -3626,17 +3584,6 @@
             }
           },
           {
-            "name": "curator_type",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "organization",
-                "person"
-              ]
-            }
-          },
-          {
             "name": "q",
             "in": "query",
             "schema": {
@@ -3753,10 +3700,10 @@
             "schema": {
               "type": "string",
               "enum": [
-                "organization",
-                "person"
+                "organization"
               ]
-            }
+            },
+            "description": "Always `organization`. Retained as a query parameter for forward compatibility; the substrate may admit additional target types in future minor versions."
           },
           {
             "name": "target_id",
@@ -3810,7 +3757,7 @@
     "/service/verifications/challenges": {
       "post": {
         "summary": "Issue a verification challenge (auto-track)",
-        "description": "Auto-track verification path: send a one-time code to the identifier (email). Used for business-domain emails on heavy-rigor org targets, or any email on light-rigor targets (groups, persons). Personal-email domains for heavy-rigor targets are rejected here with WRONG_METHOD — call /service/verifications/manual instead.",
+        "description": "Auto-track verification path: send a one-time code to the identifier (email). Used for business-domain emails on heavy-rigor organizations (commercial=true) and any email on light-rigor organizations (community groups, collectives, etc.). Personal-email domains for heavy-rigor targets are rejected here with WRONG_METHOD — call /service/verifications/manual instead.",
         "operationId": "serviceCreateVerificationChallenge",
         "security": [
           {
@@ -4664,7 +4611,7 @@
     "/service/accounts/link": {
       "post": {
         "summary": "Find-or-create a portal account by email (tenant claim)",
-        "description": "v2: operational tenant claim only. Establishes a portal_account row with the given email and marks it claimed by the calling app. Does NOT grant writeable scope — that flows through `api_key_organization_links`, established by `POST /service/organizations/link` or auto-linked when the calling key creates an organization via `POST /service/organizations`.\n\nIdempotent: calling with the same email returns the existing account.\n\n**Defense-in-depth on claim**: the endpoint refuses (409 CONFLICT) to claim an account that has `auth_user_id` set (a legacy Supabase Auth owner) or that has been claimed under a different `claimed_by` identifier than the request. Admin keys bypass both checks.",
+        "description": "Operational tenant claim only. Establishes a portal_account row with the given email and marks it claimed by the calling app. Does NOT grant writeable scope — that flows through `api_key_organization_links`, established by `POST /service/organizations/link` or auto-linked when the calling key creates an organization via `POST /service/organizations`.\n\nIdempotent: calling with the same email returns the existing account.\n\n**Defense-in-depth on claim**: the endpoint refuses (409 CONFLICT) to claim an account that has `auth_user_id` set (a Supabase Auth owner) or that has been claimed under a different `claimed_by` identifier than the request. Admin keys bypass both checks.",
         "operationId": "serviceLinkAccount",
         "security": [
           {
@@ -4986,7 +4933,7 @@
     "/service/events/{id}/organizer": {
       "patch": {
         "summary": "Re-attribute an event to a different organizer",
-        "description": "v2: re-attribute an event to a different organization. The Person primitive is gone — `organizerPersonId` is no longer accepted.\n\nAuthorization (non-admin keys): the caller's key must be linked to both the event's **current** `organizer_org_id` AND the **target** organization via `api_key_organization_links`. Re-attribution can't conjure events for an org the caller doesn't control. Witnessed-evidence keys (`source_method='witnessed'` + `witness_authority=true`) bypass the current-organizer link check.\n\nAdmin keys bypass all linkage checks.",
+        "description": "Re-attribute an event to a different organization.\n\nAuthorization (non-admin keys): the caller's key must be linked to both the event's **current** `organizer_org_id` AND the **target** organization via `api_key_organization_links`. Re-attribution can't conjure events for an org the caller doesn't control. Witnessed-evidence keys (`source_method='witnessed'` + `witness_authority=true`) bypass the current-organizer link check.\n\nAdmin keys bypass all linkage checks.",
         "operationId": "serviceAssignEventOrganizer",
         "security": [
           {
@@ -5167,7 +5114,7 @@
           },
           "organizer": {
             "type": "object",
-            "description": "v2: organizer is always an organization reference. Post-migration 081, `events.organizer_org_id` is NOT NULL, so id/slug are always present. `verified` is hydrated from `organization_verifications`. `phone` is retained as a legacy field — always null in v2.",
+            "description": "Organizer is always an organization reference. `events.organizer_org_id` is NOT NULL, so id/slug are always present. `verified` is hydrated from `organization_verifications`. `phone` is retained as a vestigial field — always null.",
             "required": ["id", "slug", "name", "verified"],
             "properties": {
               "id": { "type": "string", "format": "uuid" },
@@ -5263,7 +5210,7 @@
           },
           "first_party": {
             "type": "boolean",
-            "description": "Authority tier. `true` if the event's organizer (organization or person) had at least one active verified identifier at the time the event was inserted — meaning the event was posted by the verified business itself. `false` for public-facts events aggregated from scrapers, feeds, and ingestion pipelines. Computed server-side; not a writable input. Filterable via `?first_party=true|false` on `GET /events`."
+            "description": "Authority tier. `true` if the event's organizer had at least one active verified identifier at the time the event was inserted — meaning the event was posted by the verified organization itself. `false` for events whose organizer hadn't completed verification at write time (typically proxied or witnessed events). Computed server-side; not a writable input. Filterable via `?first_party=true|false` on `GET /events`. Related but distinct from `source.method`: `first_party` is a snapshot of verification state at write time; `source.method` describes the authority chain."
           },
           "event_image_focal_y": {
             "type": [
@@ -5561,7 +5508,7 @@
       },
       "ServiceAccount": {
         "type": "object",
-        "description": "v2: operational portal_account shell — email, claim state, status, timestamps. Business profile (name, address, logo, hours, etc.) lives on organizations now (migration 082).",
+        "description": "Operational portal_account shell — email, claim state, status, timestamps. Business profile (name, address, logo, hours, etc.) lives on organizations.",
         "required": [
           "id",
           "email",
@@ -5727,7 +5674,7 @@
       },
       "ServiceEventInput": {
         "type": "object",
-        "description": "Input schema for the Service API. Uses Neighborhood API friendly-shape field names (name, start, location, url, cost) — symmetric with the read schema. Recurrence is optional; omit for one-off events.\n\nv2: `organizerOrganizationId` is required (the constrained-publishing authority anchor). The calling service key must be linked to that organization via `api_key_organization_links`, OR set `source_method='witnessed'` from a key with `witness_authority=true` (the collective-evidence path). The legacy `account_id` field is gone.",
+        "description": "Input schema for the Service API. Uses Neighborhood API friendly-shape field names (name, start, location, url, cost) — symmetric with the read schema. Recurrence is optional; omit for one-off events.\n\n`organizerOrganizationId` is required (the constrained-publishing authority anchor). The calling service key must be linked to that organization via `api_key_organization_links`, OR set `source_method='witnessed'` from a key with `witness_authority=true` (the collective-evidence path).",
         "required": [
           "organizerOrganizationId",
           "name",
@@ -5740,7 +5687,7 @@
           "organizerOrganizationId": {
             "type": "string",
             "format": "uuid",
-            "description": "v2: the organization this event is published for. Required. Caller's service key must be linked to this org via `api_key_organization_links` (or use the witnessed-evidence path)."
+            "description": "The organization this event is published for. Required. Caller's service key must be linked to this org via `api_key_organization_links` (or use the witnessed-evidence path)."
           },
           "source_method": {
             "type": "string",
@@ -6102,7 +6049,7 @@
       },
       "Place": {
         "type": "object",
-        "description": "Schema.org Place. A physical location. Identity is the address; the stable cross-source key is `googlePlaceId` (the one Google datum permitted indefinite storage). v2: categories come from OpenStreetMap (ODbL-licensed, attributed) — see `placeCategories` and `categorySource`. Google response data beyond `googlePlaceId` is never persisted into these columns.",
+        "description": "Schema.org Place. A physical location. Identity is the address; the stable cross-source key is `googlePlaceId` (the one Google datum permitted indefinite storage). Categories come from OpenStreetMap (ODbL-licensed, attributed) — see `placeCategories` and `categorySource`. Google response data beyond `googlePlaceId` is never persisted into these columns.",
         "required": [
           "id",
           "name",
@@ -6141,12 +6088,12 @@
             "items": {
               "type": "string"
             },
-            "description": "v2: place categorization (e.g., \"cafe\", \"live_music_venue\"). Sourced from OpenStreetMap by default; never from Google response data."
+            "description": "Place categorization (e.g., \"cafe\", \"live_music_venue\"). Sourced from OpenStreetMap by default; never from Google response data."
           },
           "categorySource": {
             "type": ["string", "null"],
             "enum": ["osm", "admin_review", "publisher_declaration", null],
-            "description": "v2: provenance of `placeCategories`. `osm` (default), `admin_review` (operator added), `publisher_declaration` (verified publisher refined)."
+            "description": "Provenance of `placeCategories`. `osm` (default), `admin_review` (operator added), `publisher_declaration` (verified publisher refined)."
           },
           "region_slug": {
             "type": [
@@ -6193,7 +6140,7 @@
       },
       "Verification": {
         "type": "object",
-        "description": "Verification block exposed on verified Organization responses. v2: anchors Type A authority on organizations only (the cross-app reputation graph was retired).",
+        "description": "Verification block exposed on verified Organization responses. Anchors Type A authority on organizations only — there is no cross-app reputation graph.",
         "required": [
           "method",
           "verifiedAt",
@@ -6231,7 +6178,7 @@
       },
       "VerifiedIdentifier": {
         "type": "object",
-        "description": "A specific verified identifier on an organization. Service-tier responses include full value; public responses may mask. v2: dropped `identifierDomain` (the v2 `organization_verifications` table stores normalized values without a domain column).",
+        "description": "A specific verified identifier on an organization. Service-tier responses include full value; public responses may mask.",
         "required": [
           "identifierType",
           "method",
@@ -6429,10 +6376,9 @@
       },
       "OrganizationInput": {
         "type": "object",
-        "description": "Input shape for creating or updating an Organization. v2: no `kind` field — classify via `tags` + `commercial` instead. Calling key auto-links to the new organization on create via `api_key_organization_links`; use `POST /service/organizations/link` to link to an existing org.",
+        "description": "Input shape for creating or updating an Organization. Classification is via `tags` (descriptive labels) and `commercial` (for-profit signal) — there is no `kind` field. Calling key auto-links to the new organization on create via `api_key_organization_links`; use `POST /service/organizations/link` to link to an existing org.",
         "required": [
-          "name",
-          "kind"
+          "name"
         ],
         "properties": {
           "name": {
@@ -6708,7 +6654,7 @@
       },
       "ListInput": {
         "type": "object",
-        "description": "Input for creating a list. v2: curator is always an organization (curatorOrganizationId is required). The legacy `curator: {type, id}` shape is gone.",
+        "description": "Input for creating a list. Curator is always an organization — `curatorOrganizationId` is required.",
         "required": [
           "name",
           "curatorOrganizationId"
@@ -6766,7 +6712,7 @@
       },
       "VerificationPathRequest": {
         "type": "object",
-        "description": "v2: only organizations verify; targetType is gone.",
+        "description": "Only organizations verify; there is no targetType discriminator.",
         "required": [
           "organization_id",
           "identifier_type",
@@ -6839,7 +6785,7 @@
       },
       "VerificationChallengeInput": {
         "type": "object",
-        "description": "v2: only organizations verify; targetType is gone.",
+        "description": "Only organizations verify; there is no targetType discriminator.",
         "required": [
           "organizationId",
           "identifierType",
@@ -6948,7 +6894,7 @@
       },
       "VerificationManualInput": {
         "type": "object",
-        "description": "Submission for the manual-review path. Evidence is structured and required fields enforced at submit. Apps with verification_authority for the matching method auto-approve; others queue. v2: only organizations verify; targetType is gone.",
+        "description": "Submission for the manual-review path. Evidence is structured and required fields enforced at submit. Apps with verification_authority for the matching method auto-approve; others queue.",
         "required": [
           "organizationId",
           "identifierType",
@@ -7016,7 +6962,7 @@
       },
       "PendingReview": {
         "type": "object",
-        "description": "An item in the verification review queue (admin-tier endpoints). v2: targets are always organizations.",
+        "description": "An item in the verification review queue (admin-tier endpoints). Targets are always organizations.",
         "required": [
           "id",
           "organizationId",
@@ -7035,7 +6981,7 @@
           "organizationId": {
             "type": "string",
             "format": "uuid",
-            "description": "v2: only organizations verify; this replaces the legacy targetType/targetId pair."
+            "description": "The organization being verified."
           },
           "identifierType": {
             "type": "string"

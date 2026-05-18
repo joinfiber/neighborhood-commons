@@ -21,12 +21,9 @@ import { config } from '../config.js';
 /**
  * Events table row with organizations join (for public API / webhook use).
  *
- * v2: organizer comes from the joined `organizations` row via
- * `organizer_org_id`. The legacy `portal_accounts` join (which used to
- * supply `business_name` as the organizer name) is gone — that column
- * was dropped from portal_accounts in migration 082.
+ * Organizer comes from the joined `organizations` row via `organizer_org_id`.
  *
- * The suspended-status visibility check now traverses
+ * The suspended-status visibility check traverses
  * organizations.owner_account_id → portal_accounts.status. Organizations
  * without an owning portal account (e.g., admin-created via Studio) skip
  * the suspension check entirely.
@@ -70,7 +67,7 @@ export interface PortalEventRow {
   first_party: boolean;
   // TMDB film ID for cross-theater clustering (migration 063)
   tmdb_id: string | null;
-  // v2: organizer derived from organizations join via organizer_org_id (migration 067).
+  // Organizer derived from organizations join via organizer_org_id.
   // The nested portal_accounts (via owner_account_id) is for the suspended-status
   // visibility check; it's not exposed in the public response.
   organizer_org_id: string | null;
@@ -101,10 +98,9 @@ export interface NeighborhoodEvent {
   images: string[];
   event_image_focal_y: number;
   organizer: {
-    // v2: organizer is always an organization reference (no Person variant).
-    // Post-migration 081, events.organizer_org_id is NOT NULL, so id and slug
-    // are always present in the response. The "Unknown Organizer" placeholder
-    // catches any historical orphans.
+    // Organizer is always an organization reference. events.organizer_org_id
+    // is NOT NULL, so id and slug are always present in the response. The
+    // "Unknown Organizer" placeholder catches any historical orphans.
     id: string;              // org UUID, always present
     slug: string;             // org slug, always present
     name: string;             // org name (falls back to place_name only in pre-migration data)

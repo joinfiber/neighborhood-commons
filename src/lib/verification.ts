@@ -53,9 +53,8 @@ export function isPersonalEmailDomain(email: string): boolean {
  * Decide which verification path applies for an organization+identifier pair.
  * Returns the prescribed method and the endpoint apps should call next.
  *
- * v2: commercial=true organizations are heavy-rigor; non-commercial are
- * light-rigor (the legacy local_business/business/nonprofit vs.
- * community_group/curator/collective split).
+ * commercial=true organizations are heavy-rigor (business email-loop, or
+ * manual review with evidence). Non-commercial are light-rigor.
  */
 export type VerificationPathDecision = {
   requiredMethod: 'domain_email_loop' | 'manual_review';
@@ -101,7 +100,7 @@ export async function decideVerificationPath(
  * Look up an existing active verified identifier for an organization.
  * Returns null if not yet verified.
  *
- * v2: organization-only; the legacy target_type/target_id is gone.
+ * Organization-only; there is no target_type/target_id discriminator.
  */
 export async function findExistingVerifiedIdentifier(
   organizationId: string,
