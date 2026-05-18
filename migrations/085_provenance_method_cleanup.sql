@@ -28,7 +28,19 @@
 BEGIN;
 
 -- ---------------------------------------------------------------------------
--- 1. Normalize events.source_method values
+-- 1. Move the column default OFF the legacy value FIRST.
+-- ---------------------------------------------------------------------------
+-- Race-condition guard. If the live server is still up and accepting writes
+-- during this migration, any INSERT without an explicit source_method picks
+-- up the column default. If the default is still 'portal' when the new
+-- CHECK constraint validates, the constraint fails — even though the
+-- migration's own UPDATEs ran cleanly. Moving the default to 'self_asserted'
+-- before the UPDATEs ensures concurrent inserts land on a standard value.
+
+ALTER TABLE events ALTER COLUMN source_method SET DEFAULT 'self_asserted';
+
+-- ---------------------------------------------------------------------------
+-- 2. Normalize events.source_method values
 -- ---------------------------------------------------------------------------
 -- Legacy → standard mapping:
 --   'api', 'portal', 'admin', 'merrie'  → 'self_asserted'
@@ -66,7 +78,7 @@ BEGIN
 END $$;
 
 ALTER TABLE events ALTER COLUMN source_method SET NOT NULL;
-ALTER TABLE events ALTER COLUMN source_method SET DEFAULT 'self_asserted';
+-- DEFAULT already set above (step 1) to guard against concurrent inserts.
 
 ALTER TABLE events DROP CONSTRAINT IF EXISTS events_source_method_check;
 ALTER TABLE events
