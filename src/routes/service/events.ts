@@ -411,6 +411,23 @@ router.post('/events', serviceLimiter, async (req, res, next) => {
     }
     const validatedTags = data.tags ? validateTags(data.tags, data.category) : [];
 
+    // Auto-derive source.contributor from the calling key's brand identity
+    // when the caller didn't supply one. The publisher is the organization
+    // (orgCtx.name); the contributor is the app that pushed the data in —
+    // distinct concepts. This makes ecosystem attribution work without
+    // requiring every consumer to remember the field on every POST. Admin
+    // keys (Studio, operator tools) skip — they act on behalf of, they
+    // aren't ecosystem contributors. Callers can still set contributor
+    // explicitly to override, or omit brand_config.app_name on the key to
+    // suppress.
+    if (
+      !data.contributor
+      && !req.apiKeyInfo?.isAdmin
+      && req.apiKeyInfo?.brandConfig?.app_name
+    ) {
+      data.contributor = { name: req.apiKeyInfo.brandConfig.app_name };
+    }
+
     const { portal, event_date: eventDate, start_time: startTime, end_time: endTime }
       = friendlyToPortalInput(data, orgCtx.name);
     portal.tags = validatedTags;

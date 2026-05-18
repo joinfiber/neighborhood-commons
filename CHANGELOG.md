@@ -14,6 +14,12 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-05-17 — source.contributor auto-fill (ecosystem attribution)
+
+Service-tier event POSTs now auto-fill `source.contributor.name` from the calling key's `brand_config.app_name` when the caller didn't supply a `contributor` field explicitly. Makes ecosystem attribution work by default: every event Merrie pushes shows `source.contributor = { name: "Merrie", url: null }` on the read path without Merrie having to remember the field. Same for other consumer apps. Admin keys (Studio, operator tools) skip the auto-fill — they act on behalf of organizations, they're not ecosystem contributors. The transform-time fallback that previously used `source_publisher` as a stand-in for `contributor` on api-method events is removed — that conflated publisher (who the event is FROM) with contributor (which app pushed it IN). Events created before this change with a null `source_contributor_name` will now show `source.contributor: null` instead of incorrectly echoing the publisher name; that's a more honest read.
+
+---
+
 ## 2026-05-17 — trusted-tenant pattern (operational follow-up)
 
 Photo-eligibility gate fix surfaced by Merrie. The v2 gate requires every Organization to have a claimed owner account; tenant-umbrella consumers (Merrie publishing on behalf of community groups) don't have per-publisher portal_accounts, so photo uploads failed with `IMAGE_NOT_PERMITTED` on every Merrie-created org.

@@ -292,16 +292,17 @@ export function toNeighborhoodEvent(
         : (organizerName || row.source_publisher || 'Neighborhood Commons'),
       collected_at: row.created_at,
       method: (row.source_method || 'portal') as 'portal' | 'import' | 'api' | 'witnessed',
-      // Contributor fallback chain (migration 062):
-      //   1. Explicit per-event override via source_contributor_name
-      //      (Service API `contributor: { name, url }` input)
-      //   2. Legacy derivation: source_publisher on api-method events
-      //   3. null
+      // v2.1: contributor is just `source_contributor_name` (and url) when
+      // set, null otherwise. The pre-v2 fallback that used source_publisher
+      // as a stand-in for contributor on api-method events conflated the
+      // two slots — publisher (who the event is FROM) vs. contributor
+      // (which app pushed it IN). Service API writes now auto-fill
+      // source_contributor_name from the calling key's brand_config.app_name
+      // when the caller didn't supply one, so the fallback is no longer
+      // needed and was producing wrong-slot data for v2 service events.
       contributor: row.source_contributor_name
         ? { name: row.source_contributor_name, url: row.source_contributor_url || null }
-        : (row.source_method === 'api' && row.source_publisher
-            ? { name: row.source_publisher, url: row.source_contributor_url || null }
-            : null),
+        : null,
       license: 'CC BY 4.0',
     },
   };
