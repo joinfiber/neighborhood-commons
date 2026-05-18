@@ -103,7 +103,7 @@ curl https://neighborhood-commons.org/api/v1/events.rss
 curl https://neighborhood-commons.org/.well-known/neighborhood
 ```
 
-Every event response includes provenance (`source.publisher`, `source.license`) and conforms to the Neighborhood API event schema. Data is licensed CC BY 4.0.
+Every event response includes provenance under the four-role frame — `organizer` (who runs it), `location` (where), `source.contributor` (which app routed it in), and `source.method` (`self_asserted` / `proxied` / `witnessed`) — plus `source.license`. Conforms to the Neighborhood API event schema. Data is licensed CC BY 4.0. See [`docs/four-roles.md`](docs/four-roles.md).
 
 See [docs/consumer-guide.md](docs/consumer-guide.md) for the full integration guide.
 

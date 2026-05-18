@@ -32,7 +32,7 @@ SELECT count(*) FILTER (WHERE creator_account_id IS NULL) AS missing,
        count(*) AS total
 FROM events
 WHERE source_feed_url = 'api-key:<key-id>'
-  AND source_method = 'api';
+  AND source_method = 'self_asserted';
 ```
 
 If `missing > 0`, run the backfill explicitly:
@@ -41,7 +41,7 @@ If `missing > 0`, run the backfill explicitly:
 UPDATE events
 SET creator_account_id = '<linked-account-id>'
 WHERE source_feed_url = 'api-key:<key-id>'
-  AND source_method = 'api'
+  AND source_method = 'self_asserted'
   AND creator_account_id IS NULL;
 ```
 
@@ -81,7 +81,7 @@ Backfill ownership on this key's existing events:
 UPDATE events
 SET creator_account_id = '<account-id>'
 WHERE source_feed_url = 'api-key:<key-id>'
-  AND source_method = 'api'
+  AND source_method = 'self_asserted'
   AND creator_account_id IS NULL;
 ```
 
@@ -95,7 +95,7 @@ If the consumer rotated their key in env without telling you, and the old key wa
 -- Find stranded events (no creator_account_id, source_feed_url references a key not in api_keys)
 SELECT count(*)
 FROM events e
-WHERE e.source_method = 'api'
+WHERE e.source_method = 'self_asserted'
   AND e.creator_account_id IS NULL
   AND e.source_feed_url = 'api-key:<OLD-KEY-UUID>';
 ```
@@ -106,7 +106,7 @@ Reassign them to the consumer's current account:
 UPDATE events
 SET creator_account_id = '<current-account-id>'
 WHERE source_feed_url = 'api-key:<OLD-KEY-UUID>'
-  AND source_method = 'api'
+  AND source_method = 'self_asserted'
   AND creator_account_id IS NULL;
 ```
 
