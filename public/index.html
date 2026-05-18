@@ -724,7 +724,7 @@
         <div class="nc-pillar">
           <span class="nc-pillar-num">01 — Open</span>
           <h3>Read free.</h3>
-          <p>Every read is open. No API key, no rate sheet, no portal. The 1.0 spec commits to additive-only stability — code you write today still works in 18 months.</p>
+          <p>Every read is open. No API key, no rate sheet, no portal. The 3.0 spec commits to additive-only stability — code you write today still works in 18 months.</p>
         </div>
         <div class="nc-pillar">
           <span class="nc-pillar-num">02 — Composable</span>
@@ -949,7 +949,7 @@
         </table>
 
         <h3 id="type-broadcast">Broadcast</h3>
-        <p>Ephemeral signal from a verified Organization, pinned to a Place. Maximum 24h lifetime. No direct Schema.org analog; <code>SpecialAnnouncement</code> was checked and rejected as a fit for ephemeral commercial signals — conventions for <code>datePosted</code> and <code>expires</code> borrowed from there.</p>
+        <p>Ephemeral signal from an Organization, pinned to a Place. Maximum 24h lifetime. No direct Schema.org analog; <code>SpecialAnnouncement</code> was checked and rejected as a fit for ephemeral commercial signals — conventions for <code>datePosted</code> and <code>expires</code> borrowed from there. Broadcast creation does not require organizer verification; consumer apps use <code>verified=true</code> filters to scope editorially.</p>
 
         <pre>{
   "id": "...",
@@ -1357,7 +1357,7 @@ $ curl -X DELETE "{{baseUrl}}/api/v1/webhooks/SUBSCRIPTION_ID" \
   -H "X-API-Key: $NC_KEY"</pre>
 
         <h3>Event types</h3>
-        <p>1.0 surfaces the following event types. Additional types land additively as the substrate grows; consumers can subscribe to a subset or pass <code>["*"]</code> to receive all current and future types.</p>
+        <p>3.0 surfaces the following event types. Additional types land additively as the substrate grows; consumers can subscribe to a subset or pass <code>["*"]</code> to receive all current and future types.</p>
 
         <table>
           <thead><tr><th>Type</th><th>Fires on</th></tr></thead>

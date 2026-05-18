@@ -6,7 +6,7 @@ The SDK is a mirror of the spec. If the spec changes, this package changes. The 
 
 ## Read this first
 
-Beyond a list view, you should read [the Commons Contract Guide](https://neighborhood-commons.org/llms.txt) before building anything substantial. The SDK gives you typed access to every endpoint, but the *meaning* of each shape — how films cluster by `tmdb_id`, how attribution works via `source.contributor`, what `open_window` implies for feeds, how series IDs map to recurring events — lives in the Guide. The SDK is the floor; the Guide is what makes you build something good.
+Beyond a list view, you should read [the Commons Contract Guide](https://neighborhood-commons.org/llms.txt) before building anything substantial. The SDK gives you typed access to every endpoint, but the *meaning* of each shape — how attribution works via `source.contributor`, what `open_window` implies for feeds, how series IDs map to recurring events, the four-role provenance frame — lives in the Guide. The SDK is the floor; the Guide is what makes you build something good.
 
 Two doctrine docs especially worth knowing before you build:
 
@@ -94,6 +94,8 @@ import type {
   ServiceEvent,
 } from "neighborhood-commons";
 ```
+
+**`Event` vs `ServiceEvent`:** `Event` is the public Neighborhood-API-aligned read shape returned by `GET /v1/events` and `GET /v1/events/{id}` — friendly field names (`name`, `start`, `location`, `cost`) shaped for consumer apps. `ServiceEvent` is the DB-flavored shape returned by `GET /v1/service/events*` and `POST /v1/service/events` — closer to the internal column names (`title`, `event_date`, `start_time`, `venue_name`). Use `Event` for read paths and feeds; use `ServiceEvent` for service-tier endpoints where you're also doing writes and want symmetric types across read and write.
 
 For anything else, reach into the generated namespace:
 

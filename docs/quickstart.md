@@ -1,25 +1,139 @@
 # Quickstart — Publishing into the Commons
 
-**Audience:** developer who has a service-tier API key and an organization linked to it. Wants to publish events.
+**Audience:** developer with no key yet who wants to land their first successful event POST.
 
-If you don't have a key yet, see [`docs/onboarding-redesign.md`](onboarding-redesign.md) for the planned self-service flow, or email `hi@neighborhood-commons.org` for the current operator-mediated path.
+The conceptual model is in [`docs/four-roles.md`](four-roles.md) — read that first if anything below feels arbitrary. The path from "no key" to "first 201 Created" is below, in order.
 
-This doc walks through the three event-creation authority paths, with copy-paste examples for each. The conceptual model is in [`docs/four-roles.md`](four-roles.md) — read that first if anything below feels arbitrary.
+## From zero to first POST
 
-## Setup
+Five steps. The whole sequence takes ~10 minutes of typing plus however long activation takes (typically same-day).
+
+### Step 1 — Self-issue a service-tier key
+
+```bash
+export COMMONS_BASE=https://neighborhood-commons.org/api/v1
+
+curl -X POST "$COMMONS_BASE/service/register/send-otp" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "you@example.com"}'
+```
+
+A one-time code lands in your inbox. Then:
+
+```bash
+curl -X POST "$COMMONS_BASE/service/register/verify-otp" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "you@example.com",
+    "code": "123456",
+    "app_name": "Your App",
+    "app_url": "https://yourapp.example",
+    "what_youre_building": "One sentence — what does your app do for readers?",
+    "verification_process": "One sentence — how do you verify the entities you publish for?"
+  }'
+```
+
+The response includes your service-tier key. **Store it immediately** — it's not recoverable. Reads work right now; writes return `403 KEY_PENDING` until activation.
 
 ```bash
 export COMMONS_API_KEY=nc_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-export COMMONS_BASE=https://neighborhood-commons.org/api/v1
+
+# Verify the key works for reads
+curl -s "$COMMONS_BASE/events?limit=1" -H "X-API-Key: $COMMONS_API_KEY" | jq .meta
 ```
 
-Confirm the key works:
+### Step 2 — Wait for activation
+
+A short one-time review by the Commons operator. Usually same-day. Email `hi@neighborhood-commons.org` if it stalls past 48 hours. You'll get a confirmation when your key is active.
+
+You can validate activation completed:
 
 ```bash
-curl -s "$COMMONS_BASE/events?limit=1" -H "X-API-Key: $COMMONS_API_KEY" | jq .
+# This returns 403 KEY_PENDING before activation; 201 (or a different error) after.
+curl -X POST "$COMMONS_BASE/service/organizations" \
+  -H "X-API-Key: $COMMONS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "test-org-please-delete"}'
 ```
 
-You should see a `{ events: [...], meta: {...} }` response. If you get `401 INVALID_API_KEY` or `403 KEY_PENDING`, fix that before continuing.
+(If a real org gets created in this test, delete it before continuing.)
+
+### Step 3 — Create the venue (Place)
+
+If your event happens at a venue that's not yet in the Commons, create it. Skip this step and use an existing place if one's already there.
+
+```bash
+curl -X POST "$COMMONS_BASE/service/places" \
+  -H "X-API-Key: $COMMONS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Johnny Brenda'\''s",
+    "street_address": "1201 N Frankford Ave",
+    "address_locality": "Philadelphia",
+    "address_region": "PA",
+    "postal_code": "19125",
+    "address_country": "US",
+    "google_place_id": "ChIJ-johnnybrendas-real-id"
+  }'
+```
+
+Note the returned `id` — you'll reference it from your organization in Step 4.
+
+### Step 4 — Create + link your organization
+
+```bash
+curl -X POST "$COMMONS_BASE/service/organizations" \
+  -H "X-API-Key: $COMMONS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Philly Chess Club",
+    "tags": ["community", "chess"],
+    "commercial": false,
+    "primaryPlaceId": "<the-place-id-from-step-3>"
+  }'
+```
+
+`POST /service/organizations` auto-links your key to the new org via `api_key_organization_links`. Note the returned `id` — that's your `organizerOrganizationId` in Step 5.
+
+If your org already exists (operator created it, or another consumer did), use `POST /service/organizations/link` with the existing UUID instead.
+
+### Step 5 — Publish the event
+
+```bash
+curl -X POST "$COMMONS_BASE/service/events" \
+  -H "X-API-Key: $COMMONS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "organizerOrganizationId": "<the-org-id-from-step-4>",
+    "name": "Tuesday Chess",
+    "start": "2026-06-02T19:00:00-04:00",
+    "end": "2026-06-02T22:00:00-04:00",
+    "timezone": "America/New_York",
+    "category": "community",
+    "location": {
+      "name": "Johnny Brenda'\''s",
+      "place_id": "<google-place-id>"
+    },
+    "description": "Casual chess, all levels welcome.",
+    "tags": ["chess", "weekly"]
+  }'
+```
+
+Expected: `201 Created` with the new event object. The response carries the four-role provenance — organizer (your org), location (Johnny Brenda's), source.contributor (auto-filled from your app identity), source.method (`self_asserted` by default).
+
+That's it. You can now PATCH `/service/events/:id`, DELETE it, or publish more.
+
+## Conventions used above
+
+Category slugs use **underscores** (`live_music`, `community`, `happy_hour`) consistently. The public API accepts both underscores and kebab-case (`live-music`) on the read side as a convenience, but write payloads should use the canonical underscore form — that's what the spec enum admits.
+
+`source_method` defaults to `self_asserted` if omitted — the common case. The two other values (`witnessed`, `proxied`) describe different authority chains; the next section walks through them.
+
+---
+
+## The three authority paths
+
+The conceptual model is in [`docs/four-roles.md`](four-roles.md). The runbook above used Path 1. Here are all three with copy-paste examples.
 
 ## Path 1 — Self-asserted (the common case)
 
@@ -200,10 +314,27 @@ The SDK types enforce the `source_method` enum and required fields at compile ti
 |---|---|---|
 | `403 NOT_LINKED` on POST | Your key isn't linked to the organizer org | `POST /v1/service/organizations/link` with the organizer's UUID |
 | `403 INSUFFICIENT_TIER` on witnessed | Your key doesn't have `witness_authority` | Email operator to request it (rare grant) |
-| `403 IMAGE_NOT_PERMITTED` on event with image | Organizer has no claimed owner account | Trusted-tenant binding required — see [`CLAUDE.md`](../CLAUDE.md#trusted-tenant-pattern) |
+| `403 IMAGE_NOT_PERMITTED` on event with image | Organizer has no claimed owner account | See "Photo eligibility" below |
 | `403 KEY_PENDING` | Self-registered key not yet activated | Email operator with the key's contact info |
 | `400 VALIDATION_ERROR` on `source_method` | Trying to send `"proxied"` or a legacy value | Use `self_asserted` (default) or `witnessed` |
 | Response shows `contributor: null` | Your key has no `brand_config.app_name` | Add the field (or set `contributor` explicitly per request) |
+
+## Photo eligibility
+
+Posting an event with an `image_url` carries a contributor warranty — someone has to be on the hook for the rights claim that the photo is licensable under CC BY 4.0. The Commons enforces this with a photo-eligibility gate: every event with an image must have an organizer whose `owner_account_id` references a claimed `portal_account` (`claimed_at` set or `auth_user_id` set).
+
+Two ways to satisfy the gate:
+
+1. **Per-organization claim** — the org's owner manually completed an OTP claim against `portal_accounts`. Suitable when the consumer app has a 1:1 publisher-to-account model.
+
+2. **Trusted-tenant pattern** (recommended for publishing apps with many community publishers, like a CMS-shaped consumer):
+   - The consumer's operator provisions one shared `portal_account` (the "tenant") at integration time.
+   - The operator binds the consumer's API key to that tenant via `api_keys.tenant_account_id`.
+   - Every organization the key creates via `POST /v1/service/organizations` inherits `owner_account_id` from the bound tenant — server-side, with no per-org claim required.
+
+The tenant binding is set by the Commons operator at activation time; the consumer doesn't see or send it. If you're hitting `IMAGE_NOT_PERMITTED` consistently across many orgs, this is the pattern you want — email the operator and ask for tenant provisioning. The substrate-side mechanics are documented in [`migrations/084_api_key_tenant_account.sql`](../migrations/084_api_key_tenant_account.sql) and the "Trusted-tenant pattern" subsection of [`CLAUDE.md`](../CLAUDE.md).
+
+Witnessed events bypass the gate: the collective publishing identity (`Fiber Community`, etc.) is the warrantor, not a claimed account.
 
 ## Next steps
 

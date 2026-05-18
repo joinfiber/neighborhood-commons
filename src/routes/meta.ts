@@ -1,5 +1,5 @@
 /**
- * Neighborhood API v0.2 — Feed Metadata
+ * /meta — Feed Metadata
  *
  * Per the Neighborhood API spec, /meta provides feed identity,
  * steward info, data sources, and supported resource types.
@@ -23,9 +23,11 @@ const router: ReturnType<typeof Router> = Router();
 router.get('/', (_req, res) => {
   res.json({
     name: 'Neighborhood Commons',
-    description: 'Open neighborhood event data, flourishes because of you.',
-    spec: 'neighborhood-api-v0.2',
-    spec_url: 'https://github.com/The-Relational-Technology-Project/neighborhood-api',
+    description: 'Open, typed substrate for neighborhood public facts.',
+    implementation_version: '3.0.0',
+    implementation_spec: 'https://neighborhood-commons.org/openapi.json',
+    upstream_spec: 'neighborhood-api-v0.2',
+    upstream_spec_url: 'https://github.com/The-Relational-Technology-Project/neighborhood-api',
     stewards: [
       {
         name: 'Neighborhood Commons',

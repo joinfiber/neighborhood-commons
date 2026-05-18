@@ -243,7 +243,7 @@
       ],
       "get": {
         "summary": "Events changes feed",
-        "description": "Lightweight public sync endpoint for consumers without a service key. Returns events whose updated_at is greater than the `since` cursor, plus the IDs of events that have ended since that cursor. NOT under /v1 — the full URL is `/api/events/changes`. Rate limit: 10/min per IP. Responses are cached 60s. For higher throughput, use a service key and call `/v1/service/events`.",
+        "description": "Lightweight public sync endpoint for consumers without a service key. Returns events whose updated_at is greater than the `since` cursor, plus the IDs of events that have ended since that cursor. Rate limit: 10/min per IP. Responses are cached 60s.\n\n**Path note:** this endpoint is mounted at `/api/events/changes` — outside the `/api/v1` prefix that the rest of the spec uses. The OpenAPI path-level `servers` override above reflects this. **SDK callers (openapi-fetch et al. that don't honor path-level overrides):** either construct a second client with `baseUrl` pointed at `https://neighborhood-commons.org/api`, or call this endpoint with raw `fetch`. The SDK README documents the workaround.\n\nFor higher throughput, use a service key and call `/v1/service/events` instead.",
         "operationId": "getChangesFeed",
         "parameters": [
           {
@@ -5011,7 +5011,8 @@
           },
           "spec": {
             "type": "string",
-            "example": "neighborhood-api-v0.2"
+            "example": "neighborhood-api-v0.2",
+            "description": "The upstream Neighborhood API spec this implementation conforms to (distinct from the implementation version of this specific Commons instance, which is in `info.version` of `/openapi.json` and at `/meta` under `implementation_version`)."
           },
           "license": {
             "type": "string",
@@ -5027,6 +5028,7 @@
           "start",
           "timezone",
           "category",
+          "organizer",
           "source"
         ],
         "properties": {

@@ -33,7 +33,11 @@ export interface paths {
         };
         /**
          * Events changes feed
-         * @description Lightweight public sync endpoint for consumers without a service key. Returns events whose updated_at is greater than the `since` cursor, plus the IDs of events that have ended since that cursor. NOT under /v1 — the full URL is `/api/events/changes`. Rate limit: 10/min per IP. Responses are cached 60s. For higher throughput, use a service key and call `/v1/service/events`.
+         * @description Lightweight public sync endpoint for consumers without a service key. Returns events whose updated_at is greater than the `since` cursor, plus the IDs of events that have ended since that cursor. Rate limit: 10/min per IP. Responses are cached 60s.
+         *
+         *     **Path note:** this endpoint is mounted at `/api/events/changes` — outside the `/api/v1` prefix that the rest of the spec uses. The OpenAPI path-level `servers` override above reflects this. **SDK callers (openapi-fetch et al. that don't honor path-level overrides):** either construct a second client with `baseUrl` pointed at `https://neighborhood-commons.org/api`, or call this endpoint with raw `fetch`. The SDK README documents the workaround.
+         *
+         *     For higher throughput, use a service key and call `/v1/service/events` instead.
          */
         get: operations["getChangesFeed"];
         put?: never;
@@ -1294,7 +1298,10 @@ export interface components {
             total: number;
             limit: number;
             offset: number;
-            /** @example neighborhood-api-v0.2 */
+            /**
+             * @description The upstream Neighborhood API spec this implementation conforms to (distinct from the implementation version of this specific Commons instance, which is in `info.version` of `/openapi.json` and at `/meta` under `implementation_version`).
+             * @example neighborhood-api-v0.2
+             */
             spec: string;
             /** @example CC-BY-4.0 */
             license: string;
@@ -1328,7 +1335,7 @@ export interface components {
             url?: string | null;
             images?: string[];
             /** @description Organizer is always an organization reference. `events.organizer_org_id` is NOT NULL, so id/slug are always present. `verified` is hydrated from `organization_verifications`. `phone` is retained as a vestigial field — always null. */
-            organizer?: {
+            organizer: {
                 /** Format: uuid */
                 id: string;
                 slug: string;
