@@ -14,6 +14,22 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-05-18 — developer portal: magic-link login + profile editing (PR 3)
+
+No contract change. Returning-developer login flow + profile management at `/developers/profile`. Per [`docs/onboarding-redesign.md`](docs/onboarding-redesign.md) §4.6 and §12 (PR 3).
+
+- **Magic-link login:**
+  - `GET /developers/login` — email entry form.
+  - `POST /developers/login` — issues a 15-minute, single-use token to `magic_login_tokens`, sends the URL by email. Same response shape regardless of whether the email has an account (no user enumeration).
+  - `GET /developers/login/verify?token=…` — consumes the token, creates a session, sets the cookie, redirects to `/developers/dashboard`.
+- **Profile editing:**
+  - `GET /developers/profile` — pre-filled edit form (requires session).
+  - `POST /developers/profile` — validates + updates the `contributor_profiles` row, redirects with `?saved=1`. No MFA gate yet (PR 4 adds that for post-activation edits).
+  - Editable fields: `name`, `tagline`, `description`, `app_url`, `logo_url`, `who_its_for`, `category`. Logo via URL field for now; file upload (multer) comes in a follow-up.
+- **Dashboard updates:** "Edit profile" button on the profile preview card. Sign-up page footer links to login.
+
+---
+
 ## 2026-05-18 — developer dashboard registration flow (PR 2 of the onboarding-redesign build)
 
 No contract change. New user-facing surface at `neighborhood-commons.org/developers` that replaces the curl-based service-key registration flow with a server-rendered HTML form. Documented in [`docs/onboarding-redesign.md`](docs/onboarding-redesign.md) §4.1–4.3.
