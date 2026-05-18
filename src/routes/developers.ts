@@ -55,6 +55,11 @@ import {
   readPendingRegistration,
   type RegistrationFormData,
 } from '../lib/developer-portal/provision.js';
+import {
+  issueMagicLink,
+  consumeMagicLink,
+  sendMagicLinkEmail,
+} from '../lib/developer-portal/magic-links.js';
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -309,6 +314,211 @@ router.get('/dashboard', renderLimiter, requireDeveloperSession, async (req, res
 });
 
 // =============================================================================
+// GET /developers/login
+// =============================================================================
+//
+// Magic-link login for returning developers. Distinct from registration:
+// no form data to hold, just email → click link in email → session.
+
+router.get('/login', renderLimiter, (req, res) => {
+  if (req.developerSession) {
+    res.redirect(302, '/developers/dashboard');
+    return;
+  }
+  const csrfToken = issueCsrfCookie(res);
+  const error = (req.query.error as string) || null;
+  const sent = req.query.sent === '1';
+  res.set('Content-Type', 'text/html; charset=utf-8');
+  res.send(renderLogin(csrfToken, error, sent));
+});
+
+// =============================================================================
+// POST /developers/login
+// =============================================================================
+//
+// Issue a magic-link token for the given email and send it. We don't
+// disclose whether the email actually has an account — same response
+// shape regardless. Prevents user-enumeration.
+
+const loginEmailSchema = z.object({
+  email: z.string().email().max(254).transform((s) => s.toLowerCase().trim()),
+}).passthrough();
+
+router.post('/login', writeFormLimiter, async (req, res, next) => {
+  try {
+    if (!validateCsrf(req)) {
+      res.status(403);
+      res.set('Content-Type', 'text/html; charset=utf-8');
+      res.send(renderLogin(issueCsrfCookie(res), 'Your session expired. Please try again.', false));
+      return;
+    }
+
+    const parsed = loginEmailSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400);
+      res.set('Content-Type', 'text/html; charset=utf-8');
+      res.send(renderLogin(issueCsrfCookie(res), 'Enter a valid email address.', false));
+      return;
+    }
+
+    // Confirm an api_key exists for this email before sending. We don't
+    // tell the user either way (no user enumeration) — but we do skip
+    // the email send for unknown addresses to save delivery cost.
+    const { data: keyRow } = await supabaseAdmin
+      .from('api_keys')
+      .select('id')
+      .eq('contact_email', parsed.data.email)
+      .eq('status', 'active')
+      .limit(1)
+      .maybeSingle();
+
+    if (keyRow) {
+      const rawToken = await issueMagicLink(parsed.data.email);
+      await sendMagicLinkEmail(parsed.data.email, rawToken);
+    }
+    // Either way: render the same "check your email" confirmation.
+    res.redirect(303, '/developers/login?sent=1');
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================================================
+// GET /developers/login/verify
+// =============================================================================
+//
+// Consume the magic-link token from the URL. On success: look up the
+// developer's api_key by email, create a session, set cookie, redirect
+// to dashboard. On failure: redirect to login with error.
+
+router.get('/login/verify', renderLimiter, async (req, res, next) => {
+  try {
+    const token = typeof req.query.token === 'string' ? req.query.token : '';
+    const email = await consumeMagicLink(token);
+    if (!email) {
+      res.redirect(303, '/developers/login?error=' + encodeURIComponent('That sign-in link is invalid or expired. Try again.'));
+      return;
+    }
+
+    // Find the developer's most-recent active key for this email.
+    const { data: keyRow } = await supabaseAdmin
+      .from('api_keys')
+      .select('id')
+      .eq('contact_email', email)
+      .eq('status', 'active')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!keyRow) {
+      // Token was valid but no key — shouldn't normally happen since we
+      // guard the issuance, but be defensive.
+      res.redirect(303, '/developers/login?error=' + encodeURIComponent("We couldn't find your account. If this is unexpected, email hi@neighborhood-commons.org."));
+      return;
+    }
+
+    const { rawToken: sessionToken, expiresAt } = await import('../lib/developer-portal/sessions.js').then(m => m.createSession(keyRow.id as string));
+    setSessionCookie(res, sessionToken, expiresAt);
+    res.redirect(303, '/developers/dashboard');
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================================================
+// GET /developers/profile
+// =============================================================================
+//
+// Render the profile-edit form, pre-filled from the developer's
+// contributor_profile. Requires session. No MFA gate — PR 4 adds that
+// for post-activation edits.
+
+router.get('/profile', renderLimiter, requireDeveloperSession, async (req, res, next) => {
+  try {
+    const session = req.developerSession!;
+    const profile = await loadProfileForSession(session.api_key_id);
+    if (!profile) {
+      res.redirect(302, '/developers/dashboard');
+      return;
+    }
+
+    const csrfToken = issueCsrfCookie(res);
+    const error = (req.query.error as string) || null;
+    const saved = req.query.saved === '1';
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    res.send(renderProfileEdit(csrfToken, profile, error, saved));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================================================
+// POST /developers/profile
+// =============================================================================
+//
+// Apply profile edits. Validates each field; updates the
+// contributor_profiles row; redirects back with a "saved" flag.
+
+const profileEditSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  tagline: z.string().trim().min(1).max(120),
+  description: z.string().trim().min(1).max(2000),
+  who_its_for: z.string().trim().max(500).optional().nullable(),
+  app_url: z.string().trim().url().max(2000),
+  category: z.string().trim().max(50).optional().nullable(),
+  logo_url: z.string().trim().url().max(2000).optional().or(z.literal('')),
+}).passthrough();
+
+router.post('/profile', writeFormLimiter, requireDeveloperSession, async (req, res, next) => {
+  try {
+    if (!validateCsrf(req)) {
+      res.redirect(303, '/developers/profile?error=' + encodeURIComponent('Your session expired. Please try again.'));
+      return;
+    }
+
+    const parsed = profileEditSchema.safeParse(req.body);
+    if (!parsed.success) {
+      const firstIssue = parsed.error.issues[0];
+      const message = firstIssue ? `${firstIssue.path.join('.')}: ${firstIssue.message}` : 'Invalid submission.';
+      res.redirect(303, '/developers/profile?error=' + encodeURIComponent(message));
+      return;
+    }
+
+    const session = req.developerSession!;
+    const profile = await loadProfileForSession(session.api_key_id);
+    if (!profile) {
+      res.redirect(302, '/developers/dashboard');
+      return;
+    }
+
+    const update: Record<string, unknown> = {
+      name: parsed.data.name,
+      tagline: parsed.data.tagline,
+      description: parsed.data.description,
+      who_its_for: parsed.data.who_its_for || null,
+      app_url: parsed.data.app_url,
+      category: parsed.data.category || null,
+      logo_url: parsed.data.logo_url || null,
+    };
+
+    const { error } = await supabaseAdmin
+      .from('contributor_profiles')
+      .update(update)
+      .eq('id', profile.id as string);
+
+    if (error) {
+      console.error('[DEV_PORTAL] Profile update failed:', error.message);
+      res.redirect(303, '/developers/profile?error=' + encodeURIComponent('Save failed. Please try again.'));
+      return;
+    }
+
+    res.redirect(303, '/developers/profile?saved=1');
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================================================
 // POST /developers/logout
 // =============================================================================
 //
@@ -325,6 +535,28 @@ router.post('/logout', writeFormLimiter, async (req, res, next) => {
     next(err);
   }
 });
+
+// =============================================================================
+// Profile loader (shared)
+// =============================================================================
+
+async function loadProfileForSession(apiKeyId: string): Promise<Record<string, unknown> | null> {
+  const { data: keyRow } = await supabaseAdmin
+    .from('api_keys')
+    .select('id, contributor_profile_id')
+    .eq('id', apiKeyId)
+    .maybeSingle();
+
+  if (!keyRow || !keyRow.contributor_profile_id) return null;
+
+  const { data: profile } = await supabaseAdmin
+    .from('contributor_profiles')
+    .select('id, slug, name, tagline, description, who_its_for, app_url, logo_url, category, status')
+    .eq('id', keyRow.contributor_profile_id)
+    .maybeSingle();
+
+  return (profile as Record<string, unknown>) || null;
+}
 
 // =============================================================================
 // HTML RENDERING
@@ -353,10 +585,71 @@ function renderSignUp(csrfToken: string, error: string | null, prefill: Record<s
       <button type="submit" class="nc-btn">Send verification code</button>
     </form>
     <div class="nc-portal-footer-aux" style="margin-top:32px; font-size:13px; color:var(--muted);">
-      Already registered? Your key works as before — sign-in via magic link ships in the next release.
+      Already registered? <a href="/developers/login">Sign in</a> via magic link.
     </div>
   `;
   return portalShell({ title: 'Sign up', body });
+}
+
+function renderLogin(csrfToken: string, error: string | null, sent: boolean): string {
+  if (sent) {
+    const body = `
+      <h1>Check your email.</h1>
+      <p class="nc-portal-lede">
+        If your address is registered, we sent a sign-in link. Click it within 15 minutes to land on your dashboard.
+      </p>
+      <div class="nc-portal-footer-aux" style="margin-top:16px; font-size:13px; color:var(--muted);">
+        <a href="/developers/login">Send again</a> · <a href="/developers/sign-up">Create a new account</a>
+      </div>
+    `;
+    return portalShell({ title: 'Check your email', body });
+  }
+
+  const body = `
+    <h1>Sign in.</h1>
+    <p class="nc-portal-lede">
+      Enter the email you registered with. We'll send a single-use sign-in link.
+    </p>
+    ${errorBanner(error)}
+    <form method="POST" action="/developers/login" novalidate>
+      ${hiddenInput(CSRF_FIELD_NAME, csrfToken)}
+      ${textField('email', 'Email', { type: 'email', required: true, hint: "The same address you used to register." })}
+      <button type="submit" class="nc-btn">Send sign-in link</button>
+    </form>
+    <div class="nc-portal-footer-aux" style="margin-top:32px; font-size:13px; color:var(--muted);">
+      Don't have an account yet? <a href="/developers/sign-up">Register</a>.
+    </div>
+  `;
+  return portalShell({ title: 'Sign in', body });
+}
+
+function renderProfileEdit(csrfToken: string, profile: Record<string, unknown>, error: string | null, saved: boolean): string {
+  const status = (profile.status as string) || 'pending';
+  const statusClass = status === 'active' ? 'nc-status--active' : status === 'suspended' ? 'nc-status--suspended' : 'nc-status--pending';
+
+  const body = `
+    <h1>Edit profile.</h1>
+    <p class="nc-portal-lede">
+      This is what readers see when they tap "via ${escapeHtml((profile.name as string) || 'your app')}" in a consumer app.
+      Slug <code>${escapeHtml(profile.slug as string)}</code> ·
+      <span class="nc-status ${statusClass}">${status}</span>
+    </p>
+    ${saved ? calloutBanner('Saved.') : ''}
+    ${errorBanner(error)}
+    <form method="POST" action="/developers/profile" novalidate>
+      ${hiddenInput(CSRF_FIELD_NAME, csrfToken)}
+      ${textField('name', 'App name', { required: true, value: profile.name, hint: 'Display name. Shown verbatim in splash cards.' })}
+      ${textField('tagline', 'Tagline', { required: true, maxlength: 120, value: profile.tagline, hint: 'One-liner. Up to ~80 chars renders well in splash cards.' })}
+      ${textareaField('description', 'Description', { required: true, value: profile.description, hint: '~2000 chars. Plain text for now.' })}
+      ${textField('app_url', 'App URL', { type: 'url', required: true, value: profile.app_url })}
+      ${textField('logo_url', 'Logo URL (optional)', { type: 'url', value: profile.logo_url, hint: 'Square image works best. Paste a URL for now; file upload is coming.' })}
+      ${textField('who_its_for', "Who it's for (optional)", { maxlength: 500, value: profile.who_its_for })}
+      ${textField('category', 'Category (optional)', { maxlength: 50, value: profile.category, hint: 'Free-form, e.g. "publishing", "discovery", "civic".' })}
+      <button type="submit" class="nc-btn">Save</button>
+      <a href="/developers/dashboard" class="nc-btn nc-btn--secondary" style="margin-left:8px;">Back to dashboard</a>
+    </form>
+  `;
+  return portalShell({ title: 'Edit profile', body });
 }
 
 function renderVerify(csrfToken: string, email: string, error: string | null): string {
@@ -415,6 +708,9 @@ function renderDashboard(args: {
          </div>
          ${profile.tagline ? `<div style="margin:8px 0;">${escapeHtml(profile.tagline as string)}</div>` : ''}
          ${profile.description ? `<div style="margin:8px 0; color:var(--ink-2); white-space:pre-wrap;">${escapeHtml(profile.description as string)}</div>` : ''}
+         <div style="margin-top:14px;">
+           <a href="/developers/profile" class="nc-btn nc-btn--secondary">Edit profile</a>
+         </div>
        </div>`
     : '';
 
@@ -438,9 +734,9 @@ function renderDashboard(args: {
     <div class="nc-card">
       <div class="nc-card-label">What's next</div>
       <ul style="margin:6px 0 0 18px; padding:0; line-height:1.7;">
-        <li>Profile editing, logo upload, and MFA enrollment ship in the next release.</li>
-        <li>For now, start building against the API. Reads are free and live.</li>
-        <li>Activation email arrives when the operator reviews your application.</li>
+        <li>${status === 'pending' ? 'Activation email arrives when the operator reviews your application.' : 'Your key is active. Build away.'}</li>
+        <li>MFA enrollment ships in the next release.</li>
+        <li>Polish your profile via <a href="/developers/profile">Edit profile</a> — readers see it when they tap "via ${escapeHtml((keyRow.name as string) || 'your app')}" in a consumer app.</li>
       </ul>
     </div>
     <form method="POST" action="/developers/logout" style="margin-top:32px;">
