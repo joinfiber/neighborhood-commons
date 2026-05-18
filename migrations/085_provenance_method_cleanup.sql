@@ -28,15 +28,19 @@
 BEGIN;
 
 -- ---------------------------------------------------------------------------
--- 1. Move the column default OFF the legacy value FIRST.
+-- 1. Clear blockers BEFORE any data UPDATEs.
 -- ---------------------------------------------------------------------------
--- Race-condition guard. If the live server is still up and accepting writes
--- during this migration, any INSERT without an explicit source_method picks
--- up the column default. If the default is still 'portal' when the new
--- CHECK constraint validates, the constraint fails — even though the
--- migration's own UPDATEs ran cleanly. Moving the default to 'self_asserted'
--- before the UPDATEs ensures concurrent inserts land on a standard value.
+-- Two pre-existing things block 085's UPDATEs if we don't clear them first:
+--   (a) A pre-3.0 CHECK constraint on source_method that allows only the
+--       legacy vocabulary ('portal','api','import','witnessed' on production
+--       at time of 3.0 launch). Any UPDATE setting source_method to a 3.0
+--       value (self_asserted, proxied) violates this old constraint.
+--   (b) A pre-3.0 column default of 'portal'. While the migration runs,
+--       any concurrent INSERT without an explicit source_method picks up
+--       this default — and the row lands violating the new constraint.
+-- Both get out of the way here so the UPDATEs below run unencumbered.
 
+ALTER TABLE events DROP CONSTRAINT IF EXISTS events_source_method_check;
 ALTER TABLE events ALTER COLUMN source_method SET DEFAULT 'self_asserted';
 
 -- ---------------------------------------------------------------------------
@@ -80,7 +84,8 @@ END $$;
 ALTER TABLE events ALTER COLUMN source_method SET NOT NULL;
 -- DEFAULT already set above (step 1) to guard against concurrent inserts.
 
-ALTER TABLE events DROP CONSTRAINT IF EXISTS events_source_method_check;
+-- Old constraint already dropped in step 1 (it had to be cleared before
+-- UPDATEs could run). Now add the 3.0 one.
 ALTER TABLE events
   ADD CONSTRAINT events_source_method_check
   CHECK (source_method IN ('self_asserted', 'proxied', 'witnessed'));
