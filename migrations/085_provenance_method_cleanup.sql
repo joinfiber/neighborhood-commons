@@ -106,14 +106,22 @@ ALTER TABLE organizations
   ADD CONSTRAINT organizations_method_check
   CHECK (method IN ('self_asserted', 'proxied', 'witnessed', 'seeded'));
 
--- Backfill: orgs with a verified verification record are first-party-asserted.
+-- Backfill: orgs are first-party-asserted ('self_asserted') when there's
+-- a human-mediated act of assertion behind them. Two signals capture this:
+--   (a) a verified organization_verifications record exists — the org has
+--       completed an explicit verification flow.
+--   (b) owner_account_id is set — a portal_account has claimed ownership,
+--       either via direct OTP claim or via the trusted-tenant pattern
+--       (a service consumer's tenant account vouches for the org).
+-- Orgs with neither signal remain 'seeded' (bulk-imported, awaiting uptake).
 UPDATE organizations o
    SET method = 'self_asserted'
  WHERE EXISTS (
    SELECT 1 FROM organization_verifications v
     WHERE v.organization_id = o.id
       AND v.status = 'verified'
- );
+ )
+    OR o.owner_account_id IS NOT NULL;
 
 COMMENT ON COLUMN organizations.method IS
   'Standard provenance method (see docs/provenance.md). self_asserted (verified first-party claim), proxied (extracted from a public source), witnessed (collective observation with evidence), seeded (bulk-imported, awaiting first-party uptake).';

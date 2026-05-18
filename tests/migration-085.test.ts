@@ -77,6 +77,16 @@ describe('Migration 085 — provenance method cleanup', () => {
     );
   });
 
+  it('also backfills orgs with owner_account_id to self_asserted (trusted-tenant pattern)', () => {
+    // The doctrine treats owner_account_id IS NOT NULL as a first-party
+    // assertion signal — captures Merrie-style tenant-owned orgs that
+    // haven't completed the formal verification flow but still represent
+    // human-mediated assertion by an authorized agent.
+    expect(MIGRATION).toMatch(
+      /UPDATE organizations[\s\S]*?SET method = 'self_asserted'[\s\S]*?OR\s+o\.owner_account_id IS NOT NULL/i,
+    );
+  });
+
   it('adds broadcasts.method with default self_asserted and constrains to self_asserted only', () => {
     expect(MIGRATION).toMatch(
       /ALTER TABLE broadcasts[\s\S]*?ADD COLUMN IF NOT EXISTS method text NOT NULL DEFAULT 'self_asserted'/i,

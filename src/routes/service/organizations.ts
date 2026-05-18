@@ -129,6 +129,13 @@ router.post('/organizations', async (req, res, next) => {
         // account create orgs with owner_account_id=NULL — those orgs work
         // for everything except photo uploads.
         owner_account_id: req.apiKeyInfo?.tenantAccountId ?? null,
+        // Provenance (docs/provenance.md): orgs created via the service
+        // API are first-party-asserted by definition — the calling key is
+        // the contributor acting as courier for the entity asserting its
+        // own existence. The DB default ('seeded') is only correct for
+        // bulk-imported rows that arrive without a human-mediated
+        // assertion; that's not this path.
+        method: 'self_asserted',
       })
       .select('id')
       .single();

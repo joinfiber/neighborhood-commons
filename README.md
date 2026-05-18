@@ -235,3 +235,4 @@ Code: MIT.
 - [CHANGELOG](CHANGELOG.md) — the Log, dated record of every contract-affecting change
 - [Quickstart](docs/quickstart.md) — copy-paste worked examples for publishing events
 - [Stability promise](docs/stability-promise.md) — what counts as breaking vs. additive
+- [Launch runbook](docs/launch-runbook.md) — operator sequence for moving production between major versions
