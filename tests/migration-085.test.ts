@@ -33,19 +33,21 @@ describe('Migration 085 — provenance method cleanup', () => {
     expect(MIGRATION).toMatch(/ALTER TABLE events\s+DROP COLUMN IF EXISTS source_publisher/i);
   });
 
-  it('maps legacy api/portal/admin/merrie values to self_asserted', () => {
-    // The order matters less than the substance: every legacy value listed
-    // here is collapsed into self_asserted.
-    expect(MIGRATION).toMatch(/SET source_method = 'self_asserted'[\s\S]*?WHERE source_method IN \([^)]*'api'[^)]*\)/);
-    expect(MIGRATION).toMatch(/SET source_method = 'self_asserted'[\s\S]*?WHERE source_method IN \([^)]*'portal'[^)]*\)/);
-    expect(MIGRATION).toMatch(/SET source_method = 'self_asserted'[\s\S]*?WHERE source_method IN \([^)]*'admin'[^)]*\)/);
-    expect(MIGRATION).toMatch(/SET source_method = 'self_asserted'[\s\S]*?WHERE source_method IN \([^)]*'merrie'[^)]*\)/);
+  it('preserves witnessed as witnessed', () => {
+    // witnessed events came in via the collective-evidence path; that
+    // authority shape is unambiguous and survives the migration.
+    expect(MIGRATION).toMatch(/SET source_method = 'witnessed'[\s\S]*?WHERE source_method = 'witnessed'/);
   });
 
-  it('maps legacy import/feed/csv values to proxied', () => {
-    expect(MIGRATION).toMatch(/SET source_method = 'proxied'[\s\S]*?WHERE source_method IN \([^)]*'import'[^)]*\)/);
-    expect(MIGRATION).toMatch(/SET source_method = 'proxied'[\s\S]*?WHERE source_method IN \([^)]*'feed'[^)]*\)/);
-    expect(MIGRATION).toMatch(/SET source_method = 'proxied'[\s\S]*?WHERE source_method IN \([^)]*'csv'[^)]*\)/);
+  it('defaults all other legacy values (including NULL) to proxied', () => {
+    // The conservative default: legacy `source_method` values were not
+    // honest signals of first-party authority (api/portal/import/csv/etc.
+    // were used both for consumer-app writes AND for operator scrapes).
+    // Collapsing everything legacy to proxied avoids over-claiming
+    // first-party authority. The operator promotes specific
+    // source_contributor_name values to self_asserted in a follow-up
+    // UPDATE after the migration runs.
+    expect(MIGRATION).toMatch(/SET source_method = 'proxied'[\s\S]*?WHERE source_method IS NULL[\s\S]*?OR source_method NOT IN \('self_asserted', 'proxied', 'witnessed'\)/);
   });
 
   it('sets events.source_method NOT NULL with self_asserted default', () => {

@@ -40,6 +40,28 @@ SELECT constraint_name FROM information_schema.table_constraints
 
 Apply [`migrations/085_provenance_method_cleanup.sql`](../migrations/085_provenance_method_cleanup.sql). The migration wraps everything in a single `BEGIN/COMMIT`; if any data state violates the new `CHECK` constraint, the transaction rolls back cleanly. Idempotent — safe to re-run.
 
+**Important: 085 defaults all legacy `source_method` values to `proxied`.** This is the conservative default — legacy values (`api`, `portal`, `import`, etc.) were heterogeneous in practice (used both for consumer-app writes AND for operator-run scrapes), and over-claiming first-party authority is worse than under-claiming. After the migration, promote known first-party consumer-app events to `self_asserted` with a follow-up UPDATE keyed on `source_contributor_name`:
+
+```sql
+-- Promote known first-party consumer-app writes to self_asserted.
+-- Adjust the contributor name list to match your operator's known
+-- first-party consumers.
+BEGIN;
+UPDATE events SET source_method = 'self_asserted'
+ WHERE source_contributor_name IN ('Merrie', 'Go There', 'Go There by Bike', 'Holler');
+
+-- And promote witnessed if any non-witnessed Fiber events exist (rare —
+-- Fiber's collective-evidence path normally sets source_method='witnessed'
+-- at write time):
+UPDATE events SET source_method = 'witnessed'
+ WHERE source_contributor_name ILIKE '%fiber%'
+   AND source_method <> 'witnessed';
+
+-- Verify
+SELECT source_method, count(*) FROM events GROUP BY source_method;
+COMMIT;
+```
+
 Post-migration validation:
 
 ```sql

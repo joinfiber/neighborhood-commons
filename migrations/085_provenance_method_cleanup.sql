@@ -46,40 +46,29 @@ ALTER TABLE events ALTER COLUMN source_method SET DEFAULT 'self_asserted';
 -- ---------------------------------------------------------------------------
 -- 2. Normalize events.source_method values
 -- ---------------------------------------------------------------------------
--- Legacy → standard mapping:
---   'api', 'portal', 'admin', 'merrie'  → 'self_asserted'
---      (first-party assertions by the organizer, routed through different
---       code paths over time)
---   'import', 'feed', 'csv'             → 'proxied'
---      (third-party data extracted from a public source by a pipeline)
---   'witnessed'                          → 'witnessed' (unchanged)
+-- Legacy values in production were not honest signals of first-party
+-- authority. `source_method = 'api'` was used both by consumer apps
+-- writing on behalf of organizers AND by ingestion scrapers using the
+-- retired /v1/contribute path. `'portal'` was the operator's curated
+-- entry of scraped events. `'import'`/`'csv'`/`'feed'` were always
+-- ingestion. Defaulting all of these to 'self_asserted' would
+-- over-claim authority by orders of magnitude.
+--
+-- The conservative default: everything legacy collapses to 'proxied'
+-- unless it's already 'witnessed'. The honest first-party signal is
+-- `source_contributor_name` matching a known consumer-app identity —
+-- the operator promotes those rows in a follow-up UPDATE after this
+-- migration runs (see the launch runbook for the template).
 
 UPDATE events
-   SET source_method = 'self_asserted'
- WHERE source_method IN ('api', 'portal', 'admin', 'merrie');
+   SET source_method = 'witnessed'
+ WHERE source_method = 'witnessed';
+-- (No-op as a UPDATE, but documents the rule: witnessed stays witnessed.)
 
 UPDATE events
    SET source_method = 'proxied'
- WHERE source_method IN ('import', 'feed', 'csv');
-
--- Aggressive backstop: anything not exactly matching one of the three
--- standard values — including NULL, whitespace variants, mixed case, or
--- legacy values we didn't enumerate above — collapses to 'self_asserted'.
--- source_method is operational metadata; over-correcting is preferable to
--- migration failure. Log the count for after-the-fact review.
-DO $$
-DECLARE coerced_count int;
-BEGIN
-  SELECT count(*) INTO coerced_count FROM events
-   WHERE source_method IS NULL
-      OR source_method NOT IN ('self_asserted', 'proxied', 'witnessed');
-  IF coerced_count > 0 THEN
-    RAISE NOTICE 'Migration 085: coercing % event rows to source_method=self_asserted (unexpected legacy values or NULLs)', coerced_count;
-    UPDATE events SET source_method = 'self_asserted'
-     WHERE source_method IS NULL
-        OR source_method NOT IN ('self_asserted', 'proxied', 'witnessed');
-  END IF;
-END $$;
+ WHERE source_method IS NULL
+    OR source_method NOT IN ('self_asserted', 'proxied', 'witnessed');
 
 ALTER TABLE events ALTER COLUMN source_method SET NOT NULL;
 -- DEFAULT already set above (step 1) to guard against concurrent inserts.
