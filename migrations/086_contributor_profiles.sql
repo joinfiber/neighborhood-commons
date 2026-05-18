@@ -136,9 +136,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_developer_sessions_token_hash
 CREATE INDEX IF NOT EXISTS idx_developer_sessions_api_key
   ON developer_sessions(api_key_id);
 
+-- Plain index on expires_at (no predicate). A partial `WHERE expires_at >
+-- now()` would be tempting but Postgres rejects it — now() is STABLE, not
+-- IMMUTABLE, and only IMMUTABLE functions are allowed in index predicates.
+-- A full index is cheap enough for the session-cleanup query pattern.
 CREATE INDEX IF NOT EXISTS idx_developer_sessions_expires_at
-  ON developer_sessions(expires_at)
-  WHERE expires_at > now();
+  ON developer_sessions(expires_at);
 
 COMMENT ON TABLE developer_sessions IS
   'DB-backed sessions for the developer dashboard. Token cookie carries the raw value; the DB stores only the hash. 24-hour hard expiry; revocable instantly by deleting the row. mfa_verified_at gates writes; null or older-than-15min means a step-up is required.';
