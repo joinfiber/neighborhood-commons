@@ -1369,26 +1369,30 @@ export interface components {
             tmdb_id?: string | null;
             source: components["schemas"]["Source"];
         };
+        /** @description Event provenance under the four-role frame (see docs/four-roles.md). Carries the contributor identity (which ecosystem participant routed the event in), the method (authority shape: self_asserted, proxied, witnessed), the source URL when applicable (proxied events), plus collected_at and license. Does not carry a `publisher` field — the role 'who is this from?' is filled by the top-level `organizer.name`. */
         Source: {
-            /** @description Venue or organizer name */
-            publisher: string;
-            /** Format: date-time */
-            collected_at: string;
             /**
-             * @description Provenance. `witnessed` (v2) is the collective-evidence path — a key with `witness_authority=true` writes events attributed to a collective publisher organization (e.g., "Fiber Community") with documentary evidence (typically OCR'd flyers).
+             * @description Standard provenance method (docs/provenance.md). `self_asserted`: the organizer asserted this via the contributor (entity-runs-it). `proxied`: the contributor extracted this from a public URL (pipeline-proxies). `witnessed`: the contributor observed this with documentary evidence under a collective identity (witnessed-with-evidence). Drives rendering rules — consumers typically suppress the 'via {contributor}' line on `witnessed` events because the organizer is the collective constituted by the contributor.
              * @enum {string}
              */
-            method: "portal" | "import" | "api" | "witnessed";
-            /** @description The app that contributed this data to the commons. Null for portal-submitted events. */
-            contributor?: null | {
-                /** @description App/tool that contributed this data */
+            method: "self_asserted" | "proxied" | "witnessed";
+            /**
+             * Format: uri
+             * @description When method is `proxied`, the public URL the contributor extracted from (for transparency). Null otherwise.
+             */
+            url: string | null;
+            /** @description The ecosystem participant that routed this event into the Commons. Editorial public-facing identity — separate from the operational API key. Null for legacy rows without contributor attribution. */
+            contributor: null | {
+                /** @description Public-facing name of the contributing app/pipeline. */
                 name?: string;
                 /**
                  * Format: uri
-                 * @description Contributor website
+                 * @description Contributor website.
                  */
                 url?: string | null;
             };
+            /** Format: date-time */
+            collected_at: string;
             /** @example CC BY 4.0 */
             license: string;
         };
@@ -1450,7 +1454,7 @@ export interface components {
              * @default false
              */
             first_party: boolean;
-            source_publisher?: string | null;
+            /** @description When source_method is `proxied`, the public URL the contributor extracted from. Null otherwise. */
             source_feed_url?: string | null;
             /** @description TMDB film ID for clustering film-category events. See Event.tmdb_id. */
             tmdb_id?: string | null;
@@ -1525,11 +1529,11 @@ export interface components {
              */
             organizerOrganizationId: string;
             /**
-             * @description v2: caller-set provenance. `api` (default) requires `api_key_organization_links` linkage. `witnessed` is the collective-evidence path — requires `api_keys.witness_authority=true` and is attributed to a collective publisher organization (e.g., "Fiber Community").
-             * @default api
+             * @description Caller-set provenance method (docs/four-roles.md, docs/provenance.md). `self_asserted` (default): the organizer asserted this event; requires `api_key_organization_links` linkage. `witnessed`: collective-evidence path; requires `api_keys.witness_authority=true` and is attributed to a collective publisher organization. `proxied` is not caller-settable — it's reserved for internal pipeline code paths.
+             * @default self_asserted
              * @enum {string}
              */
-            source_method: "api" | "witnessed";
+            source_method: "self_asserted" | "witnessed";
             name: string;
             /**
              * Format: date-time
@@ -1704,12 +1708,17 @@ export interface components {
             /** @enum {string} */
             status?: "active" | "revoked";
         };
-        /** @description Schema.org Organization. v2: the unified entity primitive — businesses, community groups, nonprofits, collectives, solo operators (organizations-of-one). Classification emerges from `tags` (descriptive labels), `commercial` (for-profit boolean), and structural signals (primary place, event history). The legacy `kind` enum was retired in v2 because it mixed structural facts, vibes, and legal status into one false choice. `additionalType` is derived structurally — `LocalBusiness` when a primary place is set, plain `Organization` otherwise. */
+        /** @description Schema.org Organization. The unified entity primitive — businesses, community groups, nonprofits, collectives, solo operators (organizations-of-one). Classification emerges from `tags` (descriptive labels), `commercial` (for-profit boolean), and structural signals (primary place, event history). The legacy `kind` enum was retired because it mixed structural facts, vibes, and legal status into one false choice. `additionalType` is derived structurally — `LocalBusiness` when a primary place is set, plain `Organization` otherwise. `method` carries the provenance under the standard four-value vocabulary (docs/provenance.md). */
         Organization: {
             /** Format: uuid */
             id: string;
             slug: string;
             name: string;
+            /**
+             * @description Standard provenance method (docs/provenance.md). `self_asserted`: first-party authority (the org has claimed and verified itself). `proxied`: extracted from a public source (e.g. a business registry). `witnessed`: collective-evidence path. `seeded`: bulk-imported, awaiting first-party uptake. Consumers can filter for `self_asserted` orgs to surface only first-party-asserted records.
+             * @enum {string}
+             */
+            method: "self_asserted" | "proxied" | "witnessed" | "seeded";
             /** @description Official registered name. Optional, primarily for verified businesses. */
             legalName?: string | null;
             /** @description Descriptive labels — free-form within format rules. Recommended starter vocabulary at `/v1/meta/tags` (when shipped). Not a hard taxonomy; consumer apps filter on whatever tags appear in practice. */
@@ -1773,7 +1782,7 @@ export interface components {
              */
             primaryPlaceId?: string;
         };
-        /** @description Ephemeral real-time signal from an Organization, pinned to a Place. Maximum lifetime 24h. No direct Schema.org analog; conventions borrowed from SpecialAnnouncement (`datePosted`, `expires`). */
+        /** @description Ephemeral real-time signal from an Organization, pinned to a Place. Maximum lifetime 24h. No direct Schema.org analog; conventions borrowed from SpecialAnnouncement (`datePosted`, `expires`). `method` carries the standard provenance vocabulary — broadcasts are always first-party from the organization (only `self_asserted` is valid today). */
         Broadcast: {
             /** Format: uuid */
             id: string;
@@ -1784,6 +1793,11 @@ export interface components {
             expires: string;
             /** @enum {string} */
             status?: "active" | "expired" | "retracted";
+            /**
+             * @description Standard provenance method (docs/provenance.md). Only `self_asserted` is valid today — broadcasts are always first-party from the organization. Field exists for symmetry across primitives; new methods can be added additively.
+             * @enum {string}
+             */
+            method: "self_asserted";
             organization: components["schemas"]["Organization"];
             location: components["schemas"]["Place"];
             source: components["schemas"]["Source"];
@@ -1808,13 +1822,18 @@ export interface components {
             /** @description Curator's optional commentary on this item. */
             curatorNote?: string | null;
         };
-        /** @description Schema.org ItemList. A curatorial selection by an Organization — "this weekend's picks," "best park benches in Fishtown," etc. v2: curator is always an organization (the Person primitive is gone). */
+        /** @description Schema.org ItemList. A curatorial selection by an Organization — "this weekend's picks," "best park benches in Fishtown," etc. Curator is always an organization (the Person primitive is gone). `method` carries the standard provenance vocabulary — lists are always editorial assertions by the curator (only `self_asserted` is valid today). */
         List: {
             /** Format: uuid */
             id: string;
             slug: string;
             name: string;
             description?: string | null;
+            /**
+             * @description Standard provenance method (docs/provenance.md). Only `self_asserted` is valid today — lists are editorial assertions by the curator. Field exists for symmetry across primitives.
+             * @enum {string}
+             */
+            method: "self_asserted";
             /** @description The Organization that maintains this list. */
             curator: components["schemas"]["Organization"];
             /**
@@ -2649,7 +2668,7 @@ export interface operations {
                 /** @description Text search on title, venue name, address */
                 search?: string;
                 category?: string;
-                source_method?: "portal" | "api" | "import";
+                source_method?: "self_asserted" | "proxied" | "witnessed";
                 /** @description Include all series instances (default: false) */
                 all_instances?: "true" | "false";
                 limit?: number;

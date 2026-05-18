@@ -232,7 +232,7 @@ Schema.org `Event`. Activity at a specific time, at a Place, organized by an Org
 | `recurrence`, `series_id`, `series_instance_number`, `series_instance_count` | RRULE-based recurrence; series link. |
 | `open_window`, `capacity`, `rsvp`, `wheelchair_accessible` | Visibility and access metadata. |
 | `first_party` | Boolean. True iff the organizer had an active verification at the time of writing — the authority signal. Server-computed; not a caller input. |
-| `source` | Provenance: `{ publisher, method, contributor, collected_at, license }`. `method` includes `portal`, `api`, `import`, `witnessed`. |
+| `source` | Provenance under the four-role frame: `{ method, url, contributor, collected_at, license }`. `method` is one of `self_asserted`, `proxied`, `witnessed`. `url` is non-null only for `proxied`. The "who is this from?" role is filled by `organizer.name`, not by a `source.publisher` field. See [`docs/four-roles.md`](docs/four-roles.md). |
 
 #### Timestamps and timezones
 
@@ -276,7 +276,8 @@ Ephemeral signal from an Organization, pinned to a Place. Maximum 24h lifetime. 
   "status": "active",
   "organization": { "id": "...", "name": "Bubs", "verified": true },
   "location": { "id": "...", "name": "Bubs", "geo": {...} },
-  "source": { "publisher": "bubs", "method": "service", "contributor": "Holler", "collected_at": "..." }
+  "method": "self_asserted",
+  "source": { "method": "self_asserted", "url": null, "contributor": { "name": "Holler", "url": null }, "collected_at": "..." }
 }
 ```
 
@@ -424,7 +425,7 @@ Understand that **write access does not get you read.** The Commons is a substra
 
 - **Publisher allow-list / block-list** — apps surface events from publishers they recognize and trust.
 - **`?first_party=true`** — apps return only events from verified organizations.
-- **`?source_method=portal`** vs `?source_method=api` vs `?source_method=witnessed` — different consumers trust different ingestion methods.
+- **`?source_method=self_asserted`** vs `?source_method=proxied` vs `?source_method=witnessed` — different consumers trust different authority paths (see [`docs/four-roles.md`](docs/four-roles.md)).
 - **Contributor recognition** — `source.contributor` carries per-event attribution. Apps may surface events from contributors they trust.
 - **Soft signals in UI** — even apps that fetch everything may only *display* publishers they recognize.
 

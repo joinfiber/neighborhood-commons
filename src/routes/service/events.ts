@@ -7,10 +7,12 @@
  *
  * Auth: all routes inherit requireServiceApiKey from service/index.ts.
  *
- * Scoping (v2 constrained-publishing): every event write either has a
- * service key linked to the organizer organization via
- * api_key_organization_links, OR uses source_method='witnessed' from a
- * key with witness_authority=true. Admin keys bypass.
+ * Scoping (constrained-publishing): every event write either has a service
+ * key linked to the organizer organization via api_key_organization_links
+ * (source_method='self_asserted'), OR is from a key with
+ * witness_authority=true (source_method='witnessed'). Admin keys bypass.
+ *
+ * See docs/four-roles.md and docs/provenance.md.
  */
 
 import { Router } from 'express';
@@ -35,10 +37,10 @@ import { assertLinkedEvent } from './helpers.js';
 import { assertLinkedOrganization } from './helpers-v1.js';
 
 /**
- * Resolve the publishing organization to (a) its name (source_publisher
- * fallback), (b) its owner_account_id (carries the operational claim
- * state for the legacy creator_account_id column and photo eligibility),
- * and (c) coordinates from its primary_place if available.
+ * Resolve the organizer organization to (a) its name (for logging /
+ * downstream display lookups), (b) its owner_account_id (operational
+ * claim state for photo eligibility and creator_account_id), and
+ * (c) coordinates from its primary_place if available.
  *
  * Throws 404 NOT_FOUND if the organization doesn't exist.
  */
@@ -95,11 +97,11 @@ export const locationSchema = z.object({
   place_id: z.string().max(500).optional(),
 });
 
-// Per-event contributor override (migration 062). Decoupled from
-// source_publisher so a Service-API caller can attribute an event to an
-// app/tool (e.g. "Go There") without moving the subscribable publisher
-// off the organizer's name. Omitted → contributor falls back to the
-// legacy source_publisher-on-api derivation in event-transform.ts.
+// Per-event contributor identity (docs/four-roles.md). Most callers omit
+// this — the route auto-fills from the calling key's contributor profile
+// (today: brand_config.app_name; future: contributor_profiles.name) so
+// ecosystem attribution works without per-POST plumbing. Explicit values
+// override the default.
 const contributorSchema = z.object({
   name: z.string().min(1).max(200).trim(),
   url: z.preprocess(
@@ -108,10 +110,12 @@ const contributorSchema = z.object({
   ),
 });
 
-// v2: source_method is constrained on input. 'portal' and 'import' are
-// not caller-set (legacy / pipeline use). Callers choose 'api' (default)
-// or 'witnessed' (collective-evidence path — requires witness_authority).
-const callerSourceMethod = z.enum(['api', 'witnessed']).default('api');
+// Caller-facing source_method enum. 'proxied' is for internal pipeline
+// code paths (not API callers); the public service API admits the two
+// caller-driven authority paths:
+//   self_asserted (default) — requires api_key_organization_links to the organizer.
+//   witnessed              — requires api_keys.witness_authority on the calling key.
+const callerSourceMethod = z.enum(['self_asserted', 'witnessed']).default('self_asserted');
 
 export const createEventSchema = z.object({
   organizerOrganizationId: z.string().uuid(),
@@ -143,11 +147,11 @@ export const createEventSchema = z.object({
   rsvp: z.enum(['recommended', 'required']).nullable().default(null),
   open_window: z.boolean().default(false),
   image_focal_y: z.number().min(0).max(1).optional(),
-  // source_publisher is NOT caller-overridable — derived from the organizer organization name.
   // first_party is NOT caller-overridable — computed server-side at insert time
   // from the organizer's verification state.
-  // contributor IS caller-overridable (migration 062) — per-event "who ran this"
-  // attribution, distinct from the subscribable publisher. Optional.
+  // contributor IS caller-settable — per-event routing-participant identity.
+  // Auto-filled from the calling key's brand identity when omitted (see
+  // four-roles doctrine).
   contributor: contributorSchema.optional(),
   external_id: z.string().max(500).optional(),
   tmdb_id: z.string().max(50).optional(),
@@ -191,7 +195,6 @@ type CreateEventInput = z.infer<typeof createEventSchema>;
  */
 export function friendlyToPortalInput(
   data: CreateEventInput,
-  sourcePublisher: string | null,
 ): {
   portal: Parameters<typeof portalInputToInsert>[0];
   event_date: string;
@@ -224,8 +227,7 @@ export function friendlyToPortalInput(
       capacity: data.capacity,
       rsvp: data.rsvp,
       image_focal_y: data.image_focal_y,
-      source_method: (data.source_method ?? 'api') as 'api' | 'portal' | 'feed' | 'admin' | 'merrie',
-      source_publisher: sourcePublisher ?? undefined,
+      source_method: (data.source_method ?? 'self_asserted') as 'self_asserted' | 'proxied' | 'witnessed',
       source_contributor_name: data.contributor?.name ?? null,
       source_contributor_url:
         data.contributor && typeof data.contributor.url === 'string' && data.contributor.url
@@ -267,7 +269,7 @@ router.get('/events', serviceLimiter, async (req, res, next) => {
       query = query.eq('status', status);
     }
 
-    // Source method filter (e.g. 'api' for contributed events)
+    // Source method filter (e.g. 'self_asserted' for first-party contributed events)
     const sourceMethod = req.query.source_method as string | undefined;
     if (sourceMethod) {
       query = query.eq('source_method', sourceMethod);
@@ -349,7 +351,7 @@ router.get('/events/:id', serviceLimiter, async (req, res, next) => {
 router.post('/events', serviceLimiter, async (req, res, next) => {
   try {
     const data = validateRequest(createEventSchema, req.body);
-    const sourceMethod = data.source_method ?? 'api';
+    const sourceMethod = data.source_method ?? 'self_asserted';
     const witnessed = sourceMethod === 'witnessed';
 
     // Authority gate. Witnessed-evidence keys bypass the org-link check
@@ -411,15 +413,13 @@ router.post('/events', serviceLimiter, async (req, res, next) => {
     }
     const validatedTags = data.tags ? validateTags(data.tags, data.category) : [];
 
-    // Auto-derive source.contributor from the calling key's brand identity
-    // when the caller didn't supply one. The publisher is the organization
-    // (orgCtx.name); the contributor is the app that pushed the data in —
-    // distinct concepts. This makes ecosystem attribution work without
-    // requiring every consumer to remember the field on every POST. Admin
-    // keys (Studio, operator tools) skip — they act on behalf of, they
-    // aren't ecosystem contributors. Callers can still set contributor
-    // explicitly to override, or omit brand_config.app_name on the key to
-    // suppress.
+    // Auto-fill source.contributor from the calling key's brand identity
+    // (today: brand_config.app_name; future: contributor_profiles.name)
+    // when the caller didn't supply one. Per docs/four-roles.md, the
+    // contributor identifies the ecosystem participant who routed this
+    // event in — distinct from the organizer, who runs it. Admin keys
+    // (operator tools) skip — they act on behalf of orgs, not as
+    // ecosystem contributors.
     if (
       !data.contributor
       && !req.apiKeyInfo?.isAdmin
@@ -429,7 +429,7 @@ router.post('/events', serviceLimiter, async (req, res, next) => {
     }
 
     const { portal, event_date: eventDate, start_time: startTime, end_time: endTime }
-      = friendlyToPortalInput(data, orgCtx.name);
+      = friendlyToPortalInput(data);
     portal.tags = validatedTags;
     portal.first_party = await isFirstPartyByOrganizer(data.organizerOrganizationId);
 

@@ -188,7 +188,7 @@ export async function deleteSeriesEvents(seriesId: string): Promise<number> {
       organizer: { id: '', slug: '', name: '', verified: false, phone: null },
       cost: null, series_id: null, series_instance_number: null, series_instance_count: null, open_window: false, capacity: null, rsvp: null, tags: [], wheelchair_accessible: null,
       first_party: false, tmdb_id: null, recurrence: null,
-      source: { publisher: 'neighborhood-commons', collected_at: new Date().toISOString(), method: 'portal', contributor: null, license: 'CC BY 4.0' },
+      source: { method: 'self_asserted', url: null, contributor: null, collected_at: new Date().toISOString(), license: 'CC BY 4.0' },
     });
   }
 

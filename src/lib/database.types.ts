@@ -59,8 +59,7 @@ export type Database = {
           wheelchair_accessible: boolean | null;
           capacity: number | null;
           rsvp: 'recommended' | 'required' | null;
-          source_method: string | null;
-          source_publisher: string | null;
+          source_method: 'self_asserted' | 'proxied' | 'witnessed';
           source_feed_url: string | null;
           external_id: string | null;
           created_at: string;

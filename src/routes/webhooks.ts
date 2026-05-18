@@ -301,10 +301,10 @@ router.post('/:id/test', writeLimiter, async (req, res, next) => {
       tmdb_id: null,
       recurrence: null,
       source: {
-        publisher: 'neighborhood-commons' as const,
-        collected_at: new Date().toISOString(),
-        method: 'portal' as const,
+        method: 'self_asserted' as const,
+        url: null,
         contributor: null,
+        collected_at: new Date().toISOString(),
         license: 'CC BY 4.0' as const,
       },
     };

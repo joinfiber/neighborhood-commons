@@ -60,7 +60,7 @@ What's explicitly excluded:
 
 The constrained model means most events come from one authoritative publisher; conflict cases are rare exceptions handled by match-key clustering plus the authority hierarchy.
 
-Schema enforcement: `events.organizer_org_id` is required. The calling service key must be linked to that organization via `api_key_organization_links` (entity-runs-it), OR the source_method is `'witnessed'` and the calling key has `witness_authority=true` (witnessed-with-evidence), OR the source_method is `'import'`/`'api'` from an authorized ingestion key (pipeline-proxies).
+Schema enforcement: `events.organizer_org_id` is required. The calling service key must be linked to that organization via `api_key_organization_links` (entity-runs-it; `source_method='self_asserted'`), OR the source_method is `'witnessed'` and the calling key has `witness_authority=true` (witnessed-with-evidence), OR the source_method is `'proxied'` from an authorized ingestion key (pipeline-proxies). See [`docs/four-roles.md`](docs/four-roles.md) and [`docs/provenance.md`](docs/provenance.md) for the full doctrine.
 
 ## The Five Primitives
 
@@ -174,7 +174,7 @@ The public API (`/api/v1/events`) must return events conforming to the Neighborh
 | `images` | `event_image_url` | Wrap as array on output. |
 | `organizer` | derived from organizer_org_id | Always an organization reference. |
 | `cost` | `price` | |
-| `source` | constructed | `{publisher, collected_at, method, contributor, license}` |
+| `source` | constructed | `{method, url, contributor, collected_at, license}` — four-role frame; `organizer.name` carries the "who is this from?" role |
 
 ### Required Endpoints
 

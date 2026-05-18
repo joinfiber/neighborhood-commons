@@ -36,24 +36,19 @@ router.get('/', (_req, res) => {
     ],
     data_sources: [
       {
-        name: 'Portal',
-        method: 'portal',
-        description: 'Events submitted directly by venue owners and promoters.',
+        name: 'Self-asserted',
+        method: 'self_asserted',
+        description: 'Events asserted by the organizing organization, routed through a contributor app. The first-party authority path.',
       },
       {
-        name: 'Import',
-        method: 'import',
-        description: 'Events ingested from iCal feeds and external sources.',
-      },
-      {
-        name: 'Service API',
-        method: 'api',
-        description: 'Events pushed by third-party apps via the Service API write path.',
+        name: 'Proxied',
+        method: 'proxied',
+        description: 'Events extracted from a public source (RSS feed, calendar page, CSV) by a pipeline tool. The source URL is preserved for transparency.',
       },
       {
         name: 'Witnessed',
         method: 'witnessed',
-        description: 'Events captured from public flyers and other documentary evidence by a collective publisher.',
+        description: 'Events captured from public flyers and other documentary evidence by a contributor publishing under a collective identity.',
       },
     ],
     resources: ['events'],

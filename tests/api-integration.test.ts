@@ -106,6 +106,10 @@ function makeDbRow(overrides: Record<string, unknown> = {}) {
     organizer_org_id: 'org-uuid-tap',
     series_id: null,
     first_party: false,
+    source_method: 'self_asserted',
+    source_feed_url: null,
+    source_contributor_name: null,
+    source_contributor_url: null,
     organizations: {
       id: 'org-uuid-tap',
       slug: 'the-fishtown-taproom',
@@ -241,11 +245,14 @@ describe('GET /api/v1/events', () => {
     // Organizer
     expect(event.organizer.name).toBe('The Fishtown Taproom');
 
-    // Source with provenance
-    expect(event.source.publisher).toBe('The Fishtown Taproom');
-    expect(event.source.method).toBe('portal');
+    // Source with provenance (four-role shape — no publisher field).
+    // The "who is this from?" role is filled by organizer.name above.
+    expect(event.source.method).toBe('self_asserted');
+    expect(event.source.url).toBeNull();
+    expect(event.source.contributor).toBeNull();
     expect(event.source.license).toBe('CC BY 4.0');
     expect(event.source.collected_at).toBeDefined();
+    expect(event.source).not.toHaveProperty('publisher');
 
     // Recurrence as rrule object
     expect(event.recurrence).toEqual({ rrule: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH' });

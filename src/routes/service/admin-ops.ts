@@ -128,7 +128,7 @@ router.get('/api-keys', serviceLimiter, async (req, res, next) => {
         .from('events')
         .select('source_feed_url, status, created_at')
         .in('source_feed_url', sourceFeedUrls)
-        .eq('source_method', 'api')
+        .eq('source_method', 'self_asserted')
         .order('created_at', { ascending: false });
 
       if (stats) {

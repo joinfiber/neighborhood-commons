@@ -53,7 +53,7 @@ const PLACE_SELECT_INLINE = `
   latitude, longitude, region_id, created_at, updated_at
 `;
 
-const EVENT_SELECT_INLINE = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, event_image_focal_y, created_at, creator_account_id, organizer_org_id, series_id, series_instance_number, open_window, capacity, rsvp, tags, wheelchair_accessible, source_method, source_publisher, source_contributor_name, source_contributor_url, organizations!events_organizer_org_id_fkey(id, slug, name)';
+const EVENT_SELECT_INLINE = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, event_image_focal_y, created_at, creator_account_id, organizer_org_id, series_id, series_instance_number, open_window, capacity, rsvp, tags, wheelchair_accessible, source_method, source_feed_url, source_contributor_name, source_contributor_url, organizations!events_organizer_org_id_fkey(id, slug, name)';
 
 const listSchema = z.object({
   curator_id: z.string().uuid().optional(),

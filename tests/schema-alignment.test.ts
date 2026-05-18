@@ -54,7 +54,8 @@ const SCHEMA: Record<string, string[]> = {
     'broadcast_mode', 'discovery_radius_meters', 'recurrence', 'series_id',
     'series_instance_number', 'becomes_visible_at', 'expires_at', 'ended_at',
     'open_window', 'tags', 'wheelchair_accessible', 'capacity', 'rsvp',
-    'source_method', 'source_publisher', 'source_feed_url', 'external_id',
+    // Provenance — migration 085 normalized source_method values and dropped source_publisher.
+    'source_method', 'source_feed_url', 'external_id',
     'source_contributor_url', 'source_contributor_name',
     'first_party',
     'group_id',
@@ -118,6 +119,7 @@ const SCHEMA: Record<string, string[]> = {
     'created_at', 'updated_at',
   ],
   // Migration 082 dropped `kind`; replaced by `tags` + `commercial` (added in 078).
+  // Migration 085 added `method` (standard provenance vocabulary).
   organizations: [
     'id', 'slug', 'name', 'legal_name',
     'description', 'url', 'logo_url', 'image_url', 'telephone', 'email',
@@ -125,6 +127,8 @@ const SCHEMA: Record<string, string[]> = {
     'primary_place_id', 'owner_account_id',
     // Added in migration 078 (v2)
     'tags', 'commercial',
+    // Added in migration 085 (provenance doctrine)
+    'method',
     'created_at', 'updated_at',
   ],
   organization_places: [
@@ -135,14 +139,18 @@ const SCHEMA: Record<string, string[]> = {
     'id', 'event_id', 'organization_id', 'performer_name',
     'performer_role', 'position', 'created_at',
   ],
+  // Migration 085 added `method` (standard provenance vocabulary; only
+  // 'self_asserted' is currently valid for broadcasts).
   broadcasts: [
     'id', 'organization_id', 'place_id', 'message',
-    'expires_at', 'status', 'retracted_at', 'source', 'created_at',
+    'expires_at', 'status', 'retracted_at', 'source', 'method', 'created_at',
   ],
   // Migration 082 dropped curator_person_id; curator_org_id is now NOT NULL.
+  // Migration 085 added `method` (standard provenance vocabulary; only
+  // 'self_asserted' is currently valid for lists).
   lists: [
     'id', 'slug', 'name', 'description',
-    'curator_org_id',
+    'curator_org_id', 'method',
     'created_at', 'updated_at',
   ],
   list_items: [
