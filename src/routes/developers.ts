@@ -566,10 +566,35 @@ function renderSignUp(csrfToken: string, error: string | null, prefill: Record<s
   const body = `
     <h1>Build on the Neighborhood Commons.</h1>
     <p class="nc-portal-lede">
-      Tell us about your app. We'll send you a verification code, issue your service key,
-      and route an operator review. Most reviews take less than a day; reads work
-      immediately, writes activate when we approve.
+      Tell us about your app. We'll send a verification code, issue your service key, and route a one-time operator review. Reads work immediately; writes activate when we approve — usually within a day.
     </p>
+
+    <div class="nc-callout">
+      <strong>The deal, in one breath.</strong> Reads are free. Writes are licensed <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC&nbsp;BY&nbsp;4.0</a> — other apps in the ecosystem can mix and remix anything you contribute, with attribution back to you. Public information is welcome. Copyrighted material you don't have rights to is not.
+    </div>
+
+    <details class="nc-explainer">
+      <summary>What kinds of contributions fit — and what doesn't</summary>
+
+      <p><strong>Three shapes of contribution, all welcome:</strong></p>
+      <ul>
+        <li><strong>First-party publishing.</strong> You're building an app that lets people post things they run. "I'm building a tool where yoga teachers across Philly post their class schedules." The yoga teacher asserts their own offering via you.</li>
+        <li><strong>Proxying public information.</strong> You're collecting public facts that already exist on the open web. "I'm pulling event listings from venue websites across South Philly into a single feed." Public info is public; bringing it into the Commons makes it discoverable to every other app.</li>
+        <li><strong>Witnessing with evidence.</strong> You're capturing things observed in the world. "Users of my app photograph flyers they see on telephone poles, and I OCR them into structured events." The flyer is public; the evidence is the photo.</li>
+      </ul>
+
+      <p><strong>What's not permitted:</strong></p>
+      <ul>
+        <li>Copyrighted text, photos, video, or audio you don't have rights to redistribute under CC&nbsp;BY&nbsp;4.0. (You can link to it from a description, but the description itself must be yours or rights-cleared.)</li>
+        <li>Personal information about individuals. The Commons holds zero PII by design. The entities you publish are organizations, venues, performers, classes — not individual private people.</li>
+        <li>Content you haven't verified is real. Confidence isn't required; care is.</li>
+      </ul>
+
+      <p><strong>There's a market here, and quality matters.</strong> Consumer apps that read from the Commons filter what they surface. App A might only show events from first-party verified organizations. App B might show everything but visually mark unverified entries. App C might block-list contributors whose data is consistently wrong. If the information you contribute is sloppy or suspect, downstream apps will rightly filter it out — and you'll have done a disservice both to your own work and to the people you were trying to support. Conversely, accurate well-attributed contributions get picked up everywhere and compound your reach.</p>
+
+      <p>The two questions below are how we get a feel for the shape of what you're doing. Be plain and specific — there's no special phrasing we're listening for.</p>
+    </details>
+
     ${errorBanner(error)}
     <form method="POST" action="/developers/register" novalidate>
       ${hiddenInput(CSRF_FIELD_NAME, csrfToken)}
@@ -580,8 +605,8 @@ function renderSignUp(csrfToken: string, error: string | null, prefill: Record<s
       ${textField('app_url', 'App URL', { type: 'url', required: true, value: prefill.app_url, hint: 'Where users go to use your app.' })}
       ${textField('who_its_for', "Who it's for (optional)", { maxlength: 500, value: prefill.who_its_for })}
       ${textField('category', 'Category (optional)', { maxlength: 50, value: prefill.category, hint: 'Free-form, e.g. "publishing", "discovery", "civic".' })}
-      ${textareaField('what_youre_building', "What you're building", { required: true, value: prefill.what_youre_building, hint: "For operator review. The kind of thing you'd say if asked at a party." })}
-      ${textareaField('verification_process', 'Verification process', { required: true, value: prefill.verification_process, hint: "For operator review. How do you verify the entities you'll publish for?" })}
+      ${textareaField('what_youre_building', "What you're building", { required: true, value: prefill.what_youre_building, hint: `A paragraph is plenty. Name the data shape (events, hours, schedules, broadcasts) and the entities involved. The three example shapes above are all green-lit; saying "I'm collecting public yoga-class schedules across Philly" is perfect.` })}
+      ${textareaField('verification_process', 'Verification process', { required: true, value: prefill.verification_process, hint: `How do you confirm the publisher of your content has authority over what they're publishing? For proxied public info, naming your sources is plenty ("I scrape venue calendar pages, then de-dupe"). For first-party, describe the publisher's journey ("teachers create an account and add their own classes"). For witnessed, describe the evidence ("users upload a photo of the flyer with each submission").` })}
       <button type="submit" class="nc-btn">Send verification code</button>
     </form>
     <div class="nc-portal-footer-aux" style="margin-top:32px; font-size:13px; color:var(--muted);">

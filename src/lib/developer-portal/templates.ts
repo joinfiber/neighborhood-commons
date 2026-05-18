@@ -150,6 +150,34 @@ const SHARED_STYLES = `
     font-size: 14px;
     margin: 0 0 24px;
   }
+  .nc-callout a { color: inherit; text-decoration: underline; }
+  .nc-explainer {
+    margin: 0 0 28px;
+    padding: 10px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 14px;
+  }
+  .nc-explainer > summary {
+    cursor: pointer;
+    padding: 6px 0;
+    font-weight: 500;
+    color: var(--ink-2);
+    list-style: none;
+  }
+  .nc-explainer > summary::-webkit-details-marker { display: none; }
+  .nc-explainer > summary::before {
+    content: "▸ ";
+    font-family: var(--font-mono);
+    color: var(--muted);
+    margin-right: 4px;
+  }
+  .nc-explainer[open] > summary::before { content: "▾ "; }
+  .nc-explainer p { margin: 12px 0; line-height: 1.6; }
+  .nc-explainer ul { margin: 8px 0 12px 18px; padding: 0; line-height: 1.7; }
+  .nc-explainer li { margin-bottom: 6px; }
+  .nc-explainer li strong { color: var(--ink); }
   .nc-card {
     padding: 20px 22px;
     background: var(--surface);
