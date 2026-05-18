@@ -14,6 +14,25 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-05-17 — source.contributor auto-fill (ecosystem attribution)
+
+Service-tier event POSTs now auto-fill `source.contributor.name` from the calling key's `brand_config.app_name` when the caller didn't supply a `contributor` field explicitly. Makes ecosystem attribution work by default: every event Merrie pushes shows `source.contributor = { name: "Merrie", url: null }` on the read path without Merrie having to remember the field. Same for other consumer apps. Admin keys (Studio, operator tools) skip the auto-fill — they act on behalf of organizations, they're not ecosystem contributors. The transform-time fallback that previously used `source_publisher` as a stand-in for `contributor` on api-method events is removed — that conflated publisher (who the event is FROM) with contributor (which app pushed it IN). Events created before this change with a null `source_contributor_name` will now show `source.contributor: null` instead of incorrectly echoing the publisher name; that's a more honest read.
+
+---
+
+## 2026-05-17 — trusted-tenant pattern (operational follow-up)
+
+Photo-eligibility gate fix surfaced by Merrie. The v2 gate requires every Organization to have a claimed owner account; tenant-umbrella consumers (Merrie publishing on behalf of community groups) don't have per-publisher portal_accounts, so photo uploads failed with `IMAGE_NOT_PERMITTED` on every Merrie-created org.
+
+- Migration 084: `api_keys.tenant_account_id uuid REFERENCES portal_accounts(id)` — optional one-to-one binding. When set, `POST /service/organizations` auto-derives `owner_account_id` from this column. Tenant-umbrella consumers provision one shared `portal_account` and bind their key; future orgs they create inherit the ownership relationship server-side; consumer payloads need no extra fields.
+- `CLAUDE.md` § "No Users in the Commons" gains a "Trusted-tenant pattern" subsection documenting the model.
+- `scripts/provision-merrie-tenant.ts` updated to set `tenant_account_id` after provisioning the tenant row.
+- Backfill SQL for existing Merrie-created orgs in commit notes (not a generic migration — operator runs once with the actual Merrie key + tenant UUIDs).
+
+The parallel-scope model still holds: `api_key_organization_links` is write authority; `api_keys.tenant_account_id` is ownership-derivation. Different concerns, different storage.
+
+---
+
 ## 2026-05-17 — v2.0.0
 
 The v2 release. Coherent bundle of breaking changes that simplify the substrate around a tighter conceptual model. Documented in full in [`docs/v2-migration-plan.md`](docs/v2-migration-plan.md) and articulated in [`CLAUDE.md`](CLAUDE.md). The substrate is now defined around **Type A (durable profile data, first-party only)** vs **Type B (transactional/episodic, constrained publishing)** with three valid authority paths: entity-runs-it, pipeline-proxies, witnessed-with-evidence.

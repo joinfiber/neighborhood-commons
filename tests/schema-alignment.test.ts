@@ -38,6 +38,8 @@ const SCHEMA: Record<string, string[]> = {
     'activated_at', 'application_metadata',
     // Added in migration 078 (v2 — witnessed-evidence authority path)
     'witness_authority',
+    // Added in migration 084 (v2.1 — trusted-tenant pattern; one tenant portal_account per service key)
+    'tenant_account_id',
   ],
   audit_logs: [
     'id', 'action', 'actor_hash', 'resource_id', 'metadata', 'endpoint',

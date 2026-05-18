@@ -122,6 +122,13 @@ router.post('/organizations', async (req, res, next) => {
         keywords: body.keywords || [],
         opening_hours_specification: body.openingHoursSpecification || null,
         primary_place_id: body.primaryPlaceId || null,
+        // Trusted-tenant pattern: if the calling key has a tenant_account_id,
+        // the new organization is owned by that account. This satisfies the
+        // photo-eligibility gate for tenant-umbrella consumers (Merrie etc.)
+        // without per-publisher portal_accounts. Keys without a tenant
+        // account create orgs with owner_account_id=NULL — those orgs work
+        // for everything except photo uploads.
+        owner_account_id: req.apiKeyInfo?.tenantAccountId ?? null,
       })
       .select('id')
       .single();

@@ -1575,7 +1575,7 @@ export interface components {
              * @enum {string|null}
              */
             rsvp?: "recommended" | "required" | null;
-            /** @description Per-event attribution for the app/tool that publishes this event, distinct from the account-derived source.publisher. Surfaces on the read path as source.contributor. Omit to fall back to legacy derivation (source.publisher on api-method events). Send null on PATCH to clear an existing override. */
+            /** @description Per-event attribution for the app/tool that pushed this event into the Commons. Distinct from `source.publisher`, which names the organization the event is FROM. v2.1: when omitted, the server auto-fills `contributor.name` from the calling service key's `brand_config.app_name` so every consumer's events carry ecosystem attribution by default. Admin keys skip the auto-fill (they act on behalf of, not as ecosystem contributors). Send `null` on PATCH to clear an existing override. */
             contributor?: {
                 name: string;
                 /** Format: uri */

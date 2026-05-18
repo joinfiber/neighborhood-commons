@@ -38,6 +38,14 @@ This is non-negotiable. It dissolves whole categories of problems — PII handli
 
 Operational tables that hold email (currently `portal_accounts`) exist for service-key tenant claims and legacy OTP-claimed accounts. They are never surfaced via public API.
 
+### Trusted-tenant pattern
+
+A service consumer optionally provisions one `portal_account` (a "tenant" — a single shared operational shell for the consumer, not a per-publisher account) and binds it to its API key via `api_keys.tenant_account_id`. When the key creates Organizations via `POST /service/organizations`, the new org's `owner_account_id` is derived from the bound tenant. The org has a claimed owner; the photo-eligibility gate is satisfied; no per-publisher Commons account is required.
+
+Required for photo uploads (a contributor-warranty boundary — someone has to be on the hook for the rights claim). Optional otherwise; orgs without an owner_account_id still work for everything that doesn't carry image bytes.
+
+Used by publication-tool consumers (Merrie, future similar shapes) where individual publishers don't have Commons accounts. Provision once at integration time; document the tenant UUID in the consumer's env (`COMMONS_PORTAL_ACCOUNT_ID`); the binding is server-side from then on.
+
 ## Constrained Publishing — Three Authority Paths
 
 Publishers contribute from a position of authority over what they publish. The wild-west "anyone publishes anything" model is explicitly rejected. Three valid authority shapes:

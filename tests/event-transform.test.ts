@@ -214,11 +214,13 @@ describe('toNeighborhoodEvent', () => {
   });
 
   // -------------------------------------------------------------------------
-  // source.contributor — migration 062 override + legacy fallback chain
+  // source.contributor — v2.1: just source_contributor_name (and url) or null.
+  // The pre-v2 fallback that used source_publisher as a stand-in for
+  // contributor was retired (it conflated publisher with contributor).
   // -------------------------------------------------------------------------
 
   describe('source.contributor', () => {
-    it('uses source_contributor_name override when set', () => {
+    it('reads source_contributor_name + url when set', () => {
       const event = toNeighborhoodEvent(makeRow({
         source_method: 'api',
         source_publisher: 'monday-night-rides',
@@ -232,7 +234,7 @@ describe('toNeighborhoodEvent', () => {
       expect(event.source.publisher).toBe('monday-night-rides');
     });
 
-    it('contributor override accepts null url', () => {
+    it('accepts null url when name is set', () => {
       const event = toNeighborhoodEvent(makeRow({
         source_method: 'api',
         source_publisher: 'monday-night-rides',
@@ -242,16 +244,19 @@ describe('toNeighborhoodEvent', () => {
       expect(event.source.contributor).toEqual({ name: 'Go There', url: null });
     });
 
-    it('falls back to legacy derivation when override is null and source_method is api', () => {
+    it('returns null on api events with null source_contributor_name (no publisher fallback)', () => {
+      // v2.1: the legacy fallback that used source_publisher as the contributor
+      // is gone. api-method events with null source_contributor_name return
+      // null — service/events.ts auto-fills the column at write time from the
+      // calling key's brand_config.app_name, so this null state only persists
+      // on pre-v2.1 rows that haven't been re-written.
       const event = toNeighborhoodEvent(makeRow({
         source_method: 'api',
         source_publisher: 'Merrie',
         source_contributor_url: 'https://merrie.co',
         source_contributor_name: null,
       }));
-      // Unchanged behavior for contribute.ts callers that set source_publisher
-      // to the app name.
-      expect(event.source.contributor).toEqual({ name: 'Merrie', url: 'https://merrie.co' });
+      expect(event.source.contributor).toBeNull();
     });
 
     it('returns null contributor on portal events without override', () => {

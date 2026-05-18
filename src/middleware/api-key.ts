@@ -51,6 +51,14 @@ declare global {
          * api_key_organization_links scope. Granted at activation.
          */
         witnessAuthority?: boolean;
+        /**
+         * Trusted-tenant pattern (v2.1). The portal_account this key
+         * represents — when set, POST /service/organizations sets the
+         * new org's owner_account_id to this value, satisfying the photo
+         * gate. Optional; null for keys that don't follow the
+         * tenant-umbrella pattern.
+         */
+        tenantAccountId?: string;
       };
     }
   }
@@ -143,7 +151,7 @@ export async function requireServiceApiKey(req: Request, _res: Response, next: N
     const keyHash = hashApiKey(apiKey);
     const { data: keyInfo } = await supabaseAdmin
       .from('api_keys')
-      .select('id, contributor_tier, is_admin, brand_config, verification_authority, witness_authority, activated_at')
+      .select('id, contributor_tier, is_admin, brand_config, verification_authority, witness_authority, tenant_account_id, activated_at')
       .eq('key_hash', keyHash)
       .eq('status', 'active')
       .maybeSingle();
@@ -173,6 +181,7 @@ export async function requireServiceApiKey(req: Request, _res: Response, next: N
         ? (keyInfo.verification_authority as string[])
         : undefined,
       witnessAuthority: keyInfo.witness_authority === true,
+      tenantAccountId: (keyInfo.tenant_account_id as string | null) || undefined,
     };
     next();
   } catch {
