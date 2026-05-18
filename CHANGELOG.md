@@ -14,6 +14,25 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-05-18 — developer dashboard registration flow (PR 2 of the onboarding-redesign build)
+
+No contract change. New user-facing surface at `neighborhood-commons.org/developers` that replaces the curl-based service-key registration flow with a server-rendered HTML form. Documented in [`docs/onboarding-redesign.md`](docs/onboarding-redesign.md) §4.1–4.3.
+
+- **New pages** (server-rendered HTML, no JS required):
+  - `GET /developers/sign-up` — registration form (email, app name, tagline, description, app URL, internal review fields).
+  - `GET /developers/verify` — OTP entry form.
+  - `GET /developers/dashboard` — read-only view of status, service key, profile preview. Surfaces the just-issued key exactly once.
+- **New form handlers** (POST):
+  - `/developers/register` — validates, holds form data in `pending_registrations`, sends 8-digit OTP, redirects to verify.
+  - `/developers/verify` — validates OTP, runs atomic provisioning (creates `contributor_profile` + tenant `portal_account` + pending `api_key` + `developer_session`), sets session cookie, redirects to dashboard.
+  - `/developers/logout` — destroys session, clears cookie.
+- **DB-backed sessions** via `developer_sessions`. 24-hour expiry; revocable by deleting the row.
+- **CSRF protection** via double-submit cookie (`nc_dev_csrf`). All form POSTs validated.
+- **Rate limited:** 10 form submissions / 15 min / IP; 60 page renders / min / IP.
+- **The existing `/v1/service/register/*` curl flow remains** for backward compatibility. PR 5 retires it.
+
+---
+
 ## 2026-05-18 — 3.1.0 — contributor profiles (foundation for the developer dashboard)
 
 Additive. PR 1 of the onboarding-redesign build ([`docs/onboarding-redesign.md`](docs/onboarding-redesign.md) §12). Lays the schema and public read surface for the developer portal at `/developers`. Subsequent PRs add the dashboard UI; this one ships the foundation underneath.
