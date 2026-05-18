@@ -71,9 +71,20 @@ const envSchema = z.object({
   // Default region for new portal events (UUID from regions table)
   DEFAULT_REGION_ID: z.string().uuid().optional(),
 
-  // Operator notification — who receives report/dispute alerts. If unset,
-  // notifications are skipped and only the audit_log entry is created.
-  COMMONS_OPERATOR_EMAIL: z.string().email().optional(),
+  // Operator notification + operator-portal access. Comma-separated list of
+  // emails — the first entry receives report/dispute alerts (existing
+  // behaviour); every entry on the list is granted access to /operator/*
+  // when logged in to the developer portal with that email. Single-email
+  // values are accepted unchanged.
+  COMMONS_OPERATOR_EMAIL: z.string().optional().refine(
+    (val) => {
+      if (!val) return true;
+      const parts = val.split(',').map((s) => s.trim()).filter(Boolean);
+      if (parts.length === 0) return false;
+      return parts.every((p) => z.string().email().safeParse(p).success);
+    },
+    { message: 'Must be one email or a comma-separated list of valid emails.' },
+  ),
 
   // DMCA designated agent — surfaced at /dmca (HTML) and /api/v1/dmca (JSON).
   // When the agent fields are unset, the endpoint reports status=pending_registration
@@ -192,7 +203,12 @@ export const config = {
   defaultRegionId: env.DEFAULT_REGION_ID || null,
 
   operator: {
-    email: env.COMMONS_OPERATOR_EMAIL || '',
+    // Legacy field — kept as the bare-string the notify code reads.
+    // When multiple emails are configured, this is the first one.
+    email: parseList(env.COMMONS_OPERATOR_EMAIL)[0] || '',
+    // Full list. Empty when COMMONS_OPERATOR_EMAIL is unset. Used by the
+    // operator-portal middleware to gate /operator/* access.
+    emails: parseList(env.COMMONS_OPERATOR_EMAIL).map((e) => e.toLowerCase()),
   },
 
   // DMCA designated agent. `registered` is true when all fields are populated;
