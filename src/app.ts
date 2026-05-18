@@ -34,6 +34,7 @@ import serviceRoutes from './routes/service.js';
 import pageRoutes from './routes/pages.js';
 import dmcaRoutes, { dmcaHtmlHandler } from './routes/dmca.js';
 import reportRoutes from './routes/report.js';
+import developersRoutes from './routes/developers.js';
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -252,6 +253,12 @@ export function createApp(): Express {
   app.get('/dmca', dmcaHtmlHandler);
   app.use('/api/v1/dmca', dmcaRoutes);
   app.use('/api/v1/report', writeLimiter, reportRoutes);
+
+  // ─── Developer Portal (server-rendered HTML) ─────────────────────
+  // Self-service registration, OTP verify, dashboard. The foundation
+  // (PR 1) added the schema + public read at /v1/contributors. PR 2
+  // (this) adds the user-facing form flow at /developers/*.
+  app.use('/developers', developersRoutes);
 
   // ─── Landing page (server-rendered, instant load, no JS) ───────────
   let cachedStats = {
