@@ -163,20 +163,34 @@ async function main() {
     }
   }
 
-  // v2: writeable scope for Merrie's key lives in
-  // api_key_organization_links (set up by POST /service/organizations/link
-  // once Merrie has organizations to publish for). This script just
-  // claims the operational tenant row.
-  void merrieKey; // intentionally unused after v2 — kept for the lookup sanity check above.
+  // v2.1 trusted-tenant pattern (migration 084): bind Merrie's API key to
+  // the tenant portal_account via api_keys.tenant_account_id. After this,
+  // every Organization Merrie creates auto-derives owner_account_id from
+  // this account, which satisfies the photo-eligibility gate.
+  if (dryRun) {
+    console.log(`Would set api_keys.tenant_account_id=${accountId} on key ${merrieKey.id} (dry-run skipped).`);
+  } else {
+    const { error: bindError } = await supabase
+      .from('api_keys')
+      .update({ tenant_account_id: accountId })
+      .eq('id', merrieKey.id);
+    if (bindError) throw new Error(`Failed to bind tenant_account_id on api_keys: ${bindError.message}`);
+    console.log(`Bound Merrie key → tenant_account_id=${accountId}`);
+  }
+
+  // Writeable scope (which orgs Merrie can publish for) is separate — set
+  // up via POST /service/organizations/link or auto-linked when Merrie's
+  // key creates an organization. The tenant binding above is purely about
+  // ownership-derivation on org create, not about write authorization.
 
   console.log();
   console.log('=== DONE ===');
   console.log(`COMMONS_PORTAL_ACCOUNT_ID=${accountId}`);
-  if (accountCreated) {
-    console.log();
-    console.log('Set this UUID as COMMONS_PORTAL_ACCOUNT_ID in Merrie\'s environment.');
-    console.log('Then call POST /api/v1/service/organizations/link to grant write scope.');
-  }
+  console.log();
+  console.log('Operator next steps:');
+  console.log('  1. Set COMMONS_PORTAL_ACCOUNT_ID in Merrie\'s environment (informational; the server auto-derives it now).');
+  console.log('  2. Run the backfill SQL (see commit notes) to set owner_account_id on Merrie\'s existing orgs.');
+  console.log('  3. Confirm Merrie\'s key is linked to its orgs via /service/organizations/link if it hasn\'t been already.');
 }
 
 main().catch((err) => {
