@@ -35,6 +35,7 @@ import pageRoutes from './routes/pages.js';
 import dmcaRoutes, { dmcaHtmlHandler } from './routes/dmca.js';
 import reportRoutes from './routes/report.js';
 import developersRoutes from './routes/developers.js';
+import operatorRoutes from './routes/operator.js';
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -259,6 +260,13 @@ export function createApp(): Express {
   // (PR 1) added the schema + public read at /v1/contributors. PR 2
   // (this) adds the user-facing form flow at /developers/*.
   app.use('/developers', developersRoutes);
+
+  // ─── Operator Portal (server-rendered HTML, env-var gated) ─────
+  // Internal review surface for the operator(s) listed in
+  // COMMONS_OPERATOR_EMAIL. Returns 404 to anyone not on the allowlist
+  // — the route's existence is not leaked. Approves/rejects pending
+  // service-tier registrations.
+  app.use('/operator', operatorRoutes);
 
   // ─── Landing page (server-rendered, instant load, no JS) ───────────
   let cachedStats = {

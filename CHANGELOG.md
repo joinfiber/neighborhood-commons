@@ -14,6 +14,21 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-05-18 — operator review portal (PR 4a)
+
+No contract change. Internal review surface for pending developer registrations. Per [`docs/onboarding-redesign.md`](docs/onboarding-redesign.md) §12 (PR 4a).
+
+- **Gated by `COMMONS_OPERATOR_EMAIL`** — comma-separated allowlist (single email still works). Anyone whose dashboard session matches an address on the list sees `/operator/*`; anyone else gets `404` (route existence not leaked).
+- **`GET /operator/applications`** — list of registrations filtered by status (default `pending`, also `all` / `active` / `rejected` / `suspended`).
+- **`GET /operator/applications/:id`** — detail view: application_metadata, contributor profile, brand config, prior review record (if any), approve/reject forms.
+- **`POST /operator/applications/:id/approve`** — flips `api_keys.activated_at`, sets `contributor_profiles.status='active'`, sends activation email with dashboard link + quickstart pointer.
+- **`POST /operator/applications/:id/reject`** — flips `api_keys.status='rejected'`, sets `contributor_profiles.status='suspended'`, sends rejection email with the operator's optional free-text reason. Login is blocked for the rejected key (`status` filter on `api_keys` lookup); applicant is invited to reply for clarification.
+- Review record stored in `application_metadata.review = { action, at, by, notes }`.
+- All POSTs CSRF-protected (double-submit cookie).
+- No new database columns. Status transitions reuse the existing `api_keys.status` + `contributor_profiles.status` enums.
+
+PR 4b (MFA enrollment + step-up middleware) lands next.
+
 ## 2026-05-18 — developer portal: magic-link login + profile editing (PR 3)
 
 No contract change. Returning-developer login flow + profile management at `/developers/profile`. Per [`docs/onboarding-redesign.md`](docs/onboarding-redesign.md) §4.6 and §12 (PR 3).
