@@ -189,8 +189,13 @@ async function main() {
   console.log();
   console.log('Operator next steps:');
   console.log('  1. Set COMMONS_PORTAL_ACCOUNT_ID in Merrie\'s environment (informational; the server auto-derives it now).');
-  console.log('  2. Run the backfill SQL (see commit notes) to set owner_account_id on Merrie\'s existing orgs.');
-  console.log('  3. Confirm Merrie\'s key is linked to its orgs via /service/organizations/link if it hasn\'t been already.');
+  console.log('  2. Backfill ownership on Merrie\'s existing orgs (replace ORG_IDS with the actual list):');
+  console.log('       UPDATE organizations SET owner_account_id = \'' + accountId + '\'');
+  console.log('         WHERE id IN (\'org-uuid-1\', \'org-uuid-2\', ...) AND owner_account_id IS NULL;');
+  console.log('  3. Promote those orgs to method = \'self_asserted\' (post-085 doctrine — owner = first-party):');
+  console.log('       UPDATE organizations SET method = \'self_asserted\'');
+  console.log('         WHERE owner_account_id = \'' + accountId + '\' AND method = \'seeded\';');
+  console.log('  4. Confirm Merrie\'s key is linked to its orgs via /service/organizations/link if it hasn\'t been already.');
 }
 
 main().catch((err) => {

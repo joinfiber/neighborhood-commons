@@ -188,7 +188,7 @@ export async function deleteSeriesEvents(seriesId: string): Promise<number> {
       organizer: { id: '', slug: '', name: '', verified: false, phone: null },
       cost: null, series_id: null, series_instance_number: null, series_instance_count: null, open_window: false, capacity: null, rsvp: null, tags: [], wheelchair_accessible: null,
       first_party: false, tmdb_id: null, recurrence: null,
-      source: { publisher: 'neighborhood-commons', collected_at: new Date().toISOString(), method: 'portal', contributor: null, license: 'CC BY 4.0' },
+      source: { method: 'self_asserted', url: null, contributor: null, collected_at: new Date().toISOString(), license: 'CC BY 4.0' },
     });
   }
 
@@ -405,7 +405,6 @@ export async function updateSeriesFutureInstances(input: SeriesUpdateInput): Pro
               source: 'portal',
               visibility: 'public',
               status: 'published',
-              is_business: true,
               region_id: null,
               event_timezone: lastTz,
               event_at: eventAt,
@@ -544,7 +543,7 @@ export async function autoExtendSeries(): Promise<{
             creator_account_id: series.creator_account_id,
             user_id: adminUserId,
             source: 'portal', visibility: 'public', status: 'published',
-            is_business: true, region_id: null,
+            region_id: null,
             event_timezone: tz,
             event_at: eventAt, end_time: endTimeTs,
             recurrence, series_id: series.id,
@@ -609,7 +608,7 @@ export async function autoExtendSeries(): Promise<{
           creator_account_id: series.creator_account_id,
           user_id: adminUserId,
           source: 'portal', visibility: 'public', status: 'published',
-          is_business: true, region_id: null,
+          region_id: null,
           event_timezone: tz,
           event_at: eventAt, end_time: endTimeTs,
           recurrence, series_id: series.id,

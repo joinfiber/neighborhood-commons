@@ -33,7 +33,11 @@ export interface paths {
         };
         /**
          * Events changes feed
-         * @description Lightweight public sync endpoint for consumers without a service key. Returns events whose updated_at is greater than the `since` cursor, plus the IDs of events that have ended since that cursor. NOT under /v1 — the full URL is `/api/events/changes`. Rate limit: 10/min per IP. Responses are cached 60s. For higher throughput, use a service key and call `/v1/service/events`.
+         * @description Lightweight public sync endpoint for consumers without a service key. Returns events whose updated_at is greater than the `since` cursor, plus the IDs of events that have ended since that cursor. Rate limit: 10/min per IP. Responses are cached 60s.
+         *
+         *     **Path note:** this endpoint is mounted at `/api/events/changes` — outside the `/api/v1` prefix that the rest of the spec uses. The OpenAPI path-level `servers` override above reflects this. **SDK callers (openapi-fetch et al. that don't honor path-level overrides):** either construct a second client with `baseUrl` pointed at `https://neighborhood-commons.org/api`, or call this endpoint with raw `fetch`. The SDK README documents the workaround.
+         *
+         *     For higher throughput, use a service key and call `/v1/service/events` instead.
          */
         get: operations["getChangesFeed"];
         put?: never;
@@ -439,7 +443,7 @@ export interface paths {
         put?: never;
         /**
          * Issue API key (service/admin)
-         * @description Create a new API key. v2: writeable scope (which organizations the key may publish for) is established separately via `POST /service/organizations/link` after issuance. The optional `account_id` field references an operational tenant portal_account but does not grant write authority on its own. Returns the raw key string ONCE — store it immediately, it is unrecoverable.
+         * @description Create a new API key. Writeable scope (which organizations the key may publish for) is established separately via `POST /service/organizations/link` after issuance. The optional `account_id` field references an operational tenant portal_account but does not grant write authority on its own. Returns the raw key string ONCE — store it immediately, it is unrecoverable.
          */
         post: operations["serviceCreateApiKey"];
         delete?: never;
@@ -706,7 +710,7 @@ export interface paths {
         };
         /**
          * List organizations
-         * @description Public read of Organization records. Filters compose for opt-in consumption: `kind` for subtype, `verified` and `verified_by` for trust, `near`/`radius_km` for proximity, `created_by_contributor` for app-source slicing.
+         * @description Public read of Organization records. Filters compose for opt-in consumption: `commercial` for the for-profit signal, `tag` for descriptive labels, `verified` and `verified_by` for trust, `near`/`radius_km` for proximity, `created_by_contributor` for app-source slicing. Classification (business vs. community group vs. collective etc.) is derived by consumers from `tags`, `commercial`, and structural signals — there is no `kind` enum.
          */
         get: operations["listOrganizations"];
         put?: never;
@@ -743,7 +747,7 @@ export interface paths {
         };
         /**
          * List publishers
-         * @description Organizations that publish into the Commons — those with at least one event or active broadcast attributed to them. Same response shape as `/organizations`; the difference is a "has published" filter applied at the query layer. Replaces the legacy `/v1/accounts` route (which conflated publisher identity with user accounts).
+         * @description Organizations that publish into the Commons — those with at least one event or active broadcast attributed to them. Same response shape as `/organizations`; the difference is a "has published" filter applied at the query layer.
          */
         get: operations["listPublishers"];
         put?: never;
@@ -876,7 +880,7 @@ export interface paths {
         put?: never;
         /**
          * Issue a verification challenge (auto-track)
-         * @description Auto-track verification path: send a one-time code to the identifier (email). Used for business-domain emails on heavy-rigor org targets, or any email on light-rigor targets (groups, persons). Personal-email domains for heavy-rigor targets are rejected here with WRONG_METHOD — call /service/verifications/manual instead.
+         * @description Auto-track verification path: send a one-time code to the identifier (email). Used for business-domain emails on heavy-rigor organizations (commercial=true) and any email on light-rigor organizations (community groups, collectives, etc.). Personal-email domains for heavy-rigor targets are rejected here with WRONG_METHOD — call /service/verifications/manual instead.
          */
         post: operations["serviceCreateVerificationChallenge"];
         delete?: never;
@@ -1189,11 +1193,11 @@ export interface paths {
         put?: never;
         /**
          * Find-or-create a portal account by email (tenant claim)
-         * @description v2: operational tenant claim only. Establishes a portal_account row with the given email and marks it claimed by the calling app. Does NOT grant writeable scope — that flows through `api_key_organization_links`, established by `POST /service/organizations/link` or auto-linked when the calling key creates an organization via `POST /service/organizations`.
+         * @description Operational tenant claim only. Establishes a portal_account row with the given email and marks it claimed by the calling app. Does NOT grant writeable scope — that flows through `api_key_organization_links`, established by `POST /service/organizations/link` or auto-linked when the calling key creates an organization via `POST /service/organizations`.
          *
          *     Idempotent: calling with the same email returns the existing account.
          *
-         *     **Defense-in-depth on claim**: the endpoint refuses (409 CONFLICT) to claim an account that has `auth_user_id` set (a legacy Supabase Auth owner) or that has been claimed under a different `claimed_by` identifier than the request. Admin keys bypass both checks.
+         *     **Defense-in-depth on claim**: the endpoint refuses (409 CONFLICT) to claim an account that has `auth_user_id` set (a Supabase Auth owner) or that has been claimed under a different `claimed_by` identifier than the request. Admin keys bypass both checks.
          */
         post: operations["serviceLinkAccount"];
         delete?: never;
@@ -1277,7 +1281,7 @@ export interface paths {
         head?: never;
         /**
          * Re-attribute an event to a different organizer
-         * @description v2: re-attribute an event to a different organization. The Person primitive is gone — `organizerPersonId` is no longer accepted.
+         * @description Re-attribute an event to a different organization.
          *
          *     Authorization (non-admin keys): the caller's key must be linked to both the event's **current** `organizer_org_id` AND the **target** organization via `api_key_organization_links`. Re-attribution can't conjure events for an org the caller doesn't control. Witnessed-evidence keys (`source_method='witnessed'` + `witness_authority=true`) bypass the current-organizer link check.
          *
@@ -1294,7 +1298,10 @@ export interface components {
             total: number;
             limit: number;
             offset: number;
-            /** @example neighborhood-api-v0.2 */
+            /**
+             * @description The upstream Neighborhood API spec this implementation conforms to (distinct from the implementation version of this specific Commons instance, which is in `info.version` of `/openapi.json` and at `/meta` under `implementation_version`).
+             * @example neighborhood-api-v0.2
+             */
             spec: string;
             /** @example CC-BY-4.0 */
             license: string;
@@ -1327,8 +1334,8 @@ export interface components {
             /** Format: uri */
             url?: string | null;
             images?: string[];
-            /** @description v2: organizer is always an organization reference. Post-migration 081, `events.organizer_org_id` is NOT NULL, so id/slug are always present. `verified` is hydrated from `organization_verifications`. `phone` is retained as a legacy field — always null in v2. */
-            organizer?: {
+            /** @description Organizer is always an organization reference. `events.organizer_org_id` is NOT NULL, so id/slug are always present. `verified` is hydrated from `organization_verifications`. `phone` is retained as a vestigial field — always null. */
+            organizer: {
                 /** Format: uuid */
                 id: string;
                 slug: string;
@@ -1358,7 +1365,7 @@ export interface components {
             recurrence?: null | {
                 rrule?: string;
             };
-            /** @description Authority tier. `true` if the event's organizer (organization or person) had at least one active verified identifier at the time the event was inserted — meaning the event was posted by the verified business itself. `false` for public-facts events aggregated from scrapers, feeds, and ingestion pipelines. Computed server-side; not a writable input. Filterable via `?first_party=true|false` on `GET /events`. */
+            /** @description Authority tier. `true` if the event's organizer had at least one active verified identifier at the time the event was inserted — meaning the event was posted by the verified organization itself. `false` for events whose organizer hadn't completed verification at write time (typically proxied or witnessed events). Computed server-side; not a writable input. Filterable via `?first_party=true|false` on `GET /events`. Related but distinct from `source.method`: `first_party` is a snapshot of verification state at write time; `source.method` describes the authority chain. */
             first_party?: boolean;
             /** @description Vertical focal point for image cropping (0=top, 1=bottom, 0.5=center) */
             event_image_focal_y?: number | null;
@@ -1369,26 +1376,30 @@ export interface components {
             tmdb_id?: string | null;
             source: components["schemas"]["Source"];
         };
+        /** @description Event provenance under the four-role frame (see docs/four-roles.md). Carries the contributor identity (which ecosystem participant routed the event in), the method (authority shape: self_asserted, proxied, witnessed), the source URL when applicable (proxied events), plus collected_at and license. Does not carry a `publisher` field — the role 'who is this from?' is filled by the top-level `organizer.name`. */
         Source: {
-            /** @description Venue or organizer name */
-            publisher: string;
-            /** Format: date-time */
-            collected_at: string;
             /**
-             * @description Provenance. `witnessed` (v2) is the collective-evidence path — a key with `witness_authority=true` writes events attributed to a collective publisher organization (e.g., "Fiber Community") with documentary evidence (typically OCR'd flyers).
+             * @description Standard provenance method (docs/provenance.md). `self_asserted`: the organizer asserted this via the contributor (entity-runs-it). `proxied`: the contributor extracted this from a public URL (pipeline-proxies). `witnessed`: the contributor observed this with documentary evidence under a collective identity (witnessed-with-evidence). Drives rendering rules — consumers typically suppress the 'via {contributor}' line on `witnessed` events because the organizer is the collective constituted by the contributor.
              * @enum {string}
              */
-            method: "portal" | "import" | "api" | "witnessed";
-            /** @description The app that contributed this data to the commons. Null for portal-submitted events. */
-            contributor?: null | {
-                /** @description App/tool that contributed this data */
+            method: "self_asserted" | "proxied" | "witnessed";
+            /**
+             * Format: uri
+             * @description When method is `proxied`, the public URL the contributor extracted from (for transparency). Null otherwise.
+             */
+            url: string | null;
+            /** @description The ecosystem participant that routed this event into the Commons. Editorial public-facing identity — separate from the operational API key. Null for legacy rows without contributor attribution. */
+            contributor: null | {
+                /** @description Public-facing name of the contributing app/pipeline. */
                 name?: string;
                 /**
                  * Format: uri
-                 * @description Contributor website
+                 * @description Contributor website.
                  */
                 url?: string | null;
             };
+            /** Format: date-time */
+            collected_at: string;
             /** @example CC BY 4.0 */
             license: string;
         };
@@ -1450,14 +1461,14 @@ export interface components {
              * @default false
              */
             first_party: boolean;
-            source_publisher?: string | null;
+            /** @description When source_method is `proxied`, the public URL the contributor extracted from. Null otherwise. */
             source_feed_url?: string | null;
             /** @description TMDB film ID for clustering film-category events. See Event.tmdb_id. */
             tmdb_id?: string | null;
             /** Format: date-time */
             created_at: string;
         };
-        /** @description v2: operational portal_account shell — email, claim state, status, timestamps. Business profile (name, address, logo, hours, etc.) lives on organizations now (migration 082). */
+        /** @description Operational portal_account shell — email, claim state, status, timestamps. Business profile (name, address, logo, hours, etc.) lives on organizations. */
         ServiceAccount: {
             /** Format: uuid */
             id: string;
@@ -1516,20 +1527,20 @@ export interface components {
         /**
          * @description Input schema for the Service API. Uses Neighborhood API friendly-shape field names (name, start, location, url, cost) — symmetric with the read schema. Recurrence is optional; omit for one-off events.
          *
-         *     v2: `organizerOrganizationId` is required (the constrained-publishing authority anchor). The calling service key must be linked to that organization via `api_key_organization_links`, OR set `source_method='witnessed'` from a key with `witness_authority=true` (the collective-evidence path). The legacy `account_id` field is gone.
+         *     `organizerOrganizationId` is required (the constrained-publishing authority anchor). The calling service key must be linked to that organization via `api_key_organization_links`, OR set `source_method='witnessed'` from a key with `witness_authority=true` (the collective-evidence path).
          */
         ServiceEventInput: {
             /**
              * Format: uuid
-             * @description v2: the organization this event is published for. Required. Caller's service key must be linked to this org via `api_key_organization_links` (or use the witnessed-evidence path).
+             * @description The organization this event is published for. Required. Caller's service key must be linked to this org via `api_key_organization_links` (or use the witnessed-evidence path).
              */
             organizerOrganizationId: string;
             /**
-             * @description v2: caller-set provenance. `api` (default) requires `api_key_organization_links` linkage. `witnessed` is the collective-evidence path — requires `api_keys.witness_authority=true` and is attributed to a collective publisher organization (e.g., "Fiber Community").
-             * @default api
+             * @description Caller-set provenance method (docs/four-roles.md, docs/provenance.md). `self_asserted` (default): the organizer asserted this event; requires `api_key_organization_links` linkage. `witnessed`: collective-evidence path; requires `api_keys.witness_authority=true` and is attributed to a collective publisher organization. `proxied` is not caller-settable — it's reserved for internal pipeline code paths.
+             * @default self_asserted
              * @enum {string}
              */
-            source_method: "api" | "witnessed";
+            source_method: "self_asserted" | "witnessed";
             name: string;
             /**
              * Format: date-time
@@ -1645,7 +1656,7 @@ export interface components {
             /** @description 24h time, e.g. "17:00" */
             closes?: string;
         };
-        /** @description Schema.org Place. A physical location. Identity is the address; the stable cross-source key is `googlePlaceId` (the one Google datum permitted indefinite storage). v2: categories come from OpenStreetMap (ODbL-licensed, attributed) — see `placeCategories` and `categorySource`. Google response data beyond `googlePlaceId` is never persisted into these columns. */
+        /** @description Schema.org Place. A physical location. Identity is the address; the stable cross-source key is `googlePlaceId` (the one Google datum permitted indefinite storage). Categories come from OpenStreetMap (ODbL-licensed, attributed) — see `placeCategories` and `categorySource`. Google response data beyond `googlePlaceId` is never persisted into these columns. */
         Place: {
             /** Format: uuid */
             id: string;
@@ -1654,10 +1665,10 @@ export interface components {
             geo: components["schemas"]["GeoCoordinates"];
             /** @description External IDs. Common entry: { propertyID: "googlePlaceId", value: "ChIJ..." } */
             identifier?: components["schemas"]["IdentifierValue"][];
-            /** @description v2: place categorization (e.g., "cafe", "live_music_venue"). Sourced from OpenStreetMap by default; never from Google response data. */
+            /** @description Place categorization (e.g., "cafe", "live_music_venue"). Sourced from OpenStreetMap by default; never from Google response data. */
             placeCategories?: string[];
             /**
-             * @description v2: provenance of `placeCategories`. `osm` (default), `admin_review` (operator added), `publisher_declaration` (verified publisher refined).
+             * @description Provenance of `placeCategories`. `osm` (default), `admin_review` (operator added), `publisher_declaration` (verified publisher refined).
              * @enum {string|null}
              */
             categorySource?: "osm" | "admin_review" | "publisher_declaration" | null;
@@ -1676,7 +1687,7 @@ export interface components {
             address?: components["schemas"]["PostalAddress"];
             geo: components["schemas"]["GeoCoordinates"];
         };
-        /** @description Verification block exposed on verified Organization responses. v2: anchors Type A authority on organizations only (the cross-app reputation graph was retired). */
+        /** @description Verification block exposed on verified Organization responses. Anchors Type A authority on organizations only — there is no cross-app reputation graph. */
         Verification: {
             /** @enum {string} */
             method: "domain_email_loop" | "manual_review";
@@ -1690,7 +1701,7 @@ export interface components {
             /** @description Stable app name (snapshot at approval time, immune to key rotation). */
             verifiedByApp: string;
         };
-        /** @description A specific verified identifier on an organization. Service-tier responses include full value; public responses may mask. v2: dropped `identifierDomain` (the v2 `organization_verifications` table stores normalized values without a domain column). */
+        /** @description A specific verified identifier on an organization. Service-tier responses include full value; public responses may mask. */
         VerifiedIdentifier: {
             /** @enum {string} */
             identifierType: "email";
@@ -1704,12 +1715,17 @@ export interface components {
             /** @enum {string} */
             status?: "active" | "revoked";
         };
-        /** @description Schema.org Organization. v2: the unified entity primitive — businesses, community groups, nonprofits, collectives, solo operators (organizations-of-one). Classification emerges from `tags` (descriptive labels), `commercial` (for-profit boolean), and structural signals (primary place, event history). The legacy `kind` enum was retired in v2 because it mixed structural facts, vibes, and legal status into one false choice. `additionalType` is derived structurally — `LocalBusiness` when a primary place is set, plain `Organization` otherwise. */
+        /** @description Schema.org Organization. The unified entity primitive — businesses, community groups, nonprofits, collectives, solo operators (organizations-of-one). Classification emerges from `tags` (descriptive labels), `commercial` (for-profit boolean), and structural signals (primary place, event history). The legacy `kind` enum was retired because it mixed structural facts, vibes, and legal status into one false choice. `additionalType` is derived structurally — `LocalBusiness` when a primary place is set, plain `Organization` otherwise. `method` carries the provenance under the standard four-value vocabulary (docs/provenance.md). */
         Organization: {
             /** Format: uuid */
             id: string;
             slug: string;
             name: string;
+            /**
+             * @description Standard provenance method (docs/provenance.md). `self_asserted`: first-party authority (the org has claimed and verified itself). `proxied`: extracted from a public source (e.g. a business registry). `witnessed`: collective-evidence path. `seeded`: bulk-imported, awaiting first-party uptake. Consumers can filter for `self_asserted` orgs to surface only first-party-asserted records.
+             * @enum {string}
+             */
+            method: "self_asserted" | "proxied" | "witnessed" | "seeded";
             /** @description Official registered name. Optional, primarily for verified businesses. */
             legalName?: string | null;
             /** @description Descriptive labels — free-form within format rules. Recommended starter vocabulary at `/v1/meta/tags` (when shipped). Not a hard taxonomy; consumer apps filter on whatever tags appear in practice. */
@@ -1744,7 +1760,7 @@ export interface components {
             /** Format: date-time */
             updated_at?: string;
         };
-        /** @description Input shape for creating or updating an Organization. v2: no `kind` field — classify via `tags` + `commercial` instead. Calling key auto-links to the new organization on create via `api_key_organization_links`; use `POST /service/organizations/link` to link to an existing org. */
+        /** @description Input shape for creating or updating an Organization. Classification is via `tags` (descriptive labels) and `commercial` (for-profit signal) — there is no `kind` field. Calling key auto-links to the new organization on create via `api_key_organization_links`; use `POST /service/organizations/link` to link to an existing org. */
         OrganizationInput: {
             name: string;
             /** @description Optional; auto-generated from name if omitted. */
@@ -1773,7 +1789,7 @@ export interface components {
              */
             primaryPlaceId?: string;
         };
-        /** @description Ephemeral real-time signal from an Organization, pinned to a Place. Maximum lifetime 24h. No direct Schema.org analog; conventions borrowed from SpecialAnnouncement (`datePosted`, `expires`). */
+        /** @description Ephemeral real-time signal from an Organization, pinned to a Place. Maximum lifetime 24h. No direct Schema.org analog; conventions borrowed from SpecialAnnouncement (`datePosted`, `expires`). `method` carries the standard provenance vocabulary — broadcasts are always first-party from the organization (only `self_asserted` is valid today). */
         Broadcast: {
             /** Format: uuid */
             id: string;
@@ -1784,6 +1800,11 @@ export interface components {
             expires: string;
             /** @enum {string} */
             status?: "active" | "expired" | "retracted";
+            /**
+             * @description Standard provenance method (docs/provenance.md). Only `self_asserted` is valid today — broadcasts are always first-party from the organization. Field exists for symmetry across primitives; new methods can be added additively.
+             * @enum {string}
+             */
+            method: "self_asserted";
             organization: components["schemas"]["Organization"];
             location: components["schemas"]["Place"];
             source: components["schemas"]["Source"];
@@ -1808,13 +1829,18 @@ export interface components {
             /** @description Curator's optional commentary on this item. */
             curatorNote?: string | null;
         };
-        /** @description Schema.org ItemList. A curatorial selection by an Organization — "this weekend's picks," "best park benches in Fishtown," etc. v2: curator is always an organization (the Person primitive is gone). */
+        /** @description Schema.org ItemList. A curatorial selection by an Organization — "this weekend's picks," "best park benches in Fishtown," etc. Curator is always an organization (the Person primitive is gone). `method` carries the standard provenance vocabulary — lists are always editorial assertions by the curator (only `self_asserted` is valid today). */
         List: {
             /** Format: uuid */
             id: string;
             slug: string;
             name: string;
             description?: string | null;
+            /**
+             * @description Standard provenance method (docs/provenance.md). Only `self_asserted` is valid today — lists are editorial assertions by the curator. Field exists for symmetry across primitives.
+             * @enum {string}
+             */
+            method: "self_asserted";
             /** @description The Organization that maintains this list. */
             curator: components["schemas"]["Organization"];
             /**
@@ -1829,7 +1855,7 @@ export interface components {
             /** Format: date-time */
             updated_at?: string;
         };
-        /** @description Input for creating a list. v2: curator is always an organization (curatorOrganizationId is required). The legacy `curator: {type, id}` shape is gone. */
+        /** @description Input for creating a list. Curator is always an organization — `curatorOrganizationId` is required. */
         ListInput: {
             name: string;
             slug?: string;
@@ -1848,7 +1874,7 @@ export interface components {
             itemId: string;
             curatorNote?: string;
         };
-        /** @description v2: only organizations verify; targetType is gone. */
+        /** @description Only organizations verify; there is no targetType discriminator. */
         VerificationPathRequest: {
             /** Format: uuid */
             organization_id: string;
@@ -1869,7 +1895,7 @@ export interface components {
             /** @description Populated when alreadyVerified=true. */
             existingIdentifier?: components["schemas"]["VerifiedIdentifier"] | null;
         };
-        /** @description v2: only organizations verify; targetType is gone. */
+        /** @description Only organizations verify; there is no targetType discriminator. */
         VerificationChallengeInput: {
             /** Format: uuid */
             organizationId: string;
@@ -1904,7 +1930,7 @@ export interface components {
             /** @description Set when status=rejected. */
             reason?: string | null;
         };
-        /** @description Submission for the manual-review path. Evidence is structured and required fields enforced at submit. Apps with verification_authority for the matching method auto-approve; others queue. v2: only organizations verify; targetType is gone. */
+        /** @description Submission for the manual-review path. Evidence is structured and required fields enforced at submit. Apps with verification_authority for the matching method auto-approve; others queue. */
         VerificationManualInput: {
             /** Format: uuid */
             organizationId: string;
@@ -1924,13 +1950,13 @@ export interface components {
                 supportingNotes?: string;
             };
         };
-        /** @description An item in the verification review queue (admin-tier endpoints). v2: targets are always organizations. */
+        /** @description An item in the verification review queue (admin-tier endpoints). Targets are always organizations. */
         PendingReview: {
             /** Format: uuid */
             id: string;
             /**
              * Format: uuid
-             * @description v2: only organizations verify; this replaces the legacy targetType/targetId pair.
+             * @description The organization being verified.
              */
             organizationId: string;
             identifierType: string;
@@ -2031,15 +2057,13 @@ export interface operations {
                 collapse_series?: "true" | "false";
                 /** @description Filter to events in a specific series */
                 series_id?: string;
-                /** @description Filter to events belonging to a specific group */
-                group_id?: string;
                 /** @description Filter recurring (true) or one-off (false) events */
                 recurring?: "true" | "false";
-                /** @description Filter by organizer organization slug. v2: resolves against `organizations.slug` → `events.organizer_org_id` (replaces the legacy `portal_accounts.slug` lookup). */
+                /** @description Filter by organizer organization slug. Resolves against `organizations.slug` → `events.organizer_org_id`. */
                 contributor?: string;
-                /** @description v2: filter to events whose organizer is for-profit (`commercial=true`) vs. non-commercial (`commercial=false`). Joins through `organizations.commercial`. */
+                /** @description Filter to events whose organizer is for-profit (`commercial=true`) vs. non-commercial (`commercial=false`). Joins through `organizations.commercial`. */
                 commercial?: "true" | "false";
-                /** @description v2: filter to events at places with the given OSM-sourced category (e.g., `cafe`, `live_music_venue`). Joins through `places.place_categories`. */
+                /** @description Filter to events at places with the given OSM-sourced category (e.g., `cafe`, `live_music_venue`). Joins through `places.place_categories`. */
                 place_category?: string;
                 /** @description Filter to all showings of a film (clusters film-category events across theaters and dates). Pair with `?category=film` for clean results. */
                 tmdb_id?: string;
@@ -2183,8 +2207,6 @@ export interface operations {
                 near?: string;
                 /** @description Proximity radius in km */
                 radius_km?: number;
-                /** @description Filter by group */
-                group_id?: string;
                 /** @description Override default 30-day lookback */
                 start_after?: string;
                 /** @description Override default 90-day lookahead */
@@ -2224,8 +2246,6 @@ export interface operations {
                 near?: string;
                 /** @description Proximity radius in km */
                 radius_km?: number;
-                /** @description Filter by group */
-                group_id?: string;
                 /** @description Events after this date */
                 start_after?: string;
                 /** @description Events before this date */
@@ -2649,7 +2669,7 @@ export interface operations {
                 /** @description Text search on title, venue name, address */
                 search?: string;
                 category?: string;
-                source_method?: "portal" | "api" | "import";
+                source_method?: "self_asserted" | "proxied" | "witnessed";
                 /** @description Include all series instances (default: false) */
                 all_instances?: "true" | "false";
                 limit?: number;
@@ -3712,7 +3732,6 @@ export interface operations {
     listOrganizations: {
         parameters: {
             query?: {
-                kind?: "local_business" | "business" | "community_group" | "nonprofit" | "curator" | "collective";
                 /** @description True to filter to verified organizations only. */
                 verified?: boolean;
                 /** @description Comma-separated app names. Filters to organizations verified by any of these apps. */
@@ -3902,7 +3921,6 @@ export interface operations {
         parameters: {
             query?: {
                 curator_id?: string;
-                curator_type?: "organization" | "person";
                 q?: string;
                 limit?: number;
                 offset?: number;
@@ -3956,7 +3974,8 @@ export interface operations {
     serviceVerificationPath: {
         parameters: {
             query: {
-                target_type: "organization" | "person";
+                /** @description Always `organization`. Retained as a query parameter for forward compatibility; the substrate may admit additional target types in future minor versions. */
+                target_type: "organization";
                 target_id: string;
                 identifier_type: "email";
                 identifier_value: string;

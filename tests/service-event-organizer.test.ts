@@ -109,7 +109,7 @@ function setEvent(overrides: Record<string, unknown> = {}) {
     data: {
       id: EVENT_ID,
       organizer_org_id: ORG_ID,
-      source_method: 'api',
+      source_method: 'self_asserted',
       content: 'Test event',
       event_at: '2026-06-01T19:00:00-04:00',
       event_timezone: 'America/New_York',

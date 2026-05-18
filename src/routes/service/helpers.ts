@@ -1,14 +1,13 @@
 /**
- * Service API — Scoped-access helpers (v2)
+ * Service API — Scoped-access helpers
  *
  * Service-tier API keys can only modify data for organizations they're
  * explicitly linked to via `api_key_organization_links`. Admin keys
  * (is_admin=true) bypass the link check for platform-wide operations.
  *
- * v2: scope is anchored on organizations (constrained-publishing model).
- * The legacy account-link path is gone (api_key_account_links was
- * dropped in migration 082). Operational scope on `portal_accounts`
- * traverses `organizations.owner_account_id`.
+ * Scope is anchored on organizations (constrained-publishing model).
+ * Operational scope on `portal_accounts` traverses
+ * `organizations.owner_account_id`.
  *
  * Read endpoints don't call these — public data is readable by any key.
  */
@@ -65,7 +64,7 @@ export async function assertLinkedAccount(req: Request, accountId: string): Prom
  * Assert that the calling service key is linked to the organization that
  * organizes a given event. Returns the organizer_org_id on success.
  *
- * v2: scope check is on `events.organizer_org_id`. The witnessed-evidence
+ * Scope check is on `events.organizer_org_id`. The witnessed-evidence
  * authority path (source_method='witnessed' + api_keys.witness_authority)
  * bypasses the link check.
  */

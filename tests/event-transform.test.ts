@@ -44,8 +44,8 @@ function makeRow(overrides: Partial<PortalEventRow> = {}): PortalEventRow {
     link_url: 'https://example.com/tickets',
     event_image_url: 'https://images.example.com/jazz.jpg',
     created_at: '2026-03-10T12:00:00.000Z',
-    source_method: null,
-    source_publisher: null,
+    source_method: 'self_asserted',
+    source_feed_url: null,
     source_contributor_url: null,
     source_contributor_name: null,
     first_party: false,
@@ -189,41 +189,49 @@ describe('toNeighborhoodEvent', () => {
     expect(event.recurrence).toBeNull();
   });
 
-  it('always includes source with required fields', () => {
+  it('always includes source with required fields (four-role shape)', () => {
+    // Post-085: no `publisher` field — organizer.name fills the role.
+    // source carries method + url + contributor + collected_at + license.
     const event = toNeighborhoodEvent(makeRow());
     expect(event.source).toEqual({
-      publisher: 'South Jazz Kitchen',
-      collected_at: '2026-03-10T12:00:00.000Z',
-      method: 'portal',
+      method: 'self_asserted',
+      url: null,
       contributor: null,
+      collected_at: '2026-03-10T12:00:00.000Z',
       license: 'CC BY 4.0',
     });
+    // The organizer.name carries the "who is this from?" role.
+    expect(event.organizer.name).toBe('South Jazz Kitchen');
   });
 
-  it('falls back to "Neighborhood Commons" for publisher when nothing is set', () => {
-    // v2: publisher = source_publisher (if api/import/witnessed) OR organizer name
-    // OR source_publisher OR 'Neighborhood Commons'. With no organization,
-    // no place_name, and no source_publisher → 'Neighborhood Commons'.
+  it('surfaces source_feed_url as source.url on proxied events', () => {
     const event = toNeighborhoodEvent(makeRow({
-      organizations: null,
-      organizer_org_id: null,
-      place_name: '',
-      source_publisher: null,
+      source_method: 'proxied',
+      source_feed_url: 'https://johnnybrendas.com/calendar',
     }));
-    expect(event.source.publisher).toBe('Neighborhood Commons');
+    expect(event.source.method).toBe('proxied');
+    expect(event.source.url).toBe('https://johnnybrendas.com/calendar');
+  });
+
+  it('clears source.url for non-proxied methods even if source_feed_url is set', () => {
+    // Defensive: source_feed_url has historically been overloaded (e.g. api-key:<id>).
+    // The public response only surfaces it as source.url when method is proxied.
+    const event = toNeighborhoodEvent(makeRow({
+      source_method: 'self_asserted',
+      source_feed_url: 'api-key:abc123',
+    }));
+    expect(event.source.url).toBeNull();
   });
 
   // -------------------------------------------------------------------------
-  // source.contributor — v2.1: just source_contributor_name (and url) or null.
-  // The pre-v2 fallback that used source_publisher as a stand-in for
-  // contributor was retired (it conflated publisher with contributor).
+  // source.contributor — frozen snapshot of source_contributor_name / url.
+  // No publisher fallback; null when the columns are null.
   // -------------------------------------------------------------------------
 
   describe('source.contributor', () => {
     it('reads source_contributor_name + url when set', () => {
       const event = toNeighborhoodEvent(makeRow({
-        source_method: 'api',
-        source_publisher: 'monday-night-rides',
+        source_method: 'self_asserted',
         source_contributor_name: 'Go There',
         source_contributor_url: 'https://gothere.bike',
       }));
@@ -231,59 +239,37 @@ describe('toNeighborhoodEvent', () => {
         name: 'Go There',
         url: 'https://gothere.bike',
       });
-      expect(event.source.publisher).toBe('monday-night-rides');
     });
 
     it('accepts null url when name is set', () => {
       const event = toNeighborhoodEvent(makeRow({
-        source_method: 'api',
-        source_publisher: 'monday-night-rides',
+        source_method: 'self_asserted',
         source_contributor_name: 'Go There',
         source_contributor_url: null,
       }));
       expect(event.source.contributor).toEqual({ name: 'Go There', url: null });
     });
 
-    it('returns null on api events with null source_contributor_name (no publisher fallback)', () => {
-      // v2.1: the legacy fallback that used source_publisher as the contributor
-      // is gone. api-method events with null source_contributor_name return
-      // null — service/events.ts auto-fills the column at write time from the
-      // calling key's brand_config.app_name, so this null state only persists
-      // on pre-v2.1 rows that haven't been re-written.
+    it('returns null when source_contributor_name is null', () => {
+      // The legacy fallback that used source_publisher as a stand-in for
+      // contributor is retired — null is the honest answer when the column
+      // is null. service/events.ts auto-fills source_contributor_name on
+      // write from the calling key's brand identity, so this null state
+      // only persists on pre-cleanup rows.
       const event = toNeighborhoodEvent(makeRow({
-        source_method: 'api',
-        source_publisher: 'Merrie',
-        source_contributor_url: 'https://merrie.co',
+        source_method: 'self_asserted',
         source_contributor_name: null,
+        source_contributor_url: null,
       }));
       expect(event.source.contributor).toBeNull();
     });
 
-    it('returns null contributor on portal events without override', () => {
-      const event = toNeighborhoodEvent(makeRow());
-      expect(event.source.contributor).toBeNull();
-    });
-
-    it('returns null contributor on import events without override', () => {
+    it('returns null contributor on proxied events without override', () => {
       const event = toNeighborhoodEvent(makeRow({
-        source_method: 'import',
-        source_publisher: 'philly-gov-feed',
+        source_method: 'proxied',
+        source_feed_url: 'https://philly.gov/calendar.rss',
       }));
       expect(event.source.contributor).toBeNull();
-    });
-
-    it('override fires even on non-api source_method', () => {
-      // Portal events can carry a contributor override too — the column
-      // is independent of source_method.
-      const event = toNeighborhoodEvent(makeRow({
-        source_method: null,
-        source_contributor_name: 'Go There',
-        source_contributor_url: 'https://gothere.bike',
-      }));
-      expect(event.source.contributor).toEqual({
-        name: 'Go There',
-        url: 'https://gothere.bike',
-      });
     });
   });
 

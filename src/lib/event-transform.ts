@@ -21,12 +21,9 @@ import { config } from '../config.js';
 /**
  * Events table row with organizations join (for public API / webhook use).
  *
- * v2: organizer comes from the joined `organizations` row via
- * `organizer_org_id`. The legacy `portal_accounts` join (which used to
- * supply `business_name` as the organizer name) is gone — that column
- * was dropped from portal_accounts in migration 082.
+ * Organizer comes from the joined `organizations` row via `organizer_org_id`.
  *
- * The suspended-status visibility check now traverses
+ * The suspended-status visibility check traverses
  * organizations.owner_account_id → portal_accounts.status. Organizations
  * without an owning portal account (e.g., admin-created via Studio) skip
  * the suspension check entirely.
@@ -57,16 +54,20 @@ export interface PortalEventRow {
   link_url: string | null;
   event_image_url: string | null;
   created_at: string;
-  // Contributor tracking (migrations 020, 045, 062)
-  source_method: string | null;
-  source_publisher: string | null;
+  // Provenance (see docs/provenance.md, docs/four-roles.md). Post-085:
+  //   source_method is NOT NULL, enum {self_asserted, proxied, witnessed}
+  //   source_publisher is dropped (organizer.name fills the role)
+  //   source_feed_url carries the proxied URL when method='proxied'
+  //   source_contributor_* are a frozen snapshot of the contributing app
+  source_method: 'self_asserted' | 'proxied' | 'witnessed';
+  source_feed_url: string | null;
   source_contributor_url: string | null;
   source_contributor_name: string | null;
   // First-party flag (migration 054; semantics finalized in 73c4bce)
   first_party: boolean;
   // TMDB film ID for cross-theater clustering (migration 063)
   tmdb_id: string | null;
-  // v2: organizer derived from organizations join via organizer_org_id (migration 067).
+  // Organizer derived from organizations join via organizer_org_id.
   // The nested portal_accounts (via owner_account_id) is for the suspended-status
   // visibility check; it's not exposed in the public response.
   organizer_org_id: string | null;
@@ -97,10 +98,9 @@ export interface NeighborhoodEvent {
   images: string[];
   event_image_focal_y: number;
   organizer: {
-    // v2: organizer is always an organization reference (no Person variant).
-    // Post-migration 081, events.organizer_org_id is NOT NULL, so id and slug
-    // are always present in the response. The "Unknown Organizer" placeholder
-    // catches any historical orphans.
+    // Organizer is always an organization reference. events.organizer_org_id
+    // is NOT NULL, so id and slug are always present in the response. The
+    // "Unknown Organizer" placeholder catches any historical orphans.
     id: string;              // org UUID, always present
     slug: string;             // org slug, always present
     name: string;             // org name (falls back to place_name only in pre-migration data)
@@ -120,11 +120,15 @@ export interface NeighborhoodEvent {
   tmdb_id: string | null;
   recurrence: { rrule: string } | null;
   source: {
-    publisher: string;
-    collected_at: string;
-    // v2: extended to include 'witnessed' for the Fiber Community OCR path
-    method: 'portal' | 'import' | 'api' | 'witnessed';
+    // v3 model (docs/provenance.md, docs/four-roles.md): four-role event
+    // provenance. Organizer/venue live at the top level; source carries
+    // the contributor + method + optional URL + collected_at + license.
+    // No `publisher` field — the role "who is this from?" is filled by
+    // organizer.name.
+    method: 'self_asserted' | 'proxied' | 'witnessed';
+    url: string | null;
     contributor: { name: string; url: string | null } | null;
+    collected_at: string;
     license: 'CC BY 4.0';
   };
 }
@@ -222,12 +226,12 @@ export function toRRule(recurrence: string, count?: number): string | null {
 /**
  * Transform an events table row (with organizations join) to Neighborhood API format.
  *
- * v2 changes from v1:
- *   - organizer is derived from the joined `organizations` row, not from
- *     portal_accounts.business_name (which was dropped in migration 082)
- *   - organizer.{id, slug, verified} are new fields; phone stays as null
- *     for backward compat with consumers reading {name, phone}
- *   - source.method extended to include 'witnessed' (Fiber Community OCR path)
+ * v3 / migration 085 (four-roles provenance, docs/four-roles.md):
+ *   - source.publisher removed (role filled by organizer.name)
+ *   - source.method is the standard provenance enum:
+ *     self_asserted / proxied / witnessed
+ *   - source.url is non-null only for proxied events
+ *   - contributor identity is a snapshot in source_contributor_*
  *
  * The `verifiedOrgIds` parameter is an optional Set of organization UUIDs
  * known to be verified. Callers that hydrate verifications in batch pass
@@ -285,24 +289,16 @@ export function toNeighborhoodEvent(
     tmdb_id: row.tmdb_id ?? null,
     recurrence: rrule ? { rrule } : null,
     source: {
-      // API/import/witnessed events: source_publisher is the canonical publisher (the external source).
-      // Portal events: organization name is the publisher.
-      publisher: (row.source_method && row.source_method !== 'portal' && row.source_publisher)
-        ? row.source_publisher
-        : (organizerName || row.source_publisher || 'Neighborhood Commons'),
-      collected_at: row.created_at,
-      method: (row.source_method || 'portal') as 'portal' | 'import' | 'api' | 'witnessed',
-      // v2.1: contributor is just `source_contributor_name` (and url) when
-      // set, null otherwise. The pre-v2 fallback that used source_publisher
-      // as a stand-in for contributor on api-method events conflated the
-      // two slots — publisher (who the event is FROM) vs. contributor
-      // (which app pushed it IN). Service API writes now auto-fill
-      // source_contributor_name from the calling key's brand_config.app_name
-      // when the caller didn't supply one, so the fallback is no longer
-      // needed and was producing wrong-slot data for v2 service events.
+      // Four-role event provenance (docs/four-roles.md). Method drives the
+      // authority chain and rendering rules; contributor carries the
+      // routing-participant identity; url is non-null only for proxied
+      // events. No publisher field — organizer.name fills that role.
+      method: row.source_method,
+      url: row.source_method === 'proxied' ? (row.source_feed_url || null) : null,
       contributor: row.source_contributor_name
         ? { name: row.source_contributor_name, url: row.source_contributor_url || null }
         : null,
+      collected_at: row.created_at,
       license: 'CC BY 4.0',
     },
   };

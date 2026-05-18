@@ -1,5 +1,5 @@
 /**
- * Neighborhood API v0.2 — Feed Metadata
+ * /meta — Feed Metadata
  *
  * Per the Neighborhood API spec, /meta provides feed identity,
  * steward info, data sources, and supported resource types.
@@ -23,9 +23,11 @@ const router: ReturnType<typeof Router> = Router();
 router.get('/', (_req, res) => {
   res.json({
     name: 'Neighborhood Commons',
-    description: 'Open neighborhood event data, flourishes because of you.',
-    spec: 'neighborhood-api-v0.2',
-    spec_url: 'https://github.com/The-Relational-Technology-Project/neighborhood-api',
+    description: 'Open, typed substrate for neighborhood public facts.',
+    implementation_version: '3.0.0',
+    implementation_spec: 'https://neighborhood-commons.org/openapi.json',
+    upstream_spec: 'neighborhood-api-v0.2',
+    upstream_spec_url: 'https://github.com/The-Relational-Technology-Project/neighborhood-api',
     stewards: [
       {
         name: 'Neighborhood Commons',
@@ -36,24 +38,19 @@ router.get('/', (_req, res) => {
     ],
     data_sources: [
       {
-        name: 'Portal',
-        method: 'portal',
-        description: 'Events submitted directly by venue owners and promoters.',
+        name: 'Self-asserted',
+        method: 'self_asserted',
+        description: 'Events asserted by the organizing organization, routed through a contributor app. The first-party authority path.',
       },
       {
-        name: 'Import',
-        method: 'import',
-        description: 'Events ingested from iCal feeds and external sources.',
-      },
-      {
-        name: 'Service API',
-        method: 'api',
-        description: 'Events pushed by third-party apps via the Service API write path.',
+        name: 'Proxied',
+        method: 'proxied',
+        description: 'Events extracted from a public source (RSS feed, calendar page, CSV) by a pipeline tool. The source URL is preserved for transparency.',
       },
       {
         name: 'Witnessed',
         method: 'witnessed',
-        description: 'Events captured from public flyers and other documentary evidence by a collective publisher.',
+        description: 'Events captured from public flyers and other documentary evidence by a contributor publishing under a collective identity.',
       },
     ],
     resources: ['events'],

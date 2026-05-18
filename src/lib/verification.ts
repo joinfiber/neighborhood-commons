@@ -53,9 +53,8 @@ export function isPersonalEmailDomain(email: string): boolean {
  * Decide which verification path applies for an organization+identifier pair.
  * Returns the prescribed method and the endpoint apps should call next.
  *
- * v2: commercial=true organizations are heavy-rigor; non-commercial are
- * light-rigor (the legacy local_business/business/nonprofit vs.
- * community_group/curator/collective split).
+ * commercial=true organizations are heavy-rigor (business email-loop, or
+ * manual review with evidence). Non-commercial are light-rigor.
  */
 export type VerificationPathDecision = {
   requiredMethod: 'domain_email_loop' | 'manual_review';
@@ -101,7 +100,7 @@ export async function decideVerificationPath(
  * Look up an existing active verified identifier for an organization.
  * Returns null if not yet verified.
  *
- * v2: organization-only; the legacy target_type/target_id is gone.
+ * Organization-only; there is no target_type/target_id discriminator.
  */
 export async function findExistingVerifiedIdentifier(
   organizationId: string,
@@ -118,6 +117,40 @@ export async function findExistingVerifiedIdentifier(
     .maybeSingle();
 
   return data;
+}
+
+/**
+ * Promote an organization's `method` from `seeded` to `self_asserted` once
+ * a verification record is created. Per docs/provenance.md, a verified org
+ * has first-party authority and the substrate should reflect that. The
+ * promotion is conditional (only seeded → self_asserted) — non-seeded
+ * methods are left alone, so this never downgrades or overwrites
+ * proxied/witnessed/already-asserted rows.
+ *
+ * Best-effort: logs and swallows errors so a transient DB hiccup here
+ * doesn't fail the verification flow itself. Returns true if the row was
+ * actually flipped, false if it was already non-seeded or the update failed.
+ */
+export async function promoteOrganizationOnVerification(
+  organizationId: string,
+): Promise<boolean> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('organizations')
+      .update({ method: 'self_asserted' })
+      .eq('id', organizationId)
+      .eq('method', 'seeded')
+      .select('id')
+      .maybeSingle();
+    if (error) {
+      console.error('[VERIFICATION] org-method promotion failed for', organizationId, '—', error.message);
+      return false;
+    }
+    return !!data;
+  } catch (err) {
+    console.error('[VERIFICATION] org-method promotion threw for', organizationId, '—', err instanceof Error ? err.message : String(err));
+    return false;
+  }
 }
 
 /**

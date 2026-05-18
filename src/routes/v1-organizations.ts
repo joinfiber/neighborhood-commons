@@ -56,7 +56,6 @@ const PLACE_SELECT_INLINE = `
 `;
 
 const listSchema = z.object({
-  // v2: kind filter gone. Use tag + commercial + place_category for classification.
   tag: z.union([z.string().max(50), z.array(z.string().max(50))]).optional(),
   commercial: z.enum(['true', 'false']).optional(),
   place_category: z.string().max(50).optional(),
@@ -249,7 +248,7 @@ router.get('/:idOrSlug', async (req, res, next) => {
 // ---------------------------------------------------------------------------
 
 /**
- * v2: derive additionalType from structural data instead of a kind enum.
+ * Derive Schema.org additionalType from structural data.
  * Has primary_place_id → LocalBusiness. Otherwise → Organization.
  * Apps that want richer Schema.org subtyping can derive from tags or
  * place_categories on their side.

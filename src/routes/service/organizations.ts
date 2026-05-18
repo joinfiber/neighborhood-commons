@@ -40,7 +40,7 @@ const orgCreateSchema = z.object({
   name: z.string().min(1).max(200),
   slug: z.string().max(100).optional(),
   legalName: z.string().max(200).optional(),
-  // v2: kind enum retired (migration 082). Classify via tags + commercial.
+  // Classify via tags + commercial — there is no `kind` discriminator.
   tags: z.array(z.string().max(50)).max(15).optional(),
   commercial: z.boolean().nullable().optional(),
   description: z.string().max(2000).optional(),
@@ -129,6 +129,13 @@ router.post('/organizations', async (req, res, next) => {
         // account create orgs with owner_account_id=NULL — those orgs work
         // for everything except photo uploads.
         owner_account_id: req.apiKeyInfo?.tenantAccountId ?? null,
+        // Provenance (docs/provenance.md): orgs created via the service
+        // API are first-party-asserted by definition — the calling key is
+        // the contributor acting as courier for the entity asserting its
+        // own existence. The DB default ('seeded') is only correct for
+        // bulk-imported rows that arrive without a human-mediated
+        // assertion; that's not this path.
+        method: 'self_asserted',
       })
       .select('id')
       .single();

@@ -53,7 +53,6 @@ const listSchema = z.object({
   radius_km: z.coerce.number().min(0.1).max(100).optional(),
   collapse_series: z.enum(['true', 'false']).optional(),
   series_id: z.string().uuid().optional(),
-  group_id: z.string().uuid().optional(),
   recurring: z.enum(['true', 'false']).optional(),
   contributor: z.string().max(200).optional(),
   tmdb_id: z.string().max(50).optional(),
@@ -65,10 +64,10 @@ const listSchema = z.object({
   offset: z.coerce.number().min(0).default(0),
 });
 
-// v2: organizer derives from the organizations join via organizer_org_id.
+// Organizer derives from the organizations join via organizer_org_id.
 // The nested portal_accounts (via organizations.owner_account_id) is for the
 // suspended-status visibility check; it's not exposed in the public response.
-const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, event_image_focal_y, created_at, creator_account_id, series_id, series_instance_number, open_window, capacity, rsvp, tags, wheelchair_accessible, first_party, source_method, source_publisher, source_contributor_name, source_contributor_url, tmdb_id, organizer_org_id, organizations!events_organizer_org_id_fkey(id, slug, name, portal_accounts!organizations_owner_account_id_fkey(status))';
+const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, event_image_focal_y, created_at, creator_account_id, series_id, series_instance_number, open_window, capacity, rsvp, tags, wheelchair_accessible, first_party, source_method, source_feed_url, source_contributor_name, source_contributor_url, tmdb_id, organizer_org_id, organizations!events_organizer_org_id_fkey(id, slug, name, portal_accounts!organizations_owner_account_id_fkey(status))';
 
 // =============================================================================
 // SHARED QUERY BUILDING
@@ -78,11 +77,7 @@ type ListParams = z.infer<typeof listSchema>;
 
 /**
  * Resolve a contributor slug to organizer organization ID(s). Returns
- * null if no match.
- *
- * v2: contributor identity lives on organizations (organizations.slug),
- * not on portal_accounts. The events filter then matches on
- * events.organizer_org_id.
+ * null if no match. Matches on organizations.slug → events.organizer_org_id.
  */
 async function resolveContributorOrgIds(slug: string): Promise<string[] | null> {
   const { data } = await supabaseAdmin
@@ -145,11 +140,6 @@ async function queryFilteredEvents(params: ListParams, opts?: {
   // Series filter
   if (params.series_id) {
     query = query.eq('series_id', params.series_id);
-  }
-
-  // Group filter
-  if (params.group_id) {
-    query = query.eq('group_id', params.group_id);
   }
 
   // Recurring filter
@@ -250,7 +240,7 @@ async function queryFilteredEvents(params: ListParams, opts?: {
   const OPEN_WINDOW_DEFAULT_HOURS = 3;
   const now = new Date();
   const visible = rows.filter((row) => {
-    // v2: suspended-status check traverses organizations.owner_account_id → portal_accounts.status.
+    // Suspended-status check traverses organizations.owner_account_id → portal_accounts.status.
     // Organizations with no owning portal account (e.g., admin-created via Studio) skip the check.
     const org = row.organizations as Record<string, unknown> | null;
     const account = org?.portal_accounts as Record<string, unknown> | null;
@@ -323,7 +313,7 @@ router.get('/', async (req, res, next) => {
       }
     }
 
-    // v2: hydrate verifications for the organizer organizations in one query
+    // Hydrate verifications for the organizer organizations in one query
     // so the response includes organizer.verified for each event.
     const organizerOrgIds = Array.from(new Set(
       page.map((e) => (e as unknown as PortalEventRow).organizer_org_id).filter(Boolean) as string[]
@@ -409,7 +399,7 @@ router.get('/:id', async (req, res, next) => {
       throw createError('Event not found', 404, 'NOT_FOUND');
     }
 
-    // v2: hydrate verification for this organizer (one lookup; cheap)
+    // Hydrate verification for this organizer (one lookup; cheap)
     const eventRow = event as unknown as PortalEventRow;
     const orgId = eventRow.organizer_org_id;
     const verifications = orgId ? await hydrateVerificationsFor([orgId]) : new Map();
@@ -717,7 +707,6 @@ export async function rssHandler(req: import('express').Request, res: import('ex
     }
     if (params.q) selfQuery.set('q', params.q);
     if (params.near) selfQuery.set('near', params.near);
-    if (params.group_id) selfQuery.set('group_id', params.group_id);
     const selfUrl = `${baseUrl}/api/v1/events.rss${selfQuery.toString() ? '?' + selfQuery.toString() : ''}`;
 
     const items = page.map((row) => {

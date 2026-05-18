@@ -639,7 +639,7 @@
     <!-- Status strip — document metadata -->
     <div class="nc-status-strip">
       <div class="nc-status-inner">
-        <span><strong>Specification 2.0.0</strong></span>
+        <span><strong>Specification 3.0.0</strong></span>
         <span><span class="nc-status-dot"></span>Stable</span>
         <span>Additive-only stability</span>
         <span>CC&nbsp;BY&nbsp;4.0</span>
@@ -683,7 +683,7 @@
         <ul>
           <li>A guide that shows only events posted by the venues themselves — no scrapers, no aggregators.</li>
           <li>A live feed of what businesses are broadcasting on the next block over.</li>
-          <li>A real-estate explorer that maps the rhythm of a Tuesday night.</li>
+          <li>A simple form a yoga teacher fills out once, and their class schedule appears in every neighborhood app that cares.</li>
           <li>A civic dashboard tracking the vitality of a single district.</li>
           <li>An assistant that knows what's happening here, right now, and who's behind it.</li>
         </ul>
@@ -724,7 +724,7 @@
         <div class="nc-pillar">
           <span class="nc-pillar-num">01 — Open</span>
           <h3>Read free.</h3>
-          <p>Every read is open. No API key, no rate sheet, no portal. The 1.0 spec commits to additive-only stability — code you write today still works in 18 months.</p>
+          <p>Every read is open. No API key, no rate sheet, no portal. The 3.0 spec commits to additive-only stability — code you write today still works in 18 months.</p>
         </div>
         <div class="nc-pillar">
           <span class="nc-pillar-num">02 — Composable</span>
@@ -733,8 +733,8 @@
         </div>
         <div class="nc-pillar">
           <span class="nc-pillar-num">03 — Layered</span>
-          <h3>Two tiers of authority.</h3>
-          <p>The Commons separates information <em>about</em> a business from information <em>from</em> a business. Public facts come from scrapers, listings, and feeds — broad coverage, best-effort quality. First-party content comes from businesses themselves after they verify — authoritative, the business stands behind it. Apps filter to the tier they need.</p>
+          <h3>Authority follows the entity.</h3>
+          <p>A chess club self-asserts: it exists because someone declares it does, on an app that lets them. A music venue's show schedule arrives as public facts proxied from their calendar page — and the venue can level up by claiming and verifying, enriching those facts with first-party detail that pays back as richer presentation across every participating app. A poster on a corner is witnessed — observed by a person, recorded with documentary evidence. Each method tells consumer apps something about authority; apps filter to the tier they trust.</p>
         </div>
       </div>
     </section>
@@ -748,7 +748,8 @@
       <h2>Cooperate on data. Compete on <em>experience</em>.</h2>
       <p>The Commons is the public floor — typed atoms, verified first-party authority, faithful attribution. That floor is shared, free to read, and durable. Your app is what stands on it.</p>
       <p>Apps don't fragment the data; they enrich it. <strong>You compete on editorial</strong> — what to surface, how to curate, who you build for, what users can do once they're inside your app. <strong>You don't compete on owning the record</strong> of what a neighborhood is, or who the verified actors in it are.</p>
-      <p>This is infrastructure for an ecosystem, not a platform with a captive market. Every additional app makes the data more useful. Every verification one app does makes every other app's job a little easier. The growth dynamic is shared rather than zero-sum.</p>
+      <p><strong>The deepest move here is to write, not just read.</strong> Surfacing a yoga teacher's class schedule in your app is already a service to that teacher. Writing the schedule back to the Commons puts it in every participating app from then on — same effort, multiplicative reach. Data your users produce on your surfaces gains durability and value when other apps can also surface it. The self-interest is straightforward: you build a better relationship with the people you're documenting when you make their information as useful as it can possibly be. Build to write, and the work compounds.</p>
+      <p>This is infrastructure for an ecosystem, not a platform with a captive market. Every additional app makes the data more useful. Every verification one app does makes every other app's job a little easier. Every write expands the floor everyone stands on. The growth dynamic is shared rather than zero-sum.</p>
     </section>
 
     <!-- Section divider between marketing and reference -->
@@ -944,12 +945,12 @@
             <tr><td><code>recurrence</code>, <code>series_id</code>, <code>series_instance_number</code>, <code>series_instance_count</code></td><td>RRULE-based recurrence; series link.</td></tr>
             <tr><td><code>open_window</code>, <code>capacity</code>, <code>rsvp</code>, <code>wheelchair_accessible</code></td><td>Visibility and access metadata.</td></tr>
             <tr><td><code>first_party</code></td><td>Boolean. True iff the organizer had an active verification at the time of writing — the authority signal. Server-computed; not a caller input.</td></tr>
-            <tr><td><code>source</code></td><td>Provenance: <code>{ publisher, method, contributor, collected_at, license }</code>. <code>method</code> includes <code>portal</code>, <code>api</code>, <code>import</code>, <code>witnessed</code>.</td></tr>
+            <tr><td><code>source</code></td><td>Provenance under the four-role frame: <code>{ method, url, contributor, collected_at, license }</code>. <code>method</code> is one of <code>self_asserted</code>, <code>proxied</code>, <code>witnessed</code>. <code>url</code> is non-null only for proxied events. The "who is this from?" role is filled by <code>organizer.name</code>, not by a <code>publisher</code> field. See <a href="https://github.com/joinfiber/neighborhood-commons/blob/master/docs/four-roles.md" target="_blank" rel="noopener">docs/four-roles.md</a>.</td></tr>
           </tbody>
         </table>
 
         <h3 id="type-broadcast">Broadcast</h3>
-        <p>Ephemeral signal from a verified Organization, pinned to a Place. Maximum 24h lifetime. No direct Schema.org analog; <code>SpecialAnnouncement</code> was checked and rejected as a fit for ephemeral commercial signals — conventions for <code>datePosted</code> and <code>expires</code> borrowed from there.</p>
+        <p>Ephemeral signal from an Organization, pinned to a Place. Maximum 24h lifetime. No direct Schema.org analog; <code>SpecialAnnouncement</code> was checked and rejected as a fit for ephemeral commercial signals — conventions for <code>datePosted</code> and <code>expires</code> borrowed from there. Broadcast creation does not require organizer verification; consumer apps use <code>verified=true</code> filters to scope editorially.</p>
 
         <pre>{
   "id": "...",
@@ -959,7 +960,8 @@
   "status": "active",
   "organization": { "id": "...", "name": "Bubs", "verified": true },
   "location": { "id": "...", "name": "Bubs", "geo": {...} },
-  "source": { "publisher": "bubs", "method": "service", "contributor": "Holler", "collected_at": "..." }
+  "method": "self_asserted",
+  "source": { "method": "self_asserted", "url": null, "contributor": { "name": "Holler", "url": null }, "collected_at": "..." }
 }</pre>
 
         <p>Broadcast creation is not gated on the organization being verified — apps decide whether to surface unverified broadcasts in their feeds. Use <code>verified=true</code> filters on <code>GET /v1/broadcasts</code> to scope editorially.</p>
@@ -1251,6 +1253,8 @@ $ curl "{{baseUrl}}/api/v1/events?near=39.97,-75.14&amp;radius_km=2&amp;first_pa
 
         <p>The Commons orchestrates the verification process; apps surface the UI; the verified organization becomes the only valid editor of its Type A profile data.</p>
 
+        <p><strong>Any app can verify any organization</strong>, through whichever method fits the relationship — domain email loop, manual document review, in-person attestation, stewardship vouches. The Commons records the attestation chain (which app verified, what method, when) but doesn't prescribe how an app does the work. Apps that verify carelessly hurt themselves: bad verifications surface as bad data downstream, and the ecosystem picks up their contributions less. The stakes are direct and self-enforcing — it's why the Commons doesn't need a central referee.</p>
+
         <h3>The flow</h3>
 
         <p><strong>Step 1 — Discover the path.</strong> Given an organization and identifier, the Commons returns which submission endpoint to call:</p>
@@ -1356,7 +1360,7 @@ $ curl -X DELETE "{{baseUrl}}/api/v1/webhooks/SUBSCRIPTION_ID" \
   -H "X-API-Key: $NC_KEY"</pre>
 
         <h3>Event types</h3>
-        <p>1.0 surfaces the following event types. Additional types land additively as the substrate grows; consumers can subscribe to a subset or pass <code>["*"]</code> to receive all current and future types.</p>
+        <p>3.0 surfaces the following event types. Additional types land additively as the substrate grows; consumers can subscribe to a subset or pass <code>["*"]</code> to receive all current and future types.</p>
 
         <table>
           <thead><tr><th>Type</th><th>Fires on</th></tr></thead>
@@ -1423,7 +1427,7 @@ app.post('/webhooks/commons', express.raw({ type: 'application/json' }), (req, r
 
         <h3>What it gets you</h3>
         <ul>
-          <li><strong>Version pinning.</strong> <code>neighborhood-commons@2.x</code> is a real artifact in <code>package.json</code>. Six months from now you know exactly which spec version your code targets. AI-generated code has no version semantics unless you write them down — the SDK writes them down for you.</li>
+          <li><strong>Version pinning.</strong> <code>neighborhood-commons@3.x</code> is a real artifact in <code>package.json</code>. Six months from now you know exactly which spec version your code targets. AI-generated code has no version semantics unless you write them down — the SDK writes them down for you.</li>
           <li><strong>CI determinism.</strong> Two engineers, same build. Your build today and your build in six months produce identical output if you don't bump the dep.</li>
           <li><strong>A canonical reference your AI assistant can anchor on.</strong> "Match the SDK pattern" is a higher-quality prompt than "implement this from scratch." The SDK's value proposition has shifted — it's less an ergonomic wrapper, more a stable reference document for whatever's editing your code.</li>
           <li><strong>An audit trail.</strong> Diffing two SDK versions shows exactly what moved in the API.</li>
@@ -1521,7 +1525,7 @@ $ openapi-generator-cli generate -i {{baseUrl}}/openapi.json -g rust    -o ./cli
         <p>The complete <code>ErrorCode</code> enum is in <a href="/openapi.json">openapi.json</a>. Generated SDK clients receive it as a discriminated union, so error handling can <code>switch</code> on the code with full type-checking.</p>
 
         <h3 id="stability">Stability</h3>
-        <p>The 2.0.0 spec is stable. Future minor versions add types, fields, and endpoints additively without breaking existing consumers. Removals or renames require a 3.0.0 release with strong justification — measured in years, not months. Watch the <a href="https://github.com/joinfiber/neighborhood-commons/blob/master/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a> for every contract-affecting change.</p>
+        <p>The 3.0.0 spec is stable. Future minor versions add types, fields, and endpoints additively without breaking existing consumers. Removals or renames require a 4.0.0 release with strong justification — measured in years, not months. The explicit taxonomy of what counts as breaking vs. additive lives in <a href="https://github.com/joinfiber/neighborhood-commons/blob/master/docs/stability-promise.md" target="_blank" rel="noopener">docs/stability-promise.md</a>. Watch the <a href="https://github.com/joinfiber/neighborhood-commons/blob/master/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a> for every contract-affecting change.</p>
 
         <p>If something in this Guide contradicts <a href="/openapi.json">openapi.json</a> on a matter of fact, trust the spec and <a href="https://github.com/joinfiber/neighborhood-commons/issues" target="_blank" rel="noopener">file an issue</a>. The Spec wins. The Guide explains. The Log dates.</p>
 

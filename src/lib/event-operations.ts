@@ -20,9 +20,16 @@ import { sanitizeUrl, checkApprovedDomain } from './url-sanitizer.js';
 // =============================================================================
 
 /** Columns to select when reading portal events from the events table */
-export const PORTAL_SELECT = 'id, user_id, content, description, place_name, place_id, approximate_location, event_at, end_time, event_image_url, event_image_focal_y, link_url, category, custom_category, event_timezone, venue_address, recurrence, price, latitude, longitude, creator_account_id, organizer_org_id, source, visibility, status, is_business, region_id, series_id, series_instance_number, open_window, tags, wheelchair_accessible, capacity, rsvp, first_party, source_method, source_publisher, source_feed_url, source_contributor_url, source_contributor_name, tmdb_id, created_at';
+export const PORTAL_SELECT = 'id, user_id, content, description, place_name, place_id, approximate_location, event_at, end_time, event_image_url, event_image_focal_y, link_url, category, custom_category, event_timezone, venue_address, recurrence, price, latitude, longitude, creator_account_id, organizer_org_id, source, visibility, status, region_id, series_id, series_instance_number, open_window, tags, wheelchair_accessible, capacity, rsvp, first_party, source_method, source_feed_url, source_contributor_url, source_contributor_name, tmdb_id, created_at';
 
-/** Sources that represent account-managed events (portal-created, imported, or API-submitted). */
+/**
+ * Operational `events.source` filter values. Distinct from `source_method`
+ * (which is the provenance enum surfaced to consumers under the four-role
+ * frame, docs/four-roles.md). `events.source` is an internal write-path
+ * marker — every current write uses `'portal'`. The other values exist on
+ * historical rows; this filter scopes admin/series queries to rows we
+ * manage. Not part of the public contract.
+ */
 export const MANAGED_SOURCES = ['portal', 'import', 'api', 'csv'] as const;
 
 /**
@@ -122,7 +129,6 @@ export function toPortalEvent(row: Record<string, unknown>): Record<string, unkn
     series_id: row.series_id,
     series_instance_number: row.series_instance_number,
     first_party: row.first_party ?? false,
-    source_publisher: row.source_publisher ?? null,
     source_feed_url: row.source_feed_url ?? null,
     tmdb_id: row.tmdb_id ?? null,
     created_at: row.created_at,
@@ -156,8 +162,7 @@ export function portalInputToInsert(
     capacity?: number | null | undefined;
     rsvp?: 'recommended' | 'required' | null | undefined;
     image_focal_y?: number | undefined;
-    source_method?: 'portal' | 'api' | 'feed' | 'admin' | 'merrie' | 'witnessed' | undefined;
-    source_publisher?: string | undefined;
+    source_method?: 'self_asserted' | 'proxied' | 'witnessed' | undefined;
     source_contributor_name?: string | null | undefined;
     source_contributor_url?: string | null | undefined;
     first_party?: boolean | undefined;
@@ -211,14 +216,12 @@ export function portalInputToInsert(
     creator_account_id: accountId,
     source: 'portal',
     first_party: data.first_party ?? false,
-    source_method: data.source_method || null,
-    source_publisher: data.source_publisher || null,
+    source_method: data.source_method || 'self_asserted',
     source_contributor_name: data.source_contributor_name ?? null,
     source_contributor_url: data.source_contributor_url ?? null,
     tmdb_id: data.tmdb_id || null,
     visibility: 'public',
     status: accountStatus === 'active' ? 'published' : 'pending_review',
-    is_business: true,
     region_id: config.defaultRegionId,
   };
 }

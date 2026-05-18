@@ -6,11 +6,16 @@ The SDK is a mirror of the spec. If the spec changes, this package changes. The 
 
 ## Read this first
 
-Beyond a list view, you should read [the Commons Contract Guide](https://neighborhood-commons.org/llms.txt) before building anything substantial. The SDK gives you typed access to every endpoint, but the *meaning* of each shape — how films cluster by `tmdb_id`, how attribution works via `source.contributor`, what `open_window` implies for feeds, how series IDs map to recurring events — lives in the Guide. The SDK is the floor; the Guide is what makes you build something good.
+Beyond a list view, you should read [the Commons Contract Guide](https://neighborhood-commons.org/llms.txt) before building anything substantial. The SDK gives you typed access to every endpoint, but the *meaning* of each shape — how attribution works via `source.contributor`, what `open_window` implies for feeds, how series IDs map to recurring events, the four-role provenance frame — lives in the Guide. The SDK is the floor; the Guide is what makes you build something good.
+
+Two doctrine docs especially worth knowing before you build:
+
+- [**Four roles of event provenance**](https://github.com/joinfiber/neighborhood-commons/blob/master/docs/four-roles.md) — every event has exactly four provenance facets: organizer (who runs it), venue (where), contributor (which app routed it in), and method+url (how the data came to the Commons). No fifth role; no `source.publisher` field. The shape is uniform across self-asserted, proxied, and witnessed events.
+- [**Provenance doctrine**](https://github.com/joinfiber/neighborhood-commons/blob/master/docs/provenance.md) — every public-fact primitive (Event, Organization, Broadcast, List, future Classifieds) carries a `method` field with a shared vocabulary: `self_asserted`, `proxied`, `witnessed`, `seeded`. Learn it once; read every primitive the same way.
 
 ## Stability promise
 
-The Commons Spec is **additive-only by intent.** It grows over time as new shapes are needed, but existing shapes essentially never change. New fields are rare and considered. Breaking changes are vanishingly rare — measured in years, not months. Build against today's contract with confidence that it will still work in 18 months. See [`RELEASING.md`](./RELEASING.md) for the release discipline that backs this promise.
+The Commons Spec is **additive-only from 3.0 onward.** It grows over time as new shapes are needed, but existing shapes don't change. New fields are rare and considered. Breaking changes are vanishingly rare — measured in years, not months. Build against today's contract with confidence that it will still work in 18 months. See [`RELEASING.md`](./RELEASING.md) for the release discipline that backs this promise, and the root [`docs/stability-promise.md`](https://github.com/joinfiber/neighborhood-commons/blob/master/docs/stability-promise.md) for the explicit taxonomy of what counts as breaking vs. additive.
 
 ## Install
 
@@ -75,15 +80,22 @@ Convenience type aliases for the common shapes:
 ```ts
 import type {
   Event,
-  Account,
-  Group,
+  Organization,
+  Place,
+  Broadcast,
+  List,
   Meta,
-  Webhook,
   Source,
+  Webhook,
   ApiError,
   ErrorCode,
+  // Service-tier shapes (operational, distinct from public read types):
+  ServiceAccount,
+  ServiceEvent,
 } from "neighborhood-commons";
 ```
+
+**`Event` vs `ServiceEvent`:** `Event` is the public Neighborhood-API-aligned read shape returned by `GET /v1/events` and `GET /v1/events/{id}` — friendly field names (`name`, `start`, `location`, `cost`) shaped for consumer apps. `ServiceEvent` is the DB-flavored shape returned by `GET /v1/service/events*` and `POST /v1/service/events` — closer to the internal column names (`title`, `event_date`, `start_time`, `venue_name`). Use `Event` for read paths and feeds; use `ServiceEvent` for service-tier endpoints where you're also doing writes and want symmetric types across read and write.
 
 For anything else, reach into the generated namespace:
 
@@ -104,6 +116,10 @@ import { assertPublicPayload } from "neighborhood-commons";
 const ALLOWED_EVENT_KEYS = new Set([
   "organizerOrganizationId", "name", "start", "end", "timezone", "category",
   "location", "description", "cost", "url", "image_url", "tags",
+  // Provenance: source_method ('self_asserted' default, 'witnessed' for
+  // collective-evidence path); contributor (auto-filled from your brand
+  // identity if omitted — see docs/four-roles.md).
+  "source_method", "contributor",
 ]);
 
 function syncEvent(body: Record<string, unknown>) {

@@ -1,20 +1,22 @@
 /**
- * Service API — ServiceEventInput schema regression tests (v2)
+ * Service API — ServiceEventInput schema regression tests
  *
  * The Service API accepts the Neighborhood API friendly-shape payload
  * (name/start/timezone/location/url/cost), symmetric with the read schema.
  * Recurrence is optional.
  *
- * v2: required field is `organizerOrganizationId` (organizer authority
- * anchor for the constrained-publishing model). source_method is
- * optionally caller-set to 'api' (default) or 'witnessed' (collective
- * evidence; requires witness_authority on the key). source_publisher is
- * server-derived from the organizer organization name and not
- * caller-overridable.
+ * Required: `organizerOrganizationId` (organizer authority anchor for the
+ * constrained-publishing model). source_method is optionally caller-set
+ * to 'self_asserted' (default) or 'witnessed' (collective-evidence;
+ * requires witness_authority on the key). 'proxied' is not caller-settable —
+ * it's reserved for internal pipeline code paths.
+ *
+ * Post-085: source.publisher is gone (the role is filled by organizer.name).
+ * No source_publisher column exists.
  *
  * If these fail, the Spec (public/openapi.json) and the implementation
  * have drifted — consumers will get 400s on payloads the Spec says are
- * valid (the openapi.json rewrite ships in Chunk B of v2).
+ * valid.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -102,7 +104,7 @@ describe('ServiceEventInput — friendly-shape', () => {
   });
 
   // -------------------------------------------------------------------------
-  // contributor — per-event attribution (migration 062)
+  // contributor — per-event routing-participant identity
   // -------------------------------------------------------------------------
 
   it('accepts contributor: { name } without url', () => {
@@ -153,11 +155,11 @@ describe('ServiceEventInput — friendly-shape', () => {
   });
 });
 
-describe('friendlyToPortalInput — server-controlled provenance (v2)', () => {
-  it('defaults source_method to "api" when caller omits it', () => {
+describe('friendlyToPortalInput — server-controlled provenance', () => {
+  it('defaults source_method to "self_asserted" when caller omits it', () => {
     const parsed = createEventSchema.parse(minimumFriendly());
-    const { portal } = friendlyToPortalInput(parsed, "Johnny's Bar");
-    expect(portal.source_method).toBe('api');
+    const { portal } = friendlyToPortalInput(parsed);
+    expect(portal.source_method).toBe('self_asserted');
   });
 
   it('threads source_method="witnessed" through when caller sets it (still gated by witness_authority at route)', () => {
@@ -165,20 +167,8 @@ describe('friendlyToPortalInput — server-controlled provenance (v2)', () => {
       ...minimumFriendly(),
       source_method: 'witnessed',
     });
-    const { portal } = friendlyToPortalInput(parsed, 'Fiber Community');
+    const { portal } = friendlyToPortalInput(parsed);
     expect(portal.source_method).toBe('witnessed');
-  });
-
-  it('derives source_publisher from the organizer name passed in by the handler, not the caller', () => {
-    const parsed = createEventSchema.parse(minimumFriendly());
-    const { portal } = friendlyToPortalInput(parsed, "Johnny's Bar");
-    expect(portal.source_publisher).toBe("Johnny's Bar");
-  });
-
-  it('leaves source_publisher undefined when no organizer name passed', () => {
-    const parsed = createEventSchema.parse(minimumFriendly());
-    const { portal } = friendlyToPortalInput(parsed, null);
-    expect(portal.source_publisher).toBeUndefined();
   });
 
   it('threads contributor into source_contributor_name / source_contributor_url', () => {
@@ -186,30 +176,28 @@ describe('friendlyToPortalInput — server-controlled provenance (v2)', () => {
       ...minimumFriendly(),
       contributor: { name: 'Go There', url: 'https://gothere.bike' },
     });
-    const { portal } = friendlyToPortalInput(parsed, 'monday-night-rides');
+    const { portal } = friendlyToPortalInput(parsed);
     expect(portal.source_contributor_name).toBe('Go There');
     expect(portal.source_contributor_url).toBe('https://gothere.bike');
-    // Publisher is unaffected — still derived from organizer name
-    expect(portal.source_publisher).toBe('monday-night-rides');
   });
 
   it('nulls both contributor columns when contributor is omitted', () => {
     const parsed = createEventSchema.parse(minimumFriendly());
-    const { portal } = friendlyToPortalInput(parsed, "Johnny's Bar");
+    const { portal } = friendlyToPortalInput(parsed);
     expect(portal.source_contributor_name).toBeNull();
     expect(portal.source_contributor_url).toBeNull();
   });
 });
 
-describe('ServiceEventInput — source_method hygiene (v2)', () => {
-  it('accepts source_method="api" from the caller', () => {
+describe('ServiceEventInput — source_method hygiene', () => {
+  it('accepts source_method="self_asserted" from the caller', () => {
     const result = createEventSchema.safeParse({
       ...minimumFriendly(),
-      source_method: 'api',
+      source_method: 'self_asserted',
     });
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.source_method).toBe('api');
+      expect(result.data.source_method).toBe('self_asserted');
     }
   });
 
@@ -221,7 +209,23 @@ describe('ServiceEventInput — source_method hygiene (v2)', () => {
     expect(result.success).toBe(true);
   });
 
-  it('rejects source_method="portal" (not a caller-set method)', () => {
+  it('rejects source_method="proxied" (internal pipeline only, not caller-settable)', () => {
+    const result = createEventSchema.safeParse({
+      ...minimumFriendly(),
+      source_method: 'proxied',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects retired legacy method values like "api"', () => {
+    const result = createEventSchema.safeParse({
+      ...minimumFriendly(),
+      source_method: 'api',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects retired legacy method values like "portal"', () => {
     const result = createEventSchema.safeParse({
       ...minimumFriendly(),
       source_method: 'portal',
@@ -229,15 +233,7 @@ describe('ServiceEventInput — source_method hygiene (v2)', () => {
     expect(result.success).toBe(false);
   });
 
-  it('rejects source_method="import" (pipeline-only method)', () => {
-    const result = createEventSchema.safeParse({
-      ...minimumFriendly(),
-      source_method: 'import',
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it('does not accept source_publisher from the caller (stripped by schema)', () => {
+  it('does not accept source_publisher from the caller (field no longer exists)', () => {
     const result = createEventSchema.safeParse({
       ...minimumFriendly(),
       source_publisher: 'attacker-brand',

@@ -24,10 +24,9 @@
 import { Router } from 'express';
 import { requireServiceApiKey } from '../../middleware/api-key.js';
 
-// v2: dropped persons (no longer a primitive) and groups (replaced by
-// organizations). accounts retained as the operational tenant shell —
-// email + claim state. Writeable scope lives in
-// api_key_organization_links, established via /service/organizations/link.
+// `accounts` is the operational tenant shell — email + claim state.
+// Writeable scope lives in api_key_organization_links, established via
+// /service/organizations/link.
 import registerRoutes from './register.js';
 import accountsRoutes from './accounts.js';
 import eventsRoutes from './events.js';

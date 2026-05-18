@@ -14,6 +14,23 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-05-18 — 3.0.0 — provenance doctrine and four-role event frame
+
+Pre-launch coherent fix. The 2.0.0 draft carried a confused `source.publisher` field whose contents were heterogeneous (sometimes app name, sometimes organizer name), producing real downstream bugs. The model is fixed before any external consumer builds against the contract. The 3.0.0 contract is the foundation the substrate launches with; additive-only stability begins from here.
+
+- **BREAKING: removed `source.publisher` from the public event response.** The role "who is this from?" is filled by `organizer.name` (the joined organizations row). No consumer should read `source.publisher`; read `organizer.name` instead.
+- **BREAKING: `source.method` values changed.** The new vocabulary is `self_asserted` / `proxied` / `witnessed`. Legacy values (`api`, `portal`, `import`, `feed`, `admin`, `merrie`, `csv`) are mapped to the new vocabulary in migration 085. `seeded` is added but not valid for events.
+- **`source.url` added** — non-null when method is `proxied` (carries the URL the contributor extracted from, for transparency).
+- **Service API `source_method` enum is now `['self_asserted', 'witnessed']`** for caller-set provenance. `proxied` is reserved for internal pipeline code paths.
+- **Added `Organization.method`** carrying the standard provenance vocabulary (`self_asserted`, `proxied`, `witnessed`, `seeded`). Bulk-imported rows default to `seeded`; orgs with a verified `organization_verifications` row are backfilled to `self_asserted`. Consumers can filter for `self_asserted` orgs to surface only first-party-asserted records.
+- **Added `Broadcast.method` and `List.method`** for symmetry across primitives. Only `self_asserted` is valid today on these types.
+- **New doctrine docs:** [`docs/provenance.md`](docs/provenance.md) (type-general doctrine: every public-fact primitive carries a `method` field) and [`docs/four-roles.md`](docs/four-roles.md) (event-specific application: organizer, venue, contributor, method+URL). Both replace the earlier draft.
+- **OpenAPI spec bumped to 3.0.0.** SDK `neighborhood-commons` bumped to 3.0.0.
+
+Migration 085 (`085_provenance_method_cleanup.sql`) handles the data and schema changes. Idempotent.
+
+---
+
 ## 2026-05-17 — source.contributor auto-fill (ecosystem attribution)
 
 Service-tier event POSTs now auto-fill `source.contributor.name` from the calling key's `brand_config.app_name` when the caller didn't supply a `contributor` field explicitly. Makes ecosystem attribution work by default: every event Merrie pushes shows `source.contributor = { name: "Merrie", url: null }` on the read path without Merrie having to remember the field. Same for other consumer apps. Admin keys (Studio, operator tools) skip the auto-fill — they act on behalf of organizations, they're not ecosystem contributors. The transform-time fallback that previously used `source_publisher` as a stand-in for `contributor` on api-method events is removed — that conflated publisher (who the event is FROM) with contributor (which app pushed it IN). Events created before this change with a null `source_contributor_name` will now show `source.contributor: null` instead of incorrectly echoing the publisher name; that's a more honest read.

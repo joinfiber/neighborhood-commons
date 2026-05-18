@@ -30,7 +30,7 @@ const router: ReturnType<typeof Router> = Router();
 const SITE_NAME = 'Neighborhood Commons';
 const SITE_DOMAIN = config.apiBaseUrl || 'https://neighborhood-commons.org';
 
-const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, organizer_org_id, series_id, series_instance_number, open_window, capacity, rsvp, tags, wheelchair_accessible, source_method, source_publisher, source_contributor_name, source_contributor_url, organizations!events_organizer_org_id_fkey(id, slug, name)';
+const EVENTS_SELECT = 'id, content, description, place_name, venue_address, place_id, latitude, longitude, event_at, end_time, event_timezone, category, custom_category, recurrence, price, link_url, event_image_url, created_at, creator_account_id, organizer_org_id, series_id, series_instance_number, open_window, capacity, rsvp, tags, wheelchair_accessible, source_method, source_contributor_name, source_contributor_url, organizations!events_organizer_org_id_fkey(id, slug, name)';
 
 // =============================================================================
 // HTML HELPERS
@@ -313,8 +313,14 @@ router.get('/events/:id',async (req, res, next) => {
     const tags = (row.tags as string[] | null) || [];
     const accessible = row.wheelchair_accessible as boolean | null;
     const org = row.organizations as { id?: string; slug?: string; name?: string } | null;
-    const publisher = (row.source_publisher as string) || org?.name || SITE_NAME;
-    const method = (row.source_method as string) || 'portal';
+    // Four-role rendering (docs/four-roles.md): organizer.name is the publisher
+    // of the durable claim. Method label is appended for non-self-asserted
+    // events where the authority chain is informative.
+    const publisher = org?.name || SITE_NAME;
+    const method = (row.source_method as string) || 'self_asserted';
+    const methodLabel = method === 'proxied' ? ' (imported)'
+      : method === 'witnessed' ? ' (witnessed)'
+      : '';
 
     const dateDisplay = formatDate(row.event_at as string, tz);
     const timeDisplay = formatTimeRange(row.event_at as string, row.end_time as string | null, tz);
@@ -351,8 +357,7 @@ router.get('/events/:id',async (req, res, next) => {
     // Google Calendar link
     const gcalUrl = googleCalendarUrl(name, startIso, endIso, fullLocation, desc);
 
-    // Venue link — use the organizer's slug. v2: organizer org has a slug;
-    // the legacy portal_accounts.slug is gone.
+    // Venue link — use the organizer's slug.
     let venueLink = '';
     if (org?.slug) {
       venueLink = `${SITE_DOMAIN}/venues/${org.slug}`;
@@ -409,7 +414,7 @@ ${desc ? `<div class="nc-event-description">${escapeHtml(desc)}</div>` : ''}
 </div>
 
 <div class="nc-source">
-  <span class="nc-source-badge">Source: ${escapeHtml(publisher)} via ${escapeHtml(method)}</span>
+  <span class="nc-source-badge">Source: ${escapeHtml(publisher)}${escapeHtml(methodLabel)}</span>
   &middot; <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>
 </div>`;
 
@@ -437,7 +442,7 @@ router.get('/venues/:slug',async (req, res, next) => {
       res.status(404).send(render404()); return;
     }
 
-    // v2: venue pages resolve via organizations.slug. Status check
+    // Venue pages resolve via organizations.slug. Status check
     // traverses owner_account_id → portal_accounts (active).
     const { data: org, error: orgErr } = await supabaseAdmin
       .from('organizations')
@@ -581,7 +586,7 @@ router.get('/venues/:slug/events.ics',async (req, res, next) => {
   try {
     const slug = req.params.slug.toLowerCase();
 
-    // v2: lookup via organizations.slug.
+    // Lookup via organizations.slug.
     const { data: org } = await supabaseAdmin
       .from('organizations')
       .select('id, name')

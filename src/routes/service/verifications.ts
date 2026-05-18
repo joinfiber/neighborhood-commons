@@ -1,5 +1,5 @@
 /**
- * Service-tier Verifications API — Neighborhood Commons v2
+ * Service-tier Verifications API
  *
  * Endpoints:
  *   GET   /service/verifications/path                       — routing authority
@@ -10,10 +10,9 @@
  *   POST  /service/verifications/pending/:id/approve        — admin approve
  *   POST  /service/verifications/pending/:id/reject         — admin reject
  *
- * v2: only organizations verify. The Person target is gone. Heavy-rigor
- * rigor classification uses organizations.commercial (replaces the legacy
- * kind enum). Verified identifiers land in organization_verifications
- * (which replaced account_verified_identifiers in migration 080/082).
+ * Only organizations verify (no Person target). Heavy-rigor classification
+ * uses organizations.commercial. Verified identifiers land in
+ * organization_verifications.
  */
 
 import { Router } from 'express';
@@ -29,6 +28,7 @@ import {
   hashVerificationCode,
   hasVerificationAuthority,
   isPersonalEmailDomain,
+  promoteOrganizationOnVerification,
 } from '../../lib/verification.js';
 
 const router: ReturnType<typeof Router> = Router();
@@ -254,6 +254,8 @@ router.post('/verifications/challenges/:id/confirm', async (req, res, next) => {
           value,
         );
         if (existing) {
+          // Idempotent: confirm the org-method promotion ran even on retries.
+          await promoteOrganizationOnVerification(challenge.target_id as string);
           res.json({
             status: 'verified',
             verifiedAt: existing.verified_at,
@@ -273,6 +275,10 @@ router.post('/verifications/challenges/:id/confirm', async (req, res, next) => {
       console.error('[SERVICE:VERIFICATIONS] Identifier insert error:', insertErr.message);
       throw createError('Failed to record verified identifier', 500, 'SERVER_ERROR');
     }
+
+    // Promote the organization's provenance to self_asserted (docs/provenance.md).
+    // Conditional and best-effort — never blocks the verification response.
+    await promoteOrganizationOnVerification(challenge.target_id as string);
 
     res.json({
       status: 'verified',
@@ -360,6 +366,9 @@ router.post('/verifications/manual', async (req, res, next) => {
         console.error('[SERVICE:VERIFICATIONS] Manual auto-approve insert error:', error.message);
         throw createError('Failed to record verified identifier', 500, 'SERVER_ERROR');
       }
+
+      // Promote the organization's provenance to self_asserted.
+      await promoteOrganizationOnVerification(body.organizationId);
 
       res.json({
         status: 'verified',
@@ -516,6 +525,9 @@ router.post('/verifications/pending/:id/approve', async (req, res, next) => {
         reviewed_at: new Date().toISOString(),
       })
       .eq('id', req.params.id);
+
+    // Promote the organization's provenance to self_asserted.
+    await promoteOrganizationOnVerification(review.target_id as string);
 
     res.json({
       status: 'verified',

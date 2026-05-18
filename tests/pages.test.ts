@@ -94,8 +94,7 @@ function makeEventRow(overrides: Record<string, unknown> = {}) {
     rsvp: null,
     tags: ['free', 'live-music'],
     wheelchair_accessible: true,
-    source_method: 'portal',
-    source_publisher: null,
+    source_method: 'self_asserted',
     organizations: { id: 'org-uuid-1', slug: 'the-jazz-spot', name: 'The Jazz Spot' },
     ...overrides,
   };

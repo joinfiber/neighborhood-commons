@@ -32,11 +32,11 @@ const broadcastInputSchema = z.object({
 });
 
 const BROADCAST_SELECT = `
-  id, organization_id, place_id, message, expires_at, status, retracted_at, source, created_at,
+  id, organization_id, place_id, message, expires_at, status, retracted_at, source, method, created_at,
   organizations!broadcasts_organization_id_fkey(
-    id, slug, name, legal_name, kind, description, url, logo_url, image_url,
+    id, slug, name, legal_name, tags, commercial, description, url, logo_url, image_url,
     telephone, email, same_as, keywords, opening_hours_specification,
-    primary_place_id, owner_account_id, created_at, updated_at
+    primary_place_id, owner_account_id, method, created_at, updated_at
   ),
   places!broadcasts_place_id_fkey(
     id, google_place_id, name,
