@@ -405,11 +405,11 @@ Each is a concrete commit; collected here for reviewability.
 
 ### 10.1 Existing consumers (Merrie, Fiber, Holler, Studio)
 
-The retrofit is **the only operator-touched migration step** for existing consumers, and it lives entirely in PR 5. No intermediate `provision-merrie-tenant.ts`-style scripts; no SQL backfills run by hand between PR merge and PR 5. The script that exists today in `feat/trusted-tenant` is dropped from the migration path entirely (it stays in the codebase only until PR 5 lands, then is deleted).
+The bulk of the retrofit moves to PR 5. No per-consumer scripts, no SQL backfills run by hand between v2 close and PR 5 — with two specific exceptions covered in §10.1.1 below. The script in `feat/trusted-tenant` (`provision-merrie-tenant.ts`) is *not* run; it stays in the codebase only until PR 5 lands, then deletes.
 
-This is a deliberate trade. The cost is that Merrie's photo uploads stay blocked from now until PR 5 ships (~1 week of focused build time). The benefits:
+This is a deliberate trade. The cost is that Merrie's photo uploads stay blocked from v2 close until PR 5 ships (~1 week of focused build time). The benefits:
 
-- **Merrie's first interaction with the new system *is* the new system.** No transitional state to live through, no script-then-dashboard handoff. They log into the dashboard, retrofit through it, and that's their permanent management surface.
+- **Merrie's first interaction with the new system *is* the new system.** No transitional state, no script-then-dashboard handoff. They log into the dashboard, retrofit through it, and that's their permanent management surface.
 - **The retrofit path is tested against the consumer that most needs it.** If it works for Merrie, it works for the rest.
 - **One throwaway script avoided.** Per-consumer migration scripts proliferate hodgepodge.
 
@@ -417,7 +417,7 @@ For each consumer, the PR 5 one-shot does three things atomically:
 
 1. **Provision a `contributor_profiles` row.** Slug from app name, name + url from already-known data. Description/tagline/logo stay null until the developer logs in and fills them.
 2. **Link the existing api_key.** Sets `api_keys.contributor_profile_id` and (for tenant-umbrella consumers) `api_keys.tenant_account_id`, with a tenant `portal_account` provisioned the same way registration provisions one for a fresh consumer.
-3. **Backfill data that the existing key had no way to write before:** existing organizations' `owner_account_id` (for the photo gate), existing events' `source_contributor_name` (so historical attribution shows up).
+3. **Backfill data that the existing key had no way to write before:** existing organizations' `owner_account_id` (for the photo gate), existing events' `source_contributor_name` for v2-service events (so historical attribution shows up — depends on (2), so co-located here).
 
 Per consumer:
 
@@ -428,9 +428,23 @@ Per consumer:
 | Holler | Slug `holler`, name "Holler". | No (verification consumer, not tenant umbrella). | No org-ownership backfill needed; contributor name backfill same pattern. |
 | Studio | Slug `studio`, name "Studio". | No (admin key, bypasses scoping). | No backfill needed (admin actions are operationally attributed elsewhere). |
 
-### 10.1.1 Minimum work between now and PR 5
+### 10.1.1 What runs at v2 close
 
-The only thing the operator does outside the PR sequence: **apply migration 084** when `feat/trusted-tenant` merges to production. It's idempotent and additive (`ADD COLUMN IF NOT EXISTS api_keys.tenant_account_id`). No data writes, no risk; just makes the column available for PR 5 to populate. Nothing else runs in the interim.
+Two specific operator actions complete the v2 substrate before the dashboard work begins. Everything else waits for PR 5.
+
+**(a) Apply migration 084.** Idempotent and additive (`ADD COLUMN IF NOT EXISTS api_keys.tenant_account_id`). No data writes, no risk; just makes the column available for PR 5 to populate.
+
+**(b) Run the legacy-contribute contributor backfill.** A one-shot UPDATE that restores `source.contributor` attribution on events created via the retired `/api/v1/contribute` path (where `source_publisher` was the app name, not the org name — distinct from v2 service events where `source_publisher` is the org name). Independent of any tenant binding; safe to run at any time:
+
+```sql
+UPDATE events
+   SET source_contributor_name = source_publisher
+ WHERE source_contributor_name IS NULL
+   AND source_method = 'api'
+   AND source_feed_url LIKE 'api-key:%';
+```
+
+The corresponding v2-service-events backfill (where `source_contributor_name` is null but the events came through `/v1/service/events`) is *not* run at v2 close — it depends on the tenant binding that PR 5 establishes. It's folded into PR 5's atomic retrofit instead.
 
 ### 10.2 Existing key holders log in and edit
 
