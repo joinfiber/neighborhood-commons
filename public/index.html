@@ -639,7 +639,7 @@
     <!-- Status strip — document metadata -->
     <div class="nc-status-strip">
       <div class="nc-status-inner">
-        <span><strong>Specification 2.0.0</strong></span>
+        <span><strong>Specification 3.0.0</strong></span>
         <span><span class="nc-status-dot"></span>Stable</span>
         <span>Additive-only stability</span>
         <span>CC&nbsp;BY&nbsp;4.0</span>
@@ -944,7 +944,7 @@
             <tr><td><code>recurrence</code>, <code>series_id</code>, <code>series_instance_number</code>, <code>series_instance_count</code></td><td>RRULE-based recurrence; series link.</td></tr>
             <tr><td><code>open_window</code>, <code>capacity</code>, <code>rsvp</code>, <code>wheelchair_accessible</code></td><td>Visibility and access metadata.</td></tr>
             <tr><td><code>first_party</code></td><td>Boolean. True iff the organizer had an active verification at the time of writing — the authority signal. Server-computed; not a caller input.</td></tr>
-            <tr><td><code>source</code></td><td>Provenance: <code>{ publisher, method, contributor, collected_at, license }</code>. <code>method</code> includes <code>portal</code>, <code>api</code>, <code>import</code>, <code>witnessed</code>.</td></tr>
+            <tr><td><code>source</code></td><td>Provenance under the four-role frame: <code>{ method, url, contributor, collected_at, license }</code>. <code>method</code> is one of <code>self_asserted</code>, <code>proxied</code>, <code>witnessed</code>. <code>url</code> is non-null only for proxied events. The "who is this from?" role is filled by <code>organizer.name</code>, not by a <code>publisher</code> field. See <a href="https://github.com/joinfiber/neighborhood-commons/blob/master/docs/four-roles.md" target="_blank" rel="noopener">docs/four-roles.md</a>.</td></tr>
           </tbody>
         </table>
 
@@ -959,7 +959,8 @@
   "status": "active",
   "organization": { "id": "...", "name": "Bubs", "verified": true },
   "location": { "id": "...", "name": "Bubs", "geo": {...} },
-  "source": { "publisher": "bubs", "method": "service", "contributor": "Holler", "collected_at": "..." }
+  "method": "self_asserted",
+  "source": { "method": "self_asserted", "url": null, "contributor": { "name": "Holler", "url": null }, "collected_at": "..." }
 }</pre>
 
         <p>Broadcast creation is not gated on the organization being verified — apps decide whether to surface unverified broadcasts in their feeds. Use <code>verified=true</code> filters on <code>GET /v1/broadcasts</code> to scope editorially.</p>
@@ -1423,7 +1424,7 @@ app.post('/webhooks/commons', express.raw({ type: 'application/json' }), (req, r
 
         <h3>What it gets you</h3>
         <ul>
-          <li><strong>Version pinning.</strong> <code>neighborhood-commons@2.x</code> is a real artifact in <code>package.json</code>. Six months from now you know exactly which spec version your code targets. AI-generated code has no version semantics unless you write them down — the SDK writes them down for you.</li>
+          <li><strong>Version pinning.</strong> <code>neighborhood-commons@3.x</code> is a real artifact in <code>package.json</code>. Six months from now you know exactly which spec version your code targets. AI-generated code has no version semantics unless you write them down — the SDK writes them down for you.</li>
           <li><strong>CI determinism.</strong> Two engineers, same build. Your build today and your build in six months produce identical output if you don't bump the dep.</li>
           <li><strong>A canonical reference your AI assistant can anchor on.</strong> "Match the SDK pattern" is a higher-quality prompt than "implement this from scratch." The SDK's value proposition has shifted — it's less an ergonomic wrapper, more a stable reference document for whatever's editing your code.</li>
           <li><strong>An audit trail.</strong> Diffing two SDK versions shows exactly what moved in the API.</li>
@@ -1521,7 +1522,7 @@ $ openapi-generator-cli generate -i {{baseUrl}}/openapi.json -g rust    -o ./cli
         <p>The complete <code>ErrorCode</code> enum is in <a href="/openapi.json">openapi.json</a>. Generated SDK clients receive it as a discriminated union, so error handling can <code>switch</code> on the code with full type-checking.</p>
 
         <h3 id="stability">Stability</h3>
-        <p>The 2.0.0 spec is stable. Future minor versions add types, fields, and endpoints additively without breaking existing consumers. Removals or renames require a 3.0.0 release with strong justification — measured in years, not months. Watch the <a href="https://github.com/joinfiber/neighborhood-commons/blob/master/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a> for every contract-affecting change.</p>
+        <p>The 3.0.0 spec is stable. Future minor versions add types, fields, and endpoints additively without breaking existing consumers. Removals or renames require a 4.0.0 release with strong justification — measured in years, not months. The explicit taxonomy of what counts as breaking vs. additive lives in <a href="https://github.com/joinfiber/neighborhood-commons/blob/master/docs/stability-promise.md" target="_blank" rel="noopener">docs/stability-promise.md</a>. Watch the <a href="https://github.com/joinfiber/neighborhood-commons/blob/master/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a> for every contract-affecting change.</p>
 
         <p>If something in this Guide contradicts <a href="/openapi.json">openapi.json</a> on a matter of fact, trust the spec and <a href="https://github.com/joinfiber/neighborhood-commons/issues" target="_blank" rel="noopener">file an issue</a>. The Spec wins. The Guide explains. The Log dates.</p>
 

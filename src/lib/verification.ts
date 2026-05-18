@@ -121,6 +121,40 @@ export async function findExistingVerifiedIdentifier(
 }
 
 /**
+ * Promote an organization's `method` from `seeded` to `self_asserted` once
+ * a verification record is created. Per docs/provenance.md, a verified org
+ * has first-party authority and the substrate should reflect that. The
+ * promotion is conditional (only seeded → self_asserted) — non-seeded
+ * methods are left alone, so this never downgrades or overwrites
+ * proxied/witnessed/already-asserted rows.
+ *
+ * Best-effort: logs and swallows errors so a transient DB hiccup here
+ * doesn't fail the verification flow itself. Returns true if the row was
+ * actually flipped, false if it was already non-seeded or the update failed.
+ */
+export async function promoteOrganizationOnVerification(
+  organizationId: string,
+): Promise<boolean> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('organizations')
+      .update({ method: 'self_asserted' })
+      .eq('id', organizationId)
+      .eq('method', 'seeded')
+      .select('id')
+      .maybeSingle();
+    if (error) {
+      console.error('[VERIFICATION] org-method promotion failed for', organizationId, '—', error.message);
+      return false;
+    }
+    return !!data;
+  } catch (err) {
+    console.error('[VERIFICATION] org-method promotion threw for', organizationId, '—', err instanceof Error ? err.message : String(err));
+    return false;
+  }
+}
+
+/**
  * Generate a verification code (6-digit numeric) and its SHA-256 hash.
  * The raw code is sent to the user; only the hash is persisted.
  */
