@@ -27,8 +27,16 @@
 -- — both filter and sort agree on what "soonest relevant" means, so
 -- pagination no longer falls into the gap.
 --
--- Generated column expression is IMMUTABLE (timestamptz + interval, CASE,
--- COALESCE) — required by Postgres. STORED so we can index it.
+-- Generated columns require IMMUTABLE expressions. Naively writing
+-- `event_at + interval '3 hours'` against a timestamptz is rejected
+-- (42P17) — `timestamptz + interval` is STABLE, not IMMUTABLE, because
+-- interval arithmetic can depend on session TimeZone for date/month
+-- intervals. The standard workaround: round-trip through plain
+-- `timestamp` via `AT TIME ZONE 'UTC'`. Both AT TIME ZONE calls and
+-- the timestamp + interval in between are IMMUTABLE, so the overall
+-- expression qualifies.
+--
+-- STORED so we can index the column.
 --
 -- Idempotent.
 -- ============================================================================
@@ -37,7 +45,10 @@ ALTER TABLE events
   ADD COLUMN IF NOT EXISTS relevant_until timestamptz
   GENERATED ALWAYS AS (
     CASE
-      WHEN open_window THEN COALESCE(end_time, event_at + interval '3 hours')
+      WHEN open_window THEN COALESCE(
+        end_time,
+        ((event_at AT TIME ZONE 'UTC') + interval '3 hours') AT TIME ZONE 'UTC'
+      )
       ELSE event_at
     END
   ) STORED;
