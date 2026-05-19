@@ -352,3 +352,67 @@ describe('GET /developers/dashboard', () => {
     expect(res.headers.get('location')).toBe('/developers/sign-up');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Dashboard "What's next" — actionable state
+// ---------------------------------------------------------------------------
+
+describe('Dashboard — What\'s next card', () => {
+  const RAW_TOKEN = 'd'.repeat(64);
+
+  /** Set up the minimum mock surface to render the dashboard. */
+  function setupAuthed(opts: { mfaEnrolled: boolean }) {
+    const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    mockResponses.set('developer_sessions', {
+      data: {
+        id: 'session-id',
+        api_key_id: 'dev-api-key',
+        mfa_verified_at: null,
+        expires_at: future,
+      },
+      error: null,
+    });
+    mockResponses.set('api_keys', {
+      data: {
+        id: 'dev-api-key',
+        name: 'Test App',
+        key_prefix: 'nc_abc123',
+        contributor_tier: 'service',
+        status: 'active',
+        activated_at: '2026-05-19T00:00:00Z', // active key
+        contributor_profile_id: null, // no profile loaded — keeps mock surface small
+        contact_email: 'dev@example.com',
+        mfa_enrolled_at: opts.mfaEnrolled ? '2026-05-19T00:00:00Z' : null,
+      },
+      error: null,
+    });
+  }
+
+  it('renders an "Enable MFA" CTA when the developer has not enrolled MFA', async () => {
+    setupAuthed({ mfaEnrolled: false });
+    const res = await fetch(`${baseUrl}/developers/dashboard`, {
+      headers: { Cookie: `nc_dev_session=${RAW_TOKEN}` },
+      redirect: 'manual',
+    });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('Enable MFA');
+    expect(html).toContain('/developers/security/enroll-mfa');
+    // Stale placeholder from PR 4b must not appear
+    expect(html).not.toContain('ships in the next release');
+  });
+
+  it('renders an "MFA is enabled" confirmation when the developer has enrolled', async () => {
+    setupAuthed({ mfaEnrolled: true });
+    const res = await fetch(`${baseUrl}/developers/dashboard`, {
+      headers: { Cookie: `nc_dev_session=${RAW_TOKEN}` },
+      redirect: 'manual',
+    });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('MFA is enabled');
+    // The CTA must not be present in the enrolled state — that would be
+    // a dead end for the user.
+    expect(html).not.toContain('Enable MFA');
+  });
+});
