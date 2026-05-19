@@ -551,52 +551,24 @@ describe('Service API — admin lockdown', () => {
 // SERVICE REGISTRATION — self-issuance + pending → activated lifecycle
 // =============================================================================
 
-describe('Service registration — self-issuance', () => {
-  it('POST /service/register/send-otp validates email format', async () => {
-    const res = await fetch(`${baseUrl}/api/v1/service/register/send-otp`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: 'not-an-email' }),
-    });
-    expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body.error.code).toBe('VALIDATION_ERROR');
-  });
+describe('Service registration — retired endpoints (PR 5)', () => {
+  // Both legacy POST routes now return 410 ENDPOINT_RETIRED pointing at the
+  // developer portal. The spec marks them deprecated; the routes stay mounted
+  // (additive-only stability) so the response is informative, not a 404.
 
-  it('POST /service/register/send-otp succeeds with valid email', async () => {
-    // OTP path stores into developer_otps; default empty mock returns success.
+  it('POST /service/register/send-otp returns 410 with ENDPOINT_RETIRED', async () => {
     const res = await fetch(`${baseUrl}/api/v1/service/register/send-otp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: 'dev@example.com' }),
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(410);
     const body = await res.json();
-    expect(body.success).toBe(true);
+    expect(body.error.code).toBe('ENDPOINT_RETIRED');
+    expect(body.error.message).toContain('/developers/sign-up');
   });
 
-  it('POST /service/register/verify-otp rejects missing application metadata', async () => {
-    const res = await fetch(`${baseUrl}/api/v1/service/register/verify-otp`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: 'dev@example.com',
-        token: '12345678',
-        // missing app_name, app_url, what_youre_building, verification_process
-      }),
-    });
-    expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body.error.code).toBe('VALIDATION_ERROR');
-  });
-
-  it('POST /service/register/verify-otp returns 409 if active service key already exists', async () => {
-    // The duplicate-check query returns a row with non-null activated_at.
-    mockResponses.set('api_keys', {
-      data: { id: 'existing-svc-key', activated_at: '2025-01-01T00:00:00Z' },
-      error: null,
-    });
-
+  it('POST /service/register/verify-otp returns 410 with ENDPOINT_RETIRED', async () => {
     const res = await fetch(`${baseUrl}/api/v1/service/register/verify-otp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -609,9 +581,23 @@ describe('Service registration — self-issuance', () => {
         verification_process: 'In-person verification by our editorial team during onboarding.',
       }),
     });
-    expect(res.status).toBe(409);
+    expect(res.status).toBe(410);
     const body = await res.json();
-    expect(body.error.code).toBe('ALREADY_EXISTS');
+    expect(body.error.code).toBe('ENDPOINT_RETIRED');
+    expect(body.error.message).toContain('/developers/sign-up');
+  });
+
+  it('ignores the request body — even malformed input gets the same 410', async () => {
+    // The handlers don't parse the body; they just respond. This is the
+    // intentional contract — "this endpoint is gone, here's where to go."
+    const res = await fetch(`${baseUrl}/api/v1/service/register/send-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'not-an-email' }),
+    });
+    expect(res.status).toBe(410);
+    const body = await res.json();
+    expect(body.error.code).toBe('ENDPOINT_RETIRED');
   });
 });
 

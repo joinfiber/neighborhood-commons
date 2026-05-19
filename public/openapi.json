@@ -2488,9 +2488,10 @@
     },
     "/service/register/send-otp": {
       "post": {
-        "summary": "Self-service: send registration OTP",
-        "description": "Step 1 of self-issuance for a service-tier API key. Sends a verification code to the supplied email. Step 2 is `POST /service/register/verify-otp`, which issues the (pending) key. No authentication required.",
+        "summary": "Self-service: send registration OTP — RETIRED 2026-05-19",
+        "description": "**Retired.** Self-service registration moved to the developer portal at https://neighborhood-commons.org/developers/sign-up. The portal flow is a guided sign-up with magic-link login, MFA, and an operator review step (including the witnessed-with-evidence approval path). This endpoint now returns `410 ENDPOINT_RETIRED`. Existing service keys keep working — only the registration path moved.",
         "operationId": "serviceRegisterSendOtp",
+        "deprecated": true,
         "requestBody": {
           "required": true,
           "content": {
@@ -2512,38 +2513,25 @@
           }
         },
         "responses": {
-          "200": {
-            "description": "OTP sent",
+          "410": {
+            "description": "Endpoint retired (ENDPOINT_RETIRED). Use https://neighborhood-commons.org/developers/sign-up.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    }
-                  }
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
-          },
-          "400": {
-            "$ref": "#/components/responses/ValidationError"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
           }
         }
       }
     },
     "/service/register/verify-otp": {
       "post": {
-        "summary": "Self-service: verify OTP and receive a pending service key",
-        "description": "Step 2 of self-issuance. On a valid OTP, creates a service-tier api_key with `activated_at = NULL` and stores the application metadata for review. The raw key is returned ONCE — store it immediately.\n\nThe issued key authenticates for reads at the service-tier rate limit and for the `/service/verifications/path` lookup, but every write under `/service/*` returns `403 KEY_PENDING` until an admin calls `POST /service/api-keys/{id}/activate`. No code changes needed when the key is activated.",
+        "summary": "Self-service: verify OTP and receive a pending service key — RETIRED 2026-05-19",
+        "description": "**Retired.** Self-service registration moved to the developer portal at https://neighborhood-commons.org/developers/sign-up. This endpoint now returns `410 ENDPOINT_RETIRED`. Existing service keys keep working — only the registration path moved.",
         "operationId": "serviceRegisterVerifyOtp",
+        "deprecated": true,
         "requestBody": {
           "required": true,
           "content": {
@@ -2601,61 +2589,15 @@
           }
         },
         "responses": {
-          "201": {
-            "description": "Pending service key issued",
+          "410": {
+            "description": "Endpoint retired (ENDPOINT_RETIRED). Use https://neighborhood-commons.org/developers/sign-up.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "api_key": {
-                      "type": "object",
-                      "properties": {
-                        "id": {
-                          "type": "string",
-                          "format": "uuid"
-                        },
-                        "raw_key": {
-                          "type": "string",
-                          "description": "Returned once. Store immediately — not recoverable."
-                        },
-                        "name": {
-                          "type": "string"
-                        },
-                        "rate_limit_per_hour": {
-                          "type": "integer"
-                        },
-                        "status": {
-                          "type": "string",
-                          "enum": [
-                            "pending_activation"
-                          ]
-                        },
-                        "created_at": {
-                          "type": "string",
-                          "format": "date-time"
-                        }
-                      }
-                    },
-                    "message": {
-                      "type": "string"
-                    }
-                  }
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
-          },
-          "400": {
-            "$ref": "#/components/responses/ValidationError"
-          },
-          "401": {
-            "description": "Invalid or expired verification code (INVALID_OTP)"
-          },
-          "409": {
-            "description": "An active service-tier key already exists for this email (ALREADY_EXISTS)"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
           }
         }
       }

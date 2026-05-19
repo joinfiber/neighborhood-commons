@@ -508,8 +508,9 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Self-service: send registration OTP
-         * @description Step 1 of self-issuance for a service-tier API key. Sends a verification code to the supplied email. Step 2 is `POST /service/register/verify-otp`, which issues the (pending) key. No authentication required.
+         * Self-service: send registration OTP — RETIRED 2026-05-19
+         * @deprecated
+         * @description **Retired.** Self-service registration moved to the developer portal at https://neighborhood-commons.org/developers/sign-up. The portal flow is a guided sign-up with magic-link login, MFA, and an operator review step (including the witnessed-with-evidence approval path). This endpoint now returns `410 ENDPOINT_RETIRED`. Existing service keys keep working — only the registration path moved.
          */
         post: operations["serviceRegisterSendOtp"];
         delete?: never;
@@ -528,10 +529,9 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Self-service: verify OTP and receive a pending service key
-         * @description Step 2 of self-issuance. On a valid OTP, creates a service-tier api_key with `activated_at = NULL` and stores the application metadata for review. The raw key is returned ONCE — store it immediately.
-         *
-         *     The issued key authenticates for reads at the service-tier rate limit and for the `/service/verifications/path` lookup, but every write under `/service/*` returns `403 KEY_PENDING` until an admin calls `POST /service/api-keys/{id}/activate`. No code changes needed when the key is activated.
+         * Self-service: verify OTP and receive a pending service key — RETIRED 2026-05-19
+         * @deprecated
+         * @description **Retired.** Self-service registration moved to the developer portal at https://neighborhood-commons.org/developers/sign-up. This endpoint now returns `410 ENDPOINT_RETIRED`. Existing service keys keep working — only the registration path moved.
          */
         post: operations["serviceRegisterVerifyOtp"];
         delete?: never;
@@ -3408,20 +3408,15 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OTP sent */
-            200: {
+            /** @description Endpoint retired (ENDPOINT_RETIRED). Use https://neighborhood-commons.org/developers/sign-up. */
+            410: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        success?: boolean;
-                        message?: string;
-                    };
+                    "application/json": components["schemas"]["Error"];
                 };
             };
-            400: components["responses"]["ValidationError"];
-            429: components["responses"]["RateLimited"];
         };
     };
     serviceRegisterVerifyOtp: {
@@ -3449,45 +3444,15 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Pending service key issued */
-            201: {
+            /** @description Endpoint retired (ENDPOINT_RETIRED). Use https://neighborhood-commons.org/developers/sign-up. */
+            410: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        api_key?: {
-                            /** Format: uuid */
-                            id?: string;
-                            /** @description Returned once. Store immediately — not recoverable. */
-                            raw_key?: string;
-                            name?: string;
-                            rate_limit_per_hour?: number;
-                            /** @enum {string} */
-                            status?: "pending_activation";
-                            /** Format: date-time */
-                            created_at?: string;
-                        };
-                        message?: string;
-                    };
+                    "application/json": components["schemas"]["Error"];
                 };
             };
-            400: components["responses"]["ValidationError"];
-            /** @description Invalid or expired verification code (INVALID_OTP) */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description An active service-tier key already exists for this email (ALREADY_EXISTS) */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            429: components["responses"]["RateLimited"];
         };
     };
     serviceMigrateImageUrls: {
