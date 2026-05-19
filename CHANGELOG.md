@@ -14,6 +14,14 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-05-19 — fix events pagination via `relevant_until` generated column
+
+Closes a long-standing pagination bug surfaced during 3.0 verification. Pre-fix: `GET /api/v1/events` filtered `event_at >= now-3h` and ordered ascending in SQL, then a JS post-filter dropped events whose `end_time` was past. With small limits the SQL returned oldest-first rows in the window (most likely already ended), JS filtered them, and the response was `[]` despite `meta.total` reporting many events.
+
+- **Migration 088** — adds `events.relevant_until` as a STORED generated column: `CASE WHEN open_window THEN COALESCE(end_time, event_at + interval '3 hours') ELSE event_at END`. Indexed.
+- **`queryFilteredEvents` refactor** — default path now does `WHERE relevant_until >= now() ORDER BY relevant_until ASC`. Filter and sort use the same value, so pagination is correct end-to-end. The JS relevance post-filter is dropped (the suspended-account defense-in-depth check stays).
+- **`cutoffOverride` callers** (ICS feed) — semantics unchanged. Still filter on `event_at >= cutoff` ascending. That path wants past-events-in-range visible (it's a calendar export), so the relevance gate would have been wrong there anyway. Drive-by win: the ICS feed no longer drops past events in the user's requested window.
+
 ## 2026-05-19 — docs deploy fix + topnav + witness-request discoverability
 
 Three fixes bundled. The `/docs/four-roles` route landed yesterday but kept 404-ing in production. Witness requests existed but were buried behind the detail page.

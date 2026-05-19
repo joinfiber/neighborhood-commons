@@ -70,6 +70,8 @@ const SCHEMA: Record<string, string[]> = {
     'match_key',
     // Added in migration 086 (3.1 — contributor profiles snapshot at write time)
     'contributor_profile_id',
+    // Added in migration 088 — generated column for relevance ordering / filtering
+    'relevant_until',
     'created_at', 'updated_at',
   ],
   event_series: [
