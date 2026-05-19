@@ -36,6 +36,10 @@ COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=api-builder /app/package.json ./
 COPY --from=api-builder /app/dist ./dist
 COPY public ./public
+# Docs are served by /docs/:slug at runtime via marked. The build context
+# whitelists docs/*.md through .dockerignore — see that file for the
+# ignore + un-ignore rules.
+COPY docs ./docs
 
 # Run as non-root user
 RUN addgroup -g 1001 -S nodejs && adduser -S commons -u 1001

@@ -14,6 +14,15 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-05-19 — docs deploy fix + topnav + witness-request discoverability
+
+Three fixes bundled. The `/docs/four-roles` route landed yesterday but kept 404-ing in production. Witness requests existed but were buried behind the detail page.
+
+- **Docker:** the runner image was missing `docs/`. Added `COPY docs ./docs` and a `!docs/*.md` exception to `.dockerignore` (the blanket `*.md` rule was filtering the markdown files out of the build context). `/docs/four-roles` now resolves on the deployed site.
+- **Homepage topnav:** added a `Docs` link next to `Spec`. The `/docs/*` section is now discoverable from the front door.
+- **Operator pending list:** the default view now shows two sections — **Application reviews** and **Witness-authority requests**. Both surface api_keys waiting on the operator. Previously witness requests were only visible if the operator opened the developer's detail page. The grant-witnessing detail-page banner is unchanged.
+- **Operator notification email:** rewrote the witness-request email with explicit "Review and grant" / "See all pending" buttons + a short explanation of what granting does. Previously just a single inline link that was easy to miss.
+
 ## 2026-05-19 — public docs surface at `/docs/:slug`
 
 The portal + activation emails were linking to `/docs/four-roles` and `/docs/quickstart` — both returned 404 because there was no route. Now there is.
