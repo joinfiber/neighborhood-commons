@@ -14,6 +14,16 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-05-19 — developer-portal logo uploads (PR A)
+
+Self-service file upload for contributor profile logos. Previously the form only accepted a pasted URL (with a TODO hint that file upload was coming).
+
+- **`POST /developers/profile/logo`** — multipart upload. Magic-byte gate → Sharp re-encode (400×400 max, JPEG q85, metadata stripped, polyglots killed) → R2 upload at key `contributor-profiles/{profileId}/logo.jpg`. Persists the public URL on `contributor_profiles.logo_url`.
+- **`POST /developers/profile/logo/remove`** — clears `logo_url` and best-effort deletes the R2 object.
+- Profile edit page now shows a logo card: current preview + Remove button when set, file picker + Upload button otherwise. The URL-paste field is removed (the multipart route replaces it).
+- 5MB upload limit (multer enforced); JPEG / PNG / WebP only (magic-byte enforced).
+- New dep: `multer` 1.x for multipart form parsing. Adds ~150KB; mounted only on the two logo routes.
+
 ## 2026-05-19 — dashboard "What's next" → actionable
 
 UX fix. The "MFA enrollment ships in the next release" bullet was placeholder copy from when PR 4b was pending; it's now dead text and provides no path to the actual flow.
