@@ -361,6 +361,9 @@ describe('GET /developers/security/enroll-mfa', () => {
     expect(html).toContain('name="secret"');
     expect(html).toContain('name="code"');
     expect(html).toContain('name="_csrf"');
+    // Inline SVG QR is the primary path (PR adds qrcode dep)
+    expect(html).toMatch(/<svg[^>]*viewBox/);
+    expect(html).toContain('Scan with your authenticator');
   });
 
   it('renders the "already enrolled" page when the developer already has MFA', async () => {

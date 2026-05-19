@@ -77,6 +77,7 @@ import {
   consumeBackupCode,
   BACKUP_CODE_COUNT,
 } from '../lib/developer-portal/backup-codes.js';
+import QRCode from 'qrcode';
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -604,6 +605,28 @@ async function markSessionElevated(sessionId: string): Promise<void> {
     .eq('id', sessionId);
 }
 
+/**
+ * Render a QR code for an otpauth URL as inline SVG. Used to make
+ * MFA enrollment one-tap on a phone authenticator app instead of
+ * typing 32 base32 characters by hand.
+ *
+ * Errors get swallowed and an empty string is returned — the page
+ * still works (manual entry + tap-to-add link both remain).
+ */
+async function renderOtpauthQrSvg(otpauth: string): Promise<string> {
+  try {
+    return await QRCode.toString(otpauth, {
+      type: 'svg',
+      margin: 1,
+      width: 220,
+      errorCorrectionLevel: 'M',
+    });
+  } catch (err) {
+    console.warn('[DEV_PORTAL] QR render failed:', err instanceof Error ? err.message : err);
+    return '';
+  }
+}
+
 // -----------------------------------------------------------------------------
 // GET /developers/security/enroll-mfa
 // -----------------------------------------------------------------------------
@@ -655,11 +678,12 @@ router.get('/security/enroll-mfa', renderLimiter, requireDeveloperSession, async
     const accountName = (keyRow?.contact_email as string | undefined) || 'developer';
     const issuer = 'Neighborhood Commons';
     const url = otpauthUrl({ issuer, accountName, secret });
+    const qrSvg = await renderOtpauthQrSvg(url);
 
     const csrfToken = issueCsrfCookie(res);
     res.send(portalShell({
       title: 'Enable MFA',
-      body: renderEnrollMfa({ csrfToken, secret, otpauth: url, accountName, returnUrl, error: null }),
+      body: renderEnrollMfa({ csrfToken, secret, otpauth: url, qrSvg, accountName, returnUrl, error: null }),
     }));
   } catch (err) {
     next(err);
@@ -701,6 +725,7 @@ router.post('/security/enroll-mfa', writeFormLimiter, requireDeveloperSession, a
           csrfToken: issueCsrfCookie(res),
           secret: '',
           otpauth: '',
+          qrSvg: '',
           accountName: '',
           returnUrl,
           error: 'Submit a 6-digit code from your authenticator.',
@@ -730,12 +755,15 @@ router.post('/security/enroll-mfa', writeFormLimiter, requireDeveloperSession, a
         .eq('id', session.api_key_id)
         .maybeSingle();
       const accountName = (keyRow?.contact_email as string | undefined) || 'developer';
+      const otpauthUrlStr = otpauthUrl({ issuer: 'Neighborhood Commons', accountName, secret: parsed.data.secret });
+      const qrSvg = await renderOtpauthQrSvg(otpauthUrlStr);
       res.status(400).send(portalShell({
         title: 'Enable MFA',
         body: renderEnrollMfa({
           csrfToken: issueCsrfCookie(res),
           secret: parsed.data.secret,
-          otpauth: otpauthUrl({ issuer: 'Neighborhood Commons', accountName, secret: parsed.data.secret }),
+          otpauth: otpauthUrlStr,
+          qrSvg,
           accountName,
           returnUrl,
           error: "That code didn't match. Try the next one your authenticator shows.",
@@ -1174,11 +1202,28 @@ function renderEnrollMfa(args: {
   csrfToken: string;
   secret: string;
   otpauth: string;
+  /** Inline SVG QR code for the otpauth URL. Empty string when rendering
+   *  failed or no secret is present (the schema-error re-render path). */
+  qrSvg: string;
   accountName: string;
   returnUrl: string;
   error: string | null;
 }): string {
   const display = args.secret ? formatSecretForDisplay(args.secret) : '';
+  // The QR card is the primary path. The manual secret + tap-link stay
+  // as fallback for desktops without a paired phone camera, or for users
+  // who prefer typing.
+  const qrCard = args.qrSvg
+    ? `
+      <div class="nc-card" style="text-align:center;">
+        <div class="nc-card-label" style="text-align:left;">Scan with your authenticator</div>
+        <div style="margin:12px auto; max-width:240px;" aria-label="QR code containing the MFA setup link">${args.qrSvg}</div>
+        <div style="font-size:13px; color:var(--muted); text-align:left;">
+          Open the authenticator app, choose <em>Add account</em> → <em>Scan QR</em>. Or use one of the manual options below.
+        </div>
+      </div>
+    `
+    : '';
   return `
     <h1>Enable MFA</h1>
     <p class="nc-portal-lede">
@@ -1186,15 +1231,13 @@ function renderEnrollMfa(args: {
       Required before the operator surface unlocks.
     </p>
     ${errorBanner(args.error)}
-    <ol style="margin:0 0 24px 18px; padding:0; line-height:1.7;">
-      <li>Open your authenticator app and add a new entry.</li>
-      <li>Either tap the link below on a mobile device, or enter the secret manually as <em>Neighborhood Commons (${escapeHtml(args.accountName)})</em>.</li>
-      <li>Enter the 6-digit code your app shows to confirm.</li>
-    </ol>
+    ${qrCard}
     <div class="nc-card">
-      <div class="nc-card-label">Secret</div>
+      <div class="nc-card-label">Manual entry</div>
+      <p style="margin:0 0 10px; font-size:14px; color:var(--muted);">
+        If scanning isn't an option, type the secret into your authenticator under <em>Neighborhood Commons (${escapeHtml(args.accountName)})</em>, or tap the otpauth link from your phone.
+      </p>
       <div class="nc-key" style="margin-bottom:12px;">${escapeHtml(display)}</div>
-      <div class="nc-card-label">otpauth URL (tap on mobile)</div>
       <div style="word-break:break-all; font-family:var(--font-mono); font-size:12px;">
         <a href="${escapeAttr(args.otpauth)}">${escapeHtml(args.otpauth)}</a>
       </div>
@@ -1203,7 +1246,7 @@ function renderEnrollMfa(args: {
       ${hiddenInput(CSRF_FIELD_NAME, args.csrfToken)}
       ${hiddenInput('secret', args.secret)}
       ${hiddenInput('return', args.returnUrl)}
-      ${textField('code', 'Verification code', { required: true, maxlength: 7, hint: 'Six digits from your authenticator.' })}
+      ${textField('code', 'Verification code', { required: true, maxlength: 7, hint: 'Six digits from your authenticator once the entry is added.' })}
       <button type="submit" class="nc-btn">Verify and enable MFA</button>
       <a href="/developers/dashboard" class="nc-btn nc-btn--secondary" style="margin-left:8px;">Cancel</a>
     </form>
