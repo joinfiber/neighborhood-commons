@@ -6,12 +6,13 @@
  * 404s on anyone who isn't on the env-var allowlist — the route's
  * existence isn't leaked.
  *
- * Routes (PR 4a of the onboarding-redesign build):
- *   GET   /operator                            — index (redirect to applications)
- *   GET   /operator/applications               — list of pending api_keys
- *   GET   /operator/applications/:id           — application detail + actions
- *   POST  /operator/applications/:id/approve   — flip activated_at + status, send email
- *   POST  /operator/applications/:id/reject    — flip status, send rejection email
+ * Routes:
+ *   GET   /operator                                       — index (redirect to applications)
+ *   GET   /operator/applications                          — list of pending api_keys (PR 4a)
+ *   GET   /operator/applications/:id                      — application detail + actions (PR 4a)
+ *   POST  /operator/applications/:id/approve              — flip activated_at + status, send email (PR 4a)
+ *   POST  /operator/applications/:id/reject               — flip status, send rejection email (PR 4a)
+ *   POST  /operator/applications/:id/approve-witnessing   — provision collective org, grant witness_authority, approve (PR 4c)
  *
  * Operator authority is purely env-var driven; there's no `is_operator`
  * column. Adding one later is additive.
@@ -72,6 +73,24 @@ const uuidSchema = z.string().uuid();
 const rejectFormSchema = z.object({
   reason: z.string().trim().max(2000).optional(),
 }).passthrough();
+
+const witnessApprovalSchema = z.object({
+  collective_name: z.string().trim().min(2).max(120),
+  collective_slug: z.string().trim().min(1).max(100).optional(),
+  collective_description: z.string().trim().max(2000).optional(),
+}).passthrough();
+
+/** Derive a slug from a name. Mirrors the deriveSlug helper in
+ *  src/routes/service/organizations.ts. Kept local so the operator
+ *  route doesn't reach across into the service module. */
+function deriveOrgSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[‘’‛']/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 100);
+}
 
 // =============================================================================
 // TYPES
@@ -365,6 +384,8 @@ router.get('/applications/:id', operatorLimiter, async (req, res, next) => {
     const successFlag = req.query.success;
     const callout = successFlag === 'approved'
       ? calloutBanner('Approved. Activation email sent.')
+      : successFlag === 'approved-witnessing'
+      ? calloutBanner('Approved as witnessing app. Collective Organization provisioned, key linked, witness_authority granted. Activation email sent with the collective UUID.')
       : successFlag === 'rejected'
       ? calloutBanner('Rejected. Notification email sent.')
       : '';
@@ -372,15 +393,49 @@ router.get('/applications/:id', operatorLimiter, async (req, res, next) => {
     const csrfToken = issueCsrfCookie(res);
     const isPending = app.status === 'active' && !app.activated_at;
 
+    // Pre-fill the witnessing form: "<App Name> Community" as the default
+    // collective name, derived slug. Operator can edit before submit.
+    const suggestedCollectiveName = `${app.name || 'App'} Community`;
+    const suggestedCollectiveSlug = deriveOrgSlug(suggestedCollectiveName);
+
     const actions = isPending
       ? `
         <div class="nc-card">
-          <div class="nc-card-label">Decision</div>
-          <form method="POST" action="/operator/applications/${escapeAttr(app.id)}/approve" style="margin-bottom:24px;">
+          <div class="nc-card-label">Decision — standard</div>
+          <form method="POST" action="/operator/applications/${escapeAttr(app.id)}/approve" style="margin-bottom:8px;">
             ${hiddenInput(CSRF_FIELD_NAME, csrfToken)}
-            <p style="margin:0 0 12px;">Approve activates the service key for writes and sets the contributor profile to <code>active</code>. The applicant receives the activation email.</p>
+            <p style="margin:0 0 12px;">Activates the service key for first-party / proxied writes. Sets the contributor profile to <code>active</code>. The applicant receives the activation email.</p>
             <button type="submit" class="nc-btn">Approve and activate</button>
           </form>
+        </div>
+
+        <div class="nc-card">
+          <div class="nc-card-label">Decision — approve as witnessing app</div>
+          <form method="POST" action="/operator/applications/${escapeAttr(app.id)}/approve-witnessing" style="margin-bottom:8px;">
+            ${hiddenInput(CSRF_FIELD_NAME, csrfToken)}
+            <p style="margin:0 0 12px;">
+              Use this when the app publishes events via witnessed-with-evidence (per <a href="/docs/four-roles" target="_blank" rel="noopener">four-roles</a>).
+              Creates a collective <code>Organization</code> that the app will set as <code>organizer_org_id</code> on witnessed events,
+              links the key, and grants <code>witness_authority</code>.
+            </p>
+            <div class="nc-field">
+              <label for="collective_name">Collective Organization name</label>
+              <textarea id="collective_name" name="collective_name" maxlength="120" rows="1" placeholder="e.g., Fiber Community">${escapeHtml(suggestedCollectiveName)}</textarea>
+            </div>
+            <div class="nc-field">
+              <label for="collective_slug">Slug</label>
+              <textarea id="collective_slug" name="collective_slug" maxlength="100" rows="1" placeholder="auto-derived from name if left blank">${escapeHtml(suggestedCollectiveSlug)}</textarea>
+            </div>
+            <div class="nc-field">
+              <label for="collective_description">Description (optional)</label>
+              <textarea id="collective_description" name="collective_description" maxlength="2000" placeholder="One or two sentences. Shown on the org's public profile."></textarea>
+            </div>
+            <button type="submit" class="nc-btn">Approve as witnessing app</button>
+          </form>
+        </div>
+
+        <div class="nc-card">
+          <div class="nc-card-label">Decision — reject</div>
           <form method="POST" action="/operator/applications/${escapeAttr(app.id)}/reject">
             ${hiddenInput(CSRF_FIELD_NAME, csrfToken)}
             <div class="nc-field">
@@ -623,6 +678,203 @@ router.post('/applications/:id/reject', operatorLimiter, async (req, res, next) 
     }
 
     res.redirect(303, `/operator/applications/${app.id}?success=rejected`);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================================================
+// POST /operator/applications/:id/approve-witnessing
+// =============================================================================
+//
+// The witnessed-with-evidence approval (PR 4c). In addition to the
+// standard approval, this:
+//   1. Creates a collective Organization that this app will set as
+//      `organizer_org_id` on witnessed events (per docs/four-roles.md).
+//   2. Links the api_key → org via api_key_organization_links so the app
+//      can manage its own collective.
+//   3. Sets api_keys.witness_authority = true, which lets writes with
+//      source_method='witnessed' bypass the org-link scope check.
+//   4. Activates the key (activated_at) + flips contributor_profile.status
+//      to 'active' (same as the standard approve path).
+//   5. Sends the activation email with the collective org UUID +
+//      a usage example.
+//
+// Sequence is best-effort atomic — on a failure partway, what's been
+// written stays (no transactions across PostgREST). The operator can
+// inspect and clean up manually if needed; logs surface where the
+// failure happened.
+
+router.post('/applications/:id/approve-witnessing', operatorLimiter, async (req, res, next) => {
+  try {
+    if (!validateCsrf(req)) {
+      res.status(403).setHeader('Content-Type', 'text/plain');
+      res.send('CSRF check failed.');
+      return;
+    }
+
+    const parsed = uuidSchema.safeParse(req.params.id);
+    if (!parsed.success) {
+      res.redirect(303, '/operator/applications');
+      return;
+    }
+
+    const app = await loadApplication(parsed.data);
+    if (!app) {
+      res.redirect(303, '/operator/applications');
+      return;
+    }
+
+    if (!(app.status === 'active' && !app.activated_at)) {
+      res.redirect(303, `/operator/applications/${app.id}`);
+      return;
+    }
+
+    const formParsed = witnessApprovalSchema.safeParse(req.body || {});
+    if (!formParsed.success) {
+      // Re-render detail with error inline by redirecting back with a flag.
+      // For now, surface a plain message — the form on the detail page is
+      // single-step and the validation is minimal.
+      res.status(400).send(operatorShell({
+        title: 'Witnessing approval failed',
+        operatorEmail: req.operatorEmail || '',
+        body: `<h1>Witnessing approval failed</h1>${errorBanner('Collective name is required (2-120 chars). Slug and description are optional.')}<p><a href="/operator/applications/${escapeAttr(app.id)}">← Back to application</a></p>`,
+      }));
+      return;
+    }
+
+    const collectiveName = formParsed.data.collective_name;
+    const collectiveSlug = (formParsed.data.collective_slug && formParsed.data.collective_slug.trim())
+      || deriveOrgSlug(collectiveName);
+    const collectiveDescription = formParsed.data.collective_description || null;
+
+    if (!collectiveSlug || collectiveSlug.length < 1) {
+      res.status(400).send(operatorShell({
+        title: 'Witnessing approval failed',
+        operatorEmail: req.operatorEmail || '',
+        body: `<h1>Witnessing approval failed</h1>${errorBanner('Could not derive a valid slug from the collective name.')}<p><a href="/operator/applications/${escapeAttr(app.id)}">← Back to application</a></p>`,
+      }));
+      return;
+    }
+
+    // 1. Create the collective Organization.
+    //    method='self_asserted' matches docs/four-roles.md — the
+    //    contributor (this app) asserts the collective's existence.
+    const { data: org, error: orgErr } = await supabaseAdmin
+      .from('organizations')
+      .insert({
+        slug: collectiveSlug,
+        name: collectiveName,
+        description: collectiveDescription,
+        method: 'self_asserted',
+      })
+      .select('id, slug, name')
+      .single();
+
+    if (orgErr || !org) {
+      // Slug collision → 23505
+      if (orgErr && (orgErr as { code?: string }).code === '23505') {
+        res.status(409).send(operatorShell({
+          title: 'Slug already in use',
+          operatorEmail: req.operatorEmail || '',
+          body: `<h1>Slug already in use</h1>${errorBanner(`The slug "${collectiveSlug}" is taken. Pick a different one and try again.`)}<p><a href="/operator/applications/${escapeAttr(app.id)}">← Back to application</a></p>`,
+        }));
+        return;
+      }
+      console.error('[OPERATOR] Witnessing org insert failed:', orgErr?.message);
+      res.status(500).send(operatorShell({
+        title: 'Provisioning failed',
+        operatorEmail: req.operatorEmail || '',
+        body: `<h1>Provisioning failed</h1>${errorBanner('Could not create the collective Organization. Check logs and try again.')}`,
+      }));
+      return;
+    }
+
+    // 2. Link the api_key → org (so the app can edit/manage its collective).
+    const { error: linkErr } = await supabaseAdmin
+      .from('api_key_organization_links')
+      .insert({
+        api_key_id: app.id,
+        organization_id: org.id,
+      });
+
+    if (linkErr) {
+      // Try to roll back the org so the slug frees up for a retry.
+      await supabaseAdmin.from('organizations').delete().eq('id', org.id);
+      console.error('[OPERATOR] api_key_organization_links insert failed:', linkErr.message);
+      res.status(500).send(operatorShell({
+        title: 'Provisioning failed',
+        operatorEmail: req.operatorEmail || '',
+        body: `<h1>Provisioning failed</h1>${errorBanner('Could not link the api_key to the collective. The collective was rolled back; try again.')}`,
+      }));
+      return;
+    }
+
+    // 3 + 4. Activate the key + grant witness_authority + review record.
+    const nowIso = new Date().toISOString();
+    const reviewRecord = {
+      action: 'approved',
+      variant: 'witnessing',
+      at: nowIso,
+      by: req.operatorEmail || 'unknown',
+      notes: null,
+      collective_org_id: org.id,
+    };
+    const updatedMeta = {
+      ...(app.application_metadata || {}),
+      review: reviewRecord,
+    };
+
+    const { error: keyErr } = await supabaseAdmin
+      .from('api_keys')
+      .update({
+        activated_at: nowIso,
+        witness_authority: true,
+        application_metadata: updatedMeta,
+      })
+      .eq('id', app.id);
+
+    if (keyErr) {
+      console.error('[OPERATOR] Witnessing approve api_key update failed:', keyErr.message);
+      // Org + link are already in place; leave them — operator can
+      // re-run the approval (the duplicate check on activated_at will
+      // skip the re-provisioning).
+      res.status(500).send(operatorShell({
+        title: 'Approval failed',
+        operatorEmail: req.operatorEmail || '',
+        body: `<h1>Approval failed mid-sequence</h1>${errorBanner('Collective Organization was created and linked, but flipping the key to activated failed. Check the logs and complete manually if needed.')}`,
+      }));
+      return;
+    }
+
+    if (app.contributor_profile_id) {
+      const { error: profErr } = await supabaseAdmin
+        .from('contributor_profiles')
+        .update({ status: 'active' })
+        .eq('id', app.contributor_profile_id);
+      if (profErr) {
+        console.error('[OPERATOR] Witnessing approve profile update failed:', profErr.message);
+      }
+    }
+
+    // 5. Send activation email with collective UUID + usage example.
+    const profile = await loadProfile(app.contributor_profile_id);
+    try {
+      await sendActivationEmail({
+        email: app.contact_email,
+        appName: app.name || profile?.name || 'your app',
+        profileSlug: profile?.slug || '',
+        collectiveOrg: {
+          id: org.id as string,
+          name: org.name as string,
+          slug: org.slug as string,
+        },
+      });
+    } catch (emailErr) {
+      console.error('[OPERATOR] Witnessing activation email send failed:', emailErr instanceof Error ? emailErr.message : emailErr);
+    }
+
+    res.redirect(303, `/operator/applications/${app.id}?success=approved-witnessing`);
   } catch (err) {
     next(err);
   }

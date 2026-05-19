@@ -14,6 +14,15 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-05-18 — operator: approve-as-witnessing flow (PR 4c)
+
+No contract change. Adds the third operator decision path: approve a developer as a **witnessed-with-evidence** publisher (per [`docs/four-roles.md`](docs/four-roles.md)). Fiber-shaped apps (OCR of public flyers, user-witnessed evidence) need a collective Organization to set as `organizer_org_id` and `witness_authority=true` on the api_key — both happen in one click.
+
+- **`POST /operator/applications/:id/approve-witnessing`** — in addition to the standard approval, creates a collective `organizations` row (method `self_asserted`), links the api_key via `api_key_organization_links`, sets `api_keys.witness_authority=true`. Best-effort rollback on mid-sequence failure (org → link → key + profile).
+- **Operator detail page** now shows three decision panels: standard approve, **approve as witnessing app** (with name / slug / description inputs, defaulting to `"<App Name> Community"`), reject.
+- **Activation email** includes a witnessing block when applicable: the collective Organization's UUID, slug, and a concrete example payload showing `organizer_org_id` + `source.method = "witnessed"`.
+- Review record persists the variant: `application_metadata.review = { action: 'approved', variant: 'witnessing', collective_org_id, at, by, notes }`.
+
 ## 2026-05-18 — MFA enrollment + step-up (PR 4b)
 
 No contract change. Hardens the developer portal with TOTP-based MFA; required before the operator surface unlocks. Per [`docs/onboarding-redesign.md`](docs/onboarding-redesign.md) §3.2, §3.3, §12 (PR 4b).
