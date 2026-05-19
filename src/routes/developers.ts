@@ -79,6 +79,12 @@ import {
   BACKUP_CODE_COUNT,
 } from '../lib/developer-portal/backup-codes.js';
 import QRCode from 'qrcode';
+import multer from 'multer';
+import {
+  processAndUploadLogo,
+  deleteLogo,
+  LOGO_MAX_BYTES,
+} from '../lib/developer-portal/logo-upload.js';
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -491,7 +497,9 @@ const profileEditSchema = z.object({
   who_its_for: z.string().trim().max(500).optional().nullable(),
   app_url: z.string().trim().url().max(2000),
   category: z.string().trim().max(50).optional().nullable(),
-  logo_url: z.string().trim().url().max(2000).optional().or(z.literal('')),
+  // Logo is managed via the dedicated multipart route below
+  // (POST /profile/logo); we deliberately don't accept it here so the
+  // urlencoded text save can't clobber the uploaded image.
 }).passthrough();
 
 router.post('/profile', writeFormLimiter, requireDeveloperSession, async (req, res, next) => {
@@ -523,7 +531,7 @@ router.post('/profile', writeFormLimiter, requireDeveloperSession, async (req, r
       who_its_for: parsed.data.who_its_for || null,
       app_url: parsed.data.app_url,
       category: parsed.data.category || null,
-      logo_url: parsed.data.logo_url || null,
+      // logo_url intentionally omitted — managed by POST /profile/logo
     };
 
     const { error } = await supabaseAdmin
@@ -536,6 +544,115 @@ router.post('/profile', writeFormLimiter, requireDeveloperSession, async (req, r
       res.redirect(303, '/developers/profile?error=' + encodeURIComponent('Save failed. Please try again.'));
       return;
     }
+
+    res.redirect(303, '/developers/profile?saved=1');
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================================================
+// POST /developers/profile/logo  (upload)
+// POST /developers/profile/logo/remove
+// =============================================================================
+//
+// Logo handling lives in its own routes because the upload has to be
+// multipart-encoded and the text-only POST /profile stays urlencoded.
+// Multer parses the multipart body into req.file (the image) and
+// req.body (the CSRF token). The image goes through the same magic-byte
+// + Sharp re-encode + R2 upload pipeline as event photos.
+
+const logoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: LOGO_MAX_BYTES,
+    files: 1,
+  },
+});
+
+router.post(
+  '/profile/logo',
+  writeFormLimiter,
+  // Multer runs before requireDeveloperSession so the multipart body is
+  // parsed in time for CSRF + handler code to read req.body and req.file.
+  logoUpload.single('logo'),
+  requireDeveloperSession,
+  async (req, res, next) => {
+    try {
+      if (!validateCsrf(req)) {
+        res.redirect(303, '/developers/profile?error=' + encodeURIComponent('Your session expired. Please try again.'));
+        return;
+      }
+
+      const file = (req as unknown as { file?: { buffer: Buffer; mimetype: string } }).file;
+      if (!file || !file.buffer || file.buffer.length === 0) {
+        res.redirect(303, '/developers/profile?error=' + encodeURIComponent('Pick a JPEG, PNG, or WebP under 5MB.'));
+        return;
+      }
+
+      const session = req.developerSession!;
+      const profile = await loadProfileForSession(session.api_key_id);
+      if (!profile) {
+        res.redirect(302, '/developers/dashboard');
+        return;
+      }
+
+      let uploadResult;
+      try {
+        uploadResult = await processAndUploadLogo(profile.id as string, file.buffer);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Upload failed.';
+        res.redirect(303, '/developers/profile?error=' + encodeURIComponent(message));
+        return;
+      }
+
+      const { error: updErr } = await supabaseAdmin
+        .from('contributor_profiles')
+        .update({ logo_url: uploadResult.url })
+        .eq('id', profile.id as string);
+
+      if (updErr) {
+        console.error('[DEV_PORTAL] Logo URL persist failed:', updErr.message);
+        res.redirect(303, '/developers/profile?error=' + encodeURIComponent('Saved the upload but could not update the profile. Try again.'));
+        return;
+      }
+
+      res.redirect(303, '/developers/profile?saved=1');
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+router.post('/profile/logo/remove', writeFormLimiter, requireDeveloperSession, async (req, res, next) => {
+  try {
+    if (!validateCsrf(req)) {
+      res.redirect(303, '/developers/profile?error=' + encodeURIComponent('Your session expired. Please try again.'));
+      return;
+    }
+
+    const session = req.developerSession!;
+    const profile = await loadProfileForSession(session.api_key_id);
+    if (!profile) {
+      res.redirect(302, '/developers/dashboard');
+      return;
+    }
+
+    // Clear the DB pointer first — even if the R2 delete fails, the
+    // public-facing profile no longer references the image.
+    const { error: updErr } = await supabaseAdmin
+      .from('contributor_profiles')
+      .update({ logo_url: null })
+      .eq('id', profile.id as string);
+
+    if (updErr) {
+      console.error('[DEV_PORTAL] Logo URL clear failed:', updErr.message);
+      res.redirect(303, '/developers/profile?error=' + encodeURIComponent('Could not remove the logo. Try again.'));
+      return;
+    }
+
+    // Best-effort R2 cleanup. Failure here just leaves an orphan object.
+    await deleteLogo(profile.id as string);
 
     res.redirect(303, '/developers/profile?saved=1');
   } catch (err) {
@@ -1032,6 +1149,35 @@ function renderLogin(csrfToken: string, error: string | null, sent: boolean): st
 function renderProfileEdit(csrfToken: string, profile: Record<string, unknown>, error: string | null, saved: boolean): string {
   const status = (profile.status as string) || 'pending';
   const statusClass = status === 'active' ? 'nc-status--active' : status === 'suspended' ? 'nc-status--suspended' : 'nc-status--pending';
+  const logoUrl = profile.logo_url as string | null;
+
+  const logoCard = `
+    <div class="nc-card">
+      <div class="nc-card-label">Logo</div>
+      ${logoUrl
+        ? `<div style="display:flex; align-items:center; gap:18px; margin-bottom:14px;">
+             <img src="${escapeAttr(logoUrl)}" alt="${escapeAttr((profile.name as string) || 'Logo')}" style="width:80px; height:80px; border-radius:8px; object-fit:cover; background:#f1efea; border:1px solid var(--border);">
+             <div style="font-size:13px; color:var(--muted);">
+               Currently set. Upload a new file below to replace it, or use the remove button.
+             </div>
+           </div>
+           <form method="POST" action="/developers/profile/logo/remove" style="display:inline; margin-bottom:14px;">
+             ${hiddenInput(CSRF_FIELD_NAME, csrfToken)}
+             <button type="submit" class="nc-btn nc-btn--secondary" style="margin-bottom:14px;">Remove logo</button>
+           </form>`
+        : `<div style="font-size:13px; color:var(--muted); margin-bottom:12px;">
+             No logo yet. JPEG, PNG, or WebP under 5MB. Square images render best — they get resized to 400px max.
+           </div>`}
+      <form method="POST" action="/developers/profile/logo" enctype="multipart/form-data" novalidate>
+        ${hiddenInput(CSRF_FIELD_NAME, csrfToken)}
+        <div class="nc-field" style="margin-bottom:8px;">
+          <label for="logo" style="display:block; font-size:13px; font-weight:600; color:var(--ink-2); margin-bottom:6px;">Choose a file</label>
+          <input id="logo" name="logo" type="file" accept="image/jpeg,image/png,image/webp" required>
+        </div>
+        <button type="submit" class="nc-btn">${logoUrl ? 'Replace logo' : 'Upload logo'}</button>
+      </form>
+    </div>
+  `;
 
   const body = `
     <h1>Edit profile.</h1>
@@ -1042,13 +1188,13 @@ function renderProfileEdit(csrfToken: string, profile: Record<string, unknown>, 
     </p>
     ${saved ? calloutBanner('Saved.') : ''}
     ${errorBanner(error)}
+    ${logoCard}
     <form method="POST" action="/developers/profile" novalidate>
       ${hiddenInput(CSRF_FIELD_NAME, csrfToken)}
       ${textField('name', 'App name', { required: true, value: profile.name, hint: 'Display name. Shown verbatim in splash cards.' })}
       ${textField('tagline', 'Tagline', { required: true, maxlength: 120, value: profile.tagline, hint: 'One-liner. Up to ~80 chars renders well in splash cards.' })}
       ${textareaField('description', 'Description', { required: true, value: profile.description, hint: '~2000 chars. Plain text for now.' })}
       ${textField('app_url', 'App URL', { type: 'url', required: true, value: profile.app_url })}
-      ${textField('logo_url', 'Logo URL (optional)', { type: 'url', value: profile.logo_url, hint: 'Square image works best. Paste a URL for now; file upload is coming.' })}
       ${textField('who_its_for', "Who it's for (optional)", { maxlength: 500, value: profile.who_its_for })}
       ${textField('category', 'Category (optional)', { maxlength: 50, value: profile.category, hint: 'Free-form, e.g. "publishing", "discovery", "civic".' })}
       <button type="submit" class="nc-btn">Save</button>
