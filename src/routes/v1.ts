@@ -93,9 +93,12 @@ async function resolveContributorOrgIds(slug: string): Promise<string[] | null> 
  * Shared across JSON, iCal, and RSS endpoints.
  */
 async function queryFilteredEvents(params: ListParams, opts?: {
-  /** Skip the 3h lookback and visibility filter (for feeds with explicit date windows) */
+  /** Skip the relevance + visibility filter (for feeds with explicit date windows) */
   skipVisibility?: boolean;
-  /** Override the default cutoff for event_at (ISO string) */
+  /** Override the default relevance cutoff. When set, filters on event_at >= cutoff
+   *  with ascending event_at ordering — semantics for explicit date-window feeds
+   *  (ICS) that want events in a range regardless of whether they've already
+   *  ended. When unset, the default uses the indexed relevant_until column. */
   cutoffOverride?: string;
   /** Include total count in response */
   includeCount?: boolean;
@@ -104,11 +107,6 @@ async function queryFilteredEvents(params: ListParams, opts?: {
 }): Promise<{ events: Record<string, unknown>[]; count: number | null }> {
   const includeCount = opts?.includeCount ?? false;
   const fetchLimit = opts?.fetchLimit ?? params.limit;
-
-  // Default cutoff: 3h lookback for open-window events
-  const lookbackMs = 3 * 60 * 60 * 1000;
-  const defaultCutoff = new Date(Date.now() - lookbackMs).toISOString();
-  const cutoff = opts?.cutoffOverride ?? defaultCutoff;
 
   // Contributor filter: resolve slug → organizer org IDs before building query
   let contributorOrgIds: string[] | null = null;
@@ -123,10 +121,28 @@ async function queryFilteredEvents(params: ListParams, opts?: {
   let query = supabaseAdmin
     .from('events')
     .select(EVENTS_SELECT, includeCount ? { count: 'exact' } : undefined)
-    .eq('status', 'published')
-    .gte('event_at', cutoff)
-    .order('event_at', { ascending: true })
-    .range(params.offset, params.offset + fetchLimit - 1);
+    .eq('status', 'published');
+
+  // Relevance filter. Two paths:
+  //   - cutoffOverride set → filter on event_at >= cutoff, order by event_at ASC.
+  //     This is the explicit date-window path (ICS feed). Past events in the
+  //     range still appear — that's intentional for calendar export.
+  //   - default → filter on the indexed relevant_until column, order by it ASC.
+  //     "Relevance" here matches the JS post-filter that this replaces: strict
+  //     events are relevant until they start, open-window events until they
+  //     end (or 3h after start if end_time is null). Migration 088 added the
+  //     generated column + index.
+  if (opts?.cutoffOverride) {
+    query = query
+      .gte('event_at', opts.cutoffOverride)
+      .order('event_at', { ascending: true });
+  } else {
+    query = query
+      .gte('relevant_until', new Date().toISOString())
+      .order('relevant_until', { ascending: true });
+  }
+
+  query = query.range(params.offset, params.offset + fetchLimit - 1);
 
   // Contributor filter
   if (contributorOrgIds) {
@@ -226,36 +242,21 @@ async function queryFilteredEvents(params: ListParams, opts?: {
 
   const rows = (events || []) as unknown as Record<string, unknown>[];
 
-  // Visibility filtering (unless explicitly skipped)
-  if (opts?.skipVisibility) {
-    // Still filter out suspended accounts (via organizations.owner_account_id chain)
-    const active = rows.filter((row) => {
-      const org = row.organizations as Record<string, unknown> | null;
-      const account = org?.portal_accounts as Record<string, unknown> | null;
-      return !account || account.status !== 'suspended';
-    });
-    return { events: active, count: count ?? null };
-  }
-
-  const OPEN_WINDOW_DEFAULT_HOURS = 3;
-  const now = new Date();
+  // Suspended-account filter: defense-in-depth against an event slipping
+  // through with an owning portal_account that's been suspended. Traverses
+  // organizations.owner_account_id → portal_accounts.status. Orgs with no
+  // owning portal account (admin-created via Studio) skip the check.
+  //
+  // The relevance filter that used to live here (open_window / end_time /
+  // 3h fallback) moved to SQL via the relevant_until generated column in
+  // migration 088. The two filters disagreed on what "soonest relevant"
+  // meant when paginating — small limits could yield empty pages despite
+  // a high total. With the column-based filter, SQL ordering and SQL
+  // filtering use the same value, so pagination is correct end-to-end.
   const visible = rows.filter((row) => {
-    // Suspended-status check traverses organizations.owner_account_id → portal_accounts.status.
-    // Organizations with no owning portal account (e.g., admin-created via Studio) skip the check.
     const org = row.organizations as Record<string, unknown> | null;
     const account = org?.portal_accounts as Record<string, unknown> | null;
-    if (account && account.status === 'suspended') return false;
-
-    const openWindow = (row.open_window as boolean) ?? false;
-    const eventAt = new Date(row.event_at as string);
-    if (!openWindow) {
-      return eventAt >= now;
-    }
-    if (row.end_time) {
-      return new Date(row.end_time as string) >= now;
-    }
-    const fallback = new Date(eventAt.getTime() + OPEN_WINDOW_DEFAULT_HOURS * 60 * 60 * 1000);
-    return fallback >= now;
+    return !account || account.status !== 'suspended';
   });
 
   return { events: visible, count: count ?? null };
