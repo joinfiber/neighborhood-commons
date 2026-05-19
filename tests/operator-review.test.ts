@@ -183,26 +183,32 @@ function sessionCookie(): string {
   return `nc_dev_session=${RAW_SESSION_TOKEN}`;
 }
 
-/** Set up a session row that validateSession will accept. */
-function setupSession() {
+/** Set up a session row that validateSession will accept. By default the
+ *  session is freshly MFA-verified — operator routes treat it as elevated. */
+function setupSession(opts: { mfaVerifiedAt?: string | null } = {}) {
   const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  const mfaVerifiedAt = opts.mfaVerifiedAt === undefined
+    ? new Date().toISOString() // fresh-elevated by default
+    : opts.mfaVerifiedAt;
   mockResponses.set('developer_sessions:single', {
     data: {
       id: 'session-id',
       api_key_id: 'operator-api-key',
-      mfa_verified_at: null,
+      mfa_verified_at: mfaVerifiedAt,
       expires_at: future,
     },
     error: null,
   });
 }
 
-/** Set up an operator (email matches COMMONS_OPERATOR_EMAIL). Single-row
- *  api_keys returns a row whose contact_email is on the allowlist. */
+/** Set up an operator with the full MFA + elevation chain satisfied. */
 function setupOperatorIdentity() {
   setupSession();
   mockResponses.set('api_keys:single', {
-    data: { contact_email: 'op@example.com' },
+    data: {
+      contact_email: 'op@example.com',
+      mfa_enrolled_at: '2026-05-18T00:00:00Z',
+    },
     error: null,
   });
 }
@@ -265,12 +271,45 @@ describe('Operator gate', () => {
     expect(res.status).toBe(404);
   });
 
+  it('redirects an operator without MFA to enrollment (PR 4b)', async () => {
+    setupSession();
+    mockResponses.set('api_keys:single', {
+      data: { contact_email: 'op@example.com', mfa_enrolled_at: null },
+      error: null,
+    });
+    const res = await fetch(`${baseUrl}/operator/applications`, {
+      headers: { Cookie: sessionCookie() },
+      redirect: 'manual',
+    });
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toMatch(/^\/developers\/security\/enroll-mfa\?return=/);
+    expect(res.headers.get('location')).toContain('%2Foperator%2Fapplications');
+  });
+
+  it('redirects an operator with stale elevation to step-up (PR 4b)', async () => {
+    // mfa_verified_at older than the 15-min window → not elevated.
+    setupSession({ mfaVerifiedAt: '2026-01-01T00:00:00Z' });
+    mockResponses.set('api_keys:single', {
+      data: { contact_email: 'op@example.com', mfa_enrolled_at: '2026-05-18T00:00:00Z' },
+      error: null,
+    });
+    const res = await fetch(`${baseUrl}/operator/applications`, {
+      headers: { Cookie: sessionCookie() },
+      redirect: 'manual',
+    });
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toMatch(/^\/developers\/security\/step-up\?return=/);
+  });
+
   it('uses case-insensitive matching on the operator email', async () => {
     // Allowlist is 'op@example.com'; session email is OP@EXAMPLE.COM.
     // The middleware lowercases before comparing.
     setupSession();
     mockResponses.set('api_keys:single', {
-      data: { contact_email: 'OP@EXAMPLE.COM' },
+      data: {
+        contact_email: 'OP@EXAMPLE.COM',
+        mfa_enrolled_at: '2026-05-18T00:00:00Z',
+      },
       error: null,
     });
     mockResponses.set('api_keys:list', { data: [], error: null, count: 0 });
@@ -377,6 +416,7 @@ describe('GET /operator/applications/:id', () => {
         brand_config: { app_name: 'Test App', from_name: 'Test App' },
         contributor_profile_id: PROFILE_ID,
         created_at: '2026-05-01T12:00:00Z',
+        mfa_enrolled_at: '2026-05-18T00:00:00Z',
       },
       error: null,
     });
@@ -456,6 +496,7 @@ describe('POST /operator/applications/:id/approve', () => {
         brand_config: null,
         contributor_profile_id: PROFILE_ID,
         created_at: '2026-05-01T12:00:00Z',
+        mfa_enrolled_at: '2026-05-18T00:00:00Z',
       },
       error: null,
     });
@@ -556,6 +597,7 @@ describe('POST /operator/applications/:id/reject', () => {
         brand_config: null,
         contributor_profile_id: PROFILE_ID,
         created_at: '2026-05-01T12:00:00Z',
+        mfa_enrolled_at: '2026-05-18T00:00:00Z',
       },
       error: null,
     });
