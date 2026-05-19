@@ -219,7 +219,7 @@ export interface paths {
          * Create webhook subscription
          * @description Subscribe to event changes. Returns the signing secret once — store it securely. Webhooks are signed with HMAC-SHA256. Max 5 subscriptions per API key.
          *
-         *     **Event types:** `event.created`, `event.updated`, `event.deleted`, `event.series_created`, `event.image_processed`. The default subscribes to the first four; `event.image_processed` is opt-in (different payload shape — see Guide for details).
+         *     **Event types:** `event.created`, `event.updated`, `event.deleted`, `event.series_created`, `event.image_processed`, `series.updated`, `series.deleted`. The default subscribes to the event.* types except `event.image_processed`. `series.updated` and `series.deleted` fire when a series identity changes or the series is removed — useful for consumers caching series pages.
          */
         post: operations["createWebhook"];
         delete?: never;
@@ -386,6 +386,28 @@ export interface paths {
          * @description Update all future instances of a recurring series. Scoped to accounts linked to this service key.
          */
         patch: operations["serviceUpdateSeries"];
+        trace?: never;
+    };
+    "/service/series/{seriesId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update series identity (service)
+         * @description Update identity fields on a series — name, slug, description, cover image. Distinct from `PATCH /service/events/series/{seriesId}` (which patches the per-instance template and propagates to future instance rows). Identity edits do NOT rewrite past or future instance titles — to rename future instances too, call the template-patch endpoint with the same name. Fires the `series.updated` webhook.
+         *
+         *     Scoped to organizations linked to this service key via `api_key_organization_links`.
+         */
+        patch: operations["serviceUpdateSeriesIdentity"];
         trace?: never;
     };
     "/service/events/{id}/image": {
@@ -804,6 +826,46 @@ export interface paths {
         };
         /** Get a single broadcast */
         get: operations["getBroadcast"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List event series
+         * @description Public read of event series records. A series is a recurring activity with its own public identity (name, slug, description, cover image). For the *instances* of a series, query `/events?series_id={id}` instead — this endpoint returns the series itself. See `docs/series-as-first-class.md` for the design.
+         */
+        get: operations["listSeries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/series/{idOrSlug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a single series
+         * @description Fetch a series by UUID or slug. Used by consumer apps to render dedicated series pages (e.g., a subscribable Quizzo series). Returns the series identity, its organizer, recurrence, and the soonest upcoming instance.
+         */
+        get: operations["getSeries"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1575,7 +1637,7 @@ export interface components {
             id?: string;
             /** Format: uri */
             url?: string;
-            event_types?: ("event.created" | "event.updated" | "event.deleted" | "event.series_created" | "event.image_processed")[];
+            event_types?: ("event.created" | "event.updated" | "event.deleted" | "event.series_created" | "event.image_processed" | "series.updated" | "series.deleted")[];
             /** @enum {string} */
             status?: "active" | "paused";
             /** Format: date-time */
@@ -1657,6 +1719,15 @@ export interface components {
             /** @description RRULE string (e.g. FREQ=WEEKLY;COUNT=12). Omit for one-off events. */
             recurrence?: string;
             instance_count?: number;
+            /** @description Series-level identity, used only when `recurrence` is set. When omitted, the series name defaults to the event name and the slug is server-derived. Pass explicit values to give the series a distinct public identity (e.g., "Fishtown Quizzo" with slug `fishtown-quizzo`, separate from any individual instance's name). See `docs/series-as-first-class.md`. */
+            series?: {
+                name?: string;
+                /** @description Globally unique. Server returns 409 on collision. */
+                slug?: string;
+                description?: string;
+                /** Format: uri */
+                cover_image_url?: string;
+            };
             tags?: string[];
             wheelchair_accessible?: boolean;
             /** @description True for come-and-go events. Default false. */
@@ -1902,6 +1973,39 @@ export interface components {
              * @description Must be in the future and within 24h of now.
              */
             expires: string;
+        };
+        /** @description A recurring activity with its own public identity (name, slug, description, cover image) separate from any individual instance. Completes the event_series primitive — recurrence machinery has existed; identity is the additive surface for consumers that want to address the series as a thing (subscribable entity in Merrie, series page in Fiber, etc.). Past instances' titles (`Event.name`) are NEVER rewritten when a series is renamed — historical accuracy. To list a series's instances, use `/events?series_id={id}`. */
+        Series: {
+            /** Format: uuid */
+            id: string;
+            /** @description Globally unique URL slug. Same format as organization and group slugs. */
+            slug: string;
+            /** @description Current public identity of the series. Forward-looking — past instances retain their original titles. */
+            name: string;
+            description?: string | null;
+            /** Format: uri */
+            cover_image_url?: string | null;
+            /** @description Organization running the series. Null only on legacy series whose original organizer was deleted. */
+            organizer?: components["schemas"]["Organization"] | null;
+            recurrence?: {
+                /** @description RFC 5545 RRULE string. */
+                rrule: string;
+            } | null;
+            /** @description Soonest upcoming instance of the series, or null if none are scheduled. For the full list of instances, query `/events?series_id={id}`. */
+            next_instance?: components["schemas"]["Event"] | null;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: date-time */
+            updated_at?: string;
+        };
+        /** @description Body for PATCH /service/series/{seriesId}. All fields optional; at least one required. Identity edits do NOT propagate to past or future instance titles — to rename future instances, use PATCH /service/events/series/{seriesId} with the same name change. */
+        SeriesIdentityInput: {
+            name?: string;
+            /** @description If provided, must be unique. Server returns 409 on collision. */
+            slug?: string;
+            description?: string | null;
+            /** Format: uri */
+            cover_image_url?: string | null;
         };
         /** @description Schema.org ListItem. Used inside ItemList.itemListElement to pair an item reference with its position and an optional curator note. */
         ListItem: {
@@ -2507,7 +2611,7 @@ export interface operations {
                      *       "event.series_created"
                      *     ]
                      */
-                    event_types?: ("event.created" | "event.updated" | "event.deleted" | "event.series_created" | "event.image_processed")[];
+                    event_types?: ("event.created" | "event.updated" | "event.deleted" | "event.series_created" | "event.image_processed" | "series.updated" | "series.deleted")[];
                 };
             };
         };
@@ -2594,7 +2698,7 @@ export interface operations {
                      * @description New HTTPS endpoint URL
                      */
                     url?: string;
-                    event_types?: ("event.created" | "event.updated" | "event.deleted" | "event.series_created" | "event.image_processed")[];
+                    event_types?: ("event.created" | "event.updated" | "event.deleted" | "event.series_created" | "event.image_processed" | "series.updated" | "series.deleted")[];
                     /** @enum {string} */
                     status?: "active" | "paused";
                 };
@@ -3038,6 +3142,53 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["NotFound"];
+        };
+    };
+    serviceUpdateSeriesIdentity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                seriesId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SeriesIdentityInput"];
+            };
+        };
+        responses: {
+            /** @description Series identity updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        series_id: string;
+                        /** @description Field names that actually changed. Empty array if the request was a no-op (sent values matched existing). */
+                        changed: ("name" | "slug" | "description" | "cover_image_url")[];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description NOT_LINKED — key not linked to this series's organizer organization. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description Slug already in use. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     serviceUploadEventImage: {
@@ -3958,6 +4109,61 @@ export interface operations {
                 content: {
                     "application/json": {
                         broadcast: components["schemas"]["Broadcast"];
+                    };
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listSeries: {
+        parameters: {
+            query?: {
+                /** @description Filter to series run by a specific organization. */
+                organizer_org_id?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated series list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        meta: components["schemas"]["Meta"];
+                        series: components["schemas"]["Series"][];
+                    };
+                };
+            };
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    getSeries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Either the series UUID or its stable slug. */
+                idOrSlug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        series: components["schemas"]["Series"];
                     };
                 };
             };

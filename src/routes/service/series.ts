@@ -19,10 +19,29 @@ import { validateTags } from '../../lib/tags.js';
 import { dispatchEventWebhookById } from '../../lib/webhook-delivery.js';
 import { serviceLimiter } from '../../middleware/rate-limit.js';
 import { fromTimestamptz } from '../../lib/event-operations.js';
-import { deleteSeriesEvents, updateSeriesFutureInstances } from '../../lib/event-series.js';
+import {
+  deleteSeriesEvents,
+  updateSeriesFutureInstances,
+  updateSeriesIdentity,
+  type SeriesIdentityUpdate,
+} from '../../lib/event-series.js';
 import { assertLinkedEvent } from './helpers.js';
 import { assertLinkedOrganization } from './helpers-v1.js';
 import { updateEventSchema } from './events.js';
+
+/**
+ * Series identity edit schema. Distinct from updateEventSchema (used by the
+ * /events/series/:seriesId template-edit endpoint above) — this schema covers
+ * only the fields that belong to the series itself, not its instance template.
+ */
+const updateSeriesIdentitySchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  slug: z.string().regex(/^[a-z0-9][a-z0-9-]{0,99}$/, 'must be lowercase alphanumeric + hyphens, starting with alphanumeric, max 100 chars').optional(),
+  description: z.string().max(2000).nullable().optional(),
+  cover_image_url: z.string().url().nullable().optional(),
+}).refine((data) => Object.keys(data).length > 0, {
+  message: 'At least one field must be provided',
+});
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -146,6 +165,51 @@ router.delete('/events/series/:seriesId', serviceLimiter, async (req, res, next)
     }
     const deleted = await deleteSeriesEvents(req.params.seriesId);
     res.json({ deleted: true, series_id: req.params.seriesId, count: deleted });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * PATCH /service/series/:seriesId — Update series identity (scoped).
+ *
+ * Identity-only: name, slug, description, cover_image_url. Past instance
+ * titles (events.content) are NEVER rewritten — historical accuracy.
+ * Future instance titles are NOT auto-propagated either: to rename future
+ * instances, call PATCH /events/series/:seriesId with the same name change.
+ *
+ * Fires series.updated webhook with the list of changed fields.
+ */
+router.patch('/series/:seriesId', serviceLimiter, async (req, res, next) => {
+  try {
+    validateUuidParam(req.params.seriesId, 'series ID');
+    const data = validateRequest(updateSeriesIdentitySchema, req.body);
+
+    // Ownership: non-admin keys must be linked to the series' organizer_org.
+    const { data: series } = await supabaseAdmin
+      .from('event_series')
+      .select('id, organizer_org_id')
+      .eq('id', req.params.seriesId)
+      .maybeSingle();
+    if (!series) throw createError('Series not found', 404, 'NOT_FOUND');
+    if (!req.apiKeyInfo?.isAdmin) {
+      if (!series.organizer_org_id) throw createError('Series has no organizer; admin access required', 403, 'FORBIDDEN');
+      await assertLinkedOrganization(req, series.organizer_org_id as string);
+    }
+
+    const update: SeriesIdentityUpdate = {};
+    if (data.name !== undefined) update.name = data.name;
+    if (data.slug !== undefined) update.slug = data.slug;
+    if (data.description !== undefined) update.description = data.description;
+    if (data.cover_image_url !== undefined) update.cover_image_url = data.cover_image_url;
+
+    const result = await updateSeriesIdentity(req.params.seriesId, update);
+
+    console.log(`[SERVICE] Series ${req.params.seriesId} identity updated: ${result.changed.join(', ') || 'no-op'}`);
+    res.json({
+      series_id: result.seriesId,
+      changed: result.changed,
+    });
   } catch (err) {
     next(err);
   }

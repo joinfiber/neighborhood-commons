@@ -14,6 +14,16 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-05-19 — series as first-class primitive
+
+Completes the `event_series` primitive: recurrence machinery has existed; identity is the additive surface for consumers that want to address a series as a thing (subscribable entity in Merrie, series page in Fiber, etc.). Past instances' titles are never rewritten on rename — historical accuracy. See `docs/series-as-first-class.md` for design rationale and the Commons↔Merrie agreement.
+
+- **Migration 089** — adds `event_series.{name, slug, description, cover_image_url, organizer_org_id}`. Backfills name from `base_event_data.content`, slug via the standard slugify with `-2/-3` collision suffixes, organizer_org_id from any existing instance. `name` and `slug` become NOT NULL after backfill; `organizer_org_id` stays NULLABLE to accommodate legacy orphan rows. Globally unique slug index.
+- **`GET /api/v1/series`** + **`GET /api/v1/series/{idOrSlug}`** — new public read endpoints. Returns identity, organizer, recurrence (RRULE), and soonest upcoming instance. List supports `?organizer_org_id={uuid}`. Consumers fetch a series's instances via existing `/events?series_id={id}`.
+- **`PATCH /service/series/{seriesId}`** — new service endpoint for identity-only edits (name, slug, description, cover_image_url). Distinct from existing `PATCH /service/events/series/{seriesId}` (which patches the per-instance template). Identity edits do NOT propagate to past or future instance titles — to rename future instances too, call both.
+- **`POST /service/events`** — `series` block added to the request body. When set on a recurring event create, the series gets explicit identity; when omitted, name defaults to the event name and slug is server-derived. Response now returns `{series_id, series_count, instance_ids}` instead of looking up `series_id` via a follow-up query.
+- **Webhooks** — `event.series_created` payload enriched with `series: SeriesProfile`. New event types: `series.updated` (identity changed) and `series.deleted` (series removed). Subscribers caching series pages should listen to the latter two.
+
 ## 2026-05-19 — fix events pagination via `relevant_until` generated column
 
 Closes a long-standing pagination bug surfaced during 3.0 verification. Pre-fix: `GET /api/v1/events` filtered `event_at >= now-3h` and ordered ascending in SQL, then a JS post-filter dropped events whose `end_time` was past. With small limits the SQL returned oldest-first rows in the window (most likely already ended), JS filtered them, and the response was `[]` despite `meta.total` reporting many events.

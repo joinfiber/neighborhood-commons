@@ -1,12 +1,24 @@
 /**
  * Event Series Operations — Neighborhood Commons
  *
- * Series lifecycle: create recurring event instances, delete series,
- * and dispatch webhooks for series events. Used by portal and admin routes.
+ * Series lifecycle: create recurring event instances, edit series identity
+ * and template, delete series, and dispatch webhooks for series events.
+ *
+ * Identity vs template (see docs/series-as-first-class.md):
+ *   - Identity edits (updateSeriesIdentity) never propagate to past or
+ *     future instance titles — renames are forward-only for discovery.
+ *   - Template edits (updateSeriesFutureInstances) propagate to future
+ *     instances and to base_event_data for the auto-extend cron.
  */
 
 import { supabaseAdmin } from './supabase.js';
-import { dispatchWebhooks, dispatchSeriesCreatedWebhook } from './webhook-delivery.js';
+import {
+  dispatchWebhooks,
+  dispatchSeriesCreatedWebhook,
+  dispatchSeriesUpdatedWebhook,
+  dispatchSeriesDeletedWebhook,
+  type SeriesProfile,
+} from './webhook-delivery.js';
 import { toNeighborhoodEvent, toRRule, type PortalEventRow } from './event-transform.js';
 import { createError } from '../middleware/error-handler.js';
 import {
@@ -14,19 +26,119 @@ import {
   getAdminUserId, PORTAL_SELECT, MANAGED_SOURCES,
 } from './event-operations.js';
 
+// =============================================================================
+// SERIES IDENTITY — name, slug, description, cover_image_url
+// =============================================================================
+
+export interface SeriesIdentity {
+  /** Public display name of the series. Required. */
+  name: string;
+  /** Organization that runs the series. Required for the authority check. */
+  organizer_org_id: string;
+  /** URL slug. Server derives from name if absent. Globally unique. */
+  slug?: string;
+  /** Optional publisher-authored description. */
+  description?: string;
+  /** Optional R2-hosted cover image URL. */
+  cover_image_url?: string;
+}
+
+/**
+ * Slug-base regex per migration 089 + the contributor_profiles convention:
+ * lowercase alphanumeric + hyphens, must start with alphanumeric, max 100 chars.
+ */
+const SERIES_SLUG_FORMAT = /^[a-z0-9][a-z0-9-]{0,99}$/;
+const MAX_SLUG_LENGTH = 100;
+
+/** Lowercase, strip apostrophe variants, non-alnum → hyphen, trim, cap 100. */
+function baseSlug(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/['‘’‛`]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, MAX_SLUG_LENGTH);
+}
+
+/**
+ * Find an unused series slug derived from `name`. Suffixes `-2`, `-3`, ...
+ * on collision. Single SELECT for all candidates avoids N round-trips.
+ *
+ * Race: DB UNIQUE constraint is the actual guard; this reduces collision
+ * likelihood. Caller should handle the resulting 23505 by surfacing 409.
+ */
+export async function deriveUniqueSeriesSlug(name: string): Promise<string> {
+  const base = baseSlug(name);
+  if (!base) {
+    throw createError(
+      `Cannot derive a slug from series name "${name}". Provide an explicit slug or use English letters and numbers in the name.`,
+      400, 'VALIDATION_ERROR',
+    );
+  }
+
+  const { data: existing } = await supabaseAdmin
+    .from('event_series')
+    .select('slug')
+    .or(`slug.eq.${base},slug.like.${base}-%`);
+
+  const taken = new Set((existing || []).map((r) => r.slug as string));
+  if (!taken.has(base)) return base;
+
+  for (let n = 2; n < 10_000; n++) {
+    const candidate = `${base}-${n}`.slice(0, MAX_SLUG_LENGTH);
+    if (!taken.has(candidate)) return candidate;
+  }
+  throw createError(
+    `Could not derive a unique slug from "${name}" within 10000 attempts. Try a more distinctive name or provide an explicit slug.`,
+    409, 'CONFLICT',
+  );
+}
+
+/** Validate a publisher-provided slug against the format constraint. */
+export function validateSeriesSlug(slug: string): void {
+  if (!SERIES_SLUG_FORMAT.test(slug)) {
+    throw createError(
+      `Invalid series slug "${slug}". Must be lowercase alphanumeric + hyphens, start with alphanumeric, max 100 chars.`,
+      400, 'VALIDATION_ERROR',
+    );
+  }
+}
+
 /**
  * Create a recurring event series directly in the events table.
  * Returns the created events (with portal-friendly format).
+ *
+ * `identity` carries the series-level public identity (name, slug, description,
+ * cover image). This is distinct from `templateData`, which is the per-instance
+ * snapshot used to materialize event rows. See docs/series-as-first-class.md.
  */
 export async function createEventSeries(
   templateData: Record<string, unknown>,
+  identity: SeriesIdentity,
   recurrence: string,
   startDate: string,
   startTime: string,
   endTime: string | null | undefined,
   timezone: string,
   instanceCount?: number,
-): Promise<Array<{ id: string; event_date: string }>> {
+): Promise<{ seriesId: string; instances: Array<{ id: string; event_date: string }> }> {
+  // Identity validation
+  const trimmedName = identity.name?.trim() ?? '';
+  if (!trimmedName) {
+    throw createError('Series name is required', 400, 'VALIDATION_ERROR');
+  }
+  if (!identity.organizer_org_id) {
+    throw createError('Series organizer_org_id is required', 400, 'VALIDATION_ERROR');
+  }
+
+  let slug: string;
+  if (identity.slug) {
+    validateSeriesSlug(identity.slug);
+    slug = identity.slug;
+  } else {
+    slug = await deriveUniqueSeriesSlug(trimmedName);
+  }
+
   const dates = generateInstanceDates(startDate, recurrence, instanceCount);
   if (dates.length <= 1) {
     throw createError(
@@ -65,6 +177,11 @@ export async function createEventSeries(
     .insert({
       creator_account_id: templateData.creator_account_id as string,
       user_id: adminUserId,
+      organizer_org_id: identity.organizer_org_id,
+      name: trimmedName,
+      slug,
+      description: identity.description ?? null,
+      cover_image_url: identity.cover_image_url ?? null,
       recurrence,
       recurrence_rule: recurrenceRule,
       base_event_data: baseEventData,
@@ -73,6 +190,10 @@ export async function createEventSeries(
     .single();
 
   if (seriesErr || !series) {
+    // 23505 = unique_violation on slug — surface as 409
+    if (seriesErr?.code === '23505') {
+      throw createError(`Series slug "${slug}" is already in use`, 409, 'CONFLICT');
+    }
     console.error('[SERIES] Series row insert failed:', seriesErr?.message);
     throw createError('Failed to create event series', 500, 'SERVER_ERROR');
   }
@@ -139,7 +260,15 @@ export async function createEventSeries(
         const tpl = templateRow as unknown as Record<string, unknown>;
         tpl.recurrence = recurrence; // Ensure template carries the series recurrence
         const template = toNeighborhoodEvent(tpl as unknown as PortalEventRow);
-        void dispatchSeriesCreatedWebhook(series.id, template, instances, rrule);
+        const profile: SeriesProfile = {
+          id: series.id,
+          slug,
+          name: trimmedName,
+          description: identity.description ?? null,
+          cover_image_url: identity.cover_image_url ?? null,
+          organizer_org_id: identity.organizer_org_id,
+        };
+        void dispatchSeriesCreatedWebhook(profile, template, instances, rrule);
       }
     }
   }
@@ -149,14 +278,22 @@ export async function createEventSeries(
     return { id: e.id, event_date: date };
   });
 
-  console.log(`[SERIES] Created: ${results.length} instances (series ${series.id})`);
-  return results;
+  console.log(`[SERIES] Created: ${results.length} instances (series ${series.id}, slug "${slug}")`);
+  return { seriesId: series.id, instances: results };
 }
 
 /**
  * Delete all events in a series.
  */
 export async function deleteSeriesEvents(seriesId: string): Promise<number> {
+  // Snapshot the series identity BEFORE deletion so the series.deleted webhook
+  // payload can carry name/slug for cache invalidation.
+  const { data: seriesRow } = await supabaseAdmin
+    .from('event_series')
+    .select('id, slug, name')
+    .eq('id', seriesId)
+    .maybeSingle();
+
   const { data: events } = await supabaseAdmin
     .from('events')
     .select('id')
@@ -192,11 +329,119 @@ export async function deleteSeriesEvents(seriesId: string): Promise<number> {
     });
   }
 
+  // Series-level signal (complements the per-instance event.deleted events above).
+  if (seriesRow) {
+    void dispatchSeriesDeletedWebhook(
+      { id: seriesRow.id as string, slug: seriesRow.slug as string, name: seriesRow.name as string },
+      ids,
+    );
+  }
+
   // Clean up the event_series row (no more events reference it)
   await supabaseAdmin.from('event_series').delete().eq('id', seriesId);
 
   console.log(`[PORTAL] Series ${seriesId} deleted: ${events.length} events`);
   return events.length;
+}
+
+// =============================================================================
+// SERIES IDENTITY UPDATE — name/slug/description/cover only
+//
+// Identity edits are forward-looking: they change how the series is presented
+// from now on, but NEVER rewrite past instance titles. Past events.content
+// retains whatever it was at the time the instance was materialized. This
+// keeps the historical record accurate while letting the series evolve.
+//
+// Distinct from updateSeriesFutureInstances (below), which patches the
+// per-instance template and propagates field changes into future instance
+// rows + base_event_data for the auto-extend cron.
+// =============================================================================
+
+export interface SeriesIdentityUpdate {
+  name?: string;
+  slug?: string;
+  description?: string | null;
+  cover_image_url?: string | null;
+}
+
+export interface SeriesIdentityResult {
+  seriesId: string;
+  changed: Array<'name' | 'slug' | 'description' | 'cover_image_url'>;
+}
+
+/**
+ * Update identity fields on an event_series row. Fires series.updated webhook.
+ * Does NOT touch any event row. Slug uniqueness enforced by the DB index;
+ * collision surfaces as 409.
+ */
+export async function updateSeriesIdentity(
+  seriesId: string,
+  update: SeriesIdentityUpdate,
+): Promise<SeriesIdentityResult> {
+  const { data: existing } = await supabaseAdmin
+    .from('event_series')
+    .select('id, slug, name, description, cover_image_url, organizer_org_id')
+    .eq('id', seriesId)
+    .maybeSingle();
+
+  if (!existing) throw createError('Series not found', 404, 'NOT_FOUND');
+
+  const patch: Record<string, unknown> = {};
+  const changed: Array<'name' | 'slug' | 'description' | 'cover_image_url'> = [];
+
+  if (update.name !== undefined) {
+    const trimmed = update.name.trim();
+    if (!trimmed) throw createError('Series name cannot be empty', 400, 'VALIDATION_ERROR');
+    if (trimmed !== existing.name) {
+      patch.name = trimmed;
+      changed.push('name');
+    }
+  }
+  if (update.slug !== undefined) {
+    validateSeriesSlug(update.slug);
+    if (update.slug !== existing.slug) {
+      patch.slug = update.slug;
+      changed.push('slug');
+    }
+  }
+  if (update.description !== undefined && update.description !== existing.description) {
+    patch.description = update.description;
+    changed.push('description');
+  }
+  if (update.cover_image_url !== undefined && update.cover_image_url !== existing.cover_image_url) {
+    patch.cover_image_url = update.cover_image_url;
+    changed.push('cover_image_url');
+  }
+
+  if (changed.length === 0) {
+    return { seriesId, changed: [] };
+  }
+
+  const { error } = await supabaseAdmin
+    .from('event_series')
+    .update(patch)
+    .eq('id', seriesId);
+
+  if (error) {
+    if (error.code === '23505') {
+      throw createError(`Series slug "${update.slug}" is already in use`, 409, 'CONFLICT');
+    }
+    console.error('[SERIES] Identity update failed:', error.message);
+    throw createError('Failed to update series identity', 500, 'SERVER_ERROR');
+  }
+
+  const profile: SeriesProfile = {
+    id: seriesId,
+    slug: (patch.slug ?? existing.slug) as string,
+    name: (patch.name ?? existing.name) as string,
+    description: (patch.description ?? existing.description ?? null) as string | null,
+    cover_image_url: (patch.cover_image_url ?? existing.cover_image_url ?? null) as string | null,
+    organizer_org_id: (existing.organizer_org_id ?? null) as string | null,
+  };
+  void dispatchSeriesUpdatedWebhook(profile, changed);
+
+  console.log(`[SERIES] Identity updated for ${seriesId}: ${changed.join(', ')}`);
+  return { seriesId, changed };
 }
 
 // =============================================================================
