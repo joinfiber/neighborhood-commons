@@ -14,6 +14,14 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-05-19 — dashboard "What's next" → actionable
+
+UX fix. The "MFA enrollment ships in the next release" bullet was placeholder copy from when PR 4b was pending; it's now dead text and provides no path to the actual flow.
+
+- Bullet replaced with a state-aware CTA: **Enable MFA** (linked to `/developers/security/enroll-mfa`) when the developer has not enrolled; **MFA is enabled** confirmation when they have.
+- Operator-allowlist members see an extra bullet linking to `/operator/applications` — previously they had to remember the URL.
+- The dashboard now reads `api_keys.mfa_enrolled_at` to drive these states.
+
 ## 2026-05-19 — retire `POST /v1/service/register/*` + onboarding migration completion (PR 5)
 
 The developer portal at `/developers` (PRs 1–4 + the QR add-on) is the canonical onboarding path. The legacy two-step OTP register flow is retired.

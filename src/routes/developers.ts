@@ -21,6 +21,7 @@ import { Router, urlencoded } from 'express';
 import { z } from 'zod';
 import rateLimit from 'express-rate-limit';
 import { supabaseAdmin } from '../lib/supabase.js';
+import { config } from '../config.js';
 import {
   storeOtp,
   verifyOtp,
@@ -287,7 +288,7 @@ router.get('/dashboard', renderLimiter, requireDeveloperSession, async (req, res
     // Load the key + profile for the dashboard view.
     const { data: keyRow } = await supabaseAdmin
       .from('api_keys')
-      .select('id, name, key_prefix, contributor_tier, status, activated_at, contributor_profile_id, contact_email')
+      .select('id, name, key_prefix, contributor_tier, status, activated_at, contributor_profile_id, contact_email, mfa_enrolled_at')
       .eq('id', session.api_key_id)
       .maybeSingle();
 
@@ -319,12 +320,18 @@ router.get('/dashboard', renderLimiter, requireDeveloperSession, async (req, res
     // Issue a CSRF token for the logout form on this page.
     const csrfToken = issueCsrfCookie(res);
 
+    // Is this developer also an operator? Surfaces the operator-portal CTA
+    // on the dashboard so they don't have to remember the URL.
+    const contactEmail = (keyRow.contact_email as string | undefined)?.toLowerCase() || '';
+    const isOperator = contactEmail !== '' && config.operator.emails.includes(contactEmail);
+
     res.set('Content-Type', 'text/html; charset=utf-8');
     res.send(renderDashboard({
       keyRow: keyRow as Record<string, unknown>,
       profile,
       justRegisteredKey,
       csrfToken,
+      isOperator,
     }));
   } catch (err) {
     next(err);
@@ -1079,10 +1086,12 @@ function renderDashboard(args: {
   profile: Record<string, unknown> | null;
   justRegisteredKey: string | null;
   csrfToken: string;
+  isOperator: boolean;
 }): string {
-  const { keyRow, profile, justRegisteredKey, csrfToken } = args;
+  const { keyRow, profile, justRegisteredKey, csrfToken, isOperator } = args;
   const status = (keyRow.activated_at ? 'active' : 'pending') as 'active' | 'pending';
   const keyPrefix = (keyRow.key_prefix as string) || '';
+  const mfaEnrolled = !!keyRow.mfa_enrolled_at;
 
   const justRegisteredCallout = justRegisteredKey
     ? `${calloutBanner('Welcome! Your service key is below. Copy it now — it will not be shown again.')}
@@ -1133,8 +1142,15 @@ function renderDashboard(args: {
     <div class="nc-card">
       <div class="nc-card-label">What's next</div>
       <ul style="margin:6px 0 0 18px; padding:0; line-height:1.7;">
-        <li>${status === 'pending' ? 'Activation email arrives when the operator reviews your application.' : 'Your key is active. Build away.'}</li>
-        <li>MFA enrollment ships in the next release.</li>
+        <li>${status === 'pending'
+          ? 'Activation email arrives when the operator reviews your application.'
+          : 'Your key is active. Build away.'}</li>
+        <li>${mfaEnrolled
+          ? 'MFA is enabled on this account.'
+          : '<strong>Enable MFA</strong> to harden your account — <a href="/developers/security/enroll-mfa">/developers/security/enroll-mfa</a>. Required before the operator surface unlocks.'}</li>
+        ${isOperator
+          ? `<li>You're an operator — review pending applications at <a href="/operator/applications">/operator/applications</a>.</li>`
+          : ''}
         <li>Polish your profile via <a href="/developers/profile">Edit profile</a> — readers see it when they tap "via ${escapeHtml((keyRow.name as string) || 'your app')}" in a consumer app.</li>
       </ul>
     </div>
