@@ -14,6 +14,14 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-05-19 — MFA enrollment: scannable QR code
+
+No contract change. Adds an inline SVG QR code to `/developers/security/enroll-mfa` — scan with the authenticator app of choice instead of typing the 32-char secret by hand. Manual entry (secret + `otpauth://` tap-link) stays as fallback.
+
+- Adds `qrcode` runtime dep (pure JS, no native modules, ~80KB).
+- QR is rendered inline as SVG so no extra requests, no caching considerations, no CSP friction.
+- Render errors are non-fatal — page degrades cleanly to the manual-entry-only state.
+
 ## 2026-05-18 — operator: approve-as-witnessing flow (PR 4c)
 
 No contract change. Adds the third operator decision path: approve a developer as a **witnessed-with-evidence** publisher (per [`docs/four-roles.md`](docs/four-roles.md)). Fiber-shaped apps (OCR of public flyers, user-witnessed evidence) need a collective Organization to set as `organizer_org_id` and `witness_authority=true` on the api_key — both happen in one click.
