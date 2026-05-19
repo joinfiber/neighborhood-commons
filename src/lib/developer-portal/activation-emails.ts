@@ -39,6 +39,12 @@ interface RejectionEmailArgs {
   reason: string | null;
 }
 
+interface WitnessingEnabledEmailArgs {
+  email: string;
+  appName: string;
+  collectiveOrg: { id: string; name: string; slug: string } | null;
+}
+
 const PORTAL_HELP_EMAIL = 'hi@neighborhood-commons.org';
 
 function baseUrl(): string {
@@ -175,4 +181,64 @@ export async function sendRejectionEmail(args: RejectionEmailArgs): Promise<void
     </div>
   `;
   await sendEmail(args.email, `About your ${args.appName} registration`, html);
+}
+
+/**
+ * Notify the developer that witnessing capability has been granted on
+ * their key (after they requested it from the dashboard). Includes the
+ * collective Organization UUID + a usage example — the same payload
+ * shape the standard activation email includes.
+ */
+export async function sendWitnessingEnabledEmail(args: WitnessingEnabledEmailArgs): Promise<void> {
+  const dashboardUrl = `${baseUrl()}/developers/dashboard`;
+  const collective = args.collectiveOrg;
+
+  const usageBlock = collective
+    ? `
+      <p style="margin: 0 0 12px;">
+        Your collective Organization, <strong>${escapeHtml(collective.name)}</strong>, is what you'll set as
+        <code>organizer_org_id</code> on witnessed events. The UUID:
+      </p>
+      <div style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; padding: 10px 12px; background: #f1efea; border: 1px solid #e8e5e0; border-radius: 4px; word-break: break-all; margin-bottom: 12px;">
+        ${escapeHtml(collective.id)}
+      </div>
+      <p style="margin: 0 0 6px; font-size: 13px; color: #37352f;">Example event payload:</p>
+      <pre style="margin: 0; padding: 10px 12px; background: #f1efea; border: 1px solid #e8e5e0; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; overflow-x: auto; line-height: 1.5;">{
+  "name": "Poetry night",
+  "start": "2026-06-12T19:00:00-04:00",
+  "place_id": "ChIJ...",
+  "organizer_org_id": "${escapeHtml(collective.id)}",
+  "source": { "method": "witnessed" }
+}</pre>
+    `
+    : `
+      <p style="margin: 0 0 12px; color: #6b6660;">
+        Your key now has witness_authority. (We couldn't auto-resolve your collective Organization for this email — visit the dashboard to see it.)
+      </p>
+    `;
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; padding: 40px 20px; color: #37352f; line-height: 1.6;">
+      <div style="font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: #7a7670; margin-bottom: 24px;">
+        Neighborhood Commons
+      </div>
+      <div style="font-size: 18px; color: #1a1917; font-weight: 600; margin-bottom: 16px;">
+        Witnessing is enabled for ${escapeHtml(args.appName)}.
+      </div>
+      <p style="margin: 0 0 16px;">
+        Your request for the witness_authority capability has been approved. You can now write events with
+        <code>source_method = "witnessed"</code> attributed to your collective.
+      </p>
+      ${usageBlock}
+      <div style="margin: 24px 0;">
+        <a href="${dashboardUrl}" style="display: inline-block; padding: 12px 20px; background: #2b4d2b; color: #fff; text-decoration: none; border-radius: 6px; font-weight: 500;">
+          Open dashboard
+        </a>
+      </div>
+      <p style="font-size: 13px; color: #6b6660; margin: 32px 0 0;">
+        The doctrine: witnessed events attribute to your collective (never to individual users). The flyer / photo / OCR is the documentary evidence. Reply with questions any time.
+      </p>
+    </div>
+  `;
+  await sendEmail(args.email, `Witnessing enabled for ${args.appName}`, html);
 }

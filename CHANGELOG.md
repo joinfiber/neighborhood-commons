@@ -14,6 +14,18 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-05-19 — equip every developer with their collective + self-service witnessing request (PR B)
+
+Closes the design gap surfaced when reviewing the witnessing flow: developers couldn't indicate witnessing intent, the operator had to divine it from the application copy, and the witnessing approval was a separate route. Per the design discussion, every approved developer is now equipped with their collective Organization at activation; `witness_authority` is self-service-triggered from the dashboard.
+
+- **Migration 087** — adds `api_keys.witness_authority_requested_at` (timestamptz, nullable). Partial index for the operator-side "pending requests" query.
+- **`POST /operator/applications/:id/approve` (refactored)** — always provisions a collective `Organization` (default name `"<App Name> Community"`, operator-editable). Links the api_key. Optional inline checkbox to grant `witness_authority` preemptively for known witnessing apps (Fiber etc.). The activation email always includes the collective UUID + a witnessed-event payload example.
+- **`POST /operator/applications/:id/approve-witnessing` (removed)** — folded into the unified approve route. PR 4c's two-form fork is gone; one approval flow covers everyone.
+- **`POST /operator/applications/:id/grant-witnessing` (new)** — flips `witness_authority=true`, clears the request timestamp, sends the witnessing-enabled email (with collective UUID + usage example).
+- **`POST /developers/collective/provision` (new)** — transitional fallback: lets a developer whose key activated pre-PR-B (Merrie, Neighborhood Commons-the-app) provision their collective from the dashboard.
+- **`POST /developers/collective/request-witnessing` (new)** — sets `witness_authority_requested_at`, emails the operator with a one-click review link.
+- **Dashboard Publishing Modes panel** — educates every active developer on the three authority paths (first-party, proxied, witnessed) with their specifics inline: collective UUID, status of each capability, action buttons for what's not yet enabled.
+
 ## 2026-05-19 — developer-portal logo uploads (PR A)
 
 Self-service file upload for contributor profile logos. Previously the form only accepted a pasted URL (with a TODO hint that file upload was coming).

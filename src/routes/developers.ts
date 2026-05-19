@@ -294,7 +294,7 @@ router.get('/dashboard', renderLimiter, requireDeveloperSession, async (req, res
     // Load the key + profile for the dashboard view.
     const { data: keyRow } = await supabaseAdmin
       .from('api_keys')
-      .select('id, name, key_prefix, contributor_tier, status, activated_at, contributor_profile_id, contact_email, mfa_enrolled_at')
+      .select('id, name, key_prefix, contributor_tier, status, activated_at, contributor_profile_id, contact_email, mfa_enrolled_at, witness_authority, witness_authority_requested_at')
       .eq('id', session.api_key_id)
       .maybeSingle();
 
@@ -331,6 +331,39 @@ router.get('/dashboard', renderLimiter, requireDeveloperSession, async (req, res
     const contactEmail = (keyRow.contact_email as string | undefined)?.toLowerCase() || '';
     const isOperator = contactEmail !== '' && config.operator.emails.includes(contactEmail);
 
+    // Resolve the collective Organization (if linked). Used by the
+    // Publishing Modes panel — every PR-B-era developer has one; pre-PR-B
+    // developers (Merrie etc.) don't until they click "provision".
+    const { data: linkRow } = await supabaseAdmin
+      .from('api_key_organization_links')
+      .select('organization_id')
+      .eq('api_key_id', session.api_key_id)
+      .limit(1)
+      .maybeSingle();
+    let collectiveOrg: { id: string; name: string; slug: string } | null = null;
+    if (linkRow?.organization_id) {
+      const { data: orgRow } = await supabaseAdmin
+        .from('organizations')
+        .select('id, name, slug')
+        .eq('id', linkRow.organization_id)
+        .maybeSingle();
+      if (orgRow) {
+        collectiveOrg = {
+          id: orgRow.id as string,
+          name: orgRow.name as string,
+          slug: orgRow.slug as string,
+        };
+      }
+    }
+
+    // Surface one-shot success / error flags for the collective + witness flows.
+    const flashMessage = req.query.collective === 'provisioned'
+      ? 'Collective Organization provisioned.'
+      : req.query.witness === 'requested'
+      ? 'Witnessing request sent. The operator will review and notify you by email.'
+      : null;
+    const flashError = (req.query.error as string) || null;
+
     res.set('Content-Type', 'text/html; charset=utf-8');
     res.send(renderDashboard({
       keyRow: keyRow as Record<string, unknown>,
@@ -338,6 +371,9 @@ router.get('/dashboard', renderLimiter, requireDeveloperSession, async (req, res
       justRegisteredKey,
       csrfToken,
       isOperator,
+      collectiveOrg,
+      flashMessage,
+      flashError,
     }));
   } catch (err) {
     next(err);
@@ -659,6 +695,192 @@ router.post('/profile/logo/remove', writeFormLimiter, requireDeveloperSession, a
     next(err);
   }
 });
+
+// =============================================================================
+// POST /developers/collective/provision
+// POST /developers/collective/request-witnessing
+// =============================================================================
+//
+// PR B — equip every developer with their collective Organization.
+// `provision` is a transitional fallback for pre-PR-B approvals (Merrie,
+// Neighborhood Commons-the-app) that activated without a collective.
+// `request-witnessing` is the self-service ask for witness_authority —
+// the operator approves with one click in /operator/applications.
+
+router.post('/collective/provision', writeFormLimiter, requireDeveloperSession, async (req, res, next) => {
+  try {
+    if (!validateCsrf(req)) {
+      res.redirect(303, '/developers/dashboard?error=' + encodeURIComponent('Your session expired. Please try again.'));
+      return;
+    }
+
+    const session = req.developerSession!;
+
+    // Already linked? No-op.
+    const { data: existingLink } = await supabaseAdmin
+      .from('api_key_organization_links')
+      .select('organization_id')
+      .eq('api_key_id', session.api_key_id)
+      .limit(1)
+      .maybeSingle();
+
+    if (existingLink?.organization_id) {
+      res.redirect(303, '/developers/dashboard');
+      return;
+    }
+
+    // Resolve a sensible default name from the dev's profile/key.
+    const { data: keyRow } = await supabaseAdmin
+      .from('api_keys')
+      .select('id, name, contributor_profile_id')
+      .eq('id', session.api_key_id)
+      .maybeSingle();
+    if (!keyRow) {
+      res.redirect(302, '/developers/login');
+      return;
+    }
+    const appName = (keyRow.name as string | null) || 'App';
+    const collectiveName = `${appName} Community`;
+    const baseCollectiveSlug = deriveCollectiveSlug(collectiveName);
+
+    // Resolve a unique slug — fall back to appending random suffixes on
+    // collision so the dashboard-triggered provisioning doesn't hard-fail.
+    const slug = await deriveUniqueCollectiveSlug(baseCollectiveSlug);
+
+    const { data: org, error: orgErr } = await supabaseAdmin
+      .from('organizations')
+      .insert({
+        slug,
+        name: collectiveName,
+        method: 'self_asserted',
+      })
+      .select('id')
+      .single();
+
+    if (orgErr || !org) {
+      console.error('[DEV_PORTAL] Collective provision failed:', orgErr?.message);
+      res.redirect(303, '/developers/dashboard?error=' + encodeURIComponent('Could not provision your collective. Try again.'));
+      return;
+    }
+
+    const { error: linkErr } = await supabaseAdmin
+      .from('api_key_organization_links')
+      .insert({ api_key_id: session.api_key_id, organization_id: org.id });
+
+    if (linkErr) {
+      await supabaseAdmin.from('organizations').delete().eq('id', org.id);
+      console.error('[DEV_PORTAL] Collective link failed:', linkErr.message);
+      res.redirect(303, '/developers/dashboard?error=' + encodeURIComponent('Could not link the collective. Try again.'));
+      return;
+    }
+
+    res.redirect(303, '/developers/dashboard?collective=provisioned');
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/collective/request-witnessing', writeFormLimiter, requireDeveloperSession, async (req, res, next) => {
+  try {
+    if (!validateCsrf(req)) {
+      res.redirect(303, '/developers/dashboard?error=' + encodeURIComponent('Your session expired. Please try again.'));
+      return;
+    }
+
+    const session = req.developerSession!;
+
+    const { data: keyRow } = await supabaseAdmin
+      .from('api_keys')
+      .select('id, name, contact_email, witness_authority, witness_authority_requested_at')
+      .eq('id', session.api_key_id)
+      .maybeSingle();
+
+    if (!keyRow) {
+      res.redirect(302, '/developers/login');
+      return;
+    }
+
+    if (keyRow.witness_authority === true) {
+      res.redirect(303, '/developers/dashboard');
+      return;
+    }
+
+    // Idempotent — re-requesting just refreshes the timestamp.
+    const { error: updErr } = await supabaseAdmin
+      .from('api_keys')
+      .update({ witness_authority_requested_at: new Date().toISOString() })
+      .eq('id', session.api_key_id);
+
+    if (updErr) {
+      console.error('[DEV_PORTAL] Witness request failed:', updErr.message);
+      res.redirect(303, '/developers/dashboard?error=' + encodeURIComponent('Could not file your request. Try again.'));
+      return;
+    }
+
+    // Best-effort operator notification — fire-and-forget.
+    void notifyOperatorWitnessRequest({
+      appName: (keyRow.name as string | null) || 'an app',
+      contactEmail: (keyRow.contact_email as string),
+      apiKeyId: session.api_key_id,
+    });
+
+    res.redirect(303, '/developers/dashboard?witness=requested');
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Derive a slug for a collective Organization. Same character class as
+ * the profile slug helper but kept local so the developer-portal module
+ * doesn't reach into the service-routes namespace.
+ */
+function deriveCollectiveSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[‘’‛']/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 100);
+}
+
+/** Tries the base slug first; on collision appends -2, -3, ... up to 5 tries. */
+async function deriveUniqueCollectiveSlug(base: string): Promise<string> {
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    const candidate = attempt === 1 ? base : `${base}-${attempt}`;
+    const { data: hit } = await supabaseAdmin
+      .from('organizations')
+      .select('id')
+      .eq('slug', candidate)
+      .maybeSingle();
+    if (!hit) return candidate;
+  }
+  // Last-ditch: append a random suffix.
+  return `${base}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
+/** Send a heads-up email to the operator about a witness-authority request. */
+async function notifyOperatorWitnessRequest(args: { appName: string; contactEmail: string; apiKeyId: string }): Promise<void> {
+  const operatorEmail = config.operator.email;
+  if (!operatorEmail) {
+    console.warn('[DEV_PORTAL] Witness request from', args.appName, '— no COMMONS_OPERATOR_EMAIL configured, skipping notification');
+    return;
+  }
+  const baseUrl = config.apiBaseUrl || 'https://neighborhood-commons.org';
+  const reviewUrl = `${baseUrl.replace(/\/$/, '')}/operator/applications/${encodeURIComponent(args.apiKeyId)}`;
+  const html = `
+    <p><strong>${escapeHtml(args.appName)}</strong> has requested witness_authority.</p>
+    <p>Contact: <code>${escapeHtml(args.contactEmail)}</code></p>
+    <p><a href="${reviewUrl}">Review and grant in the operator panel →</a></p>
+    <p style="color:#888; font-size:12px;">Granting flips api_keys.witness_authority to true for this key and notifies the developer.</p>
+  `;
+  try {
+    const { sendEmail } = await import('../lib/email.js');
+    await sendEmail(operatorEmail, `[Commons] Witnessing request: ${args.appName}`, html);
+  } catch (err) {
+    console.error('[DEV_PORTAL] Operator notification email failed:', err instanceof Error ? err.message : err);
+  }
+}
 
 // =============================================================================
 // POST /developers/logout
@@ -1233,11 +1455,16 @@ function renderDashboard(args: {
   justRegisteredKey: string | null;
   csrfToken: string;
   isOperator: boolean;
+  collectiveOrg: { id: string; name: string; slug: string } | null;
+  flashMessage: string | null;
+  flashError: string | null;
 }): string {
-  const { keyRow, profile, justRegisteredKey, csrfToken, isOperator } = args;
+  const { keyRow, profile, justRegisteredKey, csrfToken, isOperator, collectiveOrg, flashMessage, flashError } = args;
   const status = (keyRow.activated_at ? 'active' : 'pending') as 'active' | 'pending';
   const keyPrefix = (keyRow.key_prefix as string) || '';
   const mfaEnrolled = !!keyRow.mfa_enrolled_at;
+  const witnessAuthority = keyRow.witness_authority === true;
+  const witnessRequested = !!keyRow.witness_authority_requested_at;
 
   const justRegisteredCallout = justRegisteredKey
     ? `${calloutBanner('Welcome! Your service key is below. Copy it now — it will not be shown again.')}
@@ -1268,12 +1495,24 @@ function renderDashboard(args: {
        </div>`
     : '';
 
+  // Publishing Modes panel — the educational + actionable surface for the
+  // three authority paths. Renders only once the key is active (pending
+  // keys have nothing to publish yet).
+  const publishingModesCard = status === 'active' ? renderPublishingModes({
+    collectiveOrg,
+    witnessAuthority,
+    witnessRequested,
+    csrfToken,
+  }) : '';
+
   const body = `
     <h1>Dashboard</h1>
     <p class="nc-portal-lede">
       ${escapeHtml((keyRow.name as string) || 'Your app')} ·
       <span class="nc-status ${statusClass}">${status}</span>
     </p>
+    ${flashMessage ? calloutBanner(flashMessage) : ''}
+    ${errorBanner(flashError)}
     ${justRegisteredCallout}
     <div class="nc-card">
       <div class="nc-card-label">Service key</div>
@@ -1284,6 +1523,7 @@ function renderDashboard(args: {
           : 'Status: <strong>active</strong>. Reads and writes are live.'}
       </div>
     </div>
+    ${publishingModesCard}
     ${profileCard}
     <div class="nc-card">
       <div class="nc-card-label">What's next</div>
@@ -1306,6 +1546,72 @@ function renderDashboard(args: {
     </form>
   `;
   return portalShell({ title: 'Dashboard', body });
+}
+
+/**
+ * Render the Publishing Modes card — the educational + actionable
+ * surface for the three authority paths (per docs/four-roles.md).
+ * Equips every developer with their collective UUID + a clear path to
+ * enable witnessing if they want it.
+ */
+function renderPublishingModes(args: {
+  collectiveOrg: { id: string; name: string; slug: string } | null;
+  witnessAuthority: boolean;
+  witnessRequested: boolean;
+  csrfToken: string;
+}): string {
+  const { collectiveOrg, witnessAuthority, witnessRequested, csrfToken } = args;
+
+  const collectiveBlock = collectiveOrg
+    ? `
+      <div style="margin-top:8px; padding:10px 12px; background:#f1efea; border-radius:4px; font-size:13px;">
+        <div style="font-weight:600; color:var(--ink); margin-bottom:4px;">Your collective: ${escapeHtml(collectiveOrg.name)}</div>
+        <div style="font-family:var(--font-mono); word-break:break-all;">${escapeHtml(collectiveOrg.id)}</div>
+        <div style="margin-top:4px; color:var(--muted);">
+          Slug <code>${escapeHtml(collectiveOrg.slug)}</code>
+        </div>
+      </div>
+    `
+    : `
+      <div style="margin-top:8px; padding:10px 12px; background:#faf6ea; border:1px dashed var(--border-strong); border-radius:4px; font-size:13px;">
+        <div style="margin-bottom:8px; color:var(--muted);">
+          You don't have a collective Organization yet. It's the entity readers see as the organizer on any witnessed events you publish.
+        </div>
+        <form method="POST" action="/developers/collective/provision" style="display:inline;">
+          ${hiddenInput(CSRF_FIELD_NAME, csrfToken)}
+          <button type="submit" class="nc-btn nc-btn--secondary">Provision my collective</button>
+        </form>
+      </div>
+    `;
+
+  const witnessRow = !collectiveOrg
+    ? `<li><strong>Witnessed</strong> — your users surface evidence (photos, OCR) of public-fact events; events attribute to your collective, never to individuals.
+        <div style="font-size:13px; color:var(--muted); margin-top:4px;">Provision your collective above before requesting this capability.</div></li>`
+    : witnessAuthority
+    ? `<li><strong>Witnessed</strong> ✓ enabled — your users surface evidence of public-fact events. Set <code>source.method: "witnessed"</code> and use your collective UUID as <code>organizer_org_id</code>.</li>`
+    : witnessRequested
+    ? `<li><strong>Witnessed</strong> — requested. The operator will review and notify you by email.</li>`
+    : `<li><strong>Witnessed</strong> — your users surface evidence (photos, OCR) of public-fact events; events attribute to your collective. Requires a one-time operator approval.
+        <form method="POST" action="/developers/collective/request-witnessing" style="display:inline; margin-left:6px;">
+          ${hiddenInput(CSRF_FIELD_NAME, csrfToken)}
+          <button type="submit" class="nc-btn nc-btn--secondary" style="padding:4px 10px; font-size:13px;">Request capability</button>
+        </form>
+      </li>`;
+
+  return `
+    <div class="nc-card">
+      <div class="nc-card-label">Publishing modes</div>
+      <p style="margin:6px 0 12px; font-size:14px; color:var(--ink-2);">
+        Three ways your app can route content into the Commons. See <a href="/docs/four-roles" target="_blank" rel="noopener">four-roles</a> for the doctrine.
+      </p>
+      <ul style="margin:0 0 12px 18px; padding:0; line-height:1.7;">
+        <li><strong>First-party</strong> ✓ enabled — your verified organizations publish about themselves (their own events, hours, broadcasts). Set <code>source.method: "self_asserted"</code>.</li>
+        <li><strong>Proxied</strong> ✓ enabled — you pull from public feeds / scrape public calendar pages. Set <code>source.method: "proxied"</code> and put the source URL in <code>source_feed_url</code>.</li>
+        ${witnessRow}
+      </ul>
+      ${collectiveBlock}
+    </div>
+  `;
 }
 
 // =============================================================================

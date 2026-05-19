@@ -42,6 +42,8 @@ const SCHEMA: Record<string, string[]> = {
     'tenant_account_id',
     // Added in migration 086 (3.1 — contributor profiles + developer dashboard)
     'contributor_profile_id', 'mfa_secret_encrypted', 'mfa_enrolled_at', 'mfa_backup_codes_hashed',
+    // Added in migration 087 (PR B — developer self-service witness-authority request)
+    'witness_authority_requested_at',
   ],
   audit_logs: [
     'id', 'action', 'actor_hash', 'resource_id', 'metadata', 'endpoint',
