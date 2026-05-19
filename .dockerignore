@@ -3,6 +3,12 @@ dist
 .git
 .gitignore
 *.md
+# Re-include docs/*.md — they're served by /docs/:slug at runtime
+# (src/routes/docs.ts). Without this exception, the blanket *.md rule
+# above blocks them from the Docker build context and the route 404s
+# because readFile can't find the source.
+!docs/
+!docs/*.md
 .env*
 .vscode
 .idea

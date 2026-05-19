@@ -289,22 +289,114 @@ router.get('/', operatorLimiter, (_req, res) => {
 // GET /operator/applications
 // =============================================================================
 //
-// List view. Default filter = pending (activated_at IS NULL AND status='active');
-// ?status=all|pending|active|rejected|suspended toggles.
+// List view. Default filter = "needing review" — surfaces BOTH pending
+// application reviews (activated_at IS NULL) AND pending witness
+// requests (witness_authority_requested_at IS NOT NULL on active keys).
+// Other filters use the simple single-bucket queries.
 
 router.get('/applications', operatorLimiter, async (req, res, next) => {
   try {
     const filter = typeof req.query.status === 'string' ? req.query.status : 'pending';
+    const filters = ['pending', 'all', 'active', 'rejected', 'suspended'] as const;
+    const filterNav = filters
+      .map((f) => f === filter
+        ? `<strong>${escapeHtml(f)}</strong>`
+        : `<a href="/operator/applications?status=${escapeAttr(f)}">${escapeHtml(f)}</a>`)
+      .join(' · ');
+
+    // ── PENDING filter: two-query union of "needing review" things.
+    if (filter === 'pending') {
+      const [pendingApps, witnessRequests] = await Promise.all([
+        supabaseAdmin
+          .from('api_keys')
+          .select('id, name, contact_email, status, activated_at, contributor_profile_id, created_at, application_metadata, key_prefix, url, brand_config, witness_authority, witness_authority_requested_at')
+          .eq('contributor_tier', 'service')
+          .eq('status', 'active')
+          .is('activated_at', null)
+          .order('created_at', { ascending: false })
+          .limit(200),
+        supabaseAdmin
+          .from('api_keys')
+          .select('id, name, contact_email, status, activated_at, contributor_profile_id, created_at, application_metadata, key_prefix, url, brand_config, witness_authority, witness_authority_requested_at')
+          .eq('contributor_tier', 'service')
+          .eq('witness_authority', false)
+          .not('witness_authority_requested_at', 'is', null)
+          .order('witness_authority_requested_at', { ascending: false })
+          .limit(200),
+      ]);
+
+      if (pendingApps.error || witnessRequests.error) {
+        console.error('[OPERATOR] Applications list failed:', pendingApps.error?.message || witnessRequests.error?.message);
+        res.status(500).send(operatorShell({
+          title: 'Applications',
+          operatorEmail: req.operatorEmail || '',
+          body: `<h1>Applications</h1>${errorBanner('Could not load applications. Try again or check logs.')}`,
+        }));
+        return;
+      }
+
+      const apps = (pendingApps.data || []) as ApplicationRow[];
+      const witnesses = (witnessRequests.data || []) as ApplicationRow[];
+
+      // De-dupe: if a row appears in both (shouldn't happen — pending
+      // apps haven't been activated yet, so they can't have requested
+      // witnessing — but belt-and-suspenders), keep the app entry.
+      const witnessOnly = witnesses.filter(w => !apps.some(a => a.id === w.id));
+
+      const renderRow = (row: ApplicationRow, kind: 'application' | 'witness') => {
+        const ts = kind === 'witness' && row.witness_authority_requested_at
+          ? new Date(row.witness_authority_requested_at).toLocaleString()
+          : new Date(row.created_at).toLocaleString();
+        const badge = kind === 'witness'
+          ? `<span class="nc-status nc-status--pending">witness</span>`
+          : `<span class="nc-status nc-status--pending">application</span>`;
+        return `<div class="nc-app-row">
+          <div class="nc-app-name">
+            <a href="/operator/applications/${escapeAttr(row.id)}">${escapeHtml(row.name || '(unnamed app)')}</a>
+            <div class="nc-app-meta">${escapeHtml(row.contact_email)} · ${escapeHtml(ts)}</div>
+          </div>
+          <div>${badge}</div>
+        </div>`;
+      };
+
+      const appsBlock = apps.length === 0
+        ? `<div style="padding:14px 4px; color:var(--muted); font-size:13px;">No pending application reviews.</div>`
+        : apps.map(r => renderRow(r, 'application')).join('');
+
+      const witnessBlock = witnessOnly.length === 0
+        ? `<div style="padding:14px 4px; color:var(--muted); font-size:13px;">No pending witness requests.</div>`
+        : witnessOnly.map(r => renderRow(r, 'witness')).join('');
+
+      const body = `
+        <h1>Applications</h1>
+        <p class="nc-op-lede">${filterNav}</p>
+        <h2 style="margin:8px 0 12px; font-size:14px; font-family:var(--font-mono); letter-spacing:0.08em; text-transform:uppercase; color:var(--muted);">
+          Application reviews (${apps.length})
+        </h2>
+        <div class="nc-card" style="padding: 8px 20px;">
+          ${appsBlock}
+        </div>
+        <h2 style="margin:24px 0 12px; font-size:14px; font-family:var(--font-mono); letter-spacing:0.08em; text-transform:uppercase; color:var(--muted);">
+          Witness-authority requests (${witnessOnly.length})
+        </h2>
+        <div class="nc-card" style="padding: 8px 20px;">
+          ${witnessBlock}
+        </div>
+      `;
+      res.setHeader('Cache-Control', 'no-store');
+      res.send(operatorShell({ title: 'Applications', operatorEmail: req.operatorEmail || '', body }));
+      return;
+    }
+
+    // ── Other filters: simple single-bucket query.
     let query = supabaseAdmin
       .from('api_keys')
-      .select('id, name, contact_email, status, activated_at, contributor_profile_id, created_at, application_metadata, key_prefix, url, brand_config')
+      .select('id, name, contact_email, status, activated_at, contributor_profile_id, created_at, application_metadata, key_prefix, url, brand_config, witness_authority, witness_authority_requested_at')
       .eq('contributor_tier', 'service')
       .order('created_at', { ascending: false })
       .limit(200);
 
-    if (filter === 'pending') {
-      query = query.eq('status', 'active').is('activated_at', null);
-    } else if (filter === 'active') {
+    if (filter === 'active') {
       query = query.eq('status', 'active').not('activated_at', 'is', null);
     } else if (filter === 'rejected') {
       query = query.eq('status', 'rejected');
@@ -325,12 +417,6 @@ router.get('/applications', operatorLimiter, async (req, res, next) => {
     }
 
     const list = (rows || []) as ApplicationRow[];
-    const filters = ['pending', 'all', 'active', 'rejected', 'suspended'] as const;
-    const filterNav = filters
-      .map((f) => f === filter
-        ? `<strong>${escapeHtml(f)}</strong>`
-        : `<a href="/operator/applications?status=${escapeAttr(f)}">${escapeHtml(f)}</a>`)
-      .join(' · ');
 
     const items = list.length === 0
       ? `<div class="nc-card" style="text-align:center; color:var(--muted);">No applications match this filter.</div>`

@@ -868,11 +868,31 @@ async function notifyOperatorWitnessRequest(args: { appName: string; contactEmai
   }
   const baseUrl = config.apiBaseUrl || 'https://neighborhood-commons.org';
   const reviewUrl = `${baseUrl.replace(/\/$/, '')}/operator/applications/${encodeURIComponent(args.apiKeyId)}`;
+  const listUrl = `${baseUrl.replace(/\/$/, '')}/operator/applications`;
   const html = `
-    <p><strong>${escapeHtml(args.appName)}</strong> has requested witness_authority.</p>
-    <p>Contact: <code>${escapeHtml(args.contactEmail)}</code></p>
-    <p><a href="${reviewUrl}">Review and grant in the operator panel →</a></p>
-    <p style="color:#888; font-size:12px;">Granting flips api_keys.witness_authority to true for this key and notifies the developer.</p>
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; padding: 40px 20px; color: #37352f; line-height: 1.6;">
+      <div style="font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: #7a7670; margin-bottom: 24px;">
+        Neighborhood Commons · Operator
+      </div>
+      <div style="font-size: 18px; color: #1a1917; font-weight: 600; margin-bottom: 16px;">
+        Witnessing request from ${escapeHtml(args.appName)}
+      </div>
+      <p style="margin: 0 0 16px;">
+        <strong>${escapeHtml(args.appName)}</strong> (<code>${escapeHtml(args.contactEmail)}</code>) is asking for the <code>witness_authority</code> capability.
+        It also now shows up under "Witness-authority requests" on the pending list.
+      </p>
+      <div style="margin: 24px 0;">
+        <a href="${reviewUrl}" style="display: inline-block; padding: 12px 20px; background: #2b4d2b; color: #fff; text-decoration: none; border-radius: 6px; font-weight: 500;">
+          Review and grant →
+        </a>
+        <a href="${listUrl}" style="display: inline-block; padding: 12px 20px; color: #37352f; background: transparent; border: 1px solid #c8c4be; text-decoration: none; border-radius: 6px; font-weight: 500; margin-left: 8px;">
+          See all pending
+        </a>
+      </div>
+      <p style="font-size: 13px; color: #6b6660; margin: 0;">
+        Granting flips <code>api_keys.witness_authority</code> to true for this key, links it to the collective Organization (if not already), and emails the developer with a usage example.
+      </p>
+    </div>
   `;
   try {
     const { sendEmail } = await import('../lib/email.js');

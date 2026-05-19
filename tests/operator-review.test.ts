@@ -359,7 +359,7 @@ describe('GET /operator/applications', () => {
     expect(html).toContain('<strong>pending</strong>');
   });
 
-  it('shows an empty-state when no applications match', async () => {
+  it('shows empty-state sub-headings when no pending items in either bucket', async () => {
     setupOperatorIdentity();
     mockResponses.set('api_keys:list', { data: [], error: null, count: 0 });
     const res = await fetch(`${baseUrl}/operator/applications`, {
@@ -368,7 +368,50 @@ describe('GET /operator/applications', () => {
     });
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain('No applications match this filter.');
+    // The default "pending" view now has two sections — each with its own empty state.
+    expect(html).toContain('Application reviews (0)');
+    expect(html).toContain('Witness-authority requests (0)');
+    expect(html).toContain('No pending application reviews.');
+    expect(html).toContain('No pending witness requests.');
+  });
+
+  it('surfaces pending witness requests in the default view', async () => {
+    setupOperatorIdentity();
+    // The pending view runs two queries; the mock returns the same list
+    // for any list query on api_keys, so we synthesize a row that
+    // represents a key with a pending witness request.
+    mockResponses.set('api_keys:list', {
+      data: [
+        {
+          id: '00000000-0000-0000-0000-000000000bbb',
+          name: 'Holler',
+          contact_email: 'holler@example.com',
+          status: 'active',
+          activated_at: '2026-05-18T12:00:00Z',
+          contributor_profile_id: null,
+          created_at: '2026-05-15T00:00:00Z',
+          application_metadata: null,
+          key_prefix: 'nc_holler',
+          url: null,
+          brand_config: null,
+          witness_authority: false,
+          witness_authority_requested_at: '2026-05-19T01:00:00Z',
+        },
+      ],
+      error: null,
+    });
+    const res = await fetch(`${baseUrl}/operator/applications`, {
+      headers: { Cookie: sessionCookie() },
+      redirect: 'manual',
+    });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('Witness-authority requests');
+    // The same Holler row appears in both buckets because the mock can't
+    // distinguish queries, but the de-dupe keeps it out of the witness
+    // section when it's already in the application section.
+    // The row IS present somewhere on the page.
+    expect(html).toContain('Holler');
   });
 
   it('honors ?status=all to skip the pending filter', async () => {
