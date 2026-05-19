@@ -38,7 +38,14 @@ describe('Migration 088 — events.relevant_until generated column', () => {
   it("uses the doctrine's expression: open_window → COALESCE(end_time, event_at + 3h); else event_at", () => {
     // Strict-start events are relevant until event_at; open-window events
     // are relevant until end_time, or 3h after event_at if end_time is null.
-    expect(MIGRATION).toMatch(/CASE\s+WHEN open_window THEN COALESCE\(end_time, event_at \+ interval '3 hours'\)\s+ELSE event_at\s+END/i);
+    // The "+ 3h" path round-trips through plain timestamp via AT TIME ZONE 'UTC'
+    // to satisfy Postgres's IMMUTABLE requirement on generated columns.
+    expect(MIGRATION).toMatch(/CASE\s+WHEN open_window THEN COALESCE\(\s*end_time,\s+\(\(event_at AT TIME ZONE 'UTC'\) \+ interval '3 hours'\) AT TIME ZONE 'UTC'\s*\)\s+ELSE event_at\s+END/i);
+  });
+
+  it("works around the timestamptz + interval STABLE restriction via AT TIME ZONE 'UTC' round-trip", () => {
+    expect(MIGRATION).toMatch(/AT TIME ZONE 'UTC'/);
+    expect(MIGRATION).toMatch(/IMMUTABLE/i); // commented explanation
   });
 
   it('indexes relevant_until for the WHERE/ORDER BY query pattern', () => {
