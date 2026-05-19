@@ -472,39 +472,24 @@ The most common adoption pattern: an app starts as a reader (no key needed), lat
 |------|---------------|-------|--------|-----------------------|
 | (none) | n/a | per-IP rate limit | no | no |
 | Developer | operator-issued by request (no self-serve flow yet) | dedicated rate limit | no | yes |
-| Service (pending) | `/service/register/*` self-serve | service-tier rate limit | `403 KEY_PENDING` | yes |
-| Service (active) | one-time activation review | service-tier rate limit | yes (all `/service/*` endpoints) | yes |
+| Service (pending) | `/developers/sign-up` portal flow | service-tier rate limit | `403 KEY_PENDING` | yes |
+| Service (active) | operator review at `/operator/applications` | service-tier rate limit | yes (all `/service/*` endpoints) | yes |
 
-Most developers go straight to service-tier — the service-register flow is self-serve and reads work immediately. Developer-tier exists for the small set of consumers that want webhook subscriptions but never write events; if that's you, email the operator. Until a self-serve developer-register flow ships, this is the path.
+Most developers go straight to service-tier — the portal sign-up is self-serve and reads work immediately. Developer-tier exists for the small set of consumers that want webhook subscriptions but never write events; if that's you, email the operator.
 
 ### 4.1 Get a key
 
-Two-step OTP flow against the public API. No human in the loop until activation.
+Sign up via the developer portal at [https://neighborhood-commons.org/developers/sign-up](https://neighborhood-commons.org/developers/sign-up). The flow is a guided form: email, app name, what you're building, how publishers in your flow have authority over what they publish. You'll verify via a one-time email code, and the dashboard lands you on your service key — copy it once, it's not shown again. Use it as `X-API-Key: nc_...` on every subsequent request.
 
-```bash
-# Step 1 — request a verification code
-curl -X POST "https://neighborhood-commons.org/api/v1/service/register/send-otp" \
-  -H "Content-Type: application/json" \
-  -d '{ "email": "you@yourcompany.com" }'
+The key lands with `status: "pending_activation"` — reads work immediately; writes return `403 KEY_PENDING` until an operator reviews and activates.
 
-# Step 2 — submit the code along with your application (8-digit code, expires in 10 minutes)
-curl -X POST "https://neighborhood-commons.org/api/v1/service/register/verify-otp" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "you@yourcompany.com",
-    "token": "12345678",
-    "app_name": "Your App",
-    "app_url": "https://yourapp.com",
-    "what_youre_building": "One paragraph: who the user is, what the integration looks like.",
-    "verification_process": "How you verify the organizations you onboard — domain email loop, manual editorial review, etc."
-  }'
-```
-
-The response includes `api_key.raw_key` — the credential, returned once. Use it as `X-API-Key: nc_...` on every subsequent request. The key lands with `status: "pending_activation"` — reads work immediately; writes return `403 KEY_PENDING` until you complete activation.
+(The legacy `POST /v1/service/register/*` endpoints now return `410 ENDPOINT_RETIRED` pointing at the portal. Existing keys keep working — only the registration path moved.)
 
 ### 4.2 Activate writes
 
-Once your build is ready, email `hi@neighborhood-commons.org` from the same address you registered with, including a link to your app. The review focuses on what your verification process looks like in practice and how you'll set up organizer attribution. Activation flips a single column on your key; no rotation, no code changes on your side.
+The operator reviews your application via `/operator/applications`, looking at the same fields you submitted: what you're building, how you verify publishers. Approval is one click and flips a single column on your key — no rotation, no code changes on your side. You'll get an activation email when it happens, usually within a business day. If you're a witnessing app (OCR of public flyers, user-witnessed evidence), the operator can additionally provision a collective Organization at approval time; the email includes its UUID and a usage example.
+
+After activation, returning logins go through `/developers/login` — magic link to your registered email, lands you back on the dashboard. The dashboard requires MFA enrollment before operator access; standard developer use doesn't.
 
 ### 4.3 Scoping rules
 
@@ -754,7 +739,7 @@ curl -X POST "https://neighborhood-commons.org/api/v1/service/verifications/chal
   -d '{ "code": "123456" }'
 ```
 
-Verification-challenge codes are six digits (distinct from the eight-digit OTP used by `/service/register/*` for key issuance — different flows, different code lengths). Challenges expire after 30 minutes. Five wrong attempts on the same challenge return `429 RATE_LIMIT`.
+Verification-challenge codes are six digits (distinct from the OTP used by the developer portal at `/developers/sign-up` for key issuance — different flows, different code lengths). Challenges expire after 30 minutes. Five wrong attempts on the same challenge return `429 RATE_LIMIT`.
 
 ### 5.3 Manual track (structured evidence)
 

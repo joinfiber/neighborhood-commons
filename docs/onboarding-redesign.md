@@ -1,6 +1,6 @@
 # Service-tier Onboarding & Developer Dashboard — Redesign
 
-**Status:** Design approved (May 2026). Implementation pending in stages — see §12.
+**Status:** **Shipped 2026-05-19.** PRs 1 through 5 landed; the developer portal at `/developers` is live and the legacy `POST /v1/service/register/*` routes return `410 ENDPOINT_RETIRED`. See the [CHANGELOG](../CHANGELOG.md) for the dated record. This document is preserved as the design rationale; for the current behavior, the [Spec](../public/openapi.json) and [Guide](../public/llms.txt) are authoritative.
 **Authors:** Operator + Claude.
 **Supersedes:** the hodgepodge documented in §1.
 

@@ -31,6 +31,6 @@ If you've never touched the Commons before, the shortest path is:
 
 1. Read the homepage at `/` — five typed atoms (places, organizations, events, broadcasts, lists), how they compose, what the substrate does and doesn't do.
 2. Try a read: `curl "https://neighborhood-commons.org/api/v1/events?near=39.97,-75.14&radius_km=2"` — no key required.
-3. If you want to write, register a service key at `/v1/service/register/send-otp` — see [§4 of the Guide](https://neighborhood-commons.org/llms.txt#4-writing-data).
+3. If you want to write, sign up at the developer portal: [https://neighborhood-commons.org/developers/sign-up](https://neighborhood-commons.org/developers/sign-up) — see [§4 of the Guide](https://neighborhood-commons.org/llms.txt#4-writing-data).
 
 That's the orientation. Everything else is in the Guide and the Spec.

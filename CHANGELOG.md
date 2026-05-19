@@ -14,6 +14,17 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-05-19 — retire `POST /v1/service/register/*` + onboarding migration completion (PR 5)
+
+The developer portal at `/developers` (PRs 1–4 + the QR add-on) is the canonical onboarding path. The legacy two-step OTP register flow is retired.
+
+- **`POST /v1/service/register/send-otp` and `POST /v1/service/register/verify-otp` return `410 ENDPOINT_RETIRED`.** Body points at `https://neighborhood-commons.org/developers/sign-up`. Existing service keys are unaffected — only the *registration* path moved.
+- OpenAPI: both endpoints flagged `deprecated: true`. They stay in the spec (additive-only stability); the `410` is the only documented response.
+- `public/llms.txt` §4.1 / §4.2 rewritten to describe the portal flow (sign-up, dashboard, operator review, witnessed-collective provisioning).
+- `docs/consumer-guide.md` and `docs/onboarding-redesign.md` updated — the latter now carries a "Shipped 2026-05-19" header.
+- SDK schema (`sdk/src/generated/schema.ts`) regenerated from the updated spec; contract-drift test green.
+- No data migration. Pre-3.1 keys keep working; new registrations only land via the portal.
+
 ## 2026-05-19 — MFA enrollment: scannable QR code
 
 No contract change. Adds an inline SVG QR code to `/developers/security/enroll-mfa` — scan with the authenticator app of choice instead of typing the 32-char secret by hand. Manual entry (secret + `otpauth://` tap-link) stays as fallback.
