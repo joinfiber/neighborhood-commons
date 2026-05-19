@@ -530,7 +530,7 @@ describe('POST /operator/applications/:id/approve', () => {
     expect(res.status).toBe(403);
   });
 
-  it('approves: flips activated_at + profile status, sends activation email', async () => {
+  it('approves: provisions collective + activates + sends email with collective UUID (PR B)', async () => {
     setupHappyApproval();
 
     // Get a CSRF token by hitting the detail page first
@@ -542,7 +542,12 @@ describe('POST /operator/applications/:id/approve', () => {
     const csrfToken = cookies.get('nc_dev_csrf') || '';
     expect(csrfToken).toBeTruthy();
 
-    const body = new URLSearchParams({ _csrf: csrfToken });
+    const body = new URLSearchParams({
+      _csrf: csrfToken,
+      collective_name: 'Test App Community',
+      collective_slug: 'test-app-community',
+      // grant_witness_authority omitted — default off
+    });
     const res = await fetch(`${baseUrl}/operator/applications/${APP_ID}/approve`, {
       method: 'POST',
       headers: {
@@ -555,13 +560,26 @@ describe('POST /operator/applications/:id/approve', () => {
     expect(res.status).toBe(303);
     expect(res.headers.get('location')).toContain(`/operator/applications/${APP_ID}?success=approved`);
 
-    // api_keys row was updated with activated_at + review record
+    // Collective Organization was created (PR B: every approval provisions one)
+    const orgInserts = insertedRows.get('organizations') || [];
+    expect(orgInserts.length).toBeGreaterThanOrEqual(1);
+    expect(orgInserts[orgInserts.length - 1].name).toBe('Test App Community');
+    expect(orgInserts[orgInserts.length - 1].slug).toBe('test-app-community');
+    expect(orgInserts[orgInserts.length - 1].method).toBe('self_asserted');
+
+    // api_key was linked to the collective
+    const linkInserts = insertedRows.get('api_key_organization_links') || [];
+    expect(linkInserts.length).toBeGreaterThanOrEqual(1);
+    expect(linkInserts[linkInserts.length - 1].api_key_id).toBe(APP_ID);
+
+    // api_keys row updated with activated_at + review record (witness_authority NOT set)
     const keyUpdates = updatedRows.get('api_keys') || [];
     expect(keyUpdates.length).toBeGreaterThanOrEqual(1);
     const update = keyUpdates[keyUpdates.length - 1];
     expect(update.activated_at).toBeTruthy();
+    expect(update.witness_authority).toBeUndefined(); // default-off path
     expect(update.application_metadata).toMatchObject({
-      review: { action: 'approved', by: 'op@example.com' },
+      review: { action: 'approved', by: 'op@example.com', witness_authority_granted: false },
     });
 
     // contributor_profiles row was flipped to active
@@ -569,11 +587,67 @@ describe('POST /operator/applications/:id/approve', () => {
     expect(profileUpdates.length).toBeGreaterThanOrEqual(1);
     expect(profileUpdates[profileUpdates.length - 1].status).toBe('active');
 
-    // Activation email was sent
+    // Activation email was sent with the collective UUID
     expect(mockEmail.lastSent).not.toBeNull();
     expect(mockEmail.lastSent?.to).toBe('op@example.com');
     expect(mockEmail.lastSent?.subject).toMatch(/Test App is live/i);
     expect(mockEmail.lastSent?.html).toContain('Open dashboard');
+    expect(mockEmail.lastSent?.html).toContain('Witnessing collective is set up');
+  });
+
+  it('grants witness_authority preemptively when the checkbox is checked', async () => {
+    setupHappyApproval();
+    const getRes = await fetch(`${baseUrl}/operator/applications/${APP_ID}`, {
+      headers: { Cookie: sessionCookie() },
+      redirect: 'manual',
+    });
+    const csrfToken = parseSetCookies(getRes).get('nc_dev_csrf') || '';
+
+    const body = new URLSearchParams({
+      _csrf: csrfToken,
+      collective_name: 'Test App Community',
+      grant_witness_authority: 'on',
+    });
+    const res = await fetch(`${baseUrl}/operator/applications/${APP_ID}/approve`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Cookie: `${sessionCookie()}; nc_dev_csrf=${csrfToken}`,
+      },
+      body: body.toString(),
+      redirect: 'manual',
+    });
+    expect(res.status).toBe(303);
+
+    const keyUpdates = updatedRows.get('api_keys') || [];
+    const update = keyUpdates[keyUpdates.length - 1];
+    expect(update.witness_authority).toBe(true);
+    expect(update.application_metadata).toMatchObject({
+      review: { witness_authority_granted: true },
+    });
+  });
+
+  it('rejects approve with empty collective_name', async () => {
+    setupHappyApproval();
+    const getRes = await fetch(`${baseUrl}/operator/applications/${APP_ID}`, {
+      headers: { Cookie: sessionCookie() },
+      redirect: 'manual',
+    });
+    const csrfToken = parseSetCookies(getRes).get('nc_dev_csrf') || '';
+
+    const body = new URLSearchParams({ _csrf: csrfToken, collective_name: '' });
+    const res = await fetch(`${baseUrl}/operator/applications/${APP_ID}/approve`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Cookie: `${sessionCookie()}; nc_dev_csrf=${csrfToken}`,
+      },
+      body: body.toString(),
+      redirect: 'manual',
+    });
+    expect(res.status).toBe(400);
+    const html = await res.text();
+    expect(html).toContain('Collective name is required');
   });
 });
 
@@ -694,80 +768,65 @@ describe('POST /operator/applications/:id/reject', () => {
 });
 
 // ---------------------------------------------------------------------------
-// POST /operator/applications/:id/approve-witnessing (PR 4c)
+// POST /operator/applications/:id/grant-witnessing (PR B)
 // ---------------------------------------------------------------------------
 
-describe('POST /operator/applications/:id/approve-witnessing', () => {
-  function setupHappyWitnessing() {
+describe('POST /operator/applications/:id/grant-witnessing', () => {
+  function setupApprovedAppWithRequest() {
     setupSession();
     mockResponses.set('api_keys:single', {
       data: {
         id: APP_ID,
         name: 'Fiber',
         contact_email: 'op@example.com',
-        url: 'https://fiber.example.com',
+        url: null,
         key_prefix: 'nc_abc',
         status: 'active',
-        activated_at: null,
-        application_metadata: { what_youre_building: 'OCR of public flyers', verification_process: 'photo evidence' },
+        activated_at: '2026-05-19T00:00:00Z', // already approved
+        application_metadata: {},
         brand_config: null,
         contributor_profile_id: PROFILE_ID,
         created_at: '2026-05-01T12:00:00Z',
-        mfa_enrolled_at: '2026-05-18T00:00:00Z',
+        mfa_enrolled_at: '2026-05-19T00:00:00Z',
+        witness_authority: false,
+        witness_authority_requested_at: '2026-05-19T01:00:00Z',
       },
       error: null,
     });
     mockResponses.set('contributor_profiles:single', {
       data: {
-        id: PROFILE_ID,
-        slug: 'fiber',
-        name: 'Fiber',
+        id: PROFILE_ID, slug: 'fiber', name: 'Fiber',
         tagline: null, description: null, who_its_for: null,
-        app_url: null, category: null, status: 'pending',
+        app_url: null, category: null, status: 'active',
       },
+      error: null,
+    });
+    mockResponses.set('api_key_organization_links:single', {
+      data: { organization_id: 'org-fiber-community' },
+      error: null,
+    });
+    mockResponses.set('organizations:single', {
+      data: { id: 'org-fiber-community', name: 'Fiber Community', slug: 'fiber-community' },
       error: null,
     });
   }
 
-  it('returns 403 when CSRF token is missing', async () => {
+  it('rejects without CSRF (403)', async () => {
     setupOperatorIdentity();
-    const res = await fetch(`${baseUrl}/operator/applications/${APP_ID}/approve-witnessing`, {
+    const res = await fetch(`${baseUrl}/operator/applications/${APP_ID}/grant-witnessing`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         Cookie: sessionCookie(),
       },
-      body: 'collective_name=Fiber%20Community',
+      body: '',
       redirect: 'manual',
     });
     expect(res.status).toBe(403);
   });
 
-  it('rejects an empty collective_name with 400', async () => {
-    setupHappyWitnessing();
-    const getRes = await fetch(`${baseUrl}/operator/applications/${APP_ID}`, {
-      headers: { Cookie: sessionCookie() },
-      redirect: 'manual',
-    });
-    const csrfToken = parseSetCookies(getRes).get('nc_dev_csrf') || '';
-
-    const body = new URLSearchParams({ _csrf: csrfToken, collective_name: '' });
-    const res = await fetch(`${baseUrl}/operator/applications/${APP_ID}/approve-witnessing`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Cookie: `${sessionCookie()}; nc_dev_csrf=${csrfToken}`,
-      },
-      body: body.toString(),
-      redirect: 'manual',
-    });
-    expect(res.status).toBe(400);
-    const html = await res.text();
-    expect(html).toContain('Collective name is required');
-  });
-
-  it('creates the collective org, links the key, flips witness_authority, sends email with UUID', async () => {
-    setupHappyWitnessing();
+  it('grants witness_authority, clears request timestamp, sends notification email', async () => {
+    setupApprovedAppWithRequest();
 
     const getRes = await fetch(`${baseUrl}/operator/applications/${APP_ID}`, {
       headers: { Cookie: sessionCookie() },
@@ -775,13 +834,8 @@ describe('POST /operator/applications/:id/approve-witnessing', () => {
     });
     const csrfToken = parseSetCookies(getRes).get('nc_dev_csrf') || '';
 
-    const body = new URLSearchParams({
-      _csrf: csrfToken,
-      collective_name: 'Fiber Community',
-      collective_slug: 'fiber-community',
-      collective_description: "Fiber's witnessed-evidence collective.",
-    });
-    const res = await fetch(`${baseUrl}/operator/applications/${APP_ID}/approve-witnessing`, {
+    const body = new URLSearchParams({ _csrf: csrfToken });
+    const res = await fetch(`${baseUrl}/operator/applications/${APP_ID}/grant-witnessing`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -791,84 +845,29 @@ describe('POST /operator/applications/:id/approve-witnessing', () => {
       redirect: 'manual',
     });
     expect(res.status).toBe(303);
-    expect(res.headers.get('location')).toContain('success=approved-witnessing');
+    expect(res.headers.get('location')).toContain('success=witness-granted');
 
-    // Organization row inserted
-    const orgInserts = insertedRows.get('organizations') || [];
-    expect(orgInserts.length).toBeGreaterThanOrEqual(1);
-    const orgInsert = orgInserts[orgInserts.length - 1];
-    expect(orgInsert.name).toBe('Fiber Community');
-    expect(orgInsert.slug).toBe('fiber-community');
-    expect(orgInsert.description).toBe("Fiber's witnessed-evidence collective.");
-    expect(orgInsert.method).toBe('self_asserted');
-
-    // api_key_organization_links row inserted
-    const linkInserts = insertedRows.get('api_key_organization_links') || [];
-    expect(linkInserts.length).toBeGreaterThanOrEqual(1);
-    const linkInsert = linkInserts[linkInserts.length - 1];
-    expect(linkInsert.api_key_id).toBe(APP_ID);
-
-    // api_keys updated: witness_authority + activated_at + review record
     const keyUpdates = updatedRows.get('api_keys') || [];
-    expect(keyUpdates.length).toBeGreaterThanOrEqual(1);
     const update = keyUpdates[keyUpdates.length - 1];
     expect(update.witness_authority).toBe(true);
-    expect(update.activated_at).toBeTruthy();
-    const meta = update.application_metadata as { review: { action: string; variant: string; collective_org_id: string } };
-    expect(meta.review.action).toBe('approved');
-    expect(meta.review.variant).toBe('witnessing');
-    expect(typeof meta.review.collective_org_id).toBe('string');
+    expect(update.witness_authority_requested_at).toBeNull();
+    expect(update.application_metadata).toMatchObject({
+      witness_grant: { action: 'witness_authority_granted', by: 'op@example.com' },
+    });
 
-    // contributor_profiles flipped to active
-    const profileUpdates = updatedRows.get('contributor_profiles') || [];
-    expect(profileUpdates[profileUpdates.length - 1].status).toBe('active');
-
-    // Activation email contains the collective UUID + organizer_org_id usage
     expect(mockEmail.lastSent).not.toBeNull();
     expect(mockEmail.lastSent?.to).toBe('op@example.com');
-    expect(mockEmail.lastSent?.subject).toMatch(/Fiber is live/i);
-    expect(mockEmail.lastSent?.html).toContain('Witnessing collective is set up');
+    expect(mockEmail.lastSent?.subject).toMatch(/Witnessing enabled/i);
     expect(mockEmail.lastSent?.html).toContain('organizer_org_id');
-    expect(mockEmail.lastSent?.html).toContain('"method": "witnessed"');
-  });
-
-  it('auto-derives a slug when collective_slug is left blank', async () => {
-    setupHappyWitnessing();
-
-    const getRes = await fetch(`${baseUrl}/operator/applications/${APP_ID}`, {
-      headers: { Cookie: sessionCookie() },
-      redirect: 'manual',
-    });
-    const csrfToken = parseSetCookies(getRes).get('nc_dev_csrf') || '';
-
-    const body = new URLSearchParams({
-      _csrf: csrfToken,
-      collective_name: "Holler Community",
-      // slug omitted
-    });
-    const res = await fetch(`${baseUrl}/operator/applications/${APP_ID}/approve-witnessing`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Cookie: `${sessionCookie()}; nc_dev_csrf=${csrfToken}`,
-      },
-      body: body.toString(),
-      redirect: 'manual',
-    });
-    expect(res.status).toBe(303);
-
-    const orgInserts = insertedRows.get('organizations') || [];
-    const orgInsert = orgInserts[orgInserts.length - 1];
-    expect(orgInsert.slug).toBe('holler-community');
   });
 });
 
 // ---------------------------------------------------------------------------
-// Detail page should surface the witnessing form (PR 4c)
+// Detail page surfaces the unified approve form + witness-request banner
 // ---------------------------------------------------------------------------
 
-describe('GET /operator/applications/:id — witnessing form (PR 4c)', () => {
-  it('renders the approve-as-witnessing form when application is pending', async () => {
+describe('GET /operator/applications/:id — unified approve form (PR B)', () => {
+  it('renders one unified approve form with collective fields + witness checkbox', async () => {
     setupSession();
     mockResponses.set('api_keys:single', {
       data: {
@@ -884,6 +883,8 @@ describe('GET /operator/applications/:id — witnessing form (PR 4c)', () => {
         contributor_profile_id: PROFILE_ID,
         created_at: '2026-05-01T12:00:00Z',
         mfa_enrolled_at: '2026-05-18T00:00:00Z',
+        witness_authority: false,
+        witness_authority_requested_at: null,
       },
       error: null,
     });
@@ -902,13 +903,55 @@ describe('GET /operator/applications/:id — witnessing form (PR 4c)', () => {
     });
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain('Approve as witnessing app');
+    expect(html).toContain('Decision — approve');
     expect(html).toContain('name="collective_name"');
     expect(html).toContain('name="collective_slug"');
     expect(html).toContain('name="collective_description"');
-    // Default-filled with "<App Name> Community"
+    expect(html).toContain('name="grant_witness_authority"');
     expect(html).toContain('Fiber Community');
-    expect(html).toContain('fiber-community');
+    // The old separate "Approve as witnessing app" section should be gone
+    expect(html).not.toContain('Approve as witnessing app');
+  });
+
+  it('surfaces a witness-request banner on an already-activated app with a pending request', async () => {
+    setupSession();
+    mockResponses.set('api_keys:single', {
+      data: {
+        id: APP_ID,
+        name: 'Fiber',
+        contact_email: 'op@example.com',
+        url: null,
+        key_prefix: 'nc_abc',
+        status: 'active',
+        activated_at: '2026-05-19T00:00:00Z', // already approved
+        application_metadata: {},
+        brand_config: null,
+        contributor_profile_id: PROFILE_ID,
+        created_at: '2026-05-01T12:00:00Z',
+        mfa_enrolled_at: '2026-05-19T00:00:00Z',
+        witness_authority: false,
+        witness_authority_requested_at: '2026-05-19T01:00:00Z',
+      },
+      error: null,
+    });
+    mockResponses.set('contributor_profiles:single', {
+      data: {
+        id: PROFILE_ID, slug: 'fiber', name: 'Fiber',
+        tagline: null, description: null, who_its_for: null,
+        app_url: null, category: null, status: 'active',
+      },
+      error: null,
+    });
+
+    const res = await fetch(`${baseUrl}/operator/applications/${APP_ID}`, {
+      headers: { Cookie: sessionCookie() },
+      redirect: 'manual',
+    });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('Witnessing requested');
+    expect(html).toContain(`action="/operator/applications/${APP_ID}/grant-witnessing"`);
+    expect(html).toContain('Grant witnessing');
   });
 });
 
