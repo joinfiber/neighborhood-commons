@@ -18,6 +18,17 @@ interface ActivationEmailArgs {
   email: string;
   appName: string;
   profileSlug: string;
+  /**
+   * Set when the operator approved this app via the witnessing path —
+   * a collective Organization was provisioned and the api_key now has
+   * witness_authority. The email surfaces the collective's UUID and a
+   * concrete usage example so the developer doesn't have to dig.
+   */
+  collectiveOrg?: {
+    id: string;
+    name: string;
+    slug: string;
+  };
 }
 
 interface RejectionEmailArgs {
@@ -54,6 +65,37 @@ export async function sendActivationEmail(args: ActivationEmailArgs): Promise<vo
   const quickstartUrl = `${baseUrl()}/docs/quickstart`;
   const profileUrl = `${baseUrl()}/v1/contributors/${encodeURIComponent(args.profileSlug)}`;
 
+  // When the operator approved as a witnessing app, surface the collective
+  // Organization's UUID + a usage example so the developer doesn't have to
+  // dig in the docs to wire their writes correctly.
+  const witnessingBlock = args.collectiveOrg
+    ? `
+      <div style="margin: 0 0 24px; padding: 16px 18px; background: #eaf2ea; border-radius: 6px; font-size: 14px;">
+        <div style="font-weight: 600; color: #1a1917; margin-bottom: 6px;">Witnessing collective is set up</div>
+        <p style="margin: 0 0 12px;">
+          Your app was approved as a witnessing publisher. A collective Organization,
+          <strong>${escapeHtml(args.collectiveOrg.name)}</strong>, was provisioned for you
+          and your service key is linked to it. Use this UUID as the <code>organizer_org_id</code>
+          on witnessed events you submit:
+        </p>
+        <div style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; padding: 10px 12px; background: #fff; border: 1px solid #e8e5e0; border-radius: 4px; word-break: break-all; margin-bottom: 12px;">
+          ${escapeHtml(args.collectiveOrg.id)}
+        </div>
+        <p style="margin: 0 0 6px; font-size: 13px; color: #37352f;">Example event payload:</p>
+        <pre style="margin: 0; padding: 10px 12px; background: #fff; border: 1px solid #e8e5e0; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; overflow-x: auto; line-height: 1.5;">{
+  "name": "Poetry night",
+  "start": "2026-06-12T19:00:00-04:00",
+  "place_id": "ChIJ...",
+  "organizer_org_id": "${escapeHtml(args.collectiveOrg.id)}",
+  "source": { "method": "witnessed" }
+}</pre>
+        <p style="margin: 12px 0 0; font-size: 13px; color: #6b6660;">
+          Slug: <code>${escapeHtml(args.collectiveOrg.slug)}</code> · The collective is editable from your dashboard.
+        </p>
+      </div>
+    `
+    : '';
+
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; padding: 40px 20px; color: #37352f; line-height: 1.6;">
       <div style="font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: #7a7670; margin-bottom: 24px;">
@@ -71,6 +113,7 @@ export async function sendActivationEmail(args: ActivationEmailArgs): Promise<vo
         events you contribute and see your card. You can edit it any time from the
         dashboard.
       </p>
+      ${witnessingBlock}
       <div style="margin: 0 0 24px;">
         <a href="${dashboardUrl}" style="display: inline-block; padding: 12px 20px; background: #2b4d2b; color: #fff; text-decoration: none; border-radius: 6px; font-weight: 500;">
           Open dashboard

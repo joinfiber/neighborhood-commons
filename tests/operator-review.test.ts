@@ -694,6 +694,225 @@ describe('POST /operator/applications/:id/reject', () => {
 });
 
 // ---------------------------------------------------------------------------
+// POST /operator/applications/:id/approve-witnessing (PR 4c)
+// ---------------------------------------------------------------------------
+
+describe('POST /operator/applications/:id/approve-witnessing', () => {
+  function setupHappyWitnessing() {
+    setupSession();
+    mockResponses.set('api_keys:single', {
+      data: {
+        id: APP_ID,
+        name: 'Fiber',
+        contact_email: 'op@example.com',
+        url: 'https://fiber.example.com',
+        key_prefix: 'nc_abc',
+        status: 'active',
+        activated_at: null,
+        application_metadata: { what_youre_building: 'OCR of public flyers', verification_process: 'photo evidence' },
+        brand_config: null,
+        contributor_profile_id: PROFILE_ID,
+        created_at: '2026-05-01T12:00:00Z',
+        mfa_enrolled_at: '2026-05-18T00:00:00Z',
+      },
+      error: null,
+    });
+    mockResponses.set('contributor_profiles:single', {
+      data: {
+        id: PROFILE_ID,
+        slug: 'fiber',
+        name: 'Fiber',
+        tagline: null, description: null, who_its_for: null,
+        app_url: null, category: null, status: 'pending',
+      },
+      error: null,
+    });
+  }
+
+  it('returns 403 when CSRF token is missing', async () => {
+    setupOperatorIdentity();
+    const res = await fetch(`${baseUrl}/operator/applications/${APP_ID}/approve-witnessing`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Cookie: sessionCookie(),
+      },
+      body: 'collective_name=Fiber%20Community',
+      redirect: 'manual',
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it('rejects an empty collective_name with 400', async () => {
+    setupHappyWitnessing();
+    const getRes = await fetch(`${baseUrl}/operator/applications/${APP_ID}`, {
+      headers: { Cookie: sessionCookie() },
+      redirect: 'manual',
+    });
+    const csrfToken = parseSetCookies(getRes).get('nc_dev_csrf') || '';
+
+    const body = new URLSearchParams({ _csrf: csrfToken, collective_name: '' });
+    const res = await fetch(`${baseUrl}/operator/applications/${APP_ID}/approve-witnessing`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Cookie: `${sessionCookie()}; nc_dev_csrf=${csrfToken}`,
+      },
+      body: body.toString(),
+      redirect: 'manual',
+    });
+    expect(res.status).toBe(400);
+    const html = await res.text();
+    expect(html).toContain('Collective name is required');
+  });
+
+  it('creates the collective org, links the key, flips witness_authority, sends email with UUID', async () => {
+    setupHappyWitnessing();
+
+    const getRes = await fetch(`${baseUrl}/operator/applications/${APP_ID}`, {
+      headers: { Cookie: sessionCookie() },
+      redirect: 'manual',
+    });
+    const csrfToken = parseSetCookies(getRes).get('nc_dev_csrf') || '';
+
+    const body = new URLSearchParams({
+      _csrf: csrfToken,
+      collective_name: 'Fiber Community',
+      collective_slug: 'fiber-community',
+      collective_description: "Fiber's witnessed-evidence collective.",
+    });
+    const res = await fetch(`${baseUrl}/operator/applications/${APP_ID}/approve-witnessing`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Cookie: `${sessionCookie()}; nc_dev_csrf=${csrfToken}`,
+      },
+      body: body.toString(),
+      redirect: 'manual',
+    });
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toContain('success=approved-witnessing');
+
+    // Organization row inserted
+    const orgInserts = insertedRows.get('organizations') || [];
+    expect(orgInserts.length).toBeGreaterThanOrEqual(1);
+    const orgInsert = orgInserts[orgInserts.length - 1];
+    expect(orgInsert.name).toBe('Fiber Community');
+    expect(orgInsert.slug).toBe('fiber-community');
+    expect(orgInsert.description).toBe("Fiber's witnessed-evidence collective.");
+    expect(orgInsert.method).toBe('self_asserted');
+
+    // api_key_organization_links row inserted
+    const linkInserts = insertedRows.get('api_key_organization_links') || [];
+    expect(linkInserts.length).toBeGreaterThanOrEqual(1);
+    const linkInsert = linkInserts[linkInserts.length - 1];
+    expect(linkInsert.api_key_id).toBe(APP_ID);
+
+    // api_keys updated: witness_authority + activated_at + review record
+    const keyUpdates = updatedRows.get('api_keys') || [];
+    expect(keyUpdates.length).toBeGreaterThanOrEqual(1);
+    const update = keyUpdates[keyUpdates.length - 1];
+    expect(update.witness_authority).toBe(true);
+    expect(update.activated_at).toBeTruthy();
+    const meta = update.application_metadata as { review: { action: string; variant: string; collective_org_id: string } };
+    expect(meta.review.action).toBe('approved');
+    expect(meta.review.variant).toBe('witnessing');
+    expect(typeof meta.review.collective_org_id).toBe('string');
+
+    // contributor_profiles flipped to active
+    const profileUpdates = updatedRows.get('contributor_profiles') || [];
+    expect(profileUpdates[profileUpdates.length - 1].status).toBe('active');
+
+    // Activation email contains the collective UUID + organizer_org_id usage
+    expect(mockEmail.lastSent).not.toBeNull();
+    expect(mockEmail.lastSent?.to).toBe('op@example.com');
+    expect(mockEmail.lastSent?.subject).toMatch(/Fiber is live/i);
+    expect(mockEmail.lastSent?.html).toContain('Witnessing collective is set up');
+    expect(mockEmail.lastSent?.html).toContain('organizer_org_id');
+    expect(mockEmail.lastSent?.html).toContain('"method": "witnessed"');
+  });
+
+  it('auto-derives a slug when collective_slug is left blank', async () => {
+    setupHappyWitnessing();
+
+    const getRes = await fetch(`${baseUrl}/operator/applications/${APP_ID}`, {
+      headers: { Cookie: sessionCookie() },
+      redirect: 'manual',
+    });
+    const csrfToken = parseSetCookies(getRes).get('nc_dev_csrf') || '';
+
+    const body = new URLSearchParams({
+      _csrf: csrfToken,
+      collective_name: "Holler Community",
+      // slug omitted
+    });
+    const res = await fetch(`${baseUrl}/operator/applications/${APP_ID}/approve-witnessing`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Cookie: `${sessionCookie()}; nc_dev_csrf=${csrfToken}`,
+      },
+      body: body.toString(),
+      redirect: 'manual',
+    });
+    expect(res.status).toBe(303);
+
+    const orgInserts = insertedRows.get('organizations') || [];
+    const orgInsert = orgInserts[orgInserts.length - 1];
+    expect(orgInsert.slug).toBe('holler-community');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Detail page should surface the witnessing form (PR 4c)
+// ---------------------------------------------------------------------------
+
+describe('GET /operator/applications/:id — witnessing form (PR 4c)', () => {
+  it('renders the approve-as-witnessing form when application is pending', async () => {
+    setupSession();
+    mockResponses.set('api_keys:single', {
+      data: {
+        id: APP_ID,
+        name: 'Fiber',
+        contact_email: 'op@example.com',
+        url: null,
+        key_prefix: 'nc_abc',
+        status: 'active',
+        activated_at: null,
+        application_metadata: { what_youre_building: 'x', verification_process: 'y' },
+        brand_config: null,
+        contributor_profile_id: PROFILE_ID,
+        created_at: '2026-05-01T12:00:00Z',
+        mfa_enrolled_at: '2026-05-18T00:00:00Z',
+      },
+      error: null,
+    });
+    mockResponses.set('contributor_profiles:single', {
+      data: {
+        id: PROFILE_ID, slug: 'fiber', name: 'Fiber',
+        tagline: null, description: null, who_its_for: null,
+        app_url: null, category: null, status: 'pending',
+      },
+      error: null,
+    });
+
+    const res = await fetch(`${baseUrl}/operator/applications/${APP_ID}`, {
+      headers: { Cookie: sessionCookie() },
+      redirect: 'manual',
+    });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('Approve as witnessing app');
+    expect(html).toContain('name="collective_name"');
+    expect(html).toContain('name="collective_slug"');
+    expect(html).toContain('name="collective_description"');
+    // Default-filled with "<App Name> Community"
+    expect(html).toContain('Fiber Community');
+    expect(html).toContain('fiber-community');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Sanity: hash check (kept here as a tripwire for the SHA-256 contract)
 // ---------------------------------------------------------------------------
 
