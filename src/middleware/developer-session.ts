@@ -17,7 +17,7 @@
  */
 
 import type { Request, Response, NextFunction } from 'express';
-import { getRawTokenFromRequest, validateSession, type DeveloperSession } from '../lib/developer-portal/sessions.js';
+import { getRawTokenFromRequest, validateSession, isSessionElevated, type DeveloperSession } from '../lib/developer-portal/sessions.js';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { config } from '../config.js';
 
@@ -81,9 +81,17 @@ export async function requireDeveloperSession(req: Request, res: Response, next:
  * anyone who shouldn't have access. Attaches `req.operatorEmail` on success
  * for downstream handlers / audit records.
  *
- * Operator status is not stored in the DB in PR 4a; it's purely env-var
- * driven. Adding a DB-backed `is_operator` flag later is additive and
- * doesn't require changing this contract.
+ * MFA gating (PR 4b): once the allowlist check passes, requires the
+ * operator's account to have MFA enrolled and the session to be elevated
+ * (mfa_verified_at within the 15-minute window). Unlike the allowlist
+ * miss, these are NOT 404s — they redirect, because the legitimate
+ * operator needs to know what to do next (enroll, or re-verify).
+ *
+ * Order of checks matters for non-disclosure:
+ *   1. Email-on-allowlist?     no → 404 (no leak)
+ *   2. MFA enrolled?           no → 303 /developers/security/enroll-mfa
+ *   3. Session elevated?       no → 303 /developers/security/step-up
+ *   4. All pass                   → next()
  */
 export async function requireOperator(req: Request, res: Response, next: NextFunction): Promise<void> {
   const allowlist = config.operator.emails;
@@ -107,7 +115,7 @@ export async function requireOperator(req: Request, res: Response, next: NextFun
 
     const { data: keyRow } = await supabaseAdmin
       .from('api_keys')
-      .select('contact_email')
+      .select('contact_email, mfa_enrolled_at')
       .eq('id', session.api_key_id)
       .maybeSingle();
 
@@ -117,11 +125,74 @@ export async function requireOperator(req: Request, res: Response, next: NextFun
       return;
     }
 
+    // From here on, the operator has been confirmed. Subsequent failures
+    // surface as redirects so the operator can complete the missing step.
+    const returnUrl = encodeURIComponent(req.originalUrl || '/operator/applications');
+
+    if (!keyRow?.mfa_enrolled_at) {
+      res.redirect(303, `/developers/security/enroll-mfa?return=${returnUrl}`);
+      return;
+    }
+
+    if (!isSessionElevated(session)) {
+      res.redirect(303, `/developers/security/step-up?return=${returnUrl}`);
+      return;
+    }
+
     req.developerSession = session;
     req.operatorEmail = email;
     next();
   } catch (err) {
     console.error('[OPERATOR] Gate check failed:', err instanceof Error ? err.message : err);
     res.status(404).send('Not Found');
+  }
+}
+
+/**
+ * Generic step-up gate. Use on any sensitive non-operator route that
+ * deserves a fresh MFA check (future hardening of profile edits, key
+ * rotation, etc.).
+ *
+ * Differs from requireOperator: doesn't apply email-allowlist gating
+ * and DOES expose its existence (302 to login) for unauthenticated
+ * requests, since it's not an admin surface.
+ */
+export async function requireStepUp(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const rawToken = getRawTokenFromRequest(req);
+  if (!rawToken) {
+    res.redirect(302, '/developers/login');
+    return;
+  }
+
+  try {
+    const session = await validateSession(rawToken);
+    if (!session) {
+      res.redirect(302, '/developers/login');
+      return;
+    }
+
+    const { data: keyRow } = await supabaseAdmin
+      .from('api_keys')
+      .select('mfa_enrolled_at')
+      .eq('id', session.api_key_id)
+      .maybeSingle();
+
+    const returnUrl = encodeURIComponent(req.originalUrl || '/developers/dashboard');
+
+    if (!keyRow?.mfa_enrolled_at) {
+      res.redirect(303, `/developers/security/enroll-mfa?return=${returnUrl}`);
+      return;
+    }
+
+    if (!isSessionElevated(session)) {
+      res.redirect(303, `/developers/security/step-up?return=${returnUrl}`);
+      return;
+    }
+
+    req.developerSession = session;
+    next();
+  } catch (err) {
+    console.error('[DEV_PORTAL] Step-up check failed:', err instanceof Error ? err.message : err);
+    res.redirect(302, '/developers/login');
   }
 }

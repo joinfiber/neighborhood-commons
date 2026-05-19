@@ -14,6 +14,18 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-05-18 — MFA enrollment + step-up (PR 4b)
+
+No contract change. Hardens the developer portal with TOTP-based MFA; required before the operator surface unlocks. Per [`docs/onboarding-redesign.md`](docs/onboarding-redesign.md) §3.2, §3.3, §12 (PR 4b).
+
+- **TOTP** (RFC 6238 over RFC 4226 HOTP) — hand-rolled via Node `crypto.createHmac` to keep the security-primitive surface auditable. ±1 step (±30s) tolerance for clock skew.
+- **`GET /developers/security/enroll-mfa`** — generates a base32 secret, renders it + `otpauth://` URL (tap-to-add on mobile, manual entry on desktop). No QR library — secret + URL is sufficient and saves a dep.
+- **`POST /developers/security/enroll-mfa`** — verifies the submitted code against the secret echoed in the form, persists `api_keys.mfa_secret_encrypted` (AES-256-GCM, keyed off `WEBHOOK_ENCRYPTION_KEY`), sets `mfa_enrolled_at`, generates 10 backup codes (`xxxxx-xxxxx` format, SHA-256 hashed for storage), shows the codes once, elevates the current session.
+- **`GET /developers/security/step-up`** + **`POST .../step-up`** — fresh-check form for sensitive operations. Accepts either a TOTP code or a backup code. Backup codes are single-use — consumed by removing the matched hash from `api_keys.mfa_backup_codes_hashed`. `?return=` is path-validated against open-redirect.
+- **`requireOperator` middleware (PR 4a) hardened** — after the email-allowlist check passes, redirects to `/developers/security/enroll-mfa` if the operator hasn't enrolled MFA, or to `/developers/security/step-up` if elevation has lapsed (`mfa_verified_at` older than 15 minutes). Non-allowlist still gets a 404 (no leak).
+- **`requireStepUp` middleware** — exported for future use on sensitive non-operator routes (profile edits, key rotation).
+- Reuses `WEBHOOK_ENCRYPTION_KEY` for MFA-secret-at-rest; documented in `mfa-crypto.ts`. Adding a separate `MFA_ENCRYPTION_KEY` is an additive future change if a trust-boundary requirement appears.
+
 ## 2026-05-18 — operator review portal (PR 4a)
 
 No contract change. Internal review surface for pending developer registrations. Per [`docs/onboarding-redesign.md`](docs/onboarding-redesign.md) §12 (PR 4a).

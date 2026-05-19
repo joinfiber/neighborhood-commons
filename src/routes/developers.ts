@@ -60,6 +60,23 @@ import {
   consumeMagicLink,
   sendMagicLinkEmail,
 } from '../lib/developer-portal/magic-links.js';
+import {
+  generateTotpSecret,
+  otpauthUrl,
+  verifyTotp,
+  formatSecretForDisplay,
+} from '../lib/developer-portal/totp.js';
+import {
+  encryptMfaSecret,
+  decryptMfaSecret,
+  bufferToBytea,
+  isMfaCryptoConfigured,
+} from '../lib/developer-portal/mfa-crypto.js';
+import {
+  generateBackupCodes,
+  consumeBackupCode,
+  BACKUP_CODE_COUNT,
+} from '../lib/developer-portal/backup-codes.js';
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -537,6 +554,335 @@ router.post('/logout', writeFormLimiter, async (req, res, next) => {
 });
 
 // =============================================================================
+// SECURITY: MFA enrollment + step-up
+// =============================================================================
+//
+// PR 4b. TOTP enrollment for the developer dashboard; required before
+// the operator surface unlocks. Backup codes generated at enrollment.
+// Step-up flow re-verifies a TOTP / backup code for sensitive actions
+// when the session's elevation window has lapsed (15 minutes).
+
+const SECURITY_ENROLL_PATH = '/developers/security/enroll-mfa';
+const SECURITY_STEPUP_PATH = '/developers/security/step-up';
+
+/** Validate a return URL passed via ?return=. Must be a local path
+ *  (single leading slash, no protocol, no double-slash). Anything else
+ *  → fall back to the dashboard. Prevents open-redirect abuse. */
+function safeReturnUrl(value: unknown): string {
+  if (typeof value !== 'string') return '/developers/dashboard';
+  if (!value.startsWith('/')) return '/developers/dashboard';
+  if (value.startsWith('//')) return '/developers/dashboard';
+  if (value.includes('\\')) return '/developers/dashboard';
+  // Don't bounce back into the step-up route itself (loop guard)
+  if (value.startsWith(SECURITY_STEPUP_PATH)) return '/developers/dashboard';
+  return value;
+}
+
+async function loadKeyMfaState(apiKeyId: string): Promise<{
+  mfa_enrolled_at: string | null;
+  mfa_secret_encrypted: string | null;
+  mfa_backup_codes_hashed: string[] | null;
+} | null> {
+  const { data } = await supabaseAdmin
+    .from('api_keys')
+    .select('mfa_enrolled_at, mfa_secret_encrypted, mfa_backup_codes_hashed')
+    .eq('id', apiKeyId)
+    .maybeSingle();
+  if (!data) return null;
+  return {
+    mfa_enrolled_at: (data.mfa_enrolled_at as string | null) ?? null,
+    // Supabase-js returns bytea columns as `\x<hex>` strings on SELECT.
+    mfa_secret_encrypted: (data.mfa_secret_encrypted as string | null) ?? null,
+    mfa_backup_codes_hashed: (data.mfa_backup_codes_hashed as string[] | null) ?? null,
+  };
+}
+
+async function markSessionElevated(sessionId: string): Promise<void> {
+  await supabaseAdmin
+    .from('developer_sessions')
+    .update({ mfa_verified_at: new Date().toISOString() })
+    .eq('id', sessionId);
+}
+
+// -----------------------------------------------------------------------------
+// GET /developers/security/enroll-mfa
+// -----------------------------------------------------------------------------
+//
+// Generate a fresh TOTP secret and render the enrollment form. The secret
+// rides as a hidden form field through the POST round-trip (same surface
+// as the QR an authenticator would scan — no additional exposure).
+
+router.get('/security/enroll-mfa', renderLimiter, requireDeveloperSession, async (req, res, next) => {
+  try {
+    const returnUrl = safeReturnUrl(req.query.return);
+
+    if (!isMfaCryptoConfigured()) {
+      res.status(500).send(portalShell({
+        title: 'MFA unavailable',
+        body: `<h1>MFA temporarily unavailable.</h1>
+          <p class="nc-portal-lede">The server's encryption key isn't configured, so MFA secrets can't be stored safely. Contact <a href="mailto:hi@neighborhood-commons.org">hi@neighborhood-commons.org</a>.</p>`,
+      }));
+      return;
+    }
+
+    const session = req.developerSession!;
+    const state = await loadKeyMfaState(session.api_key_id);
+    if (!state) {
+      res.redirect(302, '/developers/login');
+      return;
+    }
+
+    if (state.mfa_enrolled_at) {
+      // MFA already enrolled. PR 4b doesn't ship disable/re-enroll —
+      // direct the user back to the dashboard.
+      res.send(portalShell({
+        title: 'MFA already enrolled',
+        body: `<h1>MFA is already enrolled.</h1>
+          <p class="nc-portal-lede">Your account is protected by an authenticator app. To replace your device or regenerate backup codes, email <a href="mailto:hi@neighborhood-commons.org">hi@neighborhood-commons.org</a> — we'll verify your identity and reset.</p>
+          <p><a href="${escapeAttr(returnUrl)}" class="nc-btn nc-btn--secondary">Continue</a></p>`,
+      }));
+      return;
+    }
+
+    // Fresh secret per GET. If the user reloads, they get a new one — that's
+    // fine; only the secret submitted with the matching POST gets persisted.
+    const secret = generateTotpSecret();
+    const { data: keyRow } = await supabaseAdmin
+      .from('api_keys')
+      .select('contact_email, name')
+      .eq('id', session.api_key_id)
+      .maybeSingle();
+    const accountName = (keyRow?.contact_email as string | undefined) || 'developer';
+    const issuer = 'Neighborhood Commons';
+    const url = otpauthUrl({ issuer, accountName, secret });
+
+    const csrfToken = issueCsrfCookie(res);
+    res.send(portalShell({
+      title: 'Enable MFA',
+      body: renderEnrollMfa({ csrfToken, secret, otpauth: url, accountName, returnUrl, error: null }),
+    }));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// -----------------------------------------------------------------------------
+// POST /developers/security/enroll-mfa
+// -----------------------------------------------------------------------------
+//
+// Verify the submitted code against the secret echoed back in the form.
+// On success, encrypt + persist the secret, generate backup codes,
+// elevate the session, render the codes inline (single chance to copy).
+
+const enrollMfaSchema = z.object({
+  secret: z.string().min(16).max(64),
+  code: z.string().min(6).max(7),
+  return: z.string().optional(),
+}).passthrough();
+
+router.post('/security/enroll-mfa', writeFormLimiter, requireDeveloperSession, async (req, res, next) => {
+  try {
+    if (!validateCsrf(req)) {
+      res.status(403).send('CSRF check failed.');
+      return;
+    }
+
+    if (!isMfaCryptoConfigured()) {
+      res.status(500).send('MFA unavailable.');
+      return;
+    }
+
+    const parsed = enrollMfaSchema.safeParse(req.body || {});
+    const returnUrl = safeReturnUrl(parsed.success ? parsed.data.return : undefined);
+    if (!parsed.success) {
+      res.status(400).send(portalShell({
+        title: 'Enable MFA',
+        body: renderEnrollMfa({
+          csrfToken: issueCsrfCookie(res),
+          secret: '',
+          otpauth: '',
+          accountName: '',
+          returnUrl,
+          error: 'Submit a 6-digit code from your authenticator.',
+        }),
+      }));
+      return;
+    }
+
+    const session = req.developerSession!;
+    const state = await loadKeyMfaState(session.api_key_id);
+    if (!state) {
+      res.redirect(302, '/developers/login');
+      return;
+    }
+    if (state.mfa_enrolled_at) {
+      // Race: another tab enrolled. Forward to the already-enrolled page.
+      res.redirect(303, SECURITY_ENROLL_PATH);
+      return;
+    }
+
+    if (!verifyTotp(parsed.data.secret, parsed.data.code)) {
+      // Re-render with the same secret so the user can retry without
+      // re-pairing the authenticator.
+      const { data: keyRow } = await supabaseAdmin
+        .from('api_keys')
+        .select('contact_email')
+        .eq('id', session.api_key_id)
+        .maybeSingle();
+      const accountName = (keyRow?.contact_email as string | undefined) || 'developer';
+      res.status(400).send(portalShell({
+        title: 'Enable MFA',
+        body: renderEnrollMfa({
+          csrfToken: issueCsrfCookie(res),
+          secret: parsed.data.secret,
+          otpauth: otpauthUrl({ issuer: 'Neighborhood Commons', accountName, secret: parsed.data.secret }),
+          accountName,
+          returnUrl,
+          error: "That code didn't match. Try the next one your authenticator shows.",
+        }),
+      }));
+      return;
+    }
+
+    // Verified. Persist the encrypted secret + new backup codes; flip the
+    // enrolled flag; elevate this session.
+    const encryptedBuf = encryptMfaSecret(parsed.data.secret);
+    const { raw: rawCodes, hashed: hashedCodes } = generateBackupCodes();
+    const nowIso = new Date().toISOString();
+
+    const { error: updErr } = await supabaseAdmin
+      .from('api_keys')
+      .update({
+        mfa_secret_encrypted: bufferToBytea(encryptedBuf),
+        mfa_enrolled_at: nowIso,
+        mfa_backup_codes_hashed: hashedCodes,
+      })
+      .eq('id', session.api_key_id);
+
+    if (updErr) {
+      console.error('[DEV_PORTAL] MFA enroll persist failed:', updErr.message);
+      res.status(500).send('Failed to save MFA settings.');
+      return;
+    }
+
+    await markSessionElevated(session.id);
+
+    res.send(portalShell({
+      title: 'MFA enrolled',
+      body: renderMfaSuccess({ backupCodes: rawCodes, returnUrl }),
+    }));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// -----------------------------------------------------------------------------
+// GET /developers/security/step-up
+// -----------------------------------------------------------------------------
+//
+// Show the step-up form. Used by sensitive routes (operator portal,
+// future profile-edit hardening) when the session's elevation window
+// has lapsed. ?return= captures where to send the user after success;
+// validated against safeReturnUrl.
+
+router.get('/security/step-up', renderLimiter, requireDeveloperSession, async (req, res, next) => {
+  try {
+    const returnUrl = safeReturnUrl(req.query.return);
+    const session = req.developerSession!;
+    const state = await loadKeyMfaState(session.api_key_id);
+    if (!state || !state.mfa_enrolled_at) {
+      // No MFA on file → bounce to enrollment, preserving the return.
+      const target = `${SECURITY_ENROLL_PATH}?return=${encodeURIComponent(returnUrl)}`;
+      res.redirect(303, target);
+      return;
+    }
+
+    const csrfToken = issueCsrfCookie(res);
+    res.send(portalShell({
+      title: 'Verify it’s you',
+      body: renderStepUp({ csrfToken, returnUrl, error: null }),
+    }));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// -----------------------------------------------------------------------------
+// POST /developers/security/step-up
+// -----------------------------------------------------------------------------
+//
+// Verify a TOTP code OR a backup code. On success, mark the session
+// elevated and redirect to the return URL.
+
+const stepUpSchema = z.object({
+  code: z.string().min(6).max(20),
+  return: z.string().optional(),
+}).passthrough();
+
+router.post('/security/step-up', writeFormLimiter, requireDeveloperSession, async (req, res, next) => {
+  try {
+    if (!validateCsrf(req)) {
+      res.status(403).send('CSRF check failed.');
+      return;
+    }
+
+    const parsed = stepUpSchema.safeParse(req.body || {});
+    const returnUrl = safeReturnUrl(parsed.success ? parsed.data.return : undefined);
+    if (!parsed.success) {
+      res.status(400).send(portalShell({
+        title: 'Verify it’s you',
+        body: renderStepUp({ csrfToken: issueCsrfCookie(res), returnUrl, error: 'Enter your 6-digit code or a backup code.' }),
+      }));
+      return;
+    }
+
+    const session = req.developerSession!;
+    const state = await loadKeyMfaState(session.api_key_id);
+    if (!state || !state.mfa_enrolled_at || !state.mfa_secret_encrypted) {
+      res.redirect(303, `${SECURITY_ENROLL_PATH}?return=${encodeURIComponent(returnUrl)}`);
+      return;
+    }
+
+    const submitted = parsed.data.code.trim();
+    const looksLikeTotp = /^[0-9]{6}$/.test(submitted.replace(/\s+/g, ''));
+
+    let verified = false;
+
+    if (looksLikeTotp) {
+      try {
+        const secret = decryptMfaSecret(state.mfa_secret_encrypted);
+        verified = verifyTotp(secret, submitted);
+      } catch (err) {
+        console.error('[DEV_PORTAL] Step-up decrypt failed:', err instanceof Error ? err.message : err);
+      }
+    } else {
+      // Treat as backup code. Consume removes the matched hash.
+      const remaining = consumeBackupCode(submitted, state.mfa_backup_codes_hashed || []);
+      if (remaining) {
+        const { error: bcErr } = await supabaseAdmin
+          .from('api_keys')
+          .update({ mfa_backup_codes_hashed: remaining })
+          .eq('id', session.api_key_id);
+        if (!bcErr) verified = true;
+      }
+    }
+
+    if (!verified) {
+      res.status(400).send(portalShell({
+        title: 'Verify it’s you',
+        body: renderStepUp({ csrfToken: issueCsrfCookie(res), returnUrl, error: 'That code didn’t match. Try again.' }),
+      }));
+      return;
+    }
+
+    await markSessionElevated(session.id);
+    res.redirect(303, returnUrl);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================================================
 // Profile loader (shared)
 // =============================================================================
 
@@ -818,6 +1164,92 @@ function textareaField(
     <textarea id="${escapeAttr(name)}" name="${escapeAttr(name)}"${required}>${value}</textarea>
     ${hint}
   </div>`;
+}
+
+// =============================================================================
+// MFA RENDERING HELPERS (PR 4b)
+// =============================================================================
+
+function renderEnrollMfa(args: {
+  csrfToken: string;
+  secret: string;
+  otpauth: string;
+  accountName: string;
+  returnUrl: string;
+  error: string | null;
+}): string {
+  const display = args.secret ? formatSecretForDisplay(args.secret) : '';
+  return `
+    <h1>Enable MFA</h1>
+    <p class="nc-portal-lede">
+      Add an authenticator app (1Password, Authy, Google Authenticator, Bitwarden — any of them work) to protect this account.
+      Required before the operator surface unlocks.
+    </p>
+    ${errorBanner(args.error)}
+    <ol style="margin:0 0 24px 18px; padding:0; line-height:1.7;">
+      <li>Open your authenticator app and add a new entry.</li>
+      <li>Either tap the link below on a mobile device, or enter the secret manually as <em>Neighborhood Commons (${escapeHtml(args.accountName)})</em>.</li>
+      <li>Enter the 6-digit code your app shows to confirm.</li>
+    </ol>
+    <div class="nc-card">
+      <div class="nc-card-label">Secret</div>
+      <div class="nc-key" style="margin-bottom:12px;">${escapeHtml(display)}</div>
+      <div class="nc-card-label">otpauth URL (tap on mobile)</div>
+      <div style="word-break:break-all; font-family:var(--font-mono); font-size:12px;">
+        <a href="${escapeAttr(args.otpauth)}">${escapeHtml(args.otpauth)}</a>
+      </div>
+    </div>
+    <form method="POST" action="${SECURITY_ENROLL_PATH}" novalidate>
+      ${hiddenInput(CSRF_FIELD_NAME, args.csrfToken)}
+      ${hiddenInput('secret', args.secret)}
+      ${hiddenInput('return', args.returnUrl)}
+      ${textField('code', 'Verification code', { required: true, maxlength: 7, hint: 'Six digits from your authenticator.' })}
+      <button type="submit" class="nc-btn">Verify and enable MFA</button>
+      <a href="/developers/dashboard" class="nc-btn nc-btn--secondary" style="margin-left:8px;">Cancel</a>
+    </form>
+  `;
+}
+
+function renderMfaSuccess(args: { backupCodes: string[]; returnUrl: string }): string {
+  const codes = args.backupCodes
+    .map((c) => `<li style="font-family:var(--font-mono); font-size:15px; padding:4px 0;">${escapeHtml(c)}</li>`)
+    .join('');
+  const continueLabel = args.returnUrl === '/developers/dashboard'
+    ? "I've saved the codes — back to dashboard"
+    : "I've saved the codes — continue";
+  return `
+    <h1>MFA is on.</h1>
+    ${calloutBanner(`Save these ${BACKUP_CODE_COUNT} backup codes somewhere safe. They are shown once. Each is single-use.`)}
+    <div class="nc-card">
+      <div class="nc-card-label">Backup codes</div>
+      <ul style="list-style:none; margin:0; padding:0; columns: 2;">
+        ${codes}
+      </ul>
+      <div style="margin-top:14px; font-size:13px; color:var(--muted);">
+        Use one of these if you lose access to your authenticator. After use, the code is gone — generate a new batch by emailing <a href="mailto:hi@neighborhood-commons.org">hi@neighborhood-commons.org</a> if you run low.
+      </div>
+    </div>
+    <div style="margin-top:24px;">
+      <a href="${escapeAttr(args.returnUrl)}" class="nc-btn">${escapeHtml(continueLabel)}</a>
+    </div>
+  `;
+}
+
+function renderStepUp(args: { csrfToken: string; returnUrl: string; error: string | null }): string {
+  return `
+    <h1>Verify it’s you.</h1>
+    <p class="nc-portal-lede">
+      For this action we need a fresh check. Enter the 6-digit code from your authenticator, or a backup code.
+    </p>
+    ${errorBanner(args.error)}
+    <form method="POST" action="${SECURITY_STEPUP_PATH}" novalidate>
+      ${hiddenInput(CSRF_FIELD_NAME, args.csrfToken)}
+      ${hiddenInput('return', args.returnUrl)}
+      ${textField('code', 'Code', { required: true, maxlength: 20, hint: 'Six digits from your authenticator, or a backup code like XXXXX-XXXXX.' })}
+      <button type="submit" class="nc-btn">Continue</button>
+      <a href="/developers/dashboard" class="nc-btn nc-btn--secondary" style="margin-left:8px;">Cancel</a>
+    </form>
+  `;
 }
 
 export default router;
