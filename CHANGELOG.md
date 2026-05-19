@@ -14,6 +14,17 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-05-19 — public docs surface at `/docs/:slug`
+
+The portal + activation emails were linking to `/docs/four-roles` and `/docs/quickstart` — both returned 404 because there was no route. Now there is.
+
+- **`GET /docs/:slug`** — reads `docs/{slug}.md` from the repo, renders via `marked`, wraps in a minimal shell. Allowlist-gated; only published docs are servable (internal-only files like `onboarding-redesign.md` stay private).
+- **`GET /docs`** — index of published docs.
+- **Initial allowlist:** `four-roles`, `provenance`, `stability-promise`, `quickstart`, `consumer-guide`. Adding to the list is the conscious act of publishing.
+- Path-traversal guard via `path.resolve` + prefix check; 404 with a helpful body for non-allowlisted slugs.
+- Footer of each rendered doc links back to the GitHub source for the .md file.
+- New dep: `marked` (~50KB, pure JS).
+
 ## 2026-05-19 — equip every developer with their collective + self-service witnessing request (PR B)
 
 Closes the design gap surfaced when reviewing the witnessing flow: developers couldn't indicate witnessing intent, the operator had to divine it from the application copy, and the witnessing approval was a separate route. Per the design discussion, every approved developer is now equipped with their collective Organization at activation; `witness_authority` is self-service-triggered from the dashboard.

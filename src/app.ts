@@ -36,6 +36,7 @@ import dmcaRoutes, { dmcaHtmlHandler } from './routes/dmca.js';
 import reportRoutes from './routes/report.js';
 import developersRoutes from './routes/developers.js';
 import operatorRoutes from './routes/operator.js';
+import docsRoutes from './routes/docs.js';
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -267,6 +268,12 @@ export function createApp(): Express {
   // — the route's existence is not leaked. Approves/rejects pending
   // service-tier registrations.
   app.use('/operator', operatorRoutes);
+
+  // ─── Public docs (server-rendered markdown) ─────────────────────
+  // /docs/:slug renders an allowlisted file from /docs/{slug}.md.
+  // Listed under "what's public" in src/routes/docs.ts — internal
+  // design docs (onboarding-redesign, launch-runbook) stay off the list.
+  app.use('/docs', docsRoutes);
 
   // ─── Landing page (server-rendered, instant load, no JS) ───────────
   let cachedStats = {
