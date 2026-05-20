@@ -752,6 +752,9 @@ router.post('/collective/provision', writeFormLimiter, requireDeveloperSession, 
       .insert({
         slug,
         name: collectiveName,
+        // The collective is contributed by this developer's app — attribute it
+        // to their registered profile (migration 090), same axis as events.
+        contributor_profile_id: (keyRow.contributor_profile_id as string | null) ?? null,
         method: 'self_asserted',
       })
       .select('id')

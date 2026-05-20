@@ -139,6 +139,8 @@ const SCHEMA: Record<string, string[]> = {
     'tags', 'commercial',
     // Added in migration 085 (provenance doctrine)
     'method',
+    // Added in migration 090 (contributor attribution)
+    'contributor_profile_id',
     'created_at', 'updated_at',
   ],
   organization_places: [

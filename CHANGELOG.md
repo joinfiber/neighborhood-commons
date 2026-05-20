@@ -14,6 +14,14 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-05-20 — `created_by_contributor` on organizations & publishers
+
+Extends the contributor reverse-index from events to the durable org-backed types, on the same publishing-app axis (`source.contributor`). Brings two endpoints that already accepted the param but silently ignored it onto a real implementation.
+
+- **Migration 090** — adds `organizations.contributor_profile_id` (FK to `contributor_profiles`, indexed), mirroring `events.contributor_profile_id`. Backfills existing rows from `owner_account_id → api_keys.tenant_account_id → contributor_profile_id`, only where the tenant maps unambiguously to a single profile.
+- **`GET /api/v1/organizations?created_by_contributor={slug}`** and **`GET /api/v1/publishers?created_by_contributor={slug}`** — filter to records contributed by the app with the given registered `contributor_profile` slug (only `active` profiles; unknown/inactive → empty). Both previously accepted the param via the shared schema but never applied it.
+- **Write path** — `POST /service/organizations` now snapshots the calling key's `contributor_profile_id` onto the new org; developer-collective provisioning attributes the collective to the developer's profile. Operator-created orgs remain unattributed (operator curation is not an app contribution).
+
 ## 2026-05-20 — events `created_by_contributor` filter
 
 The publishing-app axis (`source.contributor`) is now filterable on events, matching the pattern already on broadcasts. Fixes a standing gap: `llms.txt` documented this filter for events but it was never implemented. Lets a consumer slice "everything app X contributed" — the reverse of the per-event `source.contributor` attribution.

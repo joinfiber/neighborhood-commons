@@ -59,6 +59,12 @@ declare global {
          * tenant-umbrella pattern.
          */
         tenantAccountId?: string;
+        /**
+         * The registered contributor_profile this key publishes under (3.1+).
+         * Snapshotted onto events and organizations at write time so the
+         * source.contributor attribution survives api_key rotation.
+         */
+        contributorProfileId?: string;
       };
     }
   }
@@ -151,7 +157,7 @@ export async function requireServiceApiKey(req: Request, _res: Response, next: N
     const keyHash = hashApiKey(apiKey);
     const { data: keyInfo } = await supabaseAdmin
       .from('api_keys')
-      .select('id, contributor_tier, is_admin, brand_config, verification_authority, witness_authority, tenant_account_id, activated_at')
+      .select('id, contributor_tier, is_admin, brand_config, verification_authority, witness_authority, tenant_account_id, contributor_profile_id, activated_at')
       .eq('key_hash', keyHash)
       .eq('status', 'active')
       .maybeSingle();
@@ -182,6 +188,7 @@ export async function requireServiceApiKey(req: Request, _res: Response, next: N
         : undefined,
       witnessAuthority: keyInfo.witness_authority === true,
       tenantAccountId: (keyInfo.tenant_account_id as string | null) || undefined,
+      contributorProfileId: (keyInfo.contributor_profile_id as string | null) || undefined,
     };
     next();
   } catch {

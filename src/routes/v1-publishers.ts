@@ -83,6 +83,21 @@ async function getPublisherOrgIds(): Promise<Set<string>> {
   return ids;
 }
 
+/**
+ * Resolve a contributor-app slug to its registered contributor_profile id
+ * (publishing-app axis). Only `active` profiles resolve. Local copy — route
+ * files stay self-contained rather than cross-importing.
+ */
+async function resolveContributorProfileId(slug: string): Promise<string | null> {
+  const { data } = await supabaseAdmin
+    .from('contributor_profiles')
+    .select('id')
+    .eq('slug', slug.toLowerCase())
+    .eq('status', 'active')
+    .maybeSingle();
+  return (data as { id: string } | null)?.id ?? null;
+}
+
 // ---------------------------------------------------------------------------
 // GET /api/v1/publishers
 // ---------------------------------------------------------------------------
@@ -103,6 +118,18 @@ router.get('/', async (req, res, next) => {
       res.set('Cache-Control', 'public, max-age=60');
       res.json({ meta: buildMeta(0, limit, offset), publishers: [] });
       return;
+    }
+
+    // created_by_contributor: resolve the publishing-app slug → registered
+    // contributor_profile id. No active match → empty result.
+    let contributorProfileId: string | null = null;
+    if (params.created_by_contributor) {
+      contributorProfileId = await resolveContributorProfileId(params.created_by_contributor);
+      if (!contributorProfileId) {
+        res.set('Cache-Control', 'public, max-age=60');
+        res.json({ meta: buildMeta(0, limit, offset), publishers: [] });
+        return;
+      }
     }
 
     // The publisher constraint: org must have at least one event or broadcast.
@@ -151,6 +178,10 @@ router.get('/', async (req, res, next) => {
       if (sanitized) {
         query = query.or(`name.ilike.%${sanitized}%,description.ilike.%${sanitized}%`);
       }
+    }
+
+    if (contributorProfileId) {
+      query = query.eq('contributor_profile_id', contributorProfileId);
     }
 
     const { data: orgs, error, count } = await query;

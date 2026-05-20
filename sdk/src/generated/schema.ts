@@ -4015,7 +4015,7 @@ export interface operations {
                 verified_by?: string;
                 /** @description Comma-separated app names. Excludes organizations verified by these apps. */
                 not_verified_by?: string;
-                /** @description Filter to organizations created by accounts linked to this contributor app. */
+                /** @description Filter to organizations contributed by this app — the publishing-app axis (`source.contributor`). Resolves against the registered `contributor_profile` slug; only `active` profiles match. Matches the `organizations.contributor_profile_id` snapshot set at write time (migration 090). */
                 created_by_contributor?: string;
                 near?: string;
                 radius_km?: number;
@@ -4144,6 +4144,7 @@ export interface operations {
                 verified?: boolean;
                 verified_by?: string;
                 not_verified_by?: string;
+                /** @description Filter to publishers contributed by this app — the publishing-app axis (`source.contributor`). Resolves against the registered `contributor_profile` slug; only `active` profiles match. */
                 created_by_contributor?: string;
                 limit?: number;
                 offset?: number;

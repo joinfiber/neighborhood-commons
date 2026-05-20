@@ -414,7 +414,7 @@ Filters apply at the URL query level. Compose them freely; all are optional.
 | `tag=slug` | organizations, publishers, events | One or more tag matches. Multiple tags use AND semantics. |
 | `commercial=true|false` | organizations, publishers | Filter by for-profit / non-profit signal. |
 | `place_category=slug` | organizations, publishers, places | Filter by OSM-sourced place categorization (e.g., `cafe`, `live_music_venue`). |
-| `created_by_contributor=slug` | events, broadcasts | Filter to records this app contributed — the `source.contributor` axis. Events resolve the registered `contributor_profile` slug (only `active` profiles match); broadcasts currently match the contributor name. |
+| `created_by_contributor=slug` | events, organizations, publishers, broadcasts | Filter to records this app contributed — the `source.contributor` axis. Events, organizations, and publishers resolve the registered `contributor_profile` slug (only `active` profiles match); broadcasts currently match the contributor name. |
 | `near=lat,lng` | events, places, organizations, broadcasts | Coordinates as `"39.97,-75.13"`. Pair with `radius_km`. |
 | `radius_km=N` | events, places, organizations, broadcasts | Proximity radius. Required when using `near`. |
 | `q=text` | events, places, organizations, lists | Text search across name and description. |

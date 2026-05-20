@@ -73,6 +73,23 @@ const listSchema = z.object({
 export type OrgListParams = z.infer<typeof listSchema>;
 export { listSchema as orgListSchema };
 
+/**
+ * Resolve a contributor-app slug to its registered contributor_profile id —
+ * the publishing-app axis (source.contributor). Only `active` profiles
+ * resolve. Returns null if none matches. Mirrors the events resolver; kept
+ * local because route files don't cross-import (a shared helper in lib/ isn't
+ * warranted for a 6-line lookup).
+ */
+async function resolveContributorProfileId(slug: string): Promise<string | null> {
+  const { data } = await supabaseAdmin
+    .from('contributor_profiles')
+    .select('id')
+    .eq('slug', slug.toLowerCase())
+    .eq('status', 'active')
+    .maybeSingle();
+  return (data as { id: string } | null)?.id ?? null;
+}
+
 // ---------------------------------------------------------------------------
 // GET /api/v1/organizations
 // ---------------------------------------------------------------------------
@@ -96,6 +113,19 @@ router.get('/', async (req, res, next) => {
       res.set('Cache-Control', 'public, max-age=60');
       res.json({ meta: buildMeta(0, limit, offset), organizations: [] });
       return;
+    }
+
+    // created_by_contributor: resolve the publishing-app slug → registered
+    // contributor_profile id (migration 090 added the FK). No active match →
+    // empty result, same shape as the verification short-circuit above.
+    let contributorProfileId: string | null = null;
+    if (params.created_by_contributor) {
+      contributorProfileId = await resolveContributorProfileId(params.created_by_contributor);
+      if (!contributorProfileId) {
+        res.set('Cache-Control', 'public, max-age=60');
+        res.json({ meta: buildMeta(0, limit, offset), organizations: [] });
+        return;
+      }
     }
 
     let query = supabaseAdmin
@@ -141,6 +171,10 @@ router.get('/', async (req, res, next) => {
       if (sanitized) {
         query = query.or(`name.ilike.%${sanitized}%,description.ilike.%${sanitized}%`);
       }
+    }
+
+    if (contributorProfileId) {
+      query = query.eq('contributor_profile_id', contributorProfileId);
     }
 
     // Geo filtering on the org's primary_place — requires JOIN.

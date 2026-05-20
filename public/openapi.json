@@ -3302,7 +3302,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Filter to organizations created by accounts linked to this contributor app."
+            "description": "Filter to organizations contributed by this app — the publishing-app axis (`source.contributor`). Resolves against the registered `contributor_profile` slug; only `active` profiles match. Matches the `organizations.contributor_profile_id` snapshot set at write time (migration 090)."
           },
           {
             "name": "near",
@@ -3608,7 +3608,8 @@
             "in": "query",
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Filter to publishers contributed by this app — the publishing-app axis (`source.contributor`). Resolves against the registered `contributor_profile` slug; only `active` profiles match."
           },
           {
             "name": "limit",

@@ -713,6 +713,56 @@ describe('Publishers API (v2)', () => {
   });
 });
 
+describe('created_by_contributor on organizations & publishers', () => {
+  // Migration 090 brought organizations onto the same contributor axis as
+  // events. Both /organizations and /publishers previously accepted the param
+  // (shared orgListSchema) but silently ignored it; these pin the wired
+  // behavior. The unknown-slug cases are the falsifiable half: the org row is
+  // mocked, so if the resolve-and-short-circuit regressed it would leak through
+  // as length 1.
+  const orgRow = {
+    id: 'org-uuid-1', slug: 'test-bar', name: 'Test Bar', legal_name: null,
+    description: null, url: null, logo_url: null, image_url: null,
+    telephone: null, email: null, same_as: [], keywords: [],
+    opening_hours_specification: null, tags: [], commercial: null,
+    primary_place_id: null, contributor_profile_id: 'cp-1',
+    created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+  };
+
+  it('organizations: unknown contributor slug returns empty', async () => {
+    mockResponses.set('contributor_profiles', { data: null, error: null });
+    mockResponses.set('organizations', { data: [orgRow], error: null, count: 1 });
+
+    const res = await fetch(`${baseUrl}/api/v1/organizations?created_by_contributor=ghost`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.organizations).toHaveLength(0);
+  });
+
+  it('organizations: active contributor slug resolves and the query proceeds', async () => {
+    mockResponses.set('contributor_profiles', { data: { id: 'cp-1' }, error: null });
+    mockResponses.set('organizations', { data: [orgRow], error: null, count: 1 });
+    mockResponses.set('organization_verifications', { data: [], error: null });
+
+    const res = await fetch(`${baseUrl}/api/v1/organizations?created_by_contributor=merrie`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.organizations).toHaveLength(1);
+  });
+
+  it('publishers: unknown contributor slug returns empty', async () => {
+    mockResponses.set('contributor_profiles', { data: null, error: null });
+    mockResponses.set('events', { data: [{ organizer_org_id: 'org-uuid-1' }], error: null });
+    mockResponses.set('broadcasts', { data: [], error: null });
+    mockResponses.set('organizations', { data: [orgRow], error: null, count: 1 });
+
+    const res = await fetch(`${baseUrl}/api/v1/publishers?created_by_contributor=ghost`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.publishers).toHaveLength(0);
+  });
+});
+
 // =============================================================================
 // SERIES — public endpoints
 // =============================================================================
