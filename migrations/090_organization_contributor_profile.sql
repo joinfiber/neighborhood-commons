@@ -14,6 +14,9 @@
 -- Idempotent.
 -- ============================================================================
 
+-- Schema change first, in its own transaction. This is what the code deploy
+-- depends on, so it must commit independently of the (best-effort) backfill
+-- below — a backfill issue can never leave the column uncreated.
 BEGIN;
 
 ALTER TABLE organizations
@@ -27,15 +30,22 @@ CREATE INDEX IF NOT EXISTS idx_organizations_contributor_profile
 COMMENT ON COLUMN organizations.contributor_profile_id IS
   'The app/pipeline that contributed this organization (the publishing-app axis, source.contributor). Set at write time by POST /service/organizations from the calling key''s contributor_profile_id; survives api_key rotation. Mirrors events.contributor_profile_id (migration 086). NULL for orgs created without a registered contributor profile.';
 
--- Backfill: resolve existing orgs through owner_account_id -> the tenant key's
--- contributor_profile_id. Only backfill tenants that map to exactly ONE distinct
--- profile, so an ambiguous tenant (keys bound to different profiles) is left
--- NULL rather than mis-attributed. Only touches currently-NULL rows, so re-runs
--- are no-ops.
+COMMIT;
+
+-- Backfill (best-effort): resolve existing orgs through owner_account_id -> the
+-- tenant key's contributor_profile_id. Only backfill tenants that map to exactly
+-- ONE distinct profile, so an ambiguous tenant (keys bound to different profiles)
+-- is left NULL rather than mis-attributed. Only touches currently-NULL rows, so
+-- re-runs are no-ops.
+BEGIN;
+
 UPDATE organizations o
 SET contributor_profile_id = sub.cpid
 FROM (
-  SELECT tenant_account_id, MIN(contributor_profile_id) AS cpid
+  -- Postgres has no MIN(uuid) aggregate. The HAVING clause guarantees a single
+  -- distinct profile per group, so taking MIN over the text form and casting
+  -- back to uuid deterministically yields that one value.
+  SELECT tenant_account_id, MIN(contributor_profile_id::text)::uuid AS cpid
   FROM api_keys
   WHERE tenant_account_id IS NOT NULL
     AND contributor_profile_id IS NOT NULL
