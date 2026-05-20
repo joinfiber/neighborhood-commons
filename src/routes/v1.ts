@@ -54,7 +54,12 @@ const listSchema = z.object({
   collapse_series: z.enum(['true', 'false']).optional(),
   series_id: z.string().uuid().optional(),
   recurring: z.enum(['true', 'false']).optional(),
+  // `contributor` is the organizer-org axis (resolves against organizations.slug);
+  // `created_by_contributor` is the publishing-app axis (source.contributor,
+  // resolves against the registered contributor_profile slug). They are different
+  // roles under the four-role frame — see the resolvers below.
   contributor: z.string().max(200).optional(),
+  created_by_contributor: z.string().max(200).optional(),
   tmdb_id: z.string().max(50).optional(),
   // first_party=true   → only events posted by the verified business itself
   // first_party=false  → only events aggregated from public sources (scrapers, feeds)
@@ -89,6 +94,25 @@ async function resolveContributorOrgIds(slug: string): Promise<string[] | null> 
 }
 
 /**
+ * Resolve a contributor-app slug to its registered contributor_profile id.
+ * This is the "publishing app" axis (source.contributor) — the app or pipeline
+ * that routed the event into the Commons — and is distinct from
+ * resolveContributorOrgIds above, which is the organizer-org axis (who ran the
+ * event). Only `active` profiles resolve; pending/suspended are not publicly
+ * filterable. Filtering is on the events.contributor_profile_id snapshot FK,
+ * so it survives api_key rotation. Returns null if no active profile matches.
+ */
+async function resolveContributorProfileId(slug: string): Promise<string | null> {
+  const { data } = await supabaseAdmin
+    .from('contributor_profiles')
+    .select('id')
+    .eq('slug', slug.toLowerCase())
+    .eq('status', 'active')
+    .maybeSingle();
+  return (data as { id: string } | null)?.id ?? null;
+}
+
+/**
  * Build and execute an event query with all standard filters applied.
  * Shared across JSON, iCal, and RSS endpoints.
  */
@@ -114,6 +138,17 @@ async function queryFilteredEvents(params: ListParams, opts?: {
     contributorOrgIds = await resolveContributorOrgIds(params.contributor);
     if (!contributorOrgIds) {
       // No matching organization — return empty result
+      return { events: [], count: 0 };
+    }
+  }
+
+  // created_by_contributor filter: resolve slug → registered contributor_profile
+  // id (the publishing-app axis). No active match → empty result, mirroring the
+  // organizer path above.
+  let contributorProfileId: string | null = null;
+  if (params.created_by_contributor) {
+    contributorProfileId = await resolveContributorProfileId(params.created_by_contributor);
+    if (!contributorProfileId) {
       return { events: [], count: 0 };
     }
   }
@@ -151,6 +186,12 @@ async function queryFilteredEvents(params: ListParams, opts?: {
     } else {
       query = query.in('organizer_org_id', contributorOrgIds);
     }
+  }
+
+  // created_by_contributor filter (publishing-app axis): events carry a
+  // contributor_profile_id snapshot, so this is a direct FK match.
+  if (contributorProfileId) {
+    query = query.eq('contributor_profile_id', contributorProfileId);
   }
 
   // Series filter
@@ -701,6 +742,7 @@ export async function rssHandler(req: import('express').Request, res: import('ex
     // Build the self-referencing URL with query params preserved
     const selfQuery = new URLSearchParams();
     if (params.contributor) selfQuery.set('contributor', params.contributor);
+    if (params.created_by_contributor) selfQuery.set('created_by_contributor', params.created_by_contributor);
     if (params.category) selfQuery.set('category', params.category);
     if (params.tag) {
       const tags = Array.isArray(params.tag) ? params.tag : [params.tag];

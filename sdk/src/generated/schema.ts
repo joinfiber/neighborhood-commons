@@ -2269,6 +2269,8 @@ export interface operations {
                 recurring?: "true" | "false";
                 /** @description Filter by organizer organization slug. Resolves against `organizations.slug` → `events.organizer_org_id`. */
                 contributor?: string;
+                /** @description Filter to events contributed by this app — the publishing-app axis (`source.contributor`). Resolves against the registered `contributor_profile` slug; only `active` profiles match. Distinct from `contributor`, which filters by the organizer organization. */
+                created_by_contributor?: string;
                 /** @description Filter to events whose organizer is for-profit (`commercial=true`) vs. non-commercial (`commercial=false`). Joins through `organizations.commercial`. */
                 commercial?: "true" | "false";
                 /** @description Filter to events at places with the given OSM-sourced category (e.g., `cafe`, `live_music_venue`). Joins through `places.place_categories`. */
@@ -2403,8 +2405,10 @@ export interface operations {
     getIcalFeed: {
         parameters: {
             query?: {
-                /** @description Filter by contributor account slug */
+                /** @description Filter by organizer organization slug. Resolves against `organizations.slug` → `events.organizer_org_id`. */
                 contributor?: string;
+                /** @description Filter to events contributed by this app — the publishing-app axis (`source.contributor`). Resolves against the registered `contributor_profile` slug; only `active` profiles match. Distinct from `contributor`, which filters by the organizer organization. */
+                created_by_contributor?: string;
                 /** @description Filter by category slug */
                 category?: string;
                 /** @description Filter by tag(s) */
@@ -2442,8 +2446,10 @@ export interface operations {
     getRssFeed: {
         parameters: {
             query?: {
-                /** @description Filter by contributor account slug */
+                /** @description Filter by organizer organization slug. Resolves against `organizations.slug` → `events.organizer_org_id`. */
                 contributor?: string;
+                /** @description Filter to events contributed by this app — the publishing-app axis (`source.contributor`). Resolves against the registered `contributor_profile` slug; only `active` profiles match. Distinct from `contributor`, which filters by the organizer organization. */
+                created_by_contributor?: string;
                 /** @description Filter by category slug */
                 category?: string;
                 /** @description Filter by tag(s) */

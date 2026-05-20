@@ -14,6 +14,13 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-05-20 — events `created_by_contributor` filter
+
+The publishing-app axis (`source.contributor`) is now filterable on events, matching the pattern already on broadcasts. Fixes a standing gap: `llms.txt` documented this filter for events but it was never implemented. Lets a consumer slice "everything app X contributed" — the reverse of the per-event `source.contributor` attribution.
+
+- **`GET /api/v1/events?created_by_contributor={slug}`** — filters to events whose contributing app matches the given registered `contributor_profile` slug (only `active` profiles resolve; unknown/inactive → empty result). Also accepted on `/events.ics` and `/events.rss`. Filters on the `events.contributor_profile_id` snapshot, so it survives api_key rotation.
+- **Clarification (no behavior change):** the existing `?contributor=` param filters by *organizer organization* slug, not the contributing app. Its description on `/events.ics` and `/events.rss` was corrected (it had read "contributor account slug"); the `/events` description was already accurate. The two are distinct under the four-role frame — `contributor` = who ran it (`organizer`), `created_by_contributor` = who published it (`source.contributor`).
+
 ## 2026-05-19 — series cover-image endpoint
 
 Follow-up to the series-as-first-class change earlier today. Closes the gap surfaced during Merrie integration prep: until now there was no way to upload a series cover through the Commons pipeline. Without this endpoint, consumers would route covers through their own R2 buckets, producing URL patterns that other consumer apps (Fiber) would have to branch on.

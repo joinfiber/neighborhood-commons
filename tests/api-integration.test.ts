@@ -318,6 +318,34 @@ describe('GET /api/v1/events', () => {
     const body = await res.json();
     expect(body.error.code).toBe('VALIDATION_ERROR');
   });
+
+  it('created_by_contributor resolves an active profile slug and lets the events query through', async () => {
+    // Publishing-app axis (source.contributor). The slug resolves against an
+    // active contributor_profile; on a hit, the events query proceeds.
+    mockResponses.set('contributor_profiles', {
+      data: { id: 'c0ffee00-0000-4000-8000-000000000001' },
+      error: null,
+    });
+    mockResponses.set('events', { data: [makeDbRow()], error: null, count: 1 });
+
+    const res = await fetch(`${baseUrl}/api/v1/events?created_by_contributor=merrie`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.events).toHaveLength(1);
+  });
+
+  it('created_by_contributor returns empty when the slug matches no active profile', async () => {
+    // The falsifiable half: no active profile → the handler short-circuits to an
+    // empty result and never queries events. If that short-circuit regressed,
+    // the events row below would leak through and this would read length 1.
+    mockResponses.set('contributor_profiles', { data: null, error: null });
+    mockResponses.set('events', { data: [makeDbRow()], error: null, count: 1 });
+
+    const res = await fetch(`${baseUrl}/api/v1/events?created_by_contributor=ghost`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.events).toHaveLength(0);
+  });
 });
 
 describe('GET /api/v1/events/:id', () => {
