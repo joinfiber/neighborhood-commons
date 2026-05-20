@@ -362,6 +362,8 @@ Don't conflate. The series carries identity; the events carry instance-time fact
 
 **Two PATCH endpoints, different semantics.** `PATCH /service/series/{id}` edits the series identity (name, slug, description, cover) — fires `series.updated`, touches no events. `PATCH /service/events/series/{seriesId}` edits the per-instance template — propagates to future instance rows. To rename both the series and the future instances, call both.
 
+**Cover images** flow through `POST /service/series/{seriesId}/cover` (base64 JSON, magic-byte validated, Sharp re-encoded, stored on Commons' R2). Use this rather than uploading covers through a per-app pipeline — every consumer renders the same URL pattern, so cross-product image rendering stays consistent. The endpoint persists the URL to `cover_image_url` and fires `series.updated` in one shot.
+
 A consumer-app design principle worth restating here: **publishers declare; readers classify.** The Commons holds publisher declarations like `events.rsvp` (`recommended` / `required`) — these travel with the data. It does not hold reader-side taxonomies like `attendance_model: drop_in | rsvp_per_instance`, which classify events into UX buckets. Apps derive their own classifications from the publisher declarations on each instance.
 
 ---

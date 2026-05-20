@@ -14,6 +14,12 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-05-19 — series cover-image endpoint
+
+Follow-up to the series-as-first-class change earlier today. Closes the gap surfaced during Merrie integration prep: until now there was no way to upload a series cover through the Commons pipeline. Without this endpoint, consumers would route covers through their own R2 buckets, producing URL patterns that other consumer apps (Fiber) would have to branch on.
+
+- **`POST /service/series/{seriesId}/cover`** — base64 JSON body `{ image }`. Pipes through the existing magic-byte + Sharp + Commons R2 pipeline (same shape as `POST /service/organizations/{id}/logo`). Persists the URL to `event_series.cover_image_url` and fires `series.updated` with `changed=['cover_image_url']` in one shot. Scoped via `api_key_organization_links` against the series's `organizer_org_id`. Max 12MB; JPEG/PNG/WebP only.
+
 ## 2026-05-19 — series as first-class primitive
 
 Completes the `event_series` primitive: recurrence machinery has existed; identity is the additive surface for consumers that want to address a series as a thing (subscribable entity in Merrie, series page in Fiber, etc.). Past instances' titles are never rewritten on rename — historical accuracy. See `docs/series-as-first-class.md` for design rationale and the Commons↔Merrie agreement.

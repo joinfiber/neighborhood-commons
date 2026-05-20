@@ -1968,6 +1968,89 @@
         }
       }
     },
+    "/service/series/{seriesId}/cover": {
+      "post": {
+        "summary": "Upload series cover image (service)",
+        "description": "Upload a cover image for a series. Image is magic-byte validated and re-encoded through Sharp (JPEG/PNG/WebP only, max 12MB), then stored on the Commons R2 bucket — the same bucket every other Commons-hosted image uses. Don't process series covers through a per-app pipeline; cross-product coherence depends on every consumer rendering the same URL pattern.\n\nPersists the resulting URL to `event_series.cover_image_url` and fires the `series.updated` webhook with `changed=['cover_image_url']`. Scoped via `api_key_organization_links` against `event_series.organizer_org_id`.",
+        "operationId": "serviceUploadSeriesCover",
+        "security": [
+          {
+            "serviceApiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "seriesId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "image"
+                ],
+                "properties": {
+                  "image": {
+                    "type": "string",
+                    "description": "Base64-encoded image bytes. Optional `data:image/...;base64,` prefix is stripped. Supported formats: JPEG, PNG, WebP. Max 12MB raw."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cover uploaded; URL persisted on the series row",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "series_id",
+                    "cover_image_url"
+                  ],
+                  "properties": {
+                    "series_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "cover_image_url": {
+                      "type": "string",
+                      "format": "uri"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "description": "NOT_LINKED — key not linked to this series's organizer organization."
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "description": "PAYLOAD_TOO_LARGE — image exceeds 12MB."
+          }
+        }
+      }
+    },
     "/service/events/{id}/image": {
       "post": {
         "summary": "Upload event image (service)",

@@ -410,6 +410,28 @@ export interface paths {
         patch: operations["serviceUpdateSeriesIdentity"];
         trace?: never;
     };
+    "/service/series/{seriesId}/cover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload series cover image (service)
+         * @description Upload a cover image for a series. Image is magic-byte validated and re-encoded through Sharp (JPEG/PNG/WebP only, max 12MB), then stored on the Commons R2 bucket — the same bucket every other Commons-hosted image uses. Don't process series covers through a per-app pipeline; cross-product coherence depends on every consumer rendering the same URL pattern.
+         *
+         *     Persists the resulting URL to `event_series.cover_image_url` and fires the `series.updated` webhook with `changed=['cover_image_url']`. Scoped via `api_key_organization_links` against `event_series.organizer_org_id`.
+         */
+        post: operations["serviceUploadSeriesCover"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/service/events/{id}/image": {
         parameters: {
             query?: never;
@@ -3184,6 +3206,57 @@ export interface operations {
             404: components["responses"]["NotFound"];
             /** @description Slug already in use. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    serviceUploadSeriesCover: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                seriesId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Base64-encoded image bytes. Optional `data:image/...;base64,` prefix is stripped. Supported formats: JPEG, PNG, WebP. Max 12MB raw. */
+                    image: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Cover uploaded; URL persisted on the series row */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        series_id: string;
+                        /** Format: uri */
+                        cover_image_url: string;
+                    };
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            /** @description NOT_LINKED — key not linked to this series's organizer organization. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description PAYLOAD_TOO_LARGE — image exceeds 12MB. */
+            413: {
                 headers: {
                     [name: string]: unknown;
                 };

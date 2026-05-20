@@ -10,7 +10,7 @@
  * past-vs-future instance semantics.
  */
 
-import { Router } from 'express';
+import { Router, json as expressJson } from 'express';
 import { z } from 'zod';
 import { supabaseAdmin } from '../../lib/supabase.js';
 import { createError } from '../../middleware/error-handler.js';
@@ -19,15 +19,23 @@ import { validateTags } from '../../lib/tags.js';
 import { dispatchEventWebhookById } from '../../lib/webhook-delivery.js';
 import { serviceLimiter } from '../../middleware/rate-limit.js';
 import { fromTimestamptz } from '../../lib/event-operations.js';
+import { processAndUploadImage } from '../../lib/image-processing.js';
 import {
   deleteSeriesEvents,
   updateSeriesFutureInstances,
   updateSeriesIdentity,
   type SeriesIdentityUpdate,
 } from '../../lib/event-series.js';
+import {
+  dispatchSeriesUpdatedWebhook,
+  type SeriesProfile,
+} from '../../lib/webhook-delivery.js';
 import { assertLinkedEvent } from './helpers.js';
 import { assertLinkedOrganization } from './helpers-v1.js';
 import { updateEventSchema } from './events.js';
+
+/** Body limit override for image uploads — matches org-logo / event-image pattern (12MB). */
+const imageBodyLimit = expressJson({ limit: '12mb' });
 
 /**
  * Series identity edit schema. Distinct from updateEventSchema (used by the
@@ -209,6 +217,70 @@ router.patch('/series/:seriesId', serviceLimiter, async (req, res, next) => {
     res.json({
       series_id: result.seriesId,
       changed: result.changed,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /service/series/:seriesId/cover — Upload series cover image.
+ *
+ * Matches the org-logo pattern (base64 JSON). Body: { image: <base64> }.
+ * Pipeline: magic-byte check → Sharp re-encode → Commons R2 → persist URL on
+ * event_series.cover_image_url. Returns the updated series.
+ *
+ * R2 location: covers live on Commons' R2 (same bucket as event images and
+ * org logos) so every consumer renders the same URL pattern. Don't process
+ * series covers through a per-app pipeline — that breaks the cross-product
+ * coherence the substrate exists to provide.
+ *
+ * Auth: scoped via api_key_organization_links against series.organizer_org_id.
+ * Fires series.updated webhook with changed=['cover_image_url'].
+ */
+const coverBodySchema = z.object({ image: z.string().min(1) });
+
+router.post('/series/:seriesId/cover', imageBodyLimit, serviceLimiter, async (req, res, next) => {
+  try {
+    validateUuidParam(req.params.seriesId, 'series ID');
+    const body = validateRequest(coverBodySchema, req.body);
+
+    const { data: series } = await supabaseAdmin
+      .from('event_series')
+      .select('id, slug, name, description, organizer_org_id')
+      .eq('id', req.params.seriesId)
+      .maybeSingle();
+    if (!series) throw createError('Series not found', 404, 'NOT_FOUND');
+    if (!req.apiKeyInfo?.isAdmin) {
+      if (!series.organizer_org_id) throw createError('Series has no organizer; admin access required', 403, 'FORBIDDEN');
+      await assertLinkedOrganization(req, series.organizer_org_id as string);
+    }
+
+    const coverUrl = await processAndUploadImage(req.params.seriesId, body.image);
+
+    const { error } = await supabaseAdmin
+      .from('event_series')
+      .update({ cover_image_url: coverUrl })
+      .eq('id', req.params.seriesId);
+    if (error) {
+      console.error('[SERVICE:SERIES] Cover update error:', error.message);
+      throw createError('Failed to update cover image URL', 500, 'SERVER_ERROR');
+    }
+
+    const profile: SeriesProfile = {
+      id: series.id as string,
+      slug: series.slug as string,
+      name: series.name as string,
+      description: (series.description ?? null) as string | null,
+      cover_image_url: coverUrl,
+      organizer_org_id: (series.organizer_org_id ?? null) as string | null,
+    };
+    void dispatchSeriesUpdatedWebhook(profile, ['cover_image_url']);
+
+    console.log(`[SERVICE] Series ${req.params.seriesId} cover uploaded`);
+    res.json({
+      series_id: req.params.seriesId,
+      cover_image_url: coverUrl,
     });
   } catch (err) {
     next(err);
