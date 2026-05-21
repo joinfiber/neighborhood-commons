@@ -14,7 +14,7 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
-## 2026-05-14 — caller-set `proxied` provenance (close the Spec↔four-roles gap)
+## 2026-05-21 — caller-set `proxied` provenance (close the Spec↔four-roles gap)
 
 `docs/four-roles.md` Path 2 ("Pipeline-proxies") defines `proxied` as the honest provenance for a tool that scrapes a public page and publishes on behalf of the scraped entity. But the Service API write enum only admitted `['self_asserted','witnessed']` and the field doc said `proxied` was "not caller-settable — reserved for internal pipeline code paths." That left external scrape-and-publish pipelines (Studio's porchfest path is the first) with no way to declare the one method that honestly describes them — they fell back to legacy `'api'`, surviving only on the migration-085 mapping grace window. Doctrine said one thing, the Spec enforced another. This closes the gap, mirroring the `witnessed` authority model.
 
