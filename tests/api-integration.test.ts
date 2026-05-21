@@ -176,6 +176,18 @@ describe('health and discovery', () => {
     expect(body.ical_url).toMatch(/\/api\/v1\/events\.ics$/);
     expect(body.rss_url).toMatch(/\/api\/v1\/events\.rss$/);
   });
+
+  it('GET / injects the spec version from openapi.json (no hardcoded drift)', async () => {
+    const res = await fetch(`${baseUrl}/`);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    // Regression guard: the homepage version is substituted from
+    // openapi.json info.version at boot. The literal placeholder must never
+    // reach the client, and a real semver must render. This replaced a
+    // hardcoded value that silently drifted (stuck at 3.0.0 through 3.1.x).
+    expect(html).not.toContain('{{specVersion}}');
+    expect(html).toMatch(/Specification \d+\.\d+\.\d+/);
+  });
 });
 
 // =============================================================================
