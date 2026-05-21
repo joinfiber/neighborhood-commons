@@ -6,10 +6,11 @@
  * Recurrence is optional.
  *
  * Required: `organizerOrganizationId` (organizer authority anchor for the
- * constrained-publishing model). source_method is optionally caller-set
- * to 'self_asserted' (default) or 'witnessed' (collective-evidence;
- * requires witness_authority on the key). 'proxied' is not caller-settable —
- * it's reserved for internal pipeline code paths.
+ * constrained-publishing model). source_method is optionally caller-set to
+ * 'self_asserted' (default), 'witnessed' (collective-evidence; requires
+ * witness_authority on the key), or 'proxied' (scrape-and-publish; requires
+ * proxy_authority on the key + a source_feed_url). Route-level guards enforce
+ * the per-method authority; the schema just admits the values.
  *
  * Post-085: source.publisher is gone (the role is filled by organizer.name).
  * No source_publisher column exists.

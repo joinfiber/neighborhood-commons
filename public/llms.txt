@@ -474,7 +474,7 @@ The Commons accepts writes from publishers with authority over what they publish
 
 1. **Entity-runs-it.** A verified organization publishing about itself. The service key writing the record must be linked to that organization via `api_key_organization_links`. This is how a venue posts its own shows, a chess club posts its own meetings, a salon manages its own profile.
 
-2. **Pipeline-proxies-an-authoritative-source.** An ingestion pipeline (typically Studio) writes records lifted from an authoritative external source — a venue's website calendar, a partner's structured feed, an imported spreadsheet. The pipeline is a faithful proxy for a known source; `source.contributor` honestly attributes the original source.
+2. **Pipeline-proxies-an-authoritative-source.** An ingestion pipeline (typically Studio) writes records lifted from an authoritative external source — a venue's website calendar, a partner's structured feed, an imported spreadsheet. The pipeline is a faithful proxy for a known source; `source.contributor` honestly attributes the original source. A key with `proxy_authority=true` sets `source_method='proxied'` and supplies the public `source_feed_url` it extracted from; the organizer stays the scraped real-world entity. Like the witnessed path, this bypasses the `api_key_organization_links` check (the pipeline doesn't own the venue).
 
 3. **Witnessed-with-evidence.** A service key with `witness_authority=true` writes records on behalf of a collective identity, with evidence attached. The Fiber Community OCR contribution path is the canonical example: a Fiber user photographs a public flyer; the event enters the Commons attributed to "Fiber Community" with the photo as documentary evidence. Individual users are never identified; the publisher is the collective.
 
@@ -532,6 +532,7 @@ After activation, returning logins go through `/developers/login` — magic link
 - Writes are scoped: an active service key can only create/update/delete data for organizations linked to it via `api_key_organization_links`. Cross-organization writes return `403 NOT_LINKED`.
 - Admin keys (`is_admin=true`, currently used only by Studio) bypass scoping.
 - Witness-authority keys (`witness_authority=true`) can publish events with `source_method='witnessed'` attributed to their app-collective organization. Granted at activation for specific use cases (e.g., Fiber's OCR contribution).
+- Proxy-authority keys (`proxy_authority=true`) can publish events with `source_method='proxied'`, attributed to the scraped real-world organizer and carrying the public `source_feed_url` the data was lifted from (required for `proxied`). Bypasses the org-link check like the witnessed path. Granted at activation for trusted scrape-and-publish pipelines (e.g., Studio's porchfest importer). See [`docs/four-roles.md`](docs/four-roles.md) Path 2.
 
 ### 4.4 Places — register a venue
 
@@ -589,7 +590,7 @@ Image uploads (logo, hero image) are JSON-base64: `POST /v1/service/organization
 
 ### 4.6 Events — using the organizer model
 
-Event creation requires `organizerOrganizationId`. The calling service key must be linked to that organization, OR have `witness_authority=true` with `source_method='witnessed'`.
+Event creation requires `organizerOrganizationId`. The calling service key must be linked to that organization, OR have `witness_authority=true` with `source_method='witnessed'`, OR have `proxy_authority=true` with `source_method='proxied'` (which also requires `source_feed_url`).
 
 ```bash
 curl -X POST "https://neighborhood-commons.org/api/v1/service/events" \
