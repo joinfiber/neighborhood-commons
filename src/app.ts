@@ -315,14 +315,27 @@ export function createApp(): Express {
   }
 
   // Load the homepage template once at boot. The template lives in
-  // public/index.html and uses {{baseUrl}} / {{statsLine}} placeholders;
-  // both are substituted per request.
+  // public/index.html and uses {{baseUrl}} / {{statsLine}} / {{specVersion}}
+  // placeholders; all are substituted per request.
   const indexTemplatePath = path.resolve(__dirname, '../public/index.html');
   let indexTemplate = '';
   try {
     indexTemplate = readFileSync(indexTemplatePath, 'utf-8');
   } catch (err) {
     console.warn('[LANDING] Failed to read public/index.html:', err);
+  }
+
+  // Single source of truth for the displayed spec version: read info.version
+  // from openapi.json at boot rather than hardcoding it in the HTML. The
+  // hardcoded value silently drifted once (sat at 3.0.0 through the entire
+  // 3.1.x line). openapi.json only changes on deploy and the server restarts
+  // on deploy, so a boot-time read always matches the served spec.
+  let specVersion = '';
+  try {
+    const openapiRaw = readFileSync(path.resolve(__dirname, '../public/openapi.json'), 'utf-8');
+    specVersion = (JSON.parse(openapiRaw)?.info?.version as string) ?? '';
+  } catch (err) {
+    console.warn('[LANDING] Failed to read spec version from openapi.json:', err);
   }
 
   app.get('/', async (_req, res, next) => {
@@ -358,7 +371,8 @@ export function createApp(): Express {
 
       const html = indexTemplate
         .replace(/\{\{baseUrl\}\}/g, baseUrl)
-        .replace('{{statsLine}}', statsLine);
+        .replace('{{statsLine}}', statsLine)
+        .replace(/\{\{specVersion\}\}/g, specVersion);
 
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.setHeader('Cache-Control', 'public, max-age=300');

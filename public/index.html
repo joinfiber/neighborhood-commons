@@ -639,7 +639,7 @@
     <!-- Status strip — document metadata -->
     <div class="nc-status-strip">
       <div class="nc-status-inner">
-        <span><strong>Specification 3.2.0</strong></span>
+        <span><strong>Specification {{specVersion}}</strong></span>
         <span><span class="nc-status-dot"></span>Stable</span>
         <span>Additive-only stability</span>
         <span>CC&nbsp;BY&nbsp;4.0</span>
@@ -1518,7 +1518,7 @@ $ openapi-generator-cli generate -i {{baseUrl}}/openapi.json -g rust    -o ./cli
         <p>The complete <code>ErrorCode</code> enum is in <a href="/openapi.json">openapi.json</a>. Generated SDK clients receive it as a discriminated union, so error handling can <code>switch</code> on the code with full type-checking.</p>
 
         <h3 id="stability">Stability</h3>
-        <p>The 3.2.0 spec is stable. Future minor versions add types, fields, and endpoints additively without breaking existing consumers. Removals or renames require a 4.0.0 release with strong justification — measured in years, not months. The explicit taxonomy of what counts as breaking vs. additive lives in <a href="https://github.com/joinfiber/neighborhood-commons/blob/master/docs/stability-promise.md" target="_blank" rel="noopener">docs/stability-promise.md</a>. Watch the <a href="https://github.com/joinfiber/neighborhood-commons/blob/master/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a> for every contract-affecting change.</p>
+        <p>The {{specVersion}} spec is stable. Future minor versions add types, fields, and endpoints additively without breaking existing consumers. Removals or renames require a 4.0.0 release with strong justification — measured in years, not months. The explicit taxonomy of what counts as breaking vs. additive lives in <a href="https://github.com/joinfiber/neighborhood-commons/blob/master/docs/stability-promise.md" target="_blank" rel="noopener">docs/stability-promise.md</a>. Watch the <a href="https://github.com/joinfiber/neighborhood-commons/blob/master/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a> for every contract-affecting change.</p>
 
         <p>If something in this Guide contradicts <a href="/openapi.json">openapi.json</a> on a matter of fact, trust the spec and <a href="https://github.com/joinfiber/neighborhood-commons/issues" target="_blank" rel="noopener">file an issue</a>. The Spec wins. The Guide explains. The Log dates.</p>
 
