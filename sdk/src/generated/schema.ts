@@ -1693,7 +1693,7 @@ export interface components {
         /**
          * @description Input schema for the Service API. Uses Neighborhood API friendly-shape field names (name, start, location, url, cost) — symmetric with the read schema. Recurrence is optional; omit for one-off events.
          *
-         *     `organizerOrganizationId` is required (the constrained-publishing authority anchor). The calling service key must be linked to that organization via `api_key_organization_links`, OR set `source_method='witnessed'` from a key with `witness_authority=true` (the collective-evidence path).
+         *     `organizerOrganizationId` is required (the constrained-publishing authority anchor). Authority is satisfied by one of: the calling service key linked to that organization via `api_key_organization_links` (`source_method='self_asserted'`, default); `source_method='proxied'` from a key with `proxy_authority=true` plus a `source_feed_url` (pipeline-proxies a public page; org-link bypassed); or `source_method='witnessed'` from a key with `witness_authority=true` (collective-evidence path).
          */
         ServiceEventInput: {
             /**
@@ -1702,11 +1702,16 @@ export interface components {
              */
             organizerOrganizationId: string;
             /**
-             * @description Caller-set provenance method (docs/four-roles.md, docs/provenance.md). `self_asserted` (default): the organizer asserted this event; requires `api_key_organization_links` linkage. `witnessed`: collective-evidence path; requires `api_keys.witness_authority=true` and is attributed to a collective publisher organization. `proxied` is not caller-settable — it's reserved for internal pipeline code paths.
+             * @description Caller-set provenance method (docs/four-roles.md, docs/provenance.md). `self_asserted` (default): the organizer asserted this event; requires `api_key_organization_links` linkage. `proxied`: pipeline-proxies path — the contributor extracted this from a public page; requires `api_keys.proxy_authority=true` (or an admin key) and a `source_feed_url`; the organizer stays the scraped real-world entity and the org-link check is bypassed. `witnessed`: collective-evidence path; requires `api_keys.witness_authority=true` and is attributed to a collective publisher organization.
              * @default self_asserted
              * @enum {string}
              */
-            source_method: "self_asserted" | "witnessed";
+            source_method: "self_asserted" | "proxied" | "witnessed";
+            /**
+             * Format: uri
+             * @description The public URL the contributor extracted this event from. Required when `source_method='proxied'`; ignored otherwise. Preserves the data lineage (docs/four-roles.md Path 2).
+             */
+            source_feed_url?: string;
             name: string;
             /**
              * Format: date-time
