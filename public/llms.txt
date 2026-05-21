@@ -333,6 +333,39 @@ The slug is the stable identifier — survives api_key rotation. Profiles are re
 
 When an event is published via a registered contributor's key, the event's `source.contributor` is enriched with `{slug, logo_url, description, profile_url}` in addition to the existing `{name, url}`. Pre-3.1 events fall back to the legacy `{name, url}` snapshot fields with the new fields as null. The expansion is additive — consumers that read only `name`/`url` continue to work unchanged.
 
+### 2.7 Series
+
+A recurring activity with its own public identity, separate from any individual instance. Used by consumer apps that want to address the series as a thing — a subscribable Quizzo show, a dedicated series page, a "weekly trivia" entity that doesn't collapse to one instance. The recurrence machinery has existed since v1; v1.x adds identity so the series is *addressable* across the ecosystem rather than reconstructed from instance templates.
+
+```json
+{
+  "id": "...",
+  "slug": "fishtown-quizzo",
+  "name": "Fishtown Quizzo",
+  "description": "Weekly drop-in trivia at Frankford Hall.",
+  "cover_image_url": "https://r2.example/fishtown-quizzo-cover.jpg",
+  "organizer": { "@type": "Organization", "id": "...", "name": "Quizzo Philly" },
+  "recurrence": { "rrule": "FREQ=WEEKLY;BYDAY=TU" },
+  "next_instance": { "@type": "Event", "id": "...", "name": "Fishtown Quizzo", "start": "..." },
+  "created_at": "...",
+  "updated_at": "..."
+}
+```
+
+Two reads:
+- `GET /v1/series/:idOrSlug` for the series itself.
+- `GET /v1/events?series_id={id}&from=...` for the materialized instances under it.
+
+Don't conflate. The series carries identity; the events carry instance-time facts. They share `series_id` but model different things.
+
+**Past instances are never renamed.** Renaming a series is forward-only — `event_series.name` becomes the new identity, but past `Event.name` values stay as they were when each instance happened. Historical accuracy of "what was happening that day" matters more than uniform branding across time.
+
+**Two PATCH endpoints, different semantics.** `PATCH /service/series/{id}` edits the series identity (name, slug, description, cover) — fires `series.updated`, touches no events. `PATCH /service/events/series/{seriesId}` edits the per-instance template — propagates to future instance rows. To rename both the series and the future instances, call both.
+
+**Cover images** flow through `POST /service/series/{seriesId}/cover` (base64 JSON, magic-byte validated, Sharp re-encoded, stored on Commons' R2). Use this rather than uploading covers through a per-app pipeline — every consumer renders the same URL pattern, so cross-product image rendering stays consistent. The endpoint persists the URL to `cover_image_url` and fires `series.updated` in one shot.
+
+A consumer-app design principle worth restating here: **publishers declare; readers classify.** The Commons holds publisher declarations like `events.rsvp` (`recommended` / `required`) — these travel with the data. It does not hold reader-side taxonomies like `attendance_model: drop_in | rsvp_per_instance`, which classify events into UX buckets. Apps derive their own classifications from the publisher declarations on each instance.
+
 ---
 
 ## 3. Reading data
@@ -360,6 +393,8 @@ All read endpoints are unauthenticated. Optional `X-API-Key` header bumps rate l
 | `GET` | `/v1/lists/:idOrSlug` | Single list with hydrated items. |
 | `GET` | `/v1/contributors` | Paginated list of active contributor profiles (the public-facing identity of each app routing data into the Commons). |
 | `GET` | `/v1/contributors/:idOrSlug` | Single contributor profile. The "via X" splash card data, fetched by slug. |
+| `GET` | `/v1/series` | Paginated series list (recurring activity with its own identity). Filter by `organizer_org_id`. |
+| `GET` | `/v1/series/:idOrSlug` | Single series with organizer, recurrence, and next upcoming instance. |
 | `GET` | `/v1/meta` | Spec metadata, regions, categories, stats. |
 | `GET` | `/v1/meta/regions` | Active regions. |
 | `GET` | `/v1/meta/categories` | Event category vocabulary. |
@@ -379,7 +414,7 @@ Filters apply at the URL query level. Compose them freely; all are optional.
 | `tag=slug` | organizations, publishers, events | One or more tag matches. Multiple tags use AND semantics. |
 | `commercial=true|false` | organizations, publishers | Filter by for-profit / non-profit signal. |
 | `place_category=slug` | organizations, publishers, places | Filter by OSM-sourced place categorization (e.g., `cafe`, `live_music_venue`). |
-| `created_by_contributor=AppName` | broadcasts, events | Filters to records whose `source.contributor` matches. |
+| `created_by_contributor=slug` | events, organizations, publishers, broadcasts | Filter to records this app contributed — the `source.contributor` axis. Events, organizations, and publishers resolve the registered `contributor_profile` slug (only `active` profiles match); broadcasts currently match the contributor name. |
 | `near=lat,lng` | events, places, organizations, broadcasts | Coordinates as `"39.97,-75.13"`. Pair with `radius_km`. |
 | `radius_km=N` | events, places, organizations, broadcasts | Proximity radius. Required when using `near`. |
 | `q=text` | events, places, organizations, lists | Text search across name and description. |
@@ -815,7 +850,9 @@ curl -X DELETE "https://neighborhood-commons.org/api/v1/webhooks/SUBSCRIPTION_ID
 | `event.created` | New event row published. |
 | `event.updated` | Event mutation (PATCH). |
 | `event.deleted` | Event hard-deleted. |
-| `event.series_created` | Recurring series instantiated. |
+| `event.series_created` | Recurring series instantiated. Payload carries the new series identity (`series.id/slug/name/description/cover_image_url`) so subscribers can hydrate without a follow-up fetch. |
+| `series.updated` | Series identity changed (name, slug, description, or cover image). Payload includes the new `series` profile plus a `changed` array listing the fields that changed. Use this to invalidate cached series pages. |
+| `series.deleted` | Series removed. Complements the per-instance `event.deleted` events that also fire. Payload carries `series.{id,slug,name}` at time of deletion plus `instance_ids[]`. |
 
 ### 6.3 Payload shape
 

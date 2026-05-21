@@ -142,6 +142,14 @@
             "description": "Filter by organizer organization slug. Resolves against `organizations.slug` → `events.organizer_org_id`."
           },
           {
+            "name": "created_by_contributor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter to events contributed by this app — the publishing-app axis (`source.contributor`). Resolves against the registered `contributor_profile` slug; only `active` profiles match. Distinct from `contributor`, which filters by the organizer organization."
+          },
+          {
             "name": "commercial",
             "in": "query",
             "schema": {
@@ -451,7 +459,15 @@
             "schema": {
               "type": "string"
             },
-            "description": "Filter by contributor account slug"
+            "description": "Filter by organizer organization slug. Resolves against `organizations.slug` → `events.organizer_org_id`."
+          },
+          {
+            "name": "created_by_contributor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter to events contributed by this app — the publishing-app axis (`source.contributor`). Resolves against the registered `contributor_profile` slug; only `active` profiles match. Distinct from `contributor`, which filters by the organizer organization."
           },
           {
             "name": "category",
@@ -558,7 +574,15 @@
             "schema": {
               "type": "string"
             },
-            "description": "Filter by contributor account slug"
+            "description": "Filter by organizer organization slug. Resolves against `organizations.slug` → `events.organizer_org_id`."
+          },
+          {
+            "name": "created_by_contributor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter to events contributed by this app — the publishing-app axis (`source.contributor`). Resolves against the registered `contributor_profile` slug; only `active` profiles match. Distinct from `contributor`, which filters by the organizer organization."
           },
           {
             "name": "category",
@@ -813,7 +837,7 @@
     "/webhooks": {
       "post": {
         "summary": "Create webhook subscription",
-        "description": "Subscribe to event changes. Returns the signing secret once — store it securely. Webhooks are signed with HMAC-SHA256. Max 5 subscriptions per API key.\n\n**Event types:** `event.created`, `event.updated`, `event.deleted`, `event.series_created`, `event.image_processed`. The default subscribes to the first four; `event.image_processed` is opt-in (different payload shape — see Guide for details).",
+        "description": "Subscribe to event changes. Returns the signing secret once — store it securely. Webhooks are signed with HMAC-SHA256. Max 5 subscriptions per API key.\n\n**Event types:** `event.created`, `event.updated`, `event.deleted`, `event.series_created`, `event.image_processed`, `series.updated`, `series.deleted`. The default subscribes to the event.* types except `event.image_processed`. `series.updated` and `series.deleted` fire when a series identity changes or the series is removed — useful for consumers caching series pages.",
         "operationId": "createWebhook",
         "security": [
           {
@@ -844,7 +868,9 @@
                         "event.updated",
                         "event.deleted",
                         "event.series_created",
-                        "event.image_processed"
+                        "event.image_processed",
+                        "series.updated",
+                        "series.deleted"
                       ]
                     },
                     "default": [
@@ -987,7 +1013,9 @@
                         "event.updated",
                         "event.deleted",
                         "event.series_created",
-                        "event.image_processed"
+                        "event.image_processed",
+                        "series.updated",
+                        "series.deleted"
                       ]
                     }
                   },
@@ -1880,6 +1908,169 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/service/series/{seriesId}": {
+      "patch": {
+        "summary": "Update series identity (service)",
+        "description": "Update identity fields on a series — name, slug, description, cover image. Distinct from `PATCH /service/events/series/{seriesId}` (which patches the per-instance template and propagates to future instance rows). Identity edits do NOT rewrite past or future instance titles — to rename future instances too, call the template-patch endpoint with the same name. Fires the `series.updated` webhook.\n\nScoped to organizations linked to this service key via `api_key_organization_links`.",
+        "operationId": "serviceUpdateSeriesIdentity",
+        "security": [
+          {
+            "serviceApiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "seriesId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeriesIdentityInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Series identity updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "series_id",
+                    "changed"
+                  ],
+                  "properties": {
+                    "series_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "changed": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "name",
+                          "slug",
+                          "description",
+                          "cover_image_url"
+                        ]
+                      },
+                      "description": "Field names that actually changed. Empty array if the request was a no-op (sent values matched existing)."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "description": "NOT_LINKED — key not linked to this series's organizer organization."
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "Slug already in use."
+          }
+        }
+      }
+    },
+    "/service/series/{seriesId}/cover": {
+      "post": {
+        "summary": "Upload series cover image (service)",
+        "description": "Upload a cover image for a series. Image is magic-byte validated and re-encoded through Sharp (JPEG/PNG/WebP only, max 12MB), then stored on the Commons R2 bucket — the same bucket every other Commons-hosted image uses. Don't process series covers through a per-app pipeline; cross-product coherence depends on every consumer rendering the same URL pattern.\n\nPersists the resulting URL to `event_series.cover_image_url` and fires the `series.updated` webhook with `changed=['cover_image_url']`. Scoped via `api_key_organization_links` against `event_series.organizer_org_id`.",
+        "operationId": "serviceUploadSeriesCover",
+        "security": [
+          {
+            "serviceApiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "seriesId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "image"
+                ],
+                "properties": {
+                  "image": {
+                    "type": "string",
+                    "description": "Base64-encoded image bytes. Optional `data:image/...;base64,` prefix is stripped. Supported formats: JPEG, PNG, WebP. Max 12MB raw."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cover uploaded; URL persisted on the series row",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "series_id",
+                    "cover_image_url"
+                  ],
+                  "properties": {
+                    "series_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "cover_image_url": {
+                      "type": "string",
+                      "format": "uri"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "description": "NOT_LINKED — key not linked to this series's organizer organization."
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "description": "PAYLOAD_TOO_LARGE — image exceeds 12MB."
           }
         }
       }
@@ -3111,7 +3302,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Filter to organizations created by accounts linked to this contributor app."
+            "description": "Filter to organizations contributed by this app — the publishing-app axis (`source.contributor`). Resolves against the registered `contributor_profile` slug; only `active` profiles match. Matches the `organizations.contributor_profile_id` snapshot set at write time (migration 090)."
           },
           {
             "name": "near",
@@ -3417,7 +3608,8 @@
             "in": "query",
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Filter to publishers contributed by this app — the publishing-app axis (`source.contributor`). Resolves against the registered `contributor_profile` slug; only `active` profiles match."
           },
           {
             "name": "limit",
@@ -3499,6 +3691,114 @@
                   "properties": {
                     "broadcast": {
                       "$ref": "#/components/schemas/Broadcast"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/series": {
+      "get": {
+        "summary": "List event series",
+        "description": "Public read of event series records. A series is a recurring activity with its own public identity (name, slug, description, cover image). For the *instances* of a series, query `/events?series_id={id}` instead — this endpoint returns the series itself. See `docs/series-as-first-class.md` for the design.",
+        "operationId": "listSeries",
+        "parameters": [
+          {
+            "name": "organizer_org_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Filter to series run by a specific organization."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated series list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "meta",
+                    "series"
+                  ],
+                  "properties": {
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    },
+                    "series": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Series"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/series/{idOrSlug}": {
+      "get": {
+        "summary": "Get a single series",
+        "description": "Fetch a series by UUID or slug. Used by consumer apps to render dedicated series pages (e.g., a subscribable Quizzo series). Returns the series identity, its organizer, recurrence, and the soonest upcoming instance.",
+        "operationId": "getSeries",
+        "parameters": [
+          {
+            "name": "idOrSlug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Either the series UUID or its stable slug."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Series",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "series"
+                  ],
+                  "properties": {
+                    "series": {
+                      "$ref": "#/components/schemas/Series"
                     }
                   }
                 }
@@ -5691,7 +5991,9 @@
                 "event.updated",
                 "event.deleted",
                 "event.series_created",
-                "event.image_processed"
+                "event.image_processed",
+                "series.updated",
+                "series.deleted"
               ]
             }
           },
@@ -5882,6 +6184,31 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 52
+          },
+          "series": {
+            "type": "object",
+            "description": "Series-level identity, used only when `recurrence` is set. When omitted, the series name defaults to the event name and the slug is server-derived. Pass explicit values to give the series a distinct public identity (e.g., \"Fishtown Quizzo\" with slug `fishtown-quizzo`, separate from any individual instance's name). See `docs/series-as-first-class.md`.",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "slug": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]{0,99}$",
+                "description": "Globally unique. Server returns 409 on collision."
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 2000
+              },
+              "cover_image_url": {
+                "type": "string",
+                "format": "uri",
+                "maxLength": 2000
+              }
+            }
           },
           "tags": {
             "type": "array",
@@ -6650,6 +6977,123 @@
             "type": "string",
             "format": "date-time",
             "description": "Must be in the future and within 24h of now."
+          }
+        }
+      },
+      "Series": {
+        "type": "object",
+        "description": "A recurring activity with its own public identity (name, slug, description, cover image) separate from any individual instance. Completes the event_series primitive — recurrence machinery has existed; identity is the additive surface for consumers that want to address the series as a thing (subscribable entity in Merrie, series page in Fiber, etc.). Past instances' titles (`Event.name`) are NEVER rewritten when a series is renamed — historical accuracy. To list a series's instances, use `/events?series_id={id}`.",
+        "required": [
+          "id",
+          "slug",
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "slug": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,99}$",
+            "description": "Globally unique URL slug. Same format as organization and group slugs."
+          },
+          "name": {
+            "type": "string",
+            "description": "Current public identity of the series. Forward-looking — past instances retain their original titles."
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cover_image_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri"
+          },
+          "organizer": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Organization"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Organization running the series. Null only on legacy series whose original organizer was deleted."
+          },
+          "recurrence": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": [
+                  "rrule"
+                ],
+                "properties": {
+                  "rrule": {
+                    "type": "string",
+                    "description": "RFC 5545 RRULE string."
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "next_instance": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Event"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Soonest upcoming instance of the series, or null if none are scheduled. For the full list of instances, query `/events?series_id={id}`."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "SeriesIdentityInput": {
+        "type": "object",
+        "description": "Body for PATCH /service/series/{seriesId}. All fields optional; at least one required. Identity edits do NOT propagate to past or future instance titles — to rename future instances, use PATCH /service/events/series/{seriesId} with the same name change.",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "slug": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,99}$",
+            "description": "If provided, must be unique. Server returns 409 on collision."
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 2000
+          },
+          "cover_image_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri",
+            "maxLength": 2000
           }
         }
       },

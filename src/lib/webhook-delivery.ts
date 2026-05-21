@@ -68,13 +68,49 @@ interface WebhookPayload {
   delivery_id: string;
 }
 
+/**
+ * Public-facing identity snapshot of a series. Embedded into series-related
+ * webhook payloads so consumers can hydrate or invalidate their cache
+ * without an extra fetch.
+ */
+export interface SeriesProfile {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  cover_image_url: string | null;
+  organizer_org_id: string | null;
+}
+
 export interface SeriesCreatedPayload {
   event_type: 'event.series_created';
   series_id: string;
+  series: SeriesProfile;
   recurrence: { rrule: string };
   instance_count: number;
   instances: Array<{ id: string; start: string; series_instance_number: number }>;
   template: NeighborhoodEvent;
+  timestamp: string;
+  delivery_id: string;
+}
+
+export interface SeriesUpdatedPayload {
+  event_type: 'series.updated';
+  series_id: string;
+  series: SeriesProfile;
+  /** Field names that changed in this update. */
+  changed: Array<'name' | 'slug' | 'description' | 'cover_image_url'>;
+  timestamp: string;
+  delivery_id: string;
+}
+
+export interface SeriesDeletedPayload {
+  event_type: 'series.deleted';
+  series_id: string;
+  /** Identity at time of deletion, so consumers can identify the series in their cache. */
+  series: Pick<SeriesProfile, 'id' | 'slug' | 'name'>;
+  /** Event IDs of the instances deleted as part of this series deletion. */
+  instance_ids: string[];
   timestamp: string;
   delivery_id: string;
 }
@@ -153,9 +189,12 @@ export async function dispatchWebhooks(
  * Dispatch a single event.series_created webhook for a new recurring series.
  * Consumers who subscribe to this event type get one webhook per series instead
  * of N individual event.created webhooks — eliminating the webhook storm.
+ *
+ * `series` carries the new identity surface (name/slug/description/cover) so
+ * subscribers can hydrate without an extra GET.
  */
 export async function dispatchSeriesCreatedWebhook(
-  seriesId: string,
+  series: SeriesProfile,
   template: NeighborhoodEvent,
   instances: Array<{ id: string; start: string; series_instance_number: number }>,
   rrule: string,
@@ -179,7 +218,7 @@ export async function dispatchSeriesCreatedWebhook(
         .insert({
           subscription_id: sub.id,
           event_type: 'event.series_created',
-          event_id: instances[0]?.id || seriesId,
+          event_id: instances[0]?.id || series.id,
           status: 'pending',
         })
         .select('id')
@@ -189,7 +228,8 @@ export async function dispatchSeriesCreatedWebhook(
 
       const payload: SeriesCreatedPayload = {
         event_type: 'event.series_created',
-        series_id: seriesId,
+        series_id: series.id,
+        series,
         recurrence: { rrule },
         instance_count: instances.length,
         instances,
@@ -202,6 +242,113 @@ export async function dispatchSeriesCreatedWebhook(
     }
   } catch (err) {
     console.error('[WEBHOOKS] Series created dispatch error:', err instanceof Error ? err.message : err);
+  }
+}
+
+/**
+ * Dispatch a series.updated webhook when identity fields change. Used by
+ * PATCH /service/series/{id}. Identity edits do NOT propagate to past or
+ * future instance titles — this webhook signals that the series itself was
+ * renamed/redescribed, not that instances changed. Consumers use it to
+ * invalidate cached series pages.
+ */
+export async function dispatchSeriesUpdatedWebhook(
+  series: SeriesProfile,
+  changed: Array<'name' | 'slug' | 'description' | 'cover_image_url'>,
+): Promise<void> {
+  try {
+    const { data: subs } = await supabaseAdmin
+      .from('webhook_subscriptions')
+      .select('id, url, signing_secret, signing_secret_encrypted, event_types')
+      .eq('status', 'active')
+      .limit(10000);
+
+    if (!subs || subs.length === 0) return;
+
+    const matching = subs.filter((s) =>
+      (s.event_types as string[]).includes('series.updated')
+    );
+
+    for (const sub of matching) {
+      const { data: delivery } = await supabaseAdmin
+        .from('webhook_deliveries')
+        .insert({
+          subscription_id: sub.id,
+          event_type: 'series.updated',
+          event_id: series.id,
+          status: 'pending',
+        })
+        .select('id')
+        .single();
+
+      if (!delivery) continue;
+
+      const payload: SeriesUpdatedPayload = {
+        event_type: 'series.updated',
+        series_id: series.id,
+        series,
+        changed,
+        timestamp: new Date().toISOString(),
+        delivery_id: String(delivery.id),
+      };
+
+      void deliverRawWebhook(sub as WebhookSub, delivery.id, payload as unknown as Record<string, unknown>);
+    }
+  } catch (err) {
+    console.error('[WEBHOOKS] Series updated dispatch error:', err instanceof Error ? err.message : err);
+  }
+}
+
+/**
+ * Dispatch a series.deleted webhook when a series is removed. Single
+ * series-level signal, complementing the per-instance event.deleted events
+ * that also fire as part of cleanup. Consumers use this to drop cached
+ * series pages cleanly.
+ */
+export async function dispatchSeriesDeletedWebhook(
+  series: Pick<SeriesProfile, 'id' | 'slug' | 'name'>,
+  instanceIds: string[],
+): Promise<void> {
+  try {
+    const { data: subs } = await supabaseAdmin
+      .from('webhook_subscriptions')
+      .select('id, url, signing_secret, signing_secret_encrypted, event_types')
+      .eq('status', 'active')
+      .limit(10000);
+
+    if (!subs || subs.length === 0) return;
+
+    const matching = subs.filter((s) =>
+      (s.event_types as string[]).includes('series.deleted')
+    );
+
+    for (const sub of matching) {
+      const { data: delivery } = await supabaseAdmin
+        .from('webhook_deliveries')
+        .insert({
+          subscription_id: sub.id,
+          event_type: 'series.deleted',
+          event_id: series.id,
+          status: 'pending',
+        })
+        .select('id')
+        .single();
+
+      if (!delivery) continue;
+
+      const payload: SeriesDeletedPayload = {
+        event_type: 'series.deleted',
+        series_id: series.id,
+        series,
+        instance_ids: instanceIds,
+        timestamp: new Date().toISOString(),
+        delivery_id: String(delivery.id),
+      };
+
+      void deliverRawWebhook(sub as WebhookSub, delivery.id, payload as unknown as Record<string, unknown>);
+    }
+  } catch (err) {
+    console.error('[WEBHOOKS] Series deleted dispatch error:', err instanceof Error ? err.message : err);
   }
 }
 

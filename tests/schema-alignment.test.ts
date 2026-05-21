@@ -77,6 +77,8 @@ const SCHEMA: Record<string, string[]> = {
   event_series: [
     'id', 'creator_account_id', 'recurrence', 'base_event_data',
     'created_at', 'updated_at', 'user_id', 'recurrence_rule', 'ends_at',
+    // Migration 089: series identity
+    'organizer_org_id', 'name', 'slug', 'description', 'cover_image_url',
   ],
   // Narrowed in migration 082 — business-profile columns moved to organizations.
   // Operational columns only: identity, claim status, status, timestamps.
@@ -137,6 +139,8 @@ const SCHEMA: Record<string, string[]> = {
     'tags', 'commercial',
     // Added in migration 085 (provenance doctrine)
     'method',
+    // Added in migration 090 (contributor attribution)
+    'contributor_profile_id',
     'created_at', 'updated_at',
   ],
   organization_places: [

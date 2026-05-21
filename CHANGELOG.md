@@ -14,6 +14,37 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-05-20 — `created_by_contributor` on organizations & publishers
+
+Extends the contributor reverse-index from events to the durable org-backed types, on the same publishing-app axis (`source.contributor`). Brings two endpoints that already accepted the param but silently ignored it onto a real implementation.
+
+- **Migration 090** — adds `organizations.contributor_profile_id` (FK to `contributor_profiles`, indexed), mirroring `events.contributor_profile_id`. Backfills existing rows from `owner_account_id → api_keys.tenant_account_id → contributor_profile_id`, only where the tenant maps unambiguously to a single profile.
+- **`GET /api/v1/organizations?created_by_contributor={slug}`** and **`GET /api/v1/publishers?created_by_contributor={slug}`** — filter to records contributed by the app with the given registered `contributor_profile` slug (only `active` profiles; unknown/inactive → empty). Both previously accepted the param via the shared schema but never applied it.
+- **Write path** — `POST /service/organizations` now snapshots the calling key's `contributor_profile_id` onto the new org; developer-collective provisioning attributes the collective to the developer's profile. Operator-created orgs remain unattributed (operator curation is not an app contribution).
+
+## 2026-05-20 — events `created_by_contributor` filter
+
+The publishing-app axis (`source.contributor`) is now filterable on events, matching the pattern already on broadcasts. Fixes a standing gap: `llms.txt` documented this filter for events but it was never implemented. Lets a consumer slice "everything app X contributed" — the reverse of the per-event `source.contributor` attribution.
+
+- **`GET /api/v1/events?created_by_contributor={slug}`** — filters to events whose contributing app matches the given registered `contributor_profile` slug (only `active` profiles resolve; unknown/inactive → empty result). Also accepted on `/events.ics` and `/events.rss`. Filters on the `events.contributor_profile_id` snapshot, so it survives api_key rotation.
+- **Clarification (no behavior change):** the existing `?contributor=` param filters by *organizer organization* slug, not the contributing app. Its description on `/events.ics` and `/events.rss` was corrected (it had read "contributor account slug"); the `/events` description was already accurate. The two are distinct under the four-role frame — `contributor` = who ran it (`organizer`), `created_by_contributor` = who published it (`source.contributor`).
+
+## 2026-05-19 — series cover-image endpoint
+
+Follow-up to the series-as-first-class change earlier today. Closes the gap surfaced during Merrie integration prep: until now there was no way to upload a series cover through the Commons pipeline. Without this endpoint, consumers would route covers through their own R2 buckets, producing URL patterns that other consumer apps (Fiber) would have to branch on.
+
+- **`POST /service/series/{seriesId}/cover`** — base64 JSON body `{ image }`. Pipes through the existing magic-byte + Sharp + Commons R2 pipeline (same shape as `POST /service/organizations/{id}/logo`). Persists the URL to `event_series.cover_image_url` and fires `series.updated` with `changed=['cover_image_url']` in one shot. Scoped via `api_key_organization_links` against the series's `organizer_org_id`. Max 12MB; JPEG/PNG/WebP only.
+
+## 2026-05-19 — series as first-class primitive
+
+Completes the `event_series` primitive: recurrence machinery has existed; identity is the additive surface for consumers that want to address a series as a thing (subscribable entity in Merrie, series page in Fiber, etc.). Past instances' titles are never rewritten on rename — historical accuracy. See `docs/series-as-first-class.md` for design rationale and the Commons↔Merrie agreement.
+
+- **Migration 089** — adds `event_series.{name, slug, description, cover_image_url, organizer_org_id}`. Backfills name from `base_event_data.content`, slug via the standard slugify with `-2/-3` collision suffixes, organizer_org_id from any existing instance. `name` and `slug` become NOT NULL after backfill; `organizer_org_id` stays NULLABLE to accommodate legacy orphan rows. Globally unique slug index.
+- **`GET /api/v1/series`** + **`GET /api/v1/series/{idOrSlug}`** — new public read endpoints. Returns identity, organizer, recurrence (RRULE), and soonest upcoming instance. List supports `?organizer_org_id={uuid}`. Consumers fetch a series's instances via existing `/events?series_id={id}`.
+- **`PATCH /service/series/{seriesId}`** — new service endpoint for identity-only edits (name, slug, description, cover_image_url). Distinct from existing `PATCH /service/events/series/{seriesId}` (which patches the per-instance template). Identity edits do NOT propagate to past or future instance titles — to rename future instances too, call both.
+- **`POST /service/events`** — `series` block added to the request body. When set on a recurring event create, the series gets explicit identity; when omitted, name defaults to the event name and slug is server-derived. Response now returns `{series_id, series_count, instance_ids}` instead of looking up `series_id` via a follow-up query.
+- **Webhooks** — `event.series_created` payload enriched with `series: SeriesProfile`. New event types: `series.updated` (identity changed) and `series.deleted` (series removed). Subscribers caching series pages should listen to the latter two.
+
 ## 2026-05-19 — fix events pagination via `relevant_until` generated column
 
 Closes a long-standing pagination bug surfaced during 3.0 verification. Pre-fix: `GET /api/v1/events` filtered `event_at >= now-3h` and ordered ascending in SQL, then a JS post-filter dropped events whose `end_time` was past. With small limits the SQL returned oldest-first rows in the window (most likely already ended), JS filtered them, and the response was `[]` despite `meta.total` reporting many events.

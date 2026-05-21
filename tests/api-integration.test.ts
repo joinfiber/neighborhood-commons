@@ -318,6 +318,34 @@ describe('GET /api/v1/events', () => {
     const body = await res.json();
     expect(body.error.code).toBe('VALIDATION_ERROR');
   });
+
+  it('created_by_contributor resolves an active profile slug and lets the events query through', async () => {
+    // Publishing-app axis (source.contributor). The slug resolves against an
+    // active contributor_profile; on a hit, the events query proceeds.
+    mockResponses.set('contributor_profiles', {
+      data: { id: 'c0ffee00-0000-4000-8000-000000000001' },
+      error: null,
+    });
+    mockResponses.set('events', { data: [makeDbRow()], error: null, count: 1 });
+
+    const res = await fetch(`${baseUrl}/api/v1/events?created_by_contributor=merrie`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.events).toHaveLength(1);
+  });
+
+  it('created_by_contributor returns empty when the slug matches no active profile', async () => {
+    // The falsifiable half: no active profile → the handler short-circuits to an
+    // empty result and never queries events. If that short-circuit regressed,
+    // the events row below would leak through and this would read length 1.
+    mockResponses.set('contributor_profiles', { data: null, error: null });
+    mockResponses.set('events', { data: [makeDbRow()], error: null, count: 1 });
+
+    const res = await fetch(`${baseUrl}/api/v1/events?created_by_contributor=ghost`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.events).toHaveLength(0);
+  });
 });
 
 describe('GET /api/v1/events/:id', () => {
@@ -682,5 +710,176 @@ describe('Publishers API (v2)', () => {
     mockResponses.set('broadcasts', { data: [], error: null });
     const res = await fetch(`${baseUrl}/api/v1/publishers/no-such-publisher`);
     expect(res.status).toBe(404);
+  });
+});
+
+describe('created_by_contributor on organizations & publishers', () => {
+  // Migration 090 brought organizations onto the same contributor axis as
+  // events. Both /organizations and /publishers previously accepted the param
+  // (shared orgListSchema) but silently ignored it; these pin the wired
+  // behavior. The unknown-slug cases are the falsifiable half: the org row is
+  // mocked, so if the resolve-and-short-circuit regressed it would leak through
+  // as length 1.
+  const orgRow = {
+    id: 'org-uuid-1', slug: 'test-bar', name: 'Test Bar', legal_name: null,
+    description: null, url: null, logo_url: null, image_url: null,
+    telephone: null, email: null, same_as: [], keywords: [],
+    opening_hours_specification: null, tags: [], commercial: null,
+    primary_place_id: null, contributor_profile_id: 'cp-1',
+    created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+  };
+
+  it('organizations: unknown contributor slug returns empty', async () => {
+    mockResponses.set('contributor_profiles', { data: null, error: null });
+    mockResponses.set('organizations', { data: [orgRow], error: null, count: 1 });
+
+    const res = await fetch(`${baseUrl}/api/v1/organizations?created_by_contributor=ghost`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.organizations).toHaveLength(0);
+  });
+
+  it('organizations: active contributor slug resolves and the query proceeds', async () => {
+    mockResponses.set('contributor_profiles', { data: { id: 'cp-1' }, error: null });
+    mockResponses.set('organizations', { data: [orgRow], error: null, count: 1 });
+    mockResponses.set('organization_verifications', { data: [], error: null });
+
+    const res = await fetch(`${baseUrl}/api/v1/organizations?created_by_contributor=merrie`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.organizations).toHaveLength(1);
+  });
+
+  it('publishers: unknown contributor slug returns empty', async () => {
+    mockResponses.set('contributor_profiles', { data: null, error: null });
+    mockResponses.set('events', { data: [{ organizer_org_id: 'org-uuid-1' }], error: null });
+    mockResponses.set('broadcasts', { data: [], error: null });
+    mockResponses.set('organizations', { data: [orgRow], error: null, count: 1 });
+
+    const res = await fetch(`${baseUrl}/api/v1/publishers?created_by_contributor=ghost`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.publishers).toHaveLength(0);
+  });
+});
+
+// =============================================================================
+// SERIES — public endpoints
+// =============================================================================
+
+describe('GET /api/v1/series/:idOrSlug', () => {
+  function makeSeriesRow(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'ser-uuid-1',
+      slug: 'fishtown-quizzo',
+      name: 'Fishtown Quizzo',
+      description: 'Weekly drop-in trivia at Frankford Hall.',
+      cover_image_url: 'https://r2.example/quizzo-cover.jpg',
+      organizer_org_id: 'org-uuid-quizzo',
+      recurrence: 'weekly',
+      recurrence_rule: { frequency: 'weekly', count: 26 },
+      created_at: '2026-03-10T12:00:00.000Z',
+      updated_at: '2026-03-10T12:00:00.000Z',
+      organizations: {
+        id: 'org-uuid-quizzo',
+        slug: 'quizzo-philly',
+        name: 'Quizzo Philly',
+        legal_name: null,
+        tags: ['trivia'],
+        commercial: false,
+        description: null,
+        url: null,
+        logo_url: null,
+        image_url: null,
+        telephone: null,
+        email: null,
+        same_as: null,
+        keywords: null,
+        opening_hours_specification: null,
+        primary_place_id: null,
+        method: 'self_asserted',
+        created_at: '2026-03-10T12:00:00.000Z',
+        updated_at: '2026-03-10T12:00:00.000Z',
+      },
+      ...overrides,
+    };
+  }
+
+  it('returns the series with identity, organizer, recurrence', async () => {
+    mockResponses.set('event_series', { data: makeSeriesRow(), error: null });
+    mockResponses.set('events', { data: null, error: null });
+    mockResponses.set('organization_verifications', { data: [], error: null });
+
+    const res = await fetch(`${baseUrl}/api/v1/series/fishtown-quizzo`);
+    expect(res.status).toBe(200);
+
+    const body = await res.json() as { series: Record<string, unknown> };
+    expect(body.series.id).toBe('ser-uuid-1');
+    expect(body.series.slug).toBe('fishtown-quizzo');
+    expect(body.series.name).toBe('Fishtown Quizzo');
+    expect(body.series.description).toBe('Weekly drop-in trivia at Frankford Hall.');
+    expect(body.series.cover_image_url).toBe('https://r2.example/quizzo-cover.jpg');
+    expect((body.series.recurrence as { rrule: string })?.rrule).toContain('FREQ=WEEKLY');
+    expect((body.series.organizer as Record<string, unknown>)?.id).toBe('org-uuid-quizzo');
+    expect(body.series.next_instance).toBeNull();
+  });
+
+  it('returns 404 for unknown slug', async () => {
+    mockResponses.set('event_series', { data: null, error: null });
+    const res = await fetch(`${baseUrl}/api/v1/series/no-such-series`);
+    expect(res.status).toBe(404);
+    const body = await res.json() as { error: { code: string } };
+    expect(body.error.code).toBe('NOT_FOUND');
+  });
+
+  it('looks up by UUID when path looks like a UUID', async () => {
+    mockResponses.set('event_series', { data: makeSeriesRow(), error: null });
+    mockResponses.set('events', { data: null, error: null });
+    mockResponses.set('organization_verifications', { data: [], error: null });
+
+    const res = await fetch(`${baseUrl}/api/v1/series/a1b2c3d4-e5f6-7890-abcd-ef1234567890`);
+    expect(res.status).toBe(200);
+  });
+});
+
+describe('GET /api/v1/series (list)', () => {
+  it('returns a paginated list with meta', async () => {
+    mockResponses.set('event_series', {
+      data: [
+        {
+          id: 'ser-1', slug: 'fishtown-quizzo', name: 'Fishtown Quizzo',
+          description: null, cover_image_url: null,
+          organizer_org_id: 'org-uuid-quizzo',
+          recurrence: 'weekly', recurrence_rule: { frequency: 'weekly' },
+          created_at: '2026-03-10T12:00:00.000Z',
+          updated_at: '2026-03-10T12:00:00.000Z',
+          organizations: { id: 'org-uuid-quizzo', slug: 'quizzo-philly', name: 'Quizzo Philly', tags: [], commercial: false, method: 'self_asserted' },
+        },
+      ],
+      error: null,
+      count: 1,
+    });
+    mockResponses.set('events', { data: [], error: null });
+    mockResponses.set('organization_verifications', { data: [], error: null });
+
+    const res = await fetch(`${baseUrl}/api/v1/series`);
+    expect(res.status).toBe(200);
+
+    const body = await res.json() as { meta: { total: number }; series: unknown[] };
+    expect(body.meta.total).toBe(1);
+    expect(body.series).toHaveLength(1);
+  });
+
+  it('returns empty list with meta.total=0 when no series exist', async () => {
+    mockResponses.set('event_series', { data: [], error: null, count: 0 });
+    mockResponses.set('events', { data: [], error: null });
+    mockResponses.set('organization_verifications', { data: [], error: null });
+
+    const res = await fetch(`${baseUrl}/api/v1/series`);
+    expect(res.status).toBe(200);
+
+    const body = await res.json() as { meta: { total: number }; series: unknown[] };
+    expect(body.meta.total).toBe(0);
+    expect(body.series).toEqual([]);
   });
 });

@@ -141,6 +141,15 @@ export const createEventSchema = z.object({
     .regex(/^(none|daily|weekly|biweekly|monthly|ordinal_weekday:[1-5]:(monday|tuesday|wednesday|thursday|friday|saturday|sunday)|weekly_days:(mon|tue|wed|thu|fri|sat|sun)(,(mon|tue|wed|thu|fri|sat|sun))*)$/)
     .optional(),
   instance_count: z.number().int().min(0).max(260).optional(),
+  // Series identity (only used when recurrence != 'none'). When omitted,
+  // series.name defaults to the event name and slug is server-derived.
+  // See docs/series-as-first-class.md.
+  series: z.object({
+    name: z.string().min(1).max(200).optional(),
+    slug: z.string().regex(/^[a-z0-9][a-z0-9-]{0,99}$/, 'must be lowercase alphanumeric + hyphens, starting with alphanumeric, max 100 chars').optional(),
+    description: z.string().max(2000).optional(),
+    cover_image_url: z.string().url().max(2000).optional(),
+  }).optional(),
   tags: z.array(z.string().max(50)).max(15).optional(),
   wheelchair_accessible: z.boolean().nullable().default(null),
   capacity: z.number().int().min(1).max(10000).nullable().default(null),
@@ -497,9 +506,19 @@ router.post('/events', serviceLimiter, async (req, res, next) => {
 
     const recurrence = data.recurrence ?? 'none';
     if (recurrence !== 'none') {
-      // Recurring: create series
-      const instances = await createEventSeries(
+      // Recurring: create series. Identity defaults from the event when the
+      // caller doesn't supply explicit series.* fields.
+      const identity = {
+        name: data.series?.name?.trim() || data.name,
+        organizer_org_id: data.organizerOrganizationId,
+        slug: data.series?.slug,
+        description: data.series?.description,
+        cover_image_url: data.series?.cover_image_url,
+      };
+
+      const { seriesId, instances } = await createEventSeries(
         insert,
+        identity,
         recurrence,
         eventDate,
         startTime,
@@ -508,7 +527,7 @@ router.post('/events', serviceLimiter, async (req, res, next) => {
         data.instance_count,
       );
 
-      console.log(`[SERVICE] Series created: ${data.name} (${instances.length} instances)`);
+      console.log(`[SERVICE] Series created: ${identity.name} (${instances.length} instances, id ${seriesId})`);
 
       // Attach image to every instance (fire-and-forget — image failure must not fail publish)
       if (data.image_url) {
@@ -521,8 +540,8 @@ router.post('/events', serviceLimiter, async (req, res, next) => {
       }
 
       res.status(201).json({
+        series_id: seriesId,
         series_count: instances.length,
-        series_id: instances[0] ? (await supabaseAdmin.from('events').select('series_id').eq('id', instances[0].id).maybeSingle()).data?.series_id : null,
         instance_ids: instances.map(i => i.id),
       });
     } else {

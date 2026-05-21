@@ -129,6 +129,10 @@ router.post('/organizations', async (req, res, next) => {
         // account create orgs with owner_account_id=NULL — those orgs work
         // for everything except photo uploads.
         owner_account_id: req.apiKeyInfo?.tenantAccountId ?? null,
+        // Contributor attribution (migration 090): the registered profile this
+        // key publishes under, snapshotted so source.contributor on the org
+        // survives api_key rotation. Mirrors events.contributor_profile_id.
+        contributor_profile_id: req.apiKeyInfo?.contributorProfileId ?? null,
         // Provenance (docs/provenance.md): orgs created via the service
         // API are first-party-asserted by definition — the calling key is
         // the contributor acting as courier for the entity asserting its
