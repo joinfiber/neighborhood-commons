@@ -163,6 +163,7 @@ export function portalInputToInsert(
     rsvp?: 'recommended' | 'required' | null | undefined;
     image_focal_y?: number | undefined;
     source_method?: 'self_asserted' | 'proxied' | 'witnessed' | undefined;
+    source_feed_url?: string | null | undefined;
     source_contributor_name?: string | null | undefined;
     source_contributor_url?: string | null | undefined;
     first_party?: boolean | undefined;
@@ -217,6 +218,7 @@ export function portalInputToInsert(
     source: 'portal',
     first_party: data.first_party ?? false,
     source_method: data.source_method || 'self_asserted',
+    source_feed_url: data.source_feed_url ?? null,
     source_contributor_name: data.source_contributor_name ?? null,
     source_contributor_url: data.source_contributor_url ?? null,
     tmdb_id: data.tmdb_id || null,

@@ -14,6 +14,17 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-05-21 — caller-set `proxied` provenance (close the Spec↔four-roles gap)
+
+`docs/four-roles.md` Path 2 ("Pipeline-proxies") defines `proxied` as the honest provenance for a tool that scrapes a public page and publishes on behalf of the scraped entity. But the Service API write enum only admitted `['self_asserted','witnessed']` and the field doc said `proxied` was "not caller-settable — reserved for internal pipeline code paths." That left external scrape-and-publish pipelines (Studio's porchfest path is the first) with no way to declare the one method that honestly describes them — they fell back to legacy `'api'`, surviving only on the migration-085 mapping grace window. Doctrine said one thing, the Spec enforced another. This closes the gap, mirroring the `witnessed` authority model.
+
+- **Migration 091** — adds `api_keys.proxy_authority` (boolean, NOT NULL DEFAULT false), the analogue of `witness_authority`. Operator-granted to trusted scrape-and-publish pipelines. (No self-service request column yet — add one mirroring migration 087 if a dashboard flow is needed.)
+- **`ServiceEventInput.source_method`** write enum now `['self_asserted','proxied','witnessed']`. Setting `proxied` requires `api_keys.proxy_authority=true` (or an admin key) and a `source_feed_url`; otherwise `403 INSUFFICIENT_TIER` / `400 VALIDATION_ERROR`. Like the witnessed path, `proxied` **bypasses the `api_key_organization_links` check** — but unlike witnessed, the organizer stays the scraped real-world entity (not a collective).
+- **`ServiceEventInput.source_feed_url`** is now a writable input (was read-only). Required when `source_method='proxied'`; carries the public lineage URL. Persisted on `events.source_feed_url`.
+- **Photo gate:** `proxied` bypasses the organizer-claimed-owner photo check alongside `witnessed` — the contributor is the warrantor (the source URL is the evidence) and the scraped organizer is unclaimed by definition.
+- `api_keys` SELECT in `src/middleware/api-key.ts` now hydrates `proxyAuthority` onto `req.apiKeyInfo`.
+- **Additive / non-breaking.** Existing `self_asserted` / `witnessed` callers are unaffected; `proxied` was already a valid stored value (read/query filter), this only opens the caller-set write path. SDK 3.1.0 schema regenerated; contract-drift + schema-alignment + service-event-schema tests updated and green (592/592).
+
 ## 2026-05-20 — `created_by_contributor` on organizations & publishers
 
 Extends the contributor reverse-index from events to the durable org-backed types, on the same publishing-app axis (`source.contributor`). Brings two endpoints that already accepted the param but silently ignored it onto a real implementation.

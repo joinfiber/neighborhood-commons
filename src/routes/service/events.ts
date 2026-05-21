@@ -110,16 +110,24 @@ const contributorSchema = z.object({
   ),
 });
 
-// Caller-facing source_method enum. 'proxied' is for internal pipeline
-// code paths (not API callers); the public service API admits the two
-// caller-driven authority paths:
+// Caller-facing source_method enum — the three authority paths from
+// docs/four-roles.md:
 //   self_asserted (default) — requires api_key_organization_links to the organizer.
-//   witnessed              — requires api_keys.witness_authority on the calling key.
-const callerSourceMethod = z.enum(['self_asserted', 'witnessed']).default('self_asserted');
+//   proxied                 — requires api_keys.proxy_authority; the contributor
+//                             extracted this from a public URL (source_feed_url
+//                             required). Organizer is the scraped real-world
+//                             entity; org-link is bypassed (the pipeline doesn't
+//                             own the venue).
+//   witnessed               — requires api_keys.witness_authority; attributed to
+//                             a collective publisher organization.
+const callerSourceMethod = z.enum(['self_asserted', 'proxied', 'witnessed']).default('self_asserted');
 
 export const createEventSchema = z.object({
   organizerOrganizationId: z.string().uuid(),
   source_method: callerSourceMethod.optional(),
+  // Public URL the data was extracted from. Required when source_method
+  // is 'proxied' (enforced in the route handler); null/omitted otherwise.
+  source_feed_url: z.string().url().max(2000).optional(),
   name: z.string().min(1).max(200),
   start: z.string().datetime({ offset: true }),
   end: z.string().datetime({ offset: true }).optional(),
@@ -237,6 +245,7 @@ export function friendlyToPortalInput(
       rsvp: data.rsvp,
       image_focal_y: data.image_focal_y,
       source_method: (data.source_method ?? 'self_asserted') as 'self_asserted' | 'proxied' | 'witnessed',
+      source_feed_url: data.source_feed_url ?? null,
       source_contributor_name: data.contributor?.name ?? null,
       source_contributor_url:
         data.contributor && typeof data.contributor.url === 'string' && data.contributor.url
@@ -362,16 +371,37 @@ router.post('/events', serviceLimiter, async (req, res, next) => {
     const data = validateRequest(createEventSchema, req.body);
     const sourceMethod = data.source_method ?? 'self_asserted';
     const witnessed = sourceMethod === 'witnessed';
+    const proxied = sourceMethod === 'proxied';
 
-    // Authority gate. Witnessed-evidence keys bypass the org-link check
-    // (publisher is the collective; the witness has the receipts). All
-    // other paths require an api_key_organization_links row.
+    // Authority gate (docs/four-roles.md). Both witnessed and proxied bypass
+    // the org-link check — the contributor is vouching for the data, not
+    // claiming to own the organizer. self_asserted requires an
+    // api_key_organization_links row (the organizer routed it via this key).
     if (witnessed) {
+      // Publisher is a collective; the witness has the evidence (a photo,
+      // held operationally — no source URL).
       if (!req.apiKeyInfo?.isAdmin && !req.apiKeyInfo?.witnessAuthority) {
         throw createError(
           'source_method=witnessed requires a key with witness_authority granted at activation.',
           403,
           'INSUFFICIENT_TIER',
+        );
+      }
+    } else if (proxied) {
+      // Trusted scrape-and-publish pipeline. Organizer stays the scraped
+      // real-world entity; the public lineage URL is mandatory evidence.
+      if (!req.apiKeyInfo?.isAdmin && !req.apiKeyInfo?.proxyAuthority) {
+        throw createError(
+          'source_method=proxied requires a key with proxy_authority.',
+          403,
+          'INSUFFICIENT_TIER',
+        );
+      }
+      if (!data.source_feed_url) {
+        throw createError(
+          'source_method=proxied requires source_feed_url — the public URL the data was extracted from.',
+          400,
+          'VALIDATION_ERROR',
         );
       }
     } else {
@@ -387,7 +417,12 @@ router.post('/events', serviceLimiter, async (req, res, next) => {
     // (the collective is the warrantor). "Claimed" means either
     // (a) Supabase Auth claim (`auth_user_id`) or (b) service-key claim
     // via /accounts/link / atomic activation (`claimed_at` is set).
-    if (data.image_url && !witnessed) {
+    // Proxied bypasses the photo-ownership gate alongside witnessed: in both
+    // paths the contributor is the warrantor (the source_feed_url is the
+    // proxied event's evidence), and the scraped organizer is unclaimed by
+    // definition, so requiring a claimed owner would block legitimate
+    // proxied imagery.
+    if (data.image_url && !witnessed && !proxied) {
       if (!orgCtx.ownerAccountId) {
         throw createError(
           'Photos may only be contributed by organizations with a claimed owner account.',

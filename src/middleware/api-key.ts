@@ -52,6 +52,14 @@ declare global {
          */
         witnessAuthority?: boolean;
         /**
+         * When true, this key may write events with `source_method='proxied'`
+         * (docs/four-roles.md Path 2) — attributed to the scraped real-world
+         * organizer, carrying the public `source_feed_url`. Like the
+         * witnessed path, it bypasses api_key_organization_links scope.
+         * Granted to trusted scrape-and-publish pipelines (e.g. Studio).
+         */
+        proxyAuthority?: boolean;
+        /**
          * Trusted-tenant pattern (v2.1). The portal_account this key
          * represents — when set, POST /service/organizations sets the
          * new org's owner_account_id to this value, satisfying the photo
@@ -157,7 +165,7 @@ export async function requireServiceApiKey(req: Request, _res: Response, next: N
     const keyHash = hashApiKey(apiKey);
     const { data: keyInfo } = await supabaseAdmin
       .from('api_keys')
-      .select('id, contributor_tier, is_admin, brand_config, verification_authority, witness_authority, tenant_account_id, contributor_profile_id, activated_at')
+      .select('id, contributor_tier, is_admin, brand_config, verification_authority, witness_authority, proxy_authority, tenant_account_id, contributor_profile_id, activated_at')
       .eq('key_hash', keyHash)
       .eq('status', 'active')
       .maybeSingle();
@@ -187,6 +195,7 @@ export async function requireServiceApiKey(req: Request, _res: Response, next: N
         ? (keyInfo.verification_authority as string[])
         : undefined,
       witnessAuthority: keyInfo.witness_authority === true,
+      proxyAuthority: keyInfo.proxy_authority === true,
       tenantAccountId: (keyInfo.tenant_account_id as string | null) || undefined,
       contributorProfileId: (keyInfo.contributor_profile_id as string | null) || undefined,
     };

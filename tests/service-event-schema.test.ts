@@ -6,10 +6,11 @@
  * Recurrence is optional.
  *
  * Required: `organizerOrganizationId` (organizer authority anchor for the
- * constrained-publishing model). source_method is optionally caller-set
- * to 'self_asserted' (default) or 'witnessed' (collective-evidence;
- * requires witness_authority on the key). 'proxied' is not caller-settable —
- * it's reserved for internal pipeline code paths.
+ * constrained-publishing model). source_method is optionally caller-set to
+ * 'self_asserted' (default), 'witnessed' (collective-evidence; requires
+ * witness_authority on the key), or 'proxied' (scrape-and-publish; requires
+ * proxy_authority on the key + a source_feed_url). Route-level guards enforce
+ * the per-method authority; the schema just admits the values.
  *
  * Post-085: source.publisher is gone (the role is filled by organizer.name).
  * No source_publisher column exists.
@@ -209,12 +210,17 @@ describe('ServiceEventInput — source_method hygiene', () => {
     expect(result.success).toBe(true);
   });
 
-  it('rejects source_method="proxied" (internal pipeline only, not caller-settable)', () => {
+  it('accepts source_method="proxied" from the caller (route-level guard enforces proxy_authority + source_feed_url)', () => {
     const result = createEventSchema.safeParse({
       ...minimumFriendly(),
       source_method: 'proxied',
+      source_feed_url: 'https://westphillyporchfest.com/shows',
     });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.source_method).toBe('proxied');
+      expect(result.data.source_feed_url).toBe('https://westphillyporchfest.com/shows');
+    }
   });
 
   it('rejects retired legacy method values like "api"', () => {
