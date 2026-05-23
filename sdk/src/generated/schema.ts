@@ -446,7 +446,11 @@ export interface paths {
          * @description Upload an image for an event. Image is re-encoded through Sharp (JPEG/PNG/WebP only, max 12MB). Returns the CDN URL.
          */
         post: operations["serviceUploadEventImage"];
-        delete?: never;
+        /**
+         * Delete event image (service)
+         * @description Remove the image associated with an event. Idempotent. Clears event_image_url and resets event_image_focal_y to its default. When the stored value is a Commons-hosted R2 object (its URL carries the deterministic key portal-events/{id}/image), the underlying R2 object is also deleted. External image URLs are left untouched upstream — only the DB reference is cleared.
+         */
+        delete: operations["serviceDeleteEventImage"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3315,6 +3319,48 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description NOT_LINKED */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    serviceDeleteEventImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Image cleared */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        deleted: boolean;
+                        /** @description True when the R2 object was deleted; false for external image URLs or when the event had no image. */
+                        r2_deleted: boolean;
+                        /** @description True when the cleared reference pointed at an external URL (not an R2-hosted object). */
+                        external: boolean;
+                        /**
+                         * @description Present when the event had no image; the response is otherwise a successful no-op.
+                         * @enum {string}
+                         */
+                        skipped?: "no_image";
+                    };
+                };
             };
             401: components["responses"]["Unauthorized"];
             /** @description NOT_LINKED */
