@@ -30,6 +30,7 @@ import {
 } from '../../lib/event-operations.js';
 import { createEventSeries } from '../../lib/event-series.js';
 import { downloadAndAttachImage } from '../../lib/image-processing.js';
+import { canContributePhotos } from '../../lib/contributor-policy.js';
 import { nominatimGeocode } from '../../lib/geocoding.js';
 import { isFirstPartyByOrganizer } from '../../lib/verification-hydrate.js';
 import { config } from '../../config.js';
@@ -144,7 +145,9 @@ export const createEventSchema = z.object({
     (v) => (typeof v === 'string' && v && !/^https?:\/\//i.test(v) ? `https://${v}` : v),
     z.string().url().max(2000).optional().or(z.literal('')),
   ),
-  image_url: z.string().url().max(2000).optional(),
+  // null is accepted and treated as "no image" (symmetric with the PATCH
+  // null-clear, so the shared ServiceEventInput shape stays honest).
+  image_url: z.string().url().max(2000).optional().nullable(),
   recurrence: z.string()
     .regex(/^(none|daily|weekly|biweekly|monthly|ordinal_weekday:[1-5]:(monday|tuesday|wednesday|thursday|friday|saturday|sunday)|weekly_days:(mon|tue|wed|thu|fri|sat|sun)(,(mon|tue|wed|thu|fri|sat|sun))*)$/)
     .optional(),
@@ -412,32 +415,18 @@ router.post('/events', serviceLimiter, async (req, res, next) => {
     // primary_place (post-082 these no longer live on portal_accounts).
     const orgCtx = await resolveOrganizerContext(data.organizerOrganizationId);
 
-    // Photo eligibility — only events whose organizer has a claimed owner
-    // account may contribute media bytes. Witnessed evidence bypasses
-    // (the collective is the warrantor). "Claimed" means either
-    // (a) Supabase Auth claim (`auth_user_id`) or (b) service-key claim
-    // via /accounts/link / atomic activation (`claimed_at` is set).
-    // Proxied bypasses the photo-ownership gate alongside witnessed: in both
-    // paths the contributor is the warrantor (the source_feed_url is the
-    // proxied event's evidence), and the scraped organizer is unclaimed by
-    // definition, so requiring a claimed owner would block legitimate
-    // proxied imagery.
+    // Photo eligibility — only events whose organizer has a photo-warrantor
+    // owner account may contribute media bytes. canContributePhotos is the
+    // single shared predicate (also used by the PATCH gate and the attach
+    // worker in image-processing.ts) so the three can't drift — they did
+    // once, which silently dropped covers for tenant-umbrella consumers.
+    // Witnessed/proxied bypass the upfront gate: the contributor is the
+    // warrantor and the scraped/collective organizer is unclaimed by
+    // definition; the attach worker still applies its own check.
     if (data.image_url && !witnessed && !proxied) {
-      if (!orgCtx.ownerAccountId) {
+      if (!orgCtx.ownerAccountId || !(await canContributePhotos(orgCtx.ownerAccountId))) {
         throw createError(
           'Photos may only be contributed by organizations with a claimed owner account.',
-          403,
-          'IMAGE_NOT_PERMITTED',
-        );
-      }
-      const { data: ownerAccount } = await supabaseAdmin
-        .from('portal_accounts')
-        .select('auth_user_id, claimed_at')
-        .eq('id', orgCtx.ownerAccountId)
-        .maybeSingle();
-      if (!ownerAccount || (!ownerAccount.auth_user_id && !ownerAccount.claimed_at)) {
-        throw createError(
-          'Photos may only be contributed by claimed accounts',
           403,
           'IMAGE_NOT_PERMITTED',
         );
@@ -669,13 +658,23 @@ router.patch('/events/:id', serviceLimiter, async (req, res, next) => {
   try {
     validateUuidParam(req.params.id, 'event ID');
     await assertLinkedEvent(req, req.params.id);
-    const data = validateRequest(updateEventSchema, req.body);
+    // image_url is single-event-only — extend here rather than widen the
+    // shared updateEventSchema (the series template PATCH reuses it and has
+    // its own per-instance image semantics). String: fetch + attach. Null:
+    // clear the cover.
+    const data = validateRequest(
+      updateEventSchema.extend({
+        image_url: z.string().url().max(2000).optional().nullable(),
+      }),
+      req.body,
+    );
 
     // Fetch existing event — include event_at/end_time so we can preserve
-    // wall-clock semantics on a timezone-only PATCH (S6).
+    // wall-clock semantics on a timezone-only PATCH (S6); source_method drives
+    // the photo-gate bypass for witnessed/proxied events.
     const { data: existing } = await supabaseAdmin
       .from('events')
-      .select('id, status, event_timezone, event_at, end_time, organizer_org_id')
+      .select('id, status, event_timezone, event_at, end_time, organizer_org_id, source_method')
       .eq('id', req.params.id)
       .maybeSingle();
 
@@ -683,6 +682,9 @@ router.patch('/events/:id', serviceLimiter, async (req, res, next) => {
 
     const wasPublished = existing.status === 'published';
     const dbUpdate: Record<string, unknown> = {};
+    // Owner account of the effective organizer (post-reassignment if any),
+    // captured for the photo-eligibility gate below.
+    let effectiveOwnerAccountId: string | null | undefined;
 
     // Reassign event to a different organizer (for merging duplicates / cleanup).
     // Caller must be linked to the TARGET org as well — re-attribution can't
@@ -693,6 +695,7 @@ router.patch('/events/:id', serviceLimiter, async (req, res, next) => {
       dbUpdate.organizer_org_id = data.organizerOrganizationId;
       // Keep creator_account_id consistent with the new organizer's owner.
       dbUpdate.creator_account_id = orgCtx.ownerAccountId;
+      effectiveOwnerAccountId = orgCtx.ownerAccountId;
     }
 
     if (data.status !== undefined) dbUpdate.status = data.status;
@@ -712,6 +715,9 @@ router.patch('/events/:id', serviceLimiter, async (req, res, next) => {
     if (data.rsvp !== undefined) dbUpdate.rsvp = data.rsvp;
     if (data.open_window !== undefined) dbUpdate.open_window = data.open_window;
     if (data.image_focal_y !== undefined) dbUpdate.event_image_focal_y = data.image_focal_y;
+    // Explicit null clears the cover. A string URL is attached below
+    // (fire-and-forget) after the row update — mirrors create.
+    if (data.image_url === null) dbUpdate.event_image_url = null;
     if (data.contributor !== undefined) {
       // null clears the override and falls back to the legacy derivation.
       dbUpdate.source_contributor_name = data.contributor?.name ?? null;
@@ -752,20 +758,62 @@ router.patch('/events/:id', serviceLimiter, async (req, res, next) => {
       }
     }
 
-    if (Object.keys(dbUpdate).length === 0) throw createError('No fields to update', 400, 'VALIDATION_ERROR');
+    // Photo-eligibility gate for a real cover URL (the null-clear above needs
+    // no gate). Same shared predicate as create; witnessed/proxied bypass the
+    // upfront check (the attach worker still applies its own).
+    const attachImageUrl = typeof data.image_url === 'string' ? data.image_url : null;
+    if (attachImageUrl) {
+      const srcMethod = (existing.source_method as string | null) ?? 'self_asserted';
+      if (srcMethod !== 'witnessed' && srcMethod !== 'proxied') {
+        let ownerAccountId: string | null = null;
+        if (data.organizerOrganizationId !== undefined) {
+          ownerAccountId = effectiveOwnerAccountId ?? null;
+        } else if (existing.organizer_org_id) {
+          ownerAccountId = (await resolveOrganizerContext(existing.organizer_org_id as string)).ownerAccountId;
+        }
+        if (!ownerAccountId || !(await canContributePhotos(ownerAccountId))) {
+          throw createError(
+            'Photos may only be contributed by organizations with a claimed owner account.',
+            403,
+            'IMAGE_NOT_PERMITTED',
+          );
+        }
+      }
+    }
 
-    const { data: updated, error } = await supabaseAdmin
-      .from('events')
-      .update(dbUpdate)
-      .eq('id', req.params.id)
-      .select(PORTAL_SELECT)
-      .single();
+    // A bare image attach (no column edits) is still a valid PATCH — the
+    // attach runs async below. Only reject when there's truly nothing to do.
+    if (Object.keys(dbUpdate).length === 0 && !attachImageUrl) {
+      throw createError('No fields to update', 400, 'VALIDATION_ERROR');
+    }
 
-    if (error) throw createError('Failed to update event', 500, 'SERVER_ERROR');
+    // Image-only PATCH writes no columns synchronously (the attach is async),
+    // so read the current row for the response instead of issuing an empty
+    // UPDATE. Both branches resolve to the same PORTAL_SELECT row shape.
+    const writeOrRead = Object.keys(dbUpdate).length > 0
+      ? supabaseAdmin.from('events').update(dbUpdate).eq('id', req.params.id).select(PORTAL_SELECT).single()
+      : supabaseAdmin.from('events').select(PORTAL_SELECT).eq('id', req.params.id).single();
+    const { data: updated, error } = await writeOrRead;
 
-    // Dispatch webhook when event transitions to published (e.g. approved from pending_review)
+    if (error || !updated) throw createError('Failed to update event', 500, 'SERVER_ERROR');
+
+    // Attach the cover (fire-and-forget — image failure must not fail the
+    // edit). downloadAndAttachImage re-checks contributor eligibility, sets
+    // event_image_url, then emits event.image_processed.
+    if (attachImageUrl) {
+      void downloadAndAttachImage(req.params.id, attachImageUrl)
+        .then(() => console.log(`[SERVICE] Image attached to ${req.params.id}`))
+        .catch((err) => console.error(`[SERVICE] Image attach failed for ${req.params.id}:`, err instanceof Error ? err.message : err));
+    }
+
     if (data.status === 'published' && !wasPublished) {
+      // First time consumers can see it — surface as a creation (existing behavior).
       dispatchEventWebhookById('event.created', updated.id);
+    } else {
+      // Gap 3: ordinary content edit (incl. image attach/clear). Notify
+      // subscribers immediately instead of waiting for the reconcile cron.
+      // onlyPublished suppresses edits to pending/draft/suspended rows.
+      dispatchEventWebhookById('event.updated', updated.id, { onlyPublished: true });
     }
 
     res.json({ event: toPortalEvent(updated) });
