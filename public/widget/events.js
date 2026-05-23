@@ -88,11 +88,30 @@
   // Create Shadow DOM
   var shadow = container.attachShadow({ mode: 'open' });
 
-  // Inject font
-  var fontLink = document.createElement('link');
-  fontLink.rel = 'stylesheet';
-  fontLink.href = 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&display=swap';
-  shadow.appendChild(fontLink);
+  // Self-host DM Sans (was a Google Fonts <link>). The widget embeds on
+  // third-party pages, so the old <link> pinged fonts.googleapis.com on every
+  // embedder's pageview — dropped for privacy/consistency.
+  //
+  // The @font-face goes in the HOST document's <head>, NOT this shadow root:
+  // Chromium ignores @font-face declared inside a shadow tree, so a
+  // shadow-scoped face never loads and text falls back to system fonts. Fonts
+  // are a document-level resource — declared in the head, 'DM Sans' is still
+  // usable by shadow content (font registration crosses the shadow boundary;
+  // style rules don't). The src is an ABSOLUTE URL to the Commons origin
+  // (apiBase, derived above from this script's own src) — a root-relative
+  // /fonts/... would resolve against the embedder's origin — and /fonts sends
+  // Access-Control-Allow-Origin for the cross-origin (CORS-mode) font fetch.
+  // Both weights map to the one variable woff2, mirroring public/index.html.
+  // Guarded by id so multiple widgets on a page inject the face only once.
+  if (!document.getElementById('nc-font-dm-sans')) {
+    var fontUrl = apiBase + '/fonts/dm-sans-latin.woff2';
+    var fontStyle = document.createElement('style');
+    fontStyle.id = 'nc-font-dm-sans';
+    fontStyle.textContent =
+      "@font-face{font-family:'DM Sans';font-style:normal;font-weight:400;font-display:swap;src:url('" + fontUrl + "') format('woff2');}" +
+      "@font-face{font-family:'DM Sans';font-style:normal;font-weight:500;font-display:swap;src:url('" + fontUrl + "') format('woff2');}";
+    document.head.appendChild(fontStyle);
+  }
 
   // Inject styles
   var style = document.createElement('style');

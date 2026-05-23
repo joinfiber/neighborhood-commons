@@ -46,6 +46,7 @@ import {
   sendRejectionEmail,
   sendWitnessingEnabledEmail,
 } from '../lib/developer-portal/activation-emails.js';
+import { FONT_PRELOAD_HTML, FONT_FACE_CSS } from '../lib/self-hosted-fonts.js';
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -205,10 +206,8 @@ function operatorShell(args: { title: string; body: string; operatorEmail: strin
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${escapeHtml(args.title)} — Operator · Neighborhood Commons</title>
   <meta name="robots" content="noindex,nofollow">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-  <style>${styles}</style>
+  ${FONT_PRELOAD_HTML}
+  <style>${FONT_FACE_CSS}${styles}</style>
 </head>
 <body>
   <main class="nc-op-wrap">

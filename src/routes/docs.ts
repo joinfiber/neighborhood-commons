@@ -18,6 +18,7 @@ import { fileURLToPath } from 'url';
 import { readFile } from 'fs/promises';
 import { marked } from 'marked';
 import rateLimit from 'express-rate-limit';
+import { FONT_PRELOAD_HTML, FONT_FACE_CSS } from '../lib/self-hosted-fonts.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DOCS_DIR = path.resolve(__dirname, '../../docs');
@@ -174,10 +175,8 @@ function renderShell(args: { title: string; bodyHtml: string; slug: string }): s
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${escapeHtmlAttr(args.title)} — Neighborhood Commons</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-  <style>${DOCS_STYLES}</style>
+  ${FONT_PRELOAD_HTML}
+  <style>${FONT_FACE_CSS}${DOCS_STYLES}</style>
 </head>
 <body>
   <main class="nc-doc-wrap">

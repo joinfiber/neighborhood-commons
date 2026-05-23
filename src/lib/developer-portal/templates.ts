@@ -12,6 +12,8 @@
  * URLs. URL fields are constrained at the validation layer.
  */
 
+import { FONT_PRELOAD_HTML, FONT_FACE_CSS } from '../self-hosted-fonts.js';
+
 /** Escape user-supplied content for safe HTML body interpolation. */
 export function escapeHtml(text: string | null | undefined): string {
   if (text == null) return '';
@@ -228,10 +230,8 @@ export function portalShell(args: { title: string; body: string }): string {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${escapeHtml(args.title)} — Neighborhood Commons Developers</title>
   <meta name="robots" content="noindex,nofollow">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-  <style>${SHARED_STYLES}</style>
+  ${FONT_PRELOAD_HTML}
+  <style>${FONT_FACE_CSS}${SHARED_STYLES}</style>
 </head>
 <body>
   <main class="nc-portal-wrap">
