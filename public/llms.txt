@@ -671,7 +671,7 @@ curl -X DELETE "https://neighborhood-commons.org/api/v1/service/lists/LIST_UUID/
 
 The Commons re-hosts images on its own infrastructure (R2) and serves them to every consumer that reads the affected event. We assert CC BY 4.0 on the data, including images, **based on contributor warranties** — we do not pre-screen uploads against copyright databases today.
 
-**Contributor warranty.** When you POST an `image_url`, you warrant that (a) you own the rights or have permission to redistribute under CC BY 4.0, (b) the content isn't infringing, and (c) you indemnify the Commons against claims arising from your upload.
+**Contributor warranty.** When you POST or PATCH an `image_url`, you warrant that (a) you own the rights or have permission to redistribute under CC BY 4.0, (b) the content isn't infringing, and (c) you indemnify the Commons against claims arising from your upload.
 
 **Safe content:** posters and flyers your venue or community group designed; photos you took or licensed; permissively-licensed content with attribution preserved.
 

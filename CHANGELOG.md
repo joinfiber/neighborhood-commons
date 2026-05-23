@@ -14,6 +14,15 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-05-22 — cover photos on event PATCH + edit webhooks + photo-gate fix
+
+Three Service-API event-write fixes, surfaced by Merrie (event covers and "via" attribution weren't reaching downstream consumers). Additive / non-breaking.
+
+- **`PATCH /service/events/{id}` now accepts `image_url`.** A string URL is fetched, re-encoded through Sharp, and attached fire-and-forget exactly like create; `null` clears the cover. Previously the field was silently dropped on update, so edit-heavy publishers could never add, change, or remove a cover after create. The Spec already documented `image_url` on this body (`ServiceEventInput`) — this aligns the implementation with the contract.
+- **Photo-eligibility gate fixed.** `canContributePhotos` now treats a service-key-claimed tenant account (`claimed_at` set) as a photo warrantor, matching the create-path gate and the documented trusted-tenant pattern. Before this, tenant-umbrella consumers (Merrie) passed the create gate on `claimed_at`, but the attach worker required `auth_user_id` — which trusted-tenant accounts never have — so covers were silently refused and events published image-less. Create, PATCH, and the attach worker now share one predicate.
+- **`event.updated` now fires on ordinary content edits.** `PATCH /service/events/{id}` previously dispatched a webhook only on the pending→published transition; other edits updated the DB silently and consumers caught them only on the reconcile cron. Edits to published events now dispatch `event.updated` (suppressed for non-published rows). No new event type — `event.updated` was already in the contract.
+- **`ServiceEventInput.image_url`** is now `nullable` in the Spec (null = clear on PATCH / no-image on create). SDK schema regenerated.
+
 ## 2026-05-21 — caller-set `proxied` provenance (close the Spec↔four-roles gap)
 
 `docs/four-roles.md` Path 2 ("Pipeline-proxies") defines `proxied` as the honest provenance for a tool that scrapes a public page and publishes on behalf of the scraped entity. But the Service API write enum only admitted `['self_asserted','witnessed']` and the field doc said `proxied` was "not caller-settable — reserved for internal pipeline code paths." That left external scrape-and-publish pipelines (Studio's porchfest path is the first) with no way to declare the one method that honestly describes them — they fell back to legacy `'api'`, surviving only on the migration-085 mapping grace window. Doctrine said one thing, the Spec enforced another. This closes the gap, mirroring the `witnessed` authority model.

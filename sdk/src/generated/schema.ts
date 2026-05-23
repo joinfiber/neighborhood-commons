@@ -1740,9 +1740,9 @@ export interface components {
             url?: string;
             /**
              * Format: uri
-             * @description Source image URL; fetched, re-encoded through Sharp, and hosted by Commons.
+             * @description Source image URL; fetched, re-encoded through Sharp, and hosted by Commons. On PATCH, pass null to clear the cover; on create, null is treated as no image. Requires the organizer to have a photo-warrantor owner account (auth-backed or service-key-claimed tenant), else 403 IMAGE_NOT_PERMITTED.
              */
-            image_url?: string;
+            image_url?: string | null;
             /** @description RRULE string (e.g. FREQ=WEEKLY;COUNT=12). Omit for one-off events. */
             recurrence?: string;
             instance_count?: number;
