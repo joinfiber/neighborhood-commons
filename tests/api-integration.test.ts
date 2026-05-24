@@ -812,6 +812,21 @@ describe('created_by_contributor on organizations & publishers', () => {
   });
 });
 
+describe('GET /api/meta/categories', () => {
+  it('returns category counts from the event_category_counts RPC', async () => {
+    mockRpcResponses.set('event_category_counts', {
+      data: [{ category: 'live_music', count: 3 }, { category: 'community', count: 1 }],
+      error: null,
+    });
+    const res = await fetch(`${baseUrl}/api/meta/categories`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.categories).toHaveLength(2);
+    // sorted by count desc; underscores become hyphens in the slug
+    expect(body.categories[0]).toMatchObject({ key: 'live_music', slug: 'live-music', count: 3 });
+  });
+});
+
 // =============================================================================
 // SERIES — public endpoints
 // =============================================================================

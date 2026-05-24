@@ -26,6 +26,17 @@ export const globalLimiter = isTest ? passthrough : rateLimit({
   legacyHeaders: false,
 });
 
+/** Meta endpoints — public reads, some revealing cardinality (categories/stats).
+ *  Tighter than the global limiter because /categories and /stats are scan-heavy. */
+export const metaLimiter = isTest ? passthrough : rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  keyGenerator: (req: Request) => req.ip || 'unknown',
+  message: { error: { code: 'RATE_LIMIT', message: 'Too many requests' } },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 /** Write endpoints (stricter) */
 export const writeLimiter = isTest ? passthrough : rateLimit({
   windowMs: 60 * 1000,
