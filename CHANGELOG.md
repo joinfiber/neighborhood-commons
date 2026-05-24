@@ -14,6 +14,14 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-05-24 — SECURITY: gate `POST /service/organizations/link` on ownership (cross-tenant write fix)
+
+A service key could link itself to **any** organization by id — and because write authority is derived from the presence of an `api_key_organization_links` row, that self-link let any activated key write to (and deface or delete) any organization's events, broadcasts, lists, and profile. Cross-tenant privilege escalation. Closed.
+
+- **`BREAKING:` `POST /service/organizations/link` now requires the target organization to be owned by the calling key's tenant account** (or an admin key); otherwise `403 NOT_LINKED`. Organizations created via `POST /service/organizations` are auto-linked to the creating key, so the normal publish flow (Merrie etc.) is unaffected — only self-service linking to an organization you don't own is rejected. Spec updated: `/service/organizations/link` description + `403` response.
+- All `/service/organizations/*` routes now carry the per-key `serviceLimiter` (previously only the global IP limit applied), bounding write/abuse rate per key like the rest of the Service API.
+- Fixed `assertLinkedAccount` mis-authorizing legitimate multi-org tenants: a `.maybeSingle()` over multiple link rows errored and surfaced a spurious `403 NOT_LINKED`.
+
 ## 2026-05-24 — events link to contributor profiles (rich "via <app>" attribution)
 
 Completes the unshipped half of migration 086. Additive / non-breaking; no Spec change (the `source.contributor` object already documents `slug`/`logo_url`/`description`/`profile_url` — this populates them for events).

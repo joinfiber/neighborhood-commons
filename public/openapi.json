@@ -5110,7 +5110,7 @@
     "/service/organizations/link": {
       "post": {
         "summary": "Link an existing organization to this service key",
-        "description": "Establishes a relationship between the calling service key and an existing Organization. After linking, the key may write to that organization's data (events, broadcasts, identifier verifications, lists curated by it). Idempotent: calling on an already-linked organization returns 200 with the existing link.",
+        "description": "Establishes a relationship between the calling service key and an existing Organization **owned by the key's own tenant account**. After linking, the key may write to that organization's data (events, broadcasts, identifier verifications, lists curated by it). A key may only link to an organization its tenant account owns (e.g. re-establishing a link after a new key is issued); admin keys bypass. Self-service linking is NOT an authority grant — linking to an organization you do not own requires operator approval. Note: organizations created via `POST /service/organizations` are auto-linked to the creating key, so this endpoint is rarely needed. Idempotent: calling on an already-linked organization returns 200 with the existing link.",
         "operationId": "serviceLinkOrganization",
         "security": [
           {
@@ -5175,6 +5175,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "description": "The calling key may only link to organizations owned by its own tenant account (or must be an admin key). Linking to an organization owned by another party requires operator approval. Returns error code `NOT_LINKED`."
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
