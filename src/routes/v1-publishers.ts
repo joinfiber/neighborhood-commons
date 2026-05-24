@@ -58,29 +58,41 @@ export const publishersLimiter = rateLimit({
  */
 async function getPublisherOrgIds(): Promise<Set<string>> {
   const ids = new Set<string>();
-
-  // Orgs with at least one event
-  const { data: eventOrgs } = await supabaseAdmin
-    .from('events')
-    .select('organizer_org_id')
-    .eq('status', 'published')
-    .not('organizer_org_id', 'is', null);
-  for (const row of eventOrgs || []) {
-    const id = (row as { organizer_org_id: string }).organizer_org_id;
-    if (id) ids.add(id);
+  // publisher_org_ids() (migration 095) dedups in Postgres and returns only the
+  // distinct publisher org ids, instead of streaming one row per published event
+  // into the process and deduping here.
+  const { data, error } = await supabaseAdmin.rpc('publisher_org_ids');
+  if (error) {
+    console.error('[V1:PUBLISHERS] publisher_org_ids RPC error:', error.message);
+    return ids;
   }
-
-  // Orgs with at least one active broadcast
-  const { data: broadcastOrgs } = await supabaseAdmin
-    .from('broadcasts')
-    .select('organization_id')
-    .eq('status', 'active');
-  for (const row of broadcastOrgs || []) {
-    const id = (row as { organization_id: string }).organization_id;
-    if (id) ids.add(id);
+  for (const row of (data as { org_id: string }[] | null) || []) {
+    if (row.org_id) ids.add(row.org_id);
   }
-
   return ids;
+}
+
+/**
+ * Whether an org has published at least one event or active broadcast. Two
+ * indexed LIMIT-1 lookups — far cheaper than materializing the entire publisher
+ * set just to test one membership (the detail route's former behavior).
+ */
+async function isPublisherOrg(orgId: string): Promise<boolean> {
+  const { data: ev } = await supabaseAdmin
+    .from('events')
+    .select('id')
+    .eq('organizer_org_id', orgId)
+    .eq('status', 'published')
+    .limit(1);
+  if ((ev?.length ?? 0) > 0) return true;
+
+  const { data: bc } = await supabaseAdmin
+    .from('broadcasts')
+    .select('id')
+    .eq('organization_id', orgId)
+    .eq('status', 'active')
+    .limit(1);
+  return (bc?.length ?? 0) > 0;
 }
 
 /**
@@ -260,10 +272,9 @@ router.get('/:idOrSlug', async (req, res, next) => {
       throw createError('Publisher not found', 404, 'NOT_FOUND');
     }
 
-    // Confirm the org is actually a publisher (has at least one event or broadcast).
-    // If not, return 404 — they exist as an organization but not as a publisher.
-    const publisherIds = await getPublisherOrgIds();
-    if (!publisherIds.has(org.id as string)) {
+    // Confirm the org is actually a publisher (has at least one event or active
+    // broadcast). Targeted existence check — no full-set materialization.
+    if (!(await isPublisherOrg(org.id as string))) {
       throw createError('Publisher not found', 404, 'NOT_FOUND');
     }
 
