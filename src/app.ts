@@ -113,13 +113,18 @@ export function createApp(): Express {
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
+          // Every Commons-served HTML surface (homepage, developer/operator
+          // portals, docs) self-hosts its fonts from /fonts/*.woff2, which
+          // 'self' covers — so no Google Fonts origins are listed. Don't
+          // re-add a Google Fonts <link> to any of these pages; self-host via
+          // src/lib/self-hosted-fonts.ts instead (the woff2 files are there).
           // jsdelivr is allowed for the /spec page's Scalar API reference:
           //   script-src   the bundle itself
           //   style-src    Scalar injects a runtime stylesheet
           //   font-src     Inter + JetBrains Mono shipped inside the bundle
           //   connect-src  Scalar fetches companion assets lazily
-          styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://cdn.jsdelivr.net'],
-          fontSrc: ["'self'", 'https://fonts.gstatic.com', 'https://cdn.jsdelivr.net'],
+          styleSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'],
+          fontSrc: ["'self'", 'https://cdn.jsdelivr.net'],
           scriptSrc: ["'self'", 'https://challenges.cloudflare.com', 'https://static.cloudflareinsights.com', 'https://cdn.jsdelivr.net'],
           frameSrc: ["'self'", 'https://challenges.cloudflare.com'],
           connectSrc: ["'self'", config.supabase.url, 'https://places.googleapis.com', 'https://cdn.jsdelivr.net'],
@@ -158,6 +163,12 @@ export function createApp(): Express {
   // Widget JS and badges must load from any origin
   app.use('/widget', publicCors);
   app.use('/pages.css', publicCors);
+  // The embeddable widget runs on third-party pages and self-hosts DM Sans via
+  // an @font-face pointing at this origin's /fonts/*.woff2. Cross-origin font
+  // fetches are always CORS-mode, so the font response needs Access-Control-
+  // Allow-Origin (CORP, set globally via helmet, is not enough). Without this
+  // the embedded widget would fall back to system fonts on every host page.
+  app.use('/fonts', publicCors);
 
   // Restricted CORS for webhooks, internal, cron routes
   app.use('/api/webhooks', privateCors);

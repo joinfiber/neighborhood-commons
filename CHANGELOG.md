@@ -14,6 +14,14 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-05-24 — events link to contributor profiles (rich "via <app>" attribution)
+
+Completes the unshipped half of migration 086. Additive / non-breaking; no Spec change (the `source.contributor` object already documents `slug`/`logo_url`/`description`/`profile_url` — this populates them for events).
+
+- **`POST /service/events` now stamps `events.contributor_profile_id`** from the calling key's registered profile (mirrors `POST /service/organizations`). The public read API surfaces the full `source.contributor` card (slug, logo, description, `profile_url`) for linked events; `event-transform.buildContributor` prefers a linked profile over the legacy name snapshot. Keys without a registered profile keep the name-only snapshot.
+- **Migration 092** backfills existing events — `creator_account_id → api_keys.tenant_account_id → contributor_profile_id`, same best-effort/unambiguous shape as migration 090 (organizations). Only links events whose contributing app has a registered profile bound to its key.
+- Series auto-extend preserves the link (`contributor_profile_id` added to the `base_event_data` template keys).
+
 ## 2026-05-22 — cover photos on event PATCH + edit webhooks + photo-gate fix
 
 Three Service-API event-write fixes, surfaced by Merrie (event covers and "via" attribution weren't reaching downstream consumers). Additive / non-breaking.

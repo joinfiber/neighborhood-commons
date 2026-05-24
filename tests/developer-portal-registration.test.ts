@@ -168,6 +168,17 @@ describe('GET /developers/sign-up', () => {
     expect(cookieHeader).toContain('HttpOnly');
     expect(cookieHeader).toContain('SameSite=Lax');
   });
+
+  it('self-hosts fonts (no Google Fonts <link>)', async () => {
+    const res = await fetch(`${baseUrl}/developers/sign-up`);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('@font-face');
+    expect(html).toContain('/fonts/dm-sans-latin.woff2');
+    expect(html).toContain('rel="preload"');
+    expect(html).not.toContain('fonts.googleapis.com');
+    expect(html).not.toContain('fonts.gstatic.com');
+  });
 });
 
 // ---------------------------------------------------------------------------

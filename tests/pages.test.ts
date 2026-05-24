@@ -420,6 +420,17 @@ describe('static assets', () => {
     expect(js).toContain('Shadow');
   });
 
+  it('serves the self-hosted woff2 body font', async () => {
+    // The portal/docs surfaces reference /fonts/dm-sans-latin.woff2 in their
+    // inline @font-face. If the file moves or is renamed, those pages would
+    // silently fall back to system fonts (FOUT) — assert it's actually served.
+    const res = await fetch(`${baseUrl}/fonts/dm-sans-latin.woff2`);
+    expect(res.status).toBe(200);
+    const buf = Buffer.from(await res.arrayBuffer());
+    // woff2 magic number: "wOF2"
+    expect(buf.subarray(0, 4).toString('latin1')).toBe('wOF2');
+  });
+
   it('serves badge SVG', async () => {
     const res = await fetch(`${baseUrl}/widget/badge.svg`);
     expect(res.status).toBe(200);
@@ -430,6 +441,17 @@ describe('static assets', () => {
 
   it('widget JS has valid CORS headers', async () => {
     const res = await fetch(`${baseUrl}/widget/events.js`);
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
+  });
+
+  it('self-hosted font has valid CORS headers', async () => {
+    // The embeddable widget self-hosts DM Sans via an @font-face pointing at
+    // this origin's /fonts/dm-sans-latin.woff2. Because the widget runs on
+    // third-party pages, that font fetch is cross-origin and CORS-mode, so the
+    // response MUST carry Access-Control-Allow-Origin or the browser blocks it
+    // and the widget silently falls back to system fonts. This guards the
+    // app.use('/fonts', publicCors) mount — drop it and this fails.
+    const res = await fetch(`${baseUrl}/fonts/dm-sans-latin.woff2`);
     expect(res.headers.get('access-control-allow-origin')).toBe('*');
   });
 });

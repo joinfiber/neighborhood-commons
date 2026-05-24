@@ -469,6 +469,14 @@ router.post('/events', serviceLimiter, async (req, res, next) => {
     const insert = portalInputToInsert(portal, orgCtx.ownerAccountId, adminUserId);
     // Stamp the organizer FK directly — it's the load-bearing authority anchor.
     insert.organizer_org_id = data.organizerOrganizationId;
+    // Link the contributing app's registered profile (migration 086 added the
+    // column and intended this stamp; it mirrors POST /service/organizations).
+    // It powers the rich "via <app>" card on the read API — event-transform's
+    // buildContributor prefers a linked profile over the name snapshot. Null for
+    // keys without a registered profile, in which case the snapshot name still
+    // applies. The per-event `contributor` override stays a display snapshot;
+    // the registered profile is the canonical identity.
+    insert.contributor_profile_id = req.apiKeyInfo?.contributorProfileId ?? null;
 
     // Resolve coordinates: explicit > organizer's primary_place > geocode
     let lat = data.location.lat ?? null;

@@ -161,6 +161,11 @@ export async function createEventSeries(
     // instances — the auto-extend cron reads base_event_data to regenerate
     // them weeks later.
     'source_contributor_name', 'source_contributor_url',
+    // Registered-profile link (migration 086). Keep it on auto-extended
+    // instances so the "via <app>" attribution card persists on instances the
+    // cron materializes weeks later. Initial instances already inherit it via
+    // the templateData spread below.
+    'contributor_profile_id',
   ];
   for (const key of templateKeys) {
     if (key in templateData) baseEventData[key] = templateData[key];

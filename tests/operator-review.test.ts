@@ -357,6 +357,10 @@ describe('GET /operator/applications', () => {
     expect(html).toContain('pending1@example.com');
     // The "pending" tab is highlighted by default
     expect(html).toContain('<strong>pending</strong>');
+    // Operator shell self-hosts fonts — no Google Fonts ping on this surface.
+    expect(html).toContain('@font-face');
+    expect(html).toContain('/fonts/dm-sans-latin.woff2');
+    expect(html).not.toContain('fonts.googleapis.com');
   });
 
   it('shows empty-state sub-headings when no pending items in either bucket', async () => {

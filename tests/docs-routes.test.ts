@@ -100,4 +100,25 @@ describe('GET /docs/:slug', () => {
     const html = await res.text();
     expect(html).toMatch(/<h[12]/);
   });
+
+  it('self-hosts fonts and serves a CSP that omits Google Fonts', async () => {
+    const res = await fetch(`${baseUrl}/docs/quickstart`);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+
+    // Fonts load from our own origin (/fonts/*.woff2), not Google Fonts.
+    expect(html).toContain('@font-face');
+    expect(html).toContain('/fonts/dm-sans-latin.woff2');
+    expect(html).toContain('rel="preload"');
+    expect(html).not.toContain('fonts.googleapis.com');
+    expect(html).not.toContain('fonts.gstatic.com');
+
+    // The global helmet CSP drops both Google Fonts origins but keeps
+    // jsdelivr (Scalar's bundle on /spec). This header is app-wide, so
+    // asserting it once here locks the invariant for every surface.
+    const csp = res.headers.get('content-security-policy') || '';
+    expect(csp).not.toContain('fonts.googleapis.com');
+    expect(csp).not.toContain('fonts.gstatic.com');
+    expect(csp).toContain('cdn.jsdelivr.net');
+  });
 });
