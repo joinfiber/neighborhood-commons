@@ -650,6 +650,10 @@ describe('series deduplication', () => {
       error: null,
       count: 4,
     });
+    mockRpcResponses.set('series_instance_counts', {
+      data: [{ series_id: 'series-uuid-1', count: 3 }],
+      error: null,
+    });
 
     // Without collapse_series, all 4 events are returned
     const resAll = await fetch(`${baseUrl}/api/v1/events`);
