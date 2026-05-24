@@ -17,6 +17,7 @@ import { createError } from '../../middleware/error-handler.js';
 import { validateRequest, validateUuidParam } from '../../lib/helpers.js';
 import { formatPlace } from '../v1-places.js';
 import { formatOrganization } from '../v1-organizations.js';
+import { shapeBroadcastSource } from '../v1-broadcasts.js';
 import { hydrateVerificationsFor } from '../../lib/verification-hydrate.js';
 import { assertLinkedOrganization } from './helpers-v1.js';
 
@@ -59,9 +60,10 @@ async function formatBroadcastWithExtras(row: Record<string, unknown>) {
     datePosted: row.created_at,
     expires: row.expires_at,
     status: row.status,
+    method: row.method,
     organization: orgRow ? formatOrganization(orgRow, new Map(), verifications) : null,
     location: placeRow ? formatPlace(placeRow) : null,
-    source: row.source,
+    source: shapeBroadcastSource(row),
   };
 }
 

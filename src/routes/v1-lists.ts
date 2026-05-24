@@ -216,6 +216,7 @@ async function formatList(row: Record<string, unknown>, opts: { hydrateItems: bo
     slug: row.slug,
     name: row.name,
     description: row.description || null,
+    method: row.method,
     curator,
     itemListOrder: 'Ascending',
     numberOfItems,

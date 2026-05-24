@@ -42,7 +42,7 @@ export const ORG_SELECT = `
   id, slug, name, legal_name,
   description, url, logo_url, image_url, telephone, email,
   same_as, keywords, opening_hours_specification,
-  tags, commercial,
+  tags, commercial, method,
   primary_place_id,
   created_at, updated_at
 `;
@@ -308,6 +308,7 @@ export function formatOrganization(
     id,
     slug: row.slug,
     name: row.name,
+    method: row.method,
     legalName: row.legal_name || null,
     additionalType: deriveAdditionalType(!!placeRow),
     description: row.description || null,
