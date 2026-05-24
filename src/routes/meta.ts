@@ -10,11 +10,26 @@
  */
 
 import { Router } from 'express';
+import { readFileSync } from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { createError } from '../middleware/error-handler.js';
 import { parseLocation } from '../lib/helpers.js';
 
 const router: ReturnType<typeof Router> = Router();
+
+// Single source of truth for the reported implementation version: read
+// info.version from openapi.json at boot rather than hardcoding it (which drifted
+// — it sat at 3.0.0 while the spec moved to 3.2.0). Mirrors src/app.ts.
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+let IMPLEMENTATION_VERSION = '';
+try {
+  const openapiRaw = readFileSync(path.resolve(__dirname, '../../public/openapi.json'), 'utf-8');
+  IMPLEMENTATION_VERSION = (JSON.parse(openapiRaw)?.info?.version as string) ?? '';
+} catch (err) {
+  console.warn('[META] Failed to read spec version from openapi.json:', err);
+}
 
 /**
  * GET /api/meta
@@ -24,7 +39,7 @@ router.get('/', (_req, res) => {
   res.json({
     name: 'Neighborhood Commons',
     description: 'Open, typed substrate for neighborhood public facts.',
-    implementation_version: '3.0.0',
+    implementation_version: IMPLEMENTATION_VERSION,
     implementation_spec: 'https://neighborhood-commons.org/openapi.json',
     upstream_spec: 'neighborhood-api-v0.2',
     upstream_spec_url: 'https://github.com/The-Relational-Technology-Project/neighborhood-api',
