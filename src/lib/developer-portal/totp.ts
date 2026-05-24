@@ -61,26 +61,37 @@ export function otpauthUrl(args: { issuer: string; accountName: string; secret: 
  * a tiny but real information leak about the server clock.
  */
 export function verifyTotp(secret: string, submittedCode: string): boolean {
-  if (!secret || !submittedCode) return false;
+  return verifyTotpStep(secret, submittedCode) !== null;
+}
+
+/**
+ * Like verifyTotp, but returns the matched TOTP time-step (counter) on success
+ * or null on failure. Exposing the step lets callers enforce single-use —
+ * rejecting a step that was already consumed defeats replay within the ±1
+ * validity window. Runs all comparisons regardless of an early match to keep
+ * the comparison count (and timing) constant.
+ */
+export function verifyTotpStep(secret: string, submittedCode: string): number | null {
+  if (!secret || !submittedCode) return null;
   const cleaned = submittedCode.replace(/\s+/g, '');
-  if (!/^[0-9]{6}$/.test(cleaned)) return false;
+  if (!/^[0-9]{6}$/.test(cleaned)) return null;
 
   const key = base32Decode(secret);
-  if (!key) return false;
+  if (!key) return null;
 
   const nowStep = Math.floor(Date.now() / 1000 / PERIOD_SECONDS);
   const submitted = Buffer.from(cleaned, 'utf8');
 
-  let matched = false;
+  let matchedStep: number | null = null;
   for (let offset = -TOLERANCE_STEPS; offset <= TOLERANCE_STEPS; offset++) {
-    const expected = hotp(key, nowStep + offset);
-    const expectedBuf = Buffer.from(expected, 'utf8');
+    const step = nowStep + offset;
+    const expectedBuf = Buffer.from(hotp(key, step), 'utf8');
     if (expectedBuf.length === submitted.length && timingSafeEqual(expectedBuf, submitted)) {
-      matched = true;
+      matchedStep = step;
       // Don't `break` — letting the loop finish keeps comparison count constant.
     }
   }
-  return matched;
+  return matchedStep;
 }
 
 /** Compute HOTP(K, C) per RFC 4226 §5.3. Returns a 6-digit zero-padded string. */
