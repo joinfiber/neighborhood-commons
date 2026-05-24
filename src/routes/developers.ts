@@ -332,27 +332,34 @@ router.get('/dashboard', renderLimiter, requireDeveloperSession, async (req, res
     const contactEmail = (keyRow.contact_email as string | undefined)?.toLowerCase() || '';
     const isOperator = contactEmail !== '' && config.operator.emails.includes(contactEmail);
 
-    // Resolve the collective Organization (if linked). Used by the
-    // Publishing Modes panel — every PR-B-era developer has one; pre-PR-B
-    // developers (Merrie etc.) don't until they click "provision".
-    const { data: linkRow } = await supabaseAdmin
+    // Resolve the developer's collective + their publishing scope.
+    //
+    // api_key_organization_links is a SCOPING table — it lists every org this
+    // key may write to. A publisher (Merrie) is scoped to many orgs it
+    // publishes for; a witnessing app (Fiber) typically has just its collective.
+    // The collective is the org the /collective/provision flow created, named
+    // "<App> Community" (the convention that flow writes) — so match on that,
+    // NOT on "first linked org", which would mislabel an arbitrary publishing
+    // org as the collective.
+    const collectiveName = `${(keyRow.name as string | null) || 'App'} Community`;
+    const { data: links } = await supabaseAdmin
       .from('api_key_organization_links')
       .select('organization_id')
-      .eq('api_key_id', session.api_key_id)
-      .limit(1)
-      .maybeSingle();
+      .eq('api_key_id', session.api_key_id);
+    const linkedOrgIds = (links || []).map((l) => l.organization_id as string);
+    const publishingOrgCount = linkedOrgIds.length;
     let collectiveOrg: { id: string; name: string; slug: string } | null = null;
-    if (linkRow?.organization_id) {
-      const { data: orgRow } = await supabaseAdmin
+    if (linkedOrgIds.length > 0) {
+      const { data: orgs } = await supabaseAdmin
         .from('organizations')
         .select('id, name, slug')
-        .eq('id', linkRow.organization_id)
-        .maybeSingle();
-      if (orgRow) {
+        .in('id', linkedOrgIds);
+      const match = (orgs || []).find((o) => (o.name as string) === collectiveName);
+      if (match) {
         collectiveOrg = {
-          id: orgRow.id as string,
-          name: orgRow.name as string,
-          slug: orgRow.slug as string,
+          id: match.id as string,
+          name: match.name as string,
+          slug: match.slug as string,
         };
       }
     }
@@ -373,6 +380,7 @@ router.get('/dashboard', renderLimiter, requireDeveloperSession, async (req, res
       csrfToken,
       isOperator,
       collectiveOrg,
+      publishingOrgCount,
       flashMessage,
       flashError,
     }));
@@ -717,20 +725,7 @@ router.post('/collective/provision', writeFormLimiter, requireDeveloperSession, 
 
     const session = req.developerSession!;
 
-    // Already linked? No-op.
-    const { data: existingLink } = await supabaseAdmin
-      .from('api_key_organization_links')
-      .select('organization_id')
-      .eq('api_key_id', session.api_key_id)
-      .limit(1)
-      .maybeSingle();
-
-    if (existingLink?.organization_id) {
-      res.redirect(303, '/developers/dashboard');
-      return;
-    }
-
-    // Resolve a sensible default name from the dev's profile/key.
+    // Resolve the dev's key + the collective name from its app name.
     const { data: keyRow } = await supabaseAdmin
       .from('api_keys')
       .select('id, name, contributor_profile_id')
@@ -742,6 +737,27 @@ router.post('/collective/provision', writeFormLimiter, requireDeveloperSession, 
     }
     const appName = (keyRow.name as string | null) || 'App';
     const collectiveName = `${appName} Community`;
+
+    // Already have a collective? It's the linked org named "<App> Community" —
+    // NOT just "any linked org". A publisher is scoped to many publishing orgs,
+    // none of which is its collective; the old "any link" check wrongly treated
+    // the first such org as the collective and blocked real provisioning.
+    const { data: links } = await supabaseAdmin
+      .from('api_key_organization_links')
+      .select('organization_id')
+      .eq('api_key_id', session.api_key_id);
+    const linkedOrgIds = (links || []).map((l) => l.organization_id as string);
+    if (linkedOrgIds.length > 0) {
+      const { data: linkedOrgs } = await supabaseAdmin
+        .from('organizations')
+        .select('id, name')
+        .in('id', linkedOrgIds);
+      if ((linkedOrgs || []).some((o) => (o.name as string) === collectiveName)) {
+        res.redirect(303, '/developers/dashboard');
+        return;
+      }
+    }
+
     const baseCollectiveSlug = deriveCollectiveSlug(collectiveName);
 
     // Resolve a unique slug — fall back to appending random suffixes on
@@ -1589,10 +1605,11 @@ function renderDashboard(args: {
   csrfToken: string;
   isOperator: boolean;
   collectiveOrg: { id: string; name: string; slug: string } | null;
+  publishingOrgCount: number;
   flashMessage: string | null;
   flashError: string | null;
 }): string {
-  const { keyRow, profile, justRegisteredKey, csrfToken, isOperator, collectiveOrg, flashMessage, flashError } = args;
+  const { keyRow, profile, justRegisteredKey, csrfToken, isOperator, collectiveOrg, publishingOrgCount, flashMessage, flashError } = args;
   const status = (keyRow.activated_at ? 'active' : 'pending') as 'active' | 'pending';
   const keyPrefix = (keyRow.key_prefix as string) || '';
   const mfaEnrolled = !!keyRow.mfa_enrolled_at;
@@ -1633,6 +1650,7 @@ function renderDashboard(args: {
   // keys have nothing to publish yet).
   const publishingModesCard = status === 'active' ? renderPublishingModes({
     collectiveOrg,
+    publishingOrgCount,
     witnessAuthority,
     witnessRequested,
     csrfToken,
@@ -1705,11 +1723,12 @@ function renderDashboard(args: {
  */
 function renderPublishingModes(args: {
   collectiveOrg: { id: string; name: string; slug: string } | null;
+  publishingOrgCount: number;
   witnessAuthority: boolean;
   witnessRequested: boolean;
   csrfToken: string;
 }): string {
-  const { collectiveOrg, witnessAuthority, witnessRequested, csrfToken } = args;
+  const { collectiveOrg, publishingOrgCount, witnessAuthority, witnessRequested, csrfToken } = args;
 
   const collectiveBlock = collectiveOrg
     ? `
@@ -1722,14 +1741,18 @@ function renderPublishingModes(args: {
       </div>
     `
     : `
-      <div style="margin-top:8px; padding:10px 12px; background:#faf6ea; border:1px dashed var(--border-strong); border-radius:4px; font-size:13px;">
-        <div style="margin-bottom:8px; color:var(--muted);">
-          You don't have a collective Organization yet. It's the entity readers see as the organizer on any witnessed events you publish.
+      <div style="margin-top:8px; padding:10px 12px; background:#f1efea; border-radius:4px; font-size:13px;">
+        ${publishingOrgCount > 0
+          ? `<div style="font-weight:600; color:var(--ink); margin-bottom:4px;">Publishing for ${publishingOrgCount} organization${publishingOrgCount === 1 ? '' : 's'}</div>
+             <div style="color:var(--muted);">The organizations your key is scoped to write to — you publish on their behalf. These aren't a single collective.</div>`
+          : `<div style="color:var(--muted);">No organizations linked yet. As your key creates or links organizations, they'll appear here.</div>`}
+        <div style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border); color:var(--muted);">
+          Doing the <strong>witnessed</strong> path (your users surface public-fact evidence)? Those events publish under one collective identity —
+          <form method="POST" action="/developers/collective/provision" style="display:inline; margin-left:4px;">
+            ${hiddenInput(CSRF_FIELD_NAME, csrfToken)}
+            <button type="submit" class="nc-btn nc-btn--secondary" style="padding:4px 10px; font-size:13px;">Provision a collective</button>
+          </form>
         </div>
-        <form method="POST" action="/developers/collective/provision" style="display:inline;">
-          ${hiddenInput(CSRF_FIELD_NAME, csrfToken)}
-          <button type="submit" class="nc-btn nc-btn--secondary">Provision my collective</button>
-        </form>
       </div>
     `;
 
