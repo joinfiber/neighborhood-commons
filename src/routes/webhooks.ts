@@ -99,6 +99,10 @@ router.post('/', writeLimiter, async (req, res, next) => {
       // over JSON-RPC. Sending a raw Buffer serializes as
       // `{"type":"Buffer","data":[...]}` which stores garbage.
       rpcParams.p_signing_secret_encrypted = bufferToBytea(encryptSecret(signingSecret));
+      // Don't persist a plaintext copy when we can store it encrypted — a DB
+      // dump must not yield usable signing secrets. The encrypted column is the
+      // source of truth in this config (resolveSigningSecret reads only it).
+      rpcParams.p_signing_secret = null;
     }
 
     const { data: subscription, error } = await supabaseAdmin
