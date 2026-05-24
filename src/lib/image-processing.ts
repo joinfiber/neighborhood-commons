@@ -24,6 +24,12 @@ export const SUPPORTED_MAGIC_BYTES: Record<string, string> = {
   '52494646': 'image/webp',
 };
 
+// Cap how many pixels Sharp will decode. A small, highly-compressed image can
+// otherwise inflate to a multi-GB raw bitmap (decompression bomb) before the
+// resize bound applies. 50 MP covers legitimate large photos (e.g. 8000x6000);
+// Sharp's default (~268 MP) is far too permissive. Inputs are byte-capped too.
+const MAX_INPUT_PIXELS = 50_000_000;
+
 /**
  * Validate magic bytes, re-encode through Sharp (strips metadata, kills polyglots),
  * upload to R2, and return the public serving URL.
@@ -47,7 +53,7 @@ export async function processAndUploadImage(entityId: string, base64: string, se
 
   // Re-encode through Sharp: strips ALL metadata (EXIF, GPS, XMP, ICC),
   // kills polyglot payloads, normalizes orientation, enforces max dimensions
-  const processed = await sharp(buffer)
+  const processed = await sharp(buffer, { limitInputPixels: MAX_INPUT_PIXELS })
     .rotate()
     .resize(1200, 1200, { fit: 'inside', withoutEnlargement: true })
     .jpeg({ quality: 90 })
@@ -150,7 +156,7 @@ export async function downloadAndAttachImage(eventId: string, imageUrl: string):
   // Re-encode through Sharp (strips metadata, kills polyglot payloads)
   let processed: Buffer;
   try {
-    processed = await sharp(buffer)
+    processed = await sharp(buffer, { limitInputPixels: MAX_INPUT_PIXELS })
       .rotate()
       .resize(1200, 1200, { fit: 'inside', withoutEnlargement: true })
       .jpeg({ quality: 90 })
