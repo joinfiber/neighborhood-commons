@@ -421,7 +421,10 @@ describe('Dashboard — What\'s next card', () => {
     });
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain('MFA is enabled');
+    // MFA now lives in the Credentials & security section (moved out of
+    // "What's next"); enrolled state shows "MFA is on" with no enroll CTA.
+    expect(html).toContain('Multi-factor authentication');
+    expect(html).toContain('MFA is <strong>on</strong>');
     // The CTA must not be present in the enrolled state — that would be
     // a dead end for the user.
     expect(html).not.toContain('Enable MFA');

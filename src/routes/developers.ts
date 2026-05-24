@@ -30,6 +30,7 @@ import {
 import {
   optionalDeveloperSession,
   requireDeveloperSession,
+  requireStepUp,
 } from '../middleware/developer-session.js';
 import {
   setSessionCookie,
@@ -1280,6 +1281,78 @@ router.post('/security/step-up', writeFormLimiter, requireDeveloperSession, asyn
 });
 
 // =============================================================================
+// GET  /developers/security/refresh-key  — confirm page
+// POST /developers/security/refresh-key  — rotate the key in place
+// =============================================================================
+//
+// Self-service API-key rotation. In-place: a new raw key replaces key_hash +
+// key_prefix on the SAME api_keys row, so the contributor profile, MFA
+// enrollment, org links, and the active dashboard session (which authenticates
+// by cookie, not by the API key) all survive untouched — only the credential
+// changes. The old key dies the instant the new hash is written; there is no
+// overlap window. That's the right shape for a leaked or lost key — a live
+// consumer must redeploy with the new key promptly.
+//
+// Gated by requireStepUp: a fresh MFA check, so a hijacked dashboard session
+// can't silently rotate the key out from under the owner. The GET is what
+// step-up returns to (a GET target, cleanly); the POST re-checks for defense
+// in depth.
+
+router.get('/security/refresh-key', renderLimiter, requireStepUp, async (req, res, next) => {
+  try {
+    const csrfToken = issueCsrfCookie(res);
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    res.send(portalShell({
+      title: 'Refresh API key',
+      body: renderRefreshKeyConfirm({ csrfToken, error: (req.query.error as string) || null }),
+    }));
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/security/refresh-key', writeFormLimiter, requireStepUp, async (req, res, next) => {
+  try {
+    if (!validateCsrf(req)) {
+      res.status(403).send('CSRF check failed.');
+      return;
+    }
+
+    const session = req.developerSession!;
+
+    // New raw key + hash. The raw key is shown ONCE on the result page and
+    // never stored — only its hash is persisted. Same shape as issuance.
+    const { randomBytes, createHash } = await import('crypto');
+    const rawKey = 'nc_' + randomBytes(16).toString('hex');
+    const keyHash = createHash('sha256').update(rawKey).digest('hex');
+    const keyPrefix = rawKey.substring(0, 12);
+
+    const { error: updateErr } = await supabaseAdmin
+      .from('api_keys')
+      .update({ key_hash: keyHash, key_prefix: keyPrefix })
+      .eq('id', session.api_key_id);
+
+    if (updateErr) {
+      console.error('[DEV_PORTAL] Key refresh failed:', updateErr.message);
+      res.redirect(303, '/developers/security/refresh-key?error=' +
+        encodeURIComponent('Could not refresh your key. Try again.'));
+      return;
+    }
+
+    // Audit trail — the key id, never the key itself.
+    console.log(`[DEV_PORTAL] API key ${session.api_key_id} rotated in place`);
+
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    res.send(portalShell({
+      title: 'API key refreshed',
+      body: renderRefreshKeyResult({ rawKey }),
+    }));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================================================
 // Profile loader (shared)
 // =============================================================================
 
@@ -1472,6 +1545,43 @@ function renderVerify(csrfToken: string, email: string, error: string | null): s
   return portalShell({ title: 'Verify', body });
 }
 
+function renderRefreshKeyConfirm(args: { csrfToken: string; error: string | null }): string {
+  const { csrfToken, error } = args;
+  return `
+    <h1>Refresh API key</h1>
+    <p class="nc-portal-lede">Generate a new service key. This <strong>immediately invalidates your current key</strong> — anything calling the API with it gets <code>401</code> until you deploy the new one. Your profile, MFA, and publishing scope are unaffected.</p>
+    ${errorBanner(error)}
+    <div class="nc-card">
+      <div class="nc-card-label">Before you continue</div>
+      <ul style="margin:6px 0 0 18px; padding:0; line-height:1.7;">
+        <li>The new key is shown <strong>once</strong> on the next screen — copy it immediately.</li>
+        <li>Update the <code>X-API-Key</code> header wherever your app runs.</li>
+        <li>Refresh if your key may be exposed, or as routine rotation.</li>
+      </ul>
+    </div>
+    <form method="POST" action="/developers/security/refresh-key">
+      ${hiddenInput(CSRF_FIELD_NAME, csrfToken)}
+      <button type="submit" class="nc-btn">Refresh key</button>
+      <a href="/developers/dashboard" class="nc-btn nc-btn--secondary" style="margin-left:8px;">Cancel</a>
+    </form>
+  `;
+}
+
+function renderRefreshKeyResult(args: { rawKey: string }): string {
+  return `
+    <h1>Your new API key</h1>
+    ${calloutBanner('Key refreshed — your previous key no longer works. Copy this now; it will not be shown again.')}
+    <div class="nc-card">
+      <div class="nc-card-label">New service key (copy now)</div>
+      <div class="nc-key">${escapeHtml(args.rawKey)}</div>
+      <div style="margin-top:10px; font-size:13px; color:var(--muted);">
+        Pass via the <code>X-API-Key</code> header. Update every running deployment now — the old key returns <code>401</code>.
+      </div>
+    </div>
+    <a href="/developers/dashboard" class="nc-btn">Back to dashboard</a>
+  `;
+}
+
 function renderDashboard(args: {
   keyRow: Record<string, unknown>;
   profile: Record<string, unknown> | null;
@@ -1528,6 +1638,18 @@ function renderDashboard(args: {
     csrfToken,
   }) : '';
 
+  // MFA lives in the Credentials & security section (was a line item in
+  // "What's next"). Grouping it with the key gives security a single home
+  // that future controls (sessions, additional keys, scopes) slot into.
+  const securityMfaCard = `
+    <div class="nc-card">
+      <div class="nc-card-label">Multi-factor authentication</div>
+      ${mfaEnrolled
+        ? '<div style="font-size:14px; color:var(--ink-2);">MFA is <strong>on</strong> for this account.</div>'
+        : `<div style="font-size:14px; color:var(--ink-2);">MFA is <strong>off</strong>. Enable it to harden your account and unlock sensitive actions like refreshing your key.</div>
+           <div style="margin-top:12px;"><a href="/developers/security/enroll-mfa" class="nc-btn nc-btn--secondary">Enable MFA</a></div>`}
+    </div>`;
+
   const body = `
     <h1>Dashboard</h1>
     <p class="nc-portal-lede">
@@ -1537,6 +1659,8 @@ function renderDashboard(args: {
     ${flashMessage ? calloutBanner(flashMessage) : ''}
     ${errorBanner(flashError)}
     ${justRegisteredCallout}
+
+    <h2>Credentials &amp; security</h2>
     <div class="nc-card">
       <div class="nc-card-label">Service key</div>
       <div style="font-family:var(--font-mono); font-size:13px; color:var(--ink);">${escapeHtml(keyPrefix)}…</div>
@@ -1545,7 +1669,12 @@ function renderDashboard(args: {
           ? 'Status: <strong>pending</strong>. Reads work immediately; writes return <code>403 KEY_PENDING</code> until an operator activates your key.'
           : 'Status: <strong>active</strong>. Reads and writes are live.'}
       </div>
+      <div style="margin-top:14px;">
+        <a href="/developers/security/refresh-key" class="nc-btn nc-btn--secondary">Refresh key</a>
+      </div>
     </div>
+    ${securityMfaCard}
+
     ${publishingModesCard}
     ${profileCard}
     <div class="nc-card">
@@ -1554,9 +1683,6 @@ function renderDashboard(args: {
         <li>${status === 'pending'
           ? 'Activation email arrives when the operator reviews your application.'
           : 'Your key is active. Build away.'}</li>
-        <li>${mfaEnrolled
-          ? 'MFA is enabled on this account.'
-          : '<strong>Enable MFA</strong> to harden your account — <a href="/developers/security/enroll-mfa">/developers/security/enroll-mfa</a>. Required before the operator surface unlocks.'}</li>
         ${isOperator
           ? `<li>You're an operator — review pending applications at <a href="/operator/applications">/operator/applications</a>.</li>`
           : ''}
