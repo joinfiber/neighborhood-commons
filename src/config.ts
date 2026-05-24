@@ -124,6 +124,13 @@ function loadConfig() {
       console.error("FATAL: SSRF_STRICT must be '1' in production (DNS-rebinding defense).");
       process.exit(1);
     }
+    // CRON_SECRET authenticates every /api/cron route (timing-safe compare). If
+    // it's unset in production the middleware fail-closes — cron silently stops
+    // (webhook retries, image verify, series extend never run). Refuse to boot.
+    if (!parsed.data.CRON_SECRET) {
+      console.error('FATAL: CRON_SECRET is required in production (cron route auth).');
+      process.exit(1);
+    }
   }
 
   return parsed.data;
