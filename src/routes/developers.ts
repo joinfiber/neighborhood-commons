@@ -22,6 +22,7 @@ import { z } from 'zod';
 import rateLimit from 'express-rate-limit';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { config } from '../config.js';
+import { verifyTurnstile } from '../lib/captcha.js';
 import {
   storeOtp,
   verifyOtp,
@@ -194,6 +195,19 @@ router.post('/register', writeFormLimiter, async (req, res, next) => {
       res.set('Content-Type', 'text/html; charset=utf-8');
       res.send(renderSignUp(issueCsrfCookie(res), message, req.body));
       return;
+    }
+
+    // CAPTCHA gate — inert unless config.captcha.enabled. The Turnstile widget
+    // injects cf-turnstile-response into the form; require and verify it so
+    // registration (which sends OTP email) isn't a bot-driven email-cost vector.
+    if (config.captcha.enabled) {
+      const token = (req.body?.['cf-turnstile-response'] as string) || '';
+      if (!token || !(await verifyTurnstile(token, req.ip))) {
+        res.status(400);
+        res.set('Content-Type', 'text/html; charset=utf-8');
+        res.send(renderSignUp(issueCsrfCookie(res), 'Please complete the verification challenge and try again.', req.body));
+        return;
+      }
     }
 
     const form: RegistrationFormData = {
@@ -1475,6 +1489,10 @@ function renderSignUp(csrfToken: string, error: string | null, prefill: Record<s
       ${textField('category', 'Category (optional)', { maxlength: 50, value: prefill.category, hint: 'Free-form, e.g. "publishing", "discovery", "civic".' })}
       ${textareaField('what_youre_building', "What you're building", { required: true, value: prefill.what_youre_building, hint: `A paragraph is plenty. Name the data shape (events, hours, schedules, broadcasts) and the entities involved. Concrete is best — "I'm collecting public yoga-class schedules across Philly," or "I'm building a tool where chess clubs post their meetups," or "I'm OCR-ing flyers my users photograph." Any of those reads cleanly.` })}
       ${textareaField('verification_process', 'Verification process', { required: true, value: prefill.verification_process, hint: `How do you confirm the publisher of your content has authority over what they're publishing? Whatever fits: "I scrape venue calendar pages and de-dupe — the venues already post these publicly." Or: "Teachers create an account in my app and add their own classes." Or: "Users upload a photo of the flyer with each submission." Any of those reads cleanly.` })}
+      ${config.captcha.enabled && config.captcha.siteKey ? `
+      <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+      <div class="cf-turnstile" data-sitekey="${config.captcha.siteKey}" style="margin:16px 0;"></div>
+      ` : ''}
       <button type="submit" class="nc-btn">Send verification code</button>
     </form>
     <div class="nc-portal-footer-aux" style="margin-top:32px; font-size:13px; color:var(--muted);">

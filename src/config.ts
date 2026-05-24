@@ -30,8 +30,11 @@ const envSchema = z.object({
   // ever traced here. Production must never run with '0' (asserted at boot).
   SSRF_STRICT: z.enum(['0', '1']).default('1'),
 
-  // Cloudflare Turnstile CAPTCHA (portal registration)
+  // Cloudflare Turnstile CAPTCHA (portal registration). Use a dedicated widget
+  // for the Commons (its own site+secret, scoped to the Commons domain): the
+  // site key is public (rendered in the form), the secret verifies tokens.
   TURNSTILE_SECRET_KEY: z.string().min(1).optional(),
+  TURNSTILE_SITE_KEY: z.string().min(1).optional(),
   CAPTCHA_ENABLED: z.enum(['true', 'false']).default('false'),
 
   // Commons Admin (comma-separated UIDs)
@@ -131,6 +134,12 @@ function loadConfig() {
       console.error('FATAL: CRON_SECRET is required in production (cron route auth).');
       process.exit(1);
     }
+    // If CAPTCHA is enabled in production it must be fully configured — a missing
+    // site or secret key would silently disable bot protection on registration.
+    if (parsed.data.CAPTCHA_ENABLED === 'true' && (!parsed.data.TURNSTILE_SECRET_KEY || !parsed.data.TURNSTILE_SITE_KEY)) {
+      console.error('FATAL: CAPTCHA_ENABLED=true requires TURNSTILE_SECRET_KEY and TURNSTILE_SITE_KEY.');
+      process.exit(1);
+    }
   }
 
   return parsed.data;
@@ -161,6 +170,7 @@ export const config = {
   captcha: {
     enabled: env.CAPTCHA_ENABLED === 'true',
     secretKey: env.TURNSTILE_SECRET_KEY || '',
+    siteKey: env.TURNSTILE_SITE_KEY || '',
   },
 
   admin: {
