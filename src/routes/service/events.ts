@@ -505,7 +505,10 @@ router.post('/events', serviceLimiter, async (req, res, next) => {
     // Geocode only as a last resort — event has an address but no coords from above
     if (lat == null && lng == null && address) {
       try {
-        const coords = await nominatimGeocode(address);
+        // Non-blocking: skip under throttle contention (ingestion bursts) rather
+        // than serialize the request behind the 1 req/sec gate. The
+        // geocode-backfill cron fills coordinates for any event skipped here.
+        const coords = await nominatimGeocode(address, { skipIfThrottled: true });
         if (coords) {
           lat = coords.lat;
           lng = coords.lng;

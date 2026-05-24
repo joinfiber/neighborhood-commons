@@ -18,12 +18,13 @@ import { supabaseAdmin } from './supabase.js';
 // ---------------------------------------------------------------------------
 
 let lastNominatimRequest = 0;
+const THROTTLE_MS = 1000; // Nominatim policy: max 1 request/second
 
 async function throttleNominatim(): Promise<void> {
   const now = Date.now();
   const elapsed = now - lastNominatimRequest;
-  if (elapsed < 1000) {
-    await new Promise((resolve) => setTimeout(resolve, 1000 - elapsed));
+  if (elapsed < THROTTLE_MS) {
+    await new Promise((resolve) => setTimeout(resolve, THROTTLE_MS - elapsed));
   }
   lastNominatimRequest = Date.now();
 }
@@ -45,7 +46,14 @@ const USER_AGENT = 'NeighborhoodCommons/1.0 (neighborhood event data)';
 
 export async function nominatimGeocode(
   address: string,
+  opts: { skipIfThrottled?: boolean } = {},
 ): Promise<{ lat: number; lng: number } | null> {
+  // On latency-sensitive paths (event create), skip rather than block when the
+  // 1 req/sec throttle would make us wait — the geocode-backfill cron fills
+  // coordinates for any event left with an address but no coordinates.
+  if (opts.skipIfThrottled && Date.now() - lastNominatimRequest < THROTTLE_MS) {
+    return null;
+  }
   await throttleNominatim();
 
   const params = new URLSearchParams({

@@ -108,6 +108,24 @@ describe('nominatimGeocode', () => {
     const result = await nominatimGeocode('bad data');
     expect(result).toBeNull();
   });
+
+  it('skips immediately (no fetch) when throttled and skipIfThrottled is set', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve([{ lat: '39.95', lon: '-75.16' }]),
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    // Prime the throttle so the next call falls inside the 1s window.
+    await nominatimGeocode('prime address');
+    fetchMock.mockClear();
+
+    // The latency-sensitive create path passes skipIfThrottled — it must return
+    // null without a network call, deferring to the geocode-backfill cron.
+    const result = await nominatimGeocode('second address', { skipIfThrottled: true });
+    expect(result).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------
