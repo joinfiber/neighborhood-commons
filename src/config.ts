@@ -22,12 +22,13 @@ const envSchema = z.object({
   // IP Filtering
   IP_FILTER_ENABLED: z.enum(['true', 'false']).default('true'),
 
-  // SSRF hardening — when '1', outbound fetches to user-supplied URLs use
-  // a dispatcher that re-resolves the hostname at connect time and rejects
-  // any resolution landing on a private/reserved IP. Defeats DNS rebinding.
-  // Kept behind a flag for staged rollout: the first deploy after landing
-  // this code runs with it off so any connect-hook bug surfaces as no regression.
-  SSRF_STRICT: z.enum(['0', '1']).default('0'),
+  // SSRF hardening — outbound fetches to user-supplied URLs route through a
+  // dispatcher that re-resolves the hostname at connect time and rejects any
+  // resolution landing on a private/reserved IP. Closes the DNS-rebinding
+  // TOCTOU between the upfront validate*Url check and the actual TCP connect.
+  // On by default; '0' is an escape hatch only if a connect-hook incident is
+  // ever traced here. Production must never run with '0' (asserted at boot).
+  SSRF_STRICT: z.enum(['0', '1']).default('1'),
 
   // Cloudflare Turnstile CAPTCHA (portal registration)
   TURNSTILE_SECRET_KEY: z.string().min(1).optional(),
@@ -114,6 +115,13 @@ function loadConfig() {
     if (!parsed.data.WEBHOOK_ENCRYPTION_KEY) {
       console.error('FATAL: WEBHOOK_ENCRYPTION_KEY is required in production.');
       console.error('Generate: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"');
+      process.exit(1);
+    }
+    // SSRF_STRICT defaults to '1'; refuse an explicit downgrade in production —
+    // running with '0' re-opens the DNS-rebinding TOCTOU on every outbound fetch
+    // to a user-supplied URL (webhooks, image-by-URL, feed import).
+    if (parsed.data.SSRF_STRICT !== '1') {
+      console.error("FATAL: SSRF_STRICT must be '1' in production (DNS-rebinding defense).");
       process.exit(1);
     }
   }

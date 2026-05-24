@@ -18,7 +18,20 @@ vi.mock('dns', () => ({
 }));
 
 import { promises as dns } from 'dns';
-const mockLookup = dns.lookup as ReturnType<typeof vi.fn>;
+
+// validate*Url resolves with { all: true }, so dns.lookup returns a
+// LookupAddress[]. These tests stub single addresses for readability; this
+// shim normalizes them to the array shape the real { all: true } call returns.
+// The dual-stack tests below pass explicit arrays to exercise reject-if-any-private.
+const rawLookup = dns.lookup as ReturnType<typeof vi.fn>;
+const mockLookup = {
+  mockResolvedValueOnce(value: unknown) {
+    return rawLookup.mockResolvedValueOnce(Array.isArray(value) ? value : [value]);
+  },
+  mockRejectedValueOnce(err: unknown) {
+    return rawLookup.mockRejectedValueOnce(err);
+  },
+};
 
 beforeAll(async () => {
   const mod = await import('../src/lib/url-validation.js');
@@ -297,5 +310,29 @@ describe('DNS resolution failures', () => {
     mockLookup.mockRejectedValueOnce(new Error('getaddrinfo EAI_AGAIN evil.test'));
     await expect(validateWebhookUrl('https://evil.test/webhook'))
       .rejects.toThrow('could not be resolved');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Dual-stack resolution — reject if ANY address is private (rebind hardening)
+// ---------------------------------------------------------------------------
+
+describe('dual-stack resolution', () => {
+  it('blocks when ANY resolved address is private (public + metadata)', async () => {
+    mockLookup.mockResolvedValueOnce([
+      { address: '93.184.216.34', family: 4 },
+      { address: '169.254.169.254', family: 4 },
+    ]);
+    await expect(validateWebhookUrl('https://dualstack.example/webhook'))
+      .rejects.toThrow('private IP');
+  });
+
+  it('allows when every resolved address is public', async () => {
+    mockLookup.mockResolvedValueOnce([
+      { address: '93.184.216.34', family: 4 },
+      { address: '2606:4700::1', family: 6 },
+    ]);
+    await expect(validateWebhookUrl('https://allpublic.example/webhook'))
+      .resolves.toBeUndefined();
   });
 });
