@@ -11,6 +11,14 @@
 -- predicate (no instance with event_at > threshold) mirrors the cron's existing
 -- per-series check (lastEvent.event_at > refillThreshold => skip). STABLE,
 -- SECURITY DEFINER, service-role only. Idempotent.
+--
+-- Self-sufficient on event_series.ends_at: that column is added by migration 052,
+-- but 052's index used now() in a partial-index predicate (Postgres rejects it as
+-- non-IMMUTABLE), so on instances where 052 ran in a transaction the index error
+-- rolled back the column add with it — leaving ends_at absent. Ensure it here so
+-- this RPC doesn't depend on 052 having landed.
+
+ALTER TABLE event_series ADD COLUMN IF NOT EXISTS ends_at timestamptz DEFAULT NULL;
 
 CREATE OR REPLACE FUNCTION series_ids_needing_extension(p_threshold timestamptz, p_limit int)
 RETURNS TABLE(id uuid)
