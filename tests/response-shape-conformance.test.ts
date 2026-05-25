@@ -25,6 +25,8 @@ import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { toNeighborhoodEvent, type PortalEventRow } from '../src/lib/event-transform.js';
+import { formatOrganization } from '../src/routes/v1-organizations.js';
+import { formatBroadcast } from '../src/routes/v1-broadcasts.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SPEC_PATH = join(__dirname, '..', 'public', 'openapi.json');
@@ -147,6 +149,75 @@ describe('response shape conformance — code matches openapi.json', () => {
       for (const key of Object.keys(event)) {
         expect(declared.has(key), `event.${key} emitted by code but not declared in openapi.json`).toBe(true);
       }
+    });
+  });
+
+  // Organization/Broadcast carry the spec-required `method` provenance field.
+  // These formatters are pure (no DB), so they're testable here. The List
+  // formatter does DB hydration and is exercised via api-integration instead.
+  describe('Organization schema (top-level fields)', () => {
+    const schema = loadSchema('Organization');
+    const required = new Set(schema.required ?? []);
+
+    function makeOrgRow(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+      return {
+        id: 'org-uuid-1', slug: 'test-org', name: 'Test Org', legal_name: null,
+        description: null, url: null, logo_url: null, image_url: null,
+        telephone: null, email: null, same_as: [], keywords: [],
+        opening_hours_specification: null, tags: [], commercial: null,
+        method: 'seeded', primary_place_id: null,
+        created_at: '2026-04-01T12:00:00.000Z', updated_at: '2026-04-01T12:00:00.000Z',
+        ...overrides,
+      };
+    }
+
+    it('output has every key declared as required in the spec', () => {
+      const org = formatOrganization(makeOrgRow(), new Map(), new Map());
+      for (const key of required) {
+        expect(org, `organization.${key} missing on live output`).toHaveProperty(key);
+      }
+    });
+
+    it('emits the provenance method (the field that silently drifted)', () => {
+      const org = formatOrganization(makeOrgRow({ method: 'self_asserted' }), new Map(), new Map());
+      expect(org.method).toBe('self_asserted');
+    });
+  });
+
+  describe('Broadcast schema (top-level + source shape)', () => {
+    const schema = loadSchema('Broadcast');
+    const required = new Set(schema.required ?? []);
+    const sourceRequired = new Set(loadSchema('Source').required ?? []);
+
+    function makeBroadcastRow(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+      return {
+        id: 'b-uuid-1', message: 'Kitchen open late',
+        created_at: '2026-05-01T19:00:00.000Z', expires_at: '2026-05-02T19:00:00.000Z',
+        status: 'active', method: 'self_asserted',
+        // Legacy non-conformant stored shape — must be shaped on output.
+        source: { publisher: 'TestApp', method: 'service', contributor: 'TestApp', collected_at: '2026-05-01T19:00:00.000Z', license: 'CC BY 4.0' },
+        organizations: { id: 'org-uuid-1', slug: 'test-org', name: 'Test Org', tags: [], method: 'seeded' },
+        places: null,
+        ...overrides,
+      };
+    }
+
+    it('output has every key declared as required in the spec', () => {
+      const b = formatBroadcast(makeBroadcastRow(), new Map());
+      for (const key of required) {
+        expect(b, `broadcast.${key} missing on live output`).toHaveProperty(key);
+      }
+    });
+
+    it('source conforms to the Source schema (shaped, not raw passthrough)', () => {
+      const b = formatBroadcast(makeBroadcastRow(), new Map());
+      for (const key of sourceRequired) {
+        expect(b.source, `broadcast.source.${key} missing on live output`).toHaveProperty(key);
+      }
+      // The retired, four-role-violating `publisher` slot must not leak through.
+      expect(b.source).not.toHaveProperty('publisher');
+      // method must be a valid Source enum value, not the legacy 'service'.
+      expect(['self_asserted', 'proxied', 'witnessed']).toContain(b.source.method);
     });
   });
 });

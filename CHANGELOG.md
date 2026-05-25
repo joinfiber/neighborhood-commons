@@ -14,6 +14,13 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-05-24 — emit required `method` provenance on every primitive; conform `Broadcast.source`
+
+Fix / spec-conformance. No Spec change: the Spec has marked `method` **required** on `Organization`, `Broadcast`, and `List` since 3.0, and types `Broadcast.source` as the full `Source` object — the formatters simply weren't emitting them, so every read of these primitives was non-conformant.
+
+- **`Organization`, `Broadcast`, and `List` now return `method`** — the standard provenance value (`self_asserted` / `proxied` / `witnessed` / `seeded` for orgs; `self_asserted` for broadcasts and lists). Previously omitted on every response despite being spec-required, so consumers filtering for first-party records by `method` got nothing. The embedded `organization` inside `/broadcasts`, `/lists`, and `/series` now carries `method` too. Affects `/organizations`, `/organizations/{idOrSlug}`, `/publishers`, `/publishers/{idOrSlug}`, `/broadcasts`, `/lists`, `/series`, and the corresponding `/service/*` writes.
+- **`Broadcast.source` now conforms to the `Source` schema** (`{method, url, contributor, collected_at, license}`). The stored JSONB previously surfaced raw — a `publisher` string, a non-enum `method: "service"`, a string `contributor`, and no `url`. It's shaped on output: broadcasts are first-party, so `method` is the broadcast's provenance, `url` is `null`, and `contributor` is the registered-profile object shape (or `null`).
+- **`response-shape-conformance` test extended** to `Organization` and `Broadcast` (required-key presence + `Broadcast.source` shape), closing the gap that let `method` drift undetected — the test previously covered only `Event`/`Source`.
 ## 2026-05-24 — audit follow-ups: webhook series types, admin email redaction, key-status signal, magic-link race
 
 Lower-severity hardening from the consumer-vantage audit. Non-breaking.
