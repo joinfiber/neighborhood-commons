@@ -13,6 +13,7 @@
  */
 
 import { Router, json as expressJson } from 'express';
+import multer from 'multer';
 import { supabaseAdmin } from '../../lib/supabase.js';
 import { createError } from '../../middleware/error-handler.js';
 import { validateUuidParam, resolveEventImageUrl } from '../../lib/helpers.js';
@@ -28,6 +29,14 @@ const router: ReturnType<typeof Router> = Router();
 const imageBodyLimit = expressJson({ limit: '12mb' });
 
 /**
+ * Multipart parser for file uploads. memoryStorage keeps the bytes in RAM for
+ * the Sharp pipeline; fileSize matches the JSON body cap. Replaces the former
+ * hand-rolled boundary splitting (`body.toString('binary').split(...)`), which
+ * allocated several copies of the payload and could mis-slice on binary data.
+ */
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 12 * 1024 * 1024, files: 1 } });
+
+/**
  * POST /service/events/:id/image — Upload event image
  *
  * Accepts three formats:
@@ -35,48 +44,18 @@ const imageBodyLimit = expressJson({ limit: '12mb' });
  * 2. JSON: { "image_url": "https://..." } — download from URL (preferred for scraped images)
  * 3. Multipart: form field "file" — standard file upload (preferred for user uploads)
  */
-router.post('/events/:id/image', imageBodyLimit, serviceLimiter, async (req, res, next) => {
+router.post('/events/:id/image', imageBodyLimit, upload.any(), serviceLimiter, async (req, res, next) => {
   try {
     validateUuidParam(req.params.id, 'event ID');
     await assertLinkedEvent(req, req.params.id);
     const eventId = req.params.id;
 
-    const contentType = req.headers['content-type'] || '';
+    const files = (req.files as Express.Multer.File[] | undefined) || [];
 
-    if (contentType.includes('multipart/form-data')) {
-      // Multipart file upload — read raw body chunks with size limit
-      const MAX_IMAGE_SIZE = 12 * 1024 * 1024; // 12MB, matching JSON body limit
-      const chunks: Buffer[] = [];
-      let totalSize = 0;
-      for await (const chunk of req) {
-        const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-        totalSize += buf.length;
-        if (totalSize > MAX_IMAGE_SIZE) {
-          throw createError('Image too large (max 12MB)', 413, 'PAYLOAD_TOO_LARGE');
-        }
-        chunks.push(buf);
-      }
-      const body = Buffer.concat(chunks);
-
-      // Parse multipart boundary
-      const boundaryMatch = contentType.match(/boundary=(.+)/);
-      if (!boundaryMatch) throw createError('Missing multipart boundary', 400, 'VALIDATION_ERROR');
-
-      // Extract the file data between boundaries
-      const boundary = boundaryMatch[1];
-      const parts = body.toString('binary').split(`--${boundary}`);
-      let fileBuffer: Buffer | null = null;
-
-      for (const part of parts) {
-        if (part.includes('filename=')) {
-          const headerEnd = part.indexOf('\r\n\r\n');
-          if (headerEnd >= 0) {
-            const fileData = part.slice(headerEnd + 4).replace(/\r\n$/, '');
-            fileBuffer = Buffer.from(fileData, 'binary');
-          }
-        }
-      }
-
+    if (files.length > 0) {
+      // Multipart file upload, parsed by multer (above). memoryStorage gives us
+      // the bytes directly; the shared pipeline does magic-byte + Sharp re-encode.
+      const fileBuffer = files[0]!.buffer;
       if (!fileBuffer || fileBuffer.length < 8) {
         throw createError('No valid file found in upload', 400, 'VALIDATION_ERROR');
       }
