@@ -12,7 +12,7 @@
  * §3.4.
  */
 
-import { randomBytes, createHash, timingSafeEqual } from 'crypto';
+import { randomBytes, createHash } from 'crypto';
 import { supabaseAdmin } from '../supabase.js';
 import { sendEmail } from '../email.js';
 import { config } from '../../config.js';
@@ -84,20 +84,19 @@ export async function consumeMagicLink(rawToken: string): Promise<string | null>
     return null;
   }
 
-  // Timing-safe length check (cheap defense against length-disclosure)
-  // The DB lookup already prevented timing attacks on the token itself —
-  // hashing flattens timing. This is belt-and-suspenders.
-  const submittedHashBuf = Buffer.from(tokenHash);
-  const expectedHashBuf = Buffer.from(tokenHash);
-  if (submittedHashBuf.length !== expectedHashBuf.length) return null;
-  if (!timingSafeEqual(submittedHashBuf, expectedHashBuf)) return null;
-
-  await supabaseAdmin
+  // Atomic single-use: only the request that flips consumed_at from NULL wins.
+  // Two concurrent redemptions of the same token (a forwarded link, a link
+  // prefetcher) would both pass the consumed_at check above; the conditional
+  // update with RETURNING ensures exactly one gets a row back — the rest null.
+  const { data: claimed } = await supabaseAdmin
     .from('magic_login_tokens')
     .update({ consumed_at: new Date().toISOString() })
-    .eq('id', row.id);
+    .eq('id', row.id)
+    .is('consumed_at', null)
+    .select('email');
 
-  return (row.email as string) || null;
+  if (!claimed || claimed.length === 0) return null;
+  return (claimed[0]!.email as string) || null;
 }
 
 /**
