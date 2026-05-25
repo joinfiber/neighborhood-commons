@@ -485,7 +485,7 @@ export interface paths {
         };
         /**
          * List API keys (service/admin)
-         * @description List all API keys with event contribution stats. Admin service key required.
+         * @description List all API keys with event contribution stats. Admin service key required. `contact_email` is redacted to `null` by default so an admin-key leak can't hand out the developer roster as a phishing list; pass `?reveal_emails=true` to include the actual addresses when an operator genuinely needs them.
          */
         get: operations["serviceListApiKeys"];
         put?: never;
@@ -3413,7 +3413,10 @@ export interface operations {
     };
     serviceListApiKeys: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description When `true`, include developer `contact_email` values. Default (omitted/false) redacts them to `null`. */
+                reveal_emails?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;

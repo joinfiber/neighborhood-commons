@@ -2286,11 +2286,22 @@
     "/service/api-keys": {
       "get": {
         "summary": "List API keys (service/admin)",
-        "description": "List all API keys with event contribution stats. Admin service key required.",
+        "description": "List all API keys with event contribution stats. Admin service key required. `contact_email` is redacted to `null` by default so an admin-key leak can't hand out the developer roster as a phishing list; pass `?reveal_emails=true` to include the actual addresses when an operator genuinely needs them.",
         "operationId": "serviceListApiKeys",
         "security": [
           {
             "serviceApiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "reveal_emails",
+            "in": "query",
+            "required": false,
+            "description": "When `true`, include developer `contact_email` values. Default (omitted/false) redacts them to `null`.",
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {

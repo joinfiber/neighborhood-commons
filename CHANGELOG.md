@@ -14,6 +14,15 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-05-24 — audit follow-ups: webhook series types, admin email redaction, key-status signal, magic-link race
+
+Lower-severity hardening from the consumer-vantage audit. Non-breaking.
+
+- **`series.updated` / `series.deleted` are now subscribable webhook event types.** They were already dispatched by the delivery layer and listed in the Spec, but the subscription enum omitted them — so consumers could never receive them (dispatched into the void). Added to the accepted `event_types`; kept out of the default set (opt-in, like `event.image_processed`). No Spec change — aligns code with the already-published `WebhookEventType` enum.
+- **`GET /service/api-keys` redacts `contact_email` to `null` by default.** An admin-key leak shouldn't yield the full developer roster as a phishing list; pass `?reveal_emails=true` to include addresses. Spec documents the new query param (the field was already nullable).
+- **Public reads return `X-API-Key-Status: invalid`** when a present `X-API-Key` doesn't resolve (revoked / typo / inactive), instead of silently dropping it — the caller can tell they've lost their dedicated rate-limit tier. Reads stay public.
+- **Magic-link redemption is now atomic** (conditional `consumed_at` update) — closes a check-then-update race that could mint two sessions from one forwarded link. Removed a dead self-comparison.
+
 ## 2026-05-24 — SECURITY: gate `POST /service/organizations/link` on ownership (cross-tenant write fix)
 
 A service key could link itself to **any** organization by id — and because write authority is derived from the presence of an `api_key_organization_links` row, that self-link let any activated key write to (and deface or delete) any organization's events, broadcasts, lists, and profile. Cross-tenant privilege escalation. Closed.
