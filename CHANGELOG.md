@@ -21,6 +21,22 @@ Fix / spec-conformance. No Spec change: the Spec has marked `method` **required*
 - **`Organization`, `Broadcast`, and `List` now return `method`** — the standard provenance value (`self_asserted` / `proxied` / `witnessed` / `seeded` for orgs; `self_asserted` for broadcasts and lists). Previously omitted on every response despite being spec-required, so consumers filtering for first-party records by `method` got nothing. The embedded `organization` inside `/broadcasts`, `/lists`, and `/series` now carries `method` too. Affects `/organizations`, `/organizations/{idOrSlug}`, `/publishers`, `/publishers/{idOrSlug}`, `/broadcasts`, `/lists`, `/series`, and the corresponding `/service/*` writes.
 - **`Broadcast.source` now conforms to the `Source` schema** (`{method, url, contributor, collected_at, license}`). The stored JSONB previously surfaced raw — a `publisher` string, a non-enum `method: "service"`, a string `contributor`, and no `url`. It's shaped on output: broadcasts are first-party, so `method` is the broadcast's provenance, `url` is `null`, and `contributor` is the registered-profile object shape (or `null`).
 - **`response-shape-conformance` test extended** to `Organization` and `Broadcast` (required-key presence + `Broadcast.source` shape), closing the gap that let `method` drift undetected — the test previously covered only `Event`/`Source`.
+## 2026-05-24 — audit follow-ups: webhook series types, admin email redaction, key-status signal, magic-link race
+
+Lower-severity hardening from the consumer-vantage audit. Non-breaking.
+
+- **`series.updated` / `series.deleted` are now subscribable webhook event types.** They were already dispatched by the delivery layer and listed in the Spec, but the subscription enum omitted them — so consumers could never receive them (dispatched into the void). Added to the accepted `event_types`; kept out of the default set (opt-in, like `event.image_processed`). No Spec change — aligns code with the already-published `WebhookEventType` enum.
+- **`GET /service/api-keys` redacts `contact_email` to `null` by default.** An admin-key leak shouldn't yield the full developer roster as a phishing list; pass `?reveal_emails=true` to include addresses. Spec documents the new query param (the field was already nullable).
+- **Public reads return `X-API-Key-Status: invalid`** when a present `X-API-Key` doesn't resolve (revoked / typo / inactive), instead of silently dropping it — the caller can tell they've lost their dedicated rate-limit tier. Reads stay public.
+- **Magic-link redemption is now atomic** (conditional `consumed_at` update) — closes a check-then-update race that could mint two sessions from one forwarded link. Removed a dead self-comparison.
+
+## 2026-05-24 — SECURITY: gate `POST /service/organizations/link` on ownership (cross-tenant write fix)
+
+A service key could link itself to **any** organization by id — and because write authority is derived from the presence of an `api_key_organization_links` row, that self-link let any activated key write to (and deface or delete) any organization's events, broadcasts, lists, and profile. Cross-tenant privilege escalation. Closed.
+
+- **`BREAKING:` `POST /service/organizations/link` now requires the target organization to be owned by the calling key's tenant account** (or an admin key); otherwise `403 NOT_LINKED`. Organizations created via `POST /service/organizations` are auto-linked to the creating key, so the normal publish flow (Merrie etc.) is unaffected — only self-service linking to an organization you don't own is rejected. Spec updated: `/service/organizations/link` description + `403` response.
+- All `/service/organizations/*` routes now carry the per-key `serviceLimiter` (previously only the global IP limit applied), bounding write/abuse rate per key like the rest of the Service API.
+- Fixed `assertLinkedAccount` mis-authorizing legitimate multi-org tenants: a `.maybeSingle()` over multiple link rows errored and surfaced a spurious `403 NOT_LINKED`.
 
 ## 2026-05-24 — events link to contributor profiles (rich "via <app>" attribution)
 

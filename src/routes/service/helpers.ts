@@ -44,14 +44,17 @@ export async function assertLinkedAccount(req: Request, accountId: string): Prom
     );
   }
 
+  // NOTE: a key legitimately representing a multi-org tenant matches multiple
+  // rows here — `.maybeSingle()` would error on >1 row and surface a spurious
+  // 403. Use limit(1) + presence check instead.
   const { data } = await supabaseAdmin
     .from('api_key_organization_links')
     .select('organization_id')
     .eq('api_key_id', req.apiKeyInfo!.id)
     .in('organization_id', orgIds)
-    .maybeSingle();
+    .limit(1);
 
-  if (!data) {
+  if (!data || data.length === 0) {
     throw createError(
       'This API key is not linked to any organization owning the target account.',
       403,

@@ -485,7 +485,7 @@ export interface paths {
         };
         /**
          * List API keys (service/admin)
-         * @description List all API keys with event contribution stats. Admin service key required.
+         * @description List all API keys with event contribution stats. Admin service key required. `contact_email` is redacted to `null` by default so an admin-key leak can't hand out the developer roster as a phishing list; pass `?reveal_emails=true` to include the actual addresses when an operator genuinely needs them.
          */
         get: operations["serviceListApiKeys"];
         put?: never;
@@ -1345,7 +1345,7 @@ export interface paths {
         put?: never;
         /**
          * Link an existing organization to this service key
-         * @description Establishes a relationship between the calling service key and an existing Organization. After linking, the key may write to that organization's data (events, broadcasts, identifier verifications, lists curated by it). Idempotent: calling on an already-linked organization returns 200 with the existing link.
+         * @description Establishes a relationship between the calling service key and an existing Organization **owned by the key's own tenant account**. After linking, the key may write to that organization's data (events, broadcasts, identifier verifications, lists curated by it). A key may only link to an organization its tenant account owns (e.g. re-establishing a link after a new key is issued); admin keys bypass. Self-service linking is NOT an authority grant — linking to an organization you do not own requires operator approval. Note: organizations created via `POST /service/organizations` are auto-linked to the creating key, so this endpoint is rarely needed. Idempotent: calling on an already-linked organization returns 200 with the existing link.
          */
         post: operations["serviceLinkOrganization"];
         delete?: never;
@@ -3413,7 +3413,10 @@ export interface operations {
     };
     serviceListApiKeys: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description When `true`, include developer `contact_email` values. Default (omitted/false) redacts them to `null`. */
+                reveal_emails?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -5117,6 +5120,13 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            /** @description The calling key may only link to organizations owned by its own tenant account (or must be an admin key). Linking to an organization owned by another party requires operator approval. Returns error code `NOT_LINKED`. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             404: components["responses"]["NotFound"];
         };
     };

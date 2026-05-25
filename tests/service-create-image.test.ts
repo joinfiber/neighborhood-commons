@@ -60,9 +60,10 @@ vi.mock('../src/lib/webhook-delivery.js', () => ({
 
 // Track calls to downloadAndAttachImage — this is the wiring under test
 const downloadAndAttachImageMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const processAndUploadImageMock = vi.hoisted(() => vi.fn().mockResolvedValue('https://r2.example/portal-events/x/image'));
 vi.mock('../src/lib/image-processing.js', () => ({
   downloadAndAttachImage: downloadAndAttachImageMock,
-  processAndUploadImage: vi.fn(),
+  processAndUploadImage: processAndUploadImageMock,
 }));
 
 vi.mock('../src/lib/geocoding.js', () => ({
@@ -96,6 +97,7 @@ beforeEach(() => {
   mockResponses.clear();
   mockRpcResponses.clear();
   downloadAndAttachImageMock.mockClear();
+  processAndUploadImageMock.mockClear();
 
   // Admin service key — bypasses linked-account scoping
   mockResponses.set('api_keys', {
@@ -219,5 +221,46 @@ describe('POST /service/events — image_url wiring', () => {
     expect(res.status).toBe(201);
     await new Promise((r) => setImmediate(r));
     expect(downloadAndAttachImageMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('POST /service/events/:id/image — upload route', () => {
+  beforeEach(() => {
+    // assertLinkedEvent reads organizer_org_id + source_method; the admin key
+    // bypasses the org-link check, but the event must carry an organizer.
+    mockResponses.set('events', {
+      data: { id: NEW_EVENT_ID, organizer_org_id: ORG_ID, source_method: 'self_asserted' },
+      error: null,
+    });
+  });
+
+  it('parses a multipart file upload via multer and runs the Sharp pipeline', async () => {
+    const boundary = '----ncTestBoundary';
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
+    const body = Buffer.concat([
+      Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="poster.jpg"\r\nContent-Type: image/jpeg\r\n\r\n`),
+      jpeg,
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ]);
+    const res = await fetch(`${baseUrl}/api/v1/service/events/${NEW_EVENT_ID}/image`, {
+      method: 'POST',
+      headers: { 'X-API-Key': SERVICE_KEY, 'Content-Type': `multipart/form-data; boundary=${boundary}` },
+      body,
+    });
+    expect(res.status).toBe(200);
+    expect(processAndUploadImageMock).toHaveBeenCalledTimes(1);
+    // multer must hand the exact file bytes to the pipeline (round-trips to base64).
+    expect(processAndUploadImageMock).toHaveBeenCalledWith(NEW_EVENT_ID, jpeg.toString('base64'));
+  });
+
+  it('still accepts a base64 JSON body', async () => {
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
+    const res = await fetch(`${baseUrl}/api/v1/service/events/${NEW_EVENT_ID}/image`, {
+      method: 'POST',
+      headers: { 'X-API-Key': SERVICE_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: jpeg.toString('base64') }),
+    });
+    expect(res.status).toBe(200);
+    expect(processAndUploadImageMock).toHaveBeenCalledWith(NEW_EVENT_ID, jpeg.toString('base64'));
   });
 });

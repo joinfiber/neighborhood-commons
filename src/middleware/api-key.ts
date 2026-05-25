@@ -88,7 +88,7 @@ function hashApiKey(rawKey: string): string {
  * If a key is present but invalid, the request proceeds without key info
  * (falls back to IP-based rate limiting).
  */
-export async function optionalApiKey(req: Request, _res: Response, next: NextFunction): Promise<void> {
+export async function optionalApiKey(req: Request, res: Response, next: NextFunction): Promise<void> {
   const apiKey = req.headers['x-api-key'];
   if (!apiKey || typeof apiKey !== 'string') {
     next();
@@ -106,6 +106,13 @@ export async function optionalApiKey(req: Request, _res: Response, next: NextFun
 
     if (keyInfo) {
       req.apiKeyInfo = { id: keyInfo.id };
+    } else {
+      // A key was sent but didn't resolve (revoked / typo / inactive). Reads are
+      // public so we don't reject — but we don't fail silently either: the caller
+      // has quietly lost their dedicated rate-limit tier. Signal it without ever
+      // echoing key material.
+      console.warn('[API-KEY] Present X-API-Key did not resolve to an active key; proceeding on IP limits.');
+      res.setHeader('X-API-Key-Status', 'invalid');
     }
   } catch {
     // Non-fatal — proceed without API key info
