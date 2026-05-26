@@ -31,12 +31,16 @@ const EVENT_TYPES = [
   'event.deleted',
   'event.series_created',
   'event.image_processed',
+  'series.updated',
+  'series.deleted',
 ] as const;
 
 // Event types included when a caller creates a subscription without specifying
-// `event_types`. Excludes `event.image_processed` so existing consumers who
-// rely on the default don't suddenly receive a new payload shape they aren't
-// prepared to handle. Subscribers who want it must opt in explicitly.
+// `event_types`. Excludes `event.image_processed` and the `series.*` lifecycle
+// types so existing consumers relying on the default don't suddenly receive new
+// payload shapes they aren't prepared to handle. Subscribers opt into those
+// explicitly. (series.updated / series.deleted are dispatched by webhook-delivery
+// but were previously un-subscribable — the spec lists all seven types.)
 const DEFAULT_EVENT_TYPES = [
   'event.created',
   'event.updated',
@@ -99,6 +103,10 @@ router.post('/', writeLimiter, async (req, res, next) => {
       // over JSON-RPC. Sending a raw Buffer serializes as
       // `{"type":"Buffer","data":[...]}` which stores garbage.
       rpcParams.p_signing_secret_encrypted = bufferToBytea(encryptSecret(signingSecret));
+      // Don't persist a plaintext copy when we can store it encrypted — a DB
+      // dump must not yield usable signing secrets. The encrypted column is the
+      // source of truth in this config (resolveSigningSecret reads only it).
+      rpcParams.p_signing_secret = null;
     }
 
     const { data: subscription, error } = await supabaseAdmin

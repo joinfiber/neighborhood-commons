@@ -162,8 +162,13 @@ router.get('/api-keys', serviceLimiter, async (req, res, next) => {
       }
     }
 
+    // Redact developer contact emails by default — an admin-key leak shouldn't
+    // hand out the full developer roster as a phishing list. Opt in explicitly
+    // with ?reveal_emails=true when an operator genuinely needs them.
+    const revealEmails = req.query.reveal_emails === 'true';
     const enrichedKeys = (keys || []).map((k) => ({
       ...k,
+      contact_email: revealEmails ? k.contact_email : null,
       event_count: eventStats[k.id]?.event_count ?? 0,
       pending_count: eventStats[k.id]?.pending_count ?? 0,
       last_submitted_at: eventStats[k.id]?.last_submitted_at ?? null,

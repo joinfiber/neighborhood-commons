@@ -75,7 +75,9 @@ export async function processAndUploadLogo(profileId: string, buffer: Buffer): P
   // Re-encode: strips ALL metadata, kills polyglots, caps dimensions, normalises orientation.
   let processed: Buffer;
   try {
-    processed = await sharp(buffer)
+    // limitInputPixels caps decode size to guard against decompression bombs
+    // (a small file inflating to a multi-GB bitmap). 50 MP covers real photos.
+    processed = await sharp(buffer, { limitInputPixels: 50_000_000 })
       .rotate()
       .resize(MAX_DIMENSION, MAX_DIMENSION, { fit: 'inside', withoutEnlargement: true })
       .jpeg({ quality: JPEG_QUALITY })

@@ -831,6 +831,17 @@ describe('GET /api/meta/categories', () => {
   });
 });
 
+describe('GET /api/meta', () => {
+  it('reports implementation_version from openapi.json, not the stale hardcode', async () => {
+    const res = await fetch(`${baseUrl}/api/meta`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    // Read from openapi.json info.version at boot; must be a real semver and not
+    // the 3.0.0 value that sat hardcoded while the spec advanced.
+    expect(body.implementation_version).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(body.implementation_version).not.toBe('3.0.0');
+  });
+});
 // =============================================================================
 // SERIES — public endpoints
 // =============================================================================

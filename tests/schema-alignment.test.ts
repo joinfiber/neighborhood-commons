@@ -46,6 +46,8 @@ const SCHEMA: Record<string, string[]> = {
     'witness_authority_requested_at',
     // Added in migration 091 (caller-set proxied authority path)
     'proxy_authority',
+    // Added in migration 094 (MFA step-up throttle + one-time TOTP)
+    'mfa_failed_attempts', 'mfa_locked_until', 'mfa_last_totp_step',
   ],
   audit_logs: [
     'id', 'action', 'actor_hash', 'resource_id', 'metadata', 'endpoint',

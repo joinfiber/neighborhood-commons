@@ -18,6 +18,7 @@ import { processAndUploadImage } from '../../lib/image-processing.js';
 import { formatOrganization } from '../v1-organizations.js';
 import { hydrateVerificationsFor } from '../../lib/verification-hydrate.js';
 import { assertLinkedOrganization } from './helpers-v1.js';
+import { serviceLimiter } from '../../middleware/rate-limit.js';
 
 const router: ReturnType<typeof Router> = Router();
 
@@ -25,7 +26,7 @@ const ORG_SELECT = `
   id, slug, name, legal_name,
   description, url, logo_url, image_url, telephone, email,
   same_as, keywords, opening_hours_specification,
-  tags, commercial,
+  tags, commercial, method,
   primary_place_id, owner_account_id,
   created_at, updated_at
 `;
@@ -95,7 +96,7 @@ async function fetchOrgWithExtras(id: string) {
 // POST /service/organizations
 // ---------------------------------------------------------------------------
 
-router.post('/organizations', async (req, res, next) => {
+router.post('/organizations', serviceLimiter, async (req, res, next) => {
   try {
     const body = validateRequest(orgCreateSchema, req.body);
     const slug = body.slug || deriveSlug(body.name);
@@ -175,7 +176,7 @@ router.post('/organizations', async (req, res, next) => {
 // PATCH /service/organizations/:id
 // ---------------------------------------------------------------------------
 
-router.patch('/organizations/:id', async (req, res, next) => {
+router.patch('/organizations/:id', serviceLimiter, async (req, res, next) => {
   try {
     validateUuidParam(req.params.id, 'id');
     await assertLinkedOrganization(req, req.params.id);
@@ -227,19 +228,37 @@ router.patch('/organizations/:id', async (req, res, next) => {
 // POST /service/organizations/link
 // ---------------------------------------------------------------------------
 
-router.post('/organizations/link', async (req, res, next) => {
+router.post('/organizations/link', serviceLimiter, async (req, res, next) => {
   try {
     const body = validateRequest(linkSchema, req.body);
 
-    // Confirm the org exists
+    // Confirm the org exists and read its owner.
     const { data: org } = await supabaseAdmin
       .from('organizations')
-      .select('id')
+      .select('id, owner_account_id')
       .eq('id', body.organizationId)
       .maybeSingle();
     if (!org) throw createError('Organization not found', 404, 'NOT_FOUND');
 
-    // Idempotent: insert ON CONFLICT DO NOTHING; status 200 if existed, 201 if newly linked.
+    // Authorization: linking grants write authority (every assertLinked* check
+    // authorizes on the presence of a link row), so linking itself must be gated
+    // on a real ownership relationship — never mere existence. A key may link
+    // only to an organization owned by its own tenant account (e.g. re-linking a
+    // key the create-time auto-link didn't cover); admin keys bypass. Otherwise
+    // any activated key could self-grant control of any organization. Orgs are
+    // auto-linked to their creator at create time, so this path is rarely needed.
+    const tenantId = req.apiKeyInfo?.tenantAccountId ?? null;
+    const owns = tenantId !== null && org.owner_account_id === tenantId;
+    if (!req.apiKeyInfo?.isAdmin && !owns) {
+      throw createError(
+        'This key may only link to organizations owned by its own account. '
+        + 'Linking to an organization you do not own requires operator approval.',
+        403,
+        'NOT_LINKED',
+      );
+    }
+
+    // Idempotent: 200 if the link already existed, 201 if newly created.
     const { data: existing } = await supabaseAdmin
       .from('api_key_organization_links')
       .select('api_key_id')
@@ -304,7 +323,7 @@ function imageUploadHandler(target: 'logo_url' | 'image_url') {
   };
 }
 
-router.post('/organizations/:id/logo', imageBodyLimit, imageUploadHandler('logo_url'));
-router.post('/organizations/:id/image', imageBodyLimit, imageUploadHandler('image_url'));
+router.post('/organizations/:id/logo', imageBodyLimit, serviceLimiter, imageUploadHandler('logo_url'));
+router.post('/organizations/:id/image', imageBodyLimit, serviceLimiter, imageUploadHandler('image_url'));
 
 export default router;

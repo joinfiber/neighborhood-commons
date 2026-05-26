@@ -184,7 +184,29 @@ router.get('/:id', async (req, res, next) => {
 // Format Broadcast for API response
 // ---------------------------------------------------------------------------
 
-function formatBroadcast(
+/**
+ * Shape the stored broadcasts.source JSONB into the spec Source object
+ * ({ method, url, contributor, collected_at, license }). Broadcasts are always
+ * first-party (self_asserted) with no source URL; the legacy column stored a
+ * `publisher` string, a non-enum `method: "service"`, and a string contributor,
+ * none of which the Source schema allows — so it must be shaped, not passed raw.
+ * Exported so the service write path produces the identical shape.
+ */
+export function shapeBroadcastSource(row: Record<string, unknown>) {
+  const src = (row.source ?? {}) as Record<string, unknown>;
+  const contributorName = typeof src.contributor === 'string' ? src.contributor : null;
+  return {
+    method: (row.method as string) || 'self_asserted',
+    url: null,
+    contributor: contributorName
+      ? { name: contributorName, url: null, slug: null, logo_url: null, description: null, profile_url: null }
+      : null,
+    collected_at: typeof src.collected_at === 'string' ? src.collected_at : (row.created_at as string),
+    license: typeof src.license === 'string' ? src.license : 'CC-BY-4.0',
+  };
+}
+
+export function formatBroadcast(
   row: Record<string, unknown>,
   verifications: ReturnType<typeof hydrateVerificationsFor> extends Promise<infer T> ? T : never
 ) {
@@ -204,9 +226,10 @@ function formatBroadcast(
     datePosted: row.created_at,
     expires: row.expires_at,
     status: row.status,
+    method: row.method,
     organization: orgRow ? formatOrganization(orgRow, orgPlacesById, verifications) : null,
     location: placeRow ? formatPlace(placeRow) : null,
-    source: row.source,
+    source: shapeBroadcastSource(row),
   };
 }
 
