@@ -1826,32 +1826,44 @@ function renderPublishingModes(args: {
       </div>
     `;
 
-  const witnessRow = !collectiveOrg
-    ? `<li><strong>Witnessed</strong> — your users surface evidence (photos, OCR) of public-fact events; events attribute to your collective, never to individuals.
-        <div style="font-size:13px; color:var(--muted); margin-top:4px;">Provision your collective above before requesting this capability.</div></li>`
+  // The witnessed mode is stateful — the plain lead stays the same; this tail
+  // reflects collective + approval state.
+  const witnessTail = !collectiveOrg
+    ? `<div style="font-size:12px; color:var(--muted-2); margin-top:2px;">Provision your collective (just below) first, then request this.</div>`
     : witnessAuthority
-    ? `<li><strong>Witnessed</strong> ✓ enabled — your users surface evidence of public-fact events. Set <code>source.method: "witnessed"</code> and use your collective UUID as <code>organizer_org_id</code>.</li>`
+    ? `<div style="font-size:12px; color:var(--muted-2); margin-top:2px;"><code>source.method: "witnessed"</code> · organizer is your collective</div>`
     : witnessRequested
-    ? `<li><strong>Witnessed</strong> — requested. The operator will review and notify you by email.</li>`
-    : `<li><strong>Witnessed</strong> — your users surface evidence (photos, OCR) of public-fact events; events attribute to your collective. Requires a one-time operator approval.
-        <form method="POST" action="/developers/collective/request-witnessing" style="display:inline; margin-left:6px;">
-          ${hiddenInput(CSRF_FIELD_NAME, csrfToken)}
-          <button type="submit" class="nc-btn nc-btn--secondary" style="padding:4px 10px; font-size:13px;">Request capability</button>
-        </form>
-      </li>`;
+    ? `<div style="font-size:12px; color:var(--muted-2); margin-top:2px;">Requested — the operator will review and email you.</div>`
+    : `<form method="POST" action="/developers/collective/request-witnessing" style="margin-top:6px;">
+         ${hiddenInput(CSRF_FIELD_NAME, csrfToken)}
+         <button type="submit" class="nc-btn nc-btn--secondary" style="padding:4px 10px; font-size:13px;">Request this capability</button>
+       </form>`;
 
   return `
     <div class="nc-card">
-      <div class="nc-card-label">Publishing modes</div>
-      <p style="margin:6px 0 12px; font-size:14px; color:var(--ink-2);">
-        Three ways your app can route content into the Commons. See <a href="/docs/four-roles" target="_blank" rel="noopener">four-roles</a> for the doctrine.
+      <div class="nc-card-label">How you publish</div>
+      <p style="margin:6px 0 16px; font-size:14px; color:var(--ink-2);">
+        Which of these is you? Pick whatever fits what you're doing — you can do more than one. (The doctrine, if you want it: <a href="/docs/four-roles" target="_blank" rel="noopener">four-roles</a>.)
       </p>
-      <ul style="margin:0 0 12px 18px; padding:0; line-height:1.7;">
-        <li><strong>First-party</strong> ✓ enabled — your verified organizations publish about themselves (their own events, hours, broadcasts). Set <code>source.method: "self_asserted"</code>.</li>
-        <li><strong>Proxied</strong> ✓ enabled — you pull from public feeds / scrape public calendar pages. Set <code>source.method: "proxied"</code> and put the source URL in <code>source_feed_url</code>.</li>
-        ${witnessRow}
-      </ul>
+      <div style="margin-bottom:14px;">
+        <div style="font-weight:600; color:var(--ink);">You publish your own happenings.</div>
+        <div style="font-size:13px; color:var(--muted); margin:2px 0 3px;">A venue posts its shows, a teacher posts classes, a club posts its meetups — the organizer speaks for itself, through you.</div>
+        <div style="font-size:12px; color:var(--muted-2);"><code>source.method: "self_asserted"</code></div>
+      </div>
+      <div style="margin-bottom:14px;">
+        <div style="font-weight:600; color:var(--ink);">You bring in public info that's already out there.</div>
+        <div style="font-size:13px; color:var(--muted); margin:2px 0 3px;">Scraping a venue calendar, mirroring a public events page, pulling a feed — facts that are already public, gathered into one place.</div>
+        <div style="font-size:12px; color:var(--muted-2);"><code>source.method: "proxied"</code> · public URL in <code>source_feed_url</code></div>
+      </div>
+      <div style="margin-bottom:14px;">
+        <div style="font-weight:600; color:var(--ink);">You capture what your users witness.</div>
+        <div style="font-size:13px; color:var(--muted); margin:2px 0 3px;">Someone photographs a flyer; you OCR a public notice. It's attributed to your collective, never to an individual.</div>
+        ${witnessTail}
+      </div>
       ${collectiveBlock}
+      <div style="margin-top:16px; padding-top:12px; border-top:1px solid var(--border); font-size:13px; color:var(--muted);">
+        Whatever you publish flows to the whole ecosystem — any app reading the Commons can surface it, attributed to you. The better your data, the more places it travels.
+      </div>
     </div>
   `;
 }
