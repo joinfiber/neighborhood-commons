@@ -481,6 +481,10 @@ describe('Dashboard — collective vs publishing scope', () => {
     // The bug: an arbitrary scoped org must NOT be presented as the collective.
     expect(html).not.toContain('Your collective');
     expect(html).not.toContain('Pong around Philly');
+    // Self-locating publishing modes + the ecosystem beat.
+    expect(html).toContain('Which of these is you?');
+    expect(html).toContain("You bring in public info that's already out there.");
+    expect(html).toContain('flows to the whole ecosystem');
   });
 
   it('shows the collective when a linked org is named "<App> Community"', async () => {
