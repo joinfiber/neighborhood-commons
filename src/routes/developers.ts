@@ -1542,28 +1542,28 @@ function renderProfileEdit(csrfToken: string, profile: Record<string, unknown>, 
   const logoCard = `
     <div class="nc-card">
       <div class="nc-card-label">Logo</div>
-      ${logoUrl
-        ? `<div style="display:flex; align-items:center; gap:18px; margin-bottom:14px;">
-             <img src="${escapeAttr(logoUrl)}" alt="${escapeAttr((profile.name as string) || 'Logo')}" style="width:80px; height:80px; border-radius:8px; object-fit:cover; background:#f1efea; border:1px solid var(--border);">
-             <div style="font-size:13px; color:var(--muted);">
-               Currently set. Upload a new file below to replace it, or use the remove button.
-             </div>
-           </div>
-           <form method="POST" action="/developers/profile/logo/remove" style="display:inline; margin-bottom:14px;">
-             ${hiddenInput(CSRF_FIELD_NAME, csrfToken)}
-             <button type="submit" class="nc-btn nc-btn--secondary" style="margin-bottom:14px;">Remove logo</button>
-           </form>`
-        : `<div style="font-size:13px; color:var(--muted); margin-bottom:12px;">
-             No logo yet. JPEG, PNG, or WebP under 5MB. Square images render best — they get resized to 400px max.
-           </div>`}
       <form method="POST" action="/developers/profile/logo" enctype="multipart/form-data" novalidate>
         ${hiddenInput(CSRF_FIELD_NAME, csrfToken)}
-        <div class="nc-field" style="margin-bottom:8px;">
-          <label for="logo" style="display:block; font-size:13px; font-weight:600; color:var(--ink-2); margin-bottom:6px;">Choose a file</label>
+        <label class="nc-dropzone" for="logo">
           <input id="logo" name="logo" type="file" accept="image/jpeg,image/png,image/webp" required>
+          ${logoUrl
+            ? `<img src="${escapeAttr(logoUrl)}" alt="${escapeAttr((profile.name as string) || 'Logo')}" class="nc-dropzone-preview">`
+            : `<span class="nc-dropzone-preview" aria-hidden="true">+</span>`}
+          <span class="nc-dropzone-text">
+            Drag a photo here, or click to choose
+            <span class="nc-dropzone-hint">JPEG, PNG, or WebP under 5MB · square renders best (resized to 400px)</span>
+          </span>
+        </label>
+        <div style="margin-top:14px;">
+          <button type="submit" class="nc-btn">${logoUrl ? 'Replace logo' : 'Upload logo'}</button>
         </div>
-        <button type="submit" class="nc-btn">${logoUrl ? 'Replace logo' : 'Upload logo'}</button>
       </form>
+      ${logoUrl
+        ? `<form method="POST" action="/developers/profile/logo/remove" style="margin-top:12px;">
+             ${hiddenInput(CSRF_FIELD_NAME, csrfToken)}
+             <button type="submit" class="nc-link-btn">Remove logo</button>
+           </form>`
+        : ''}
     </div>
   `;
 
