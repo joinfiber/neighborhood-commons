@@ -155,15 +155,12 @@ export async function dispatchWebhooks(
       .from('webhook_subscriptions')
       .select('id, url, signing_secret, signing_secret_encrypted, event_types')
       .eq('status', 'active')
+      .contains('event_types', [eventType])
       .limit(10000);
 
     if (!subs || subs.length === 0) return;
 
-    const matching = subs.filter((s) =>
-      (s.event_types as string[]).includes(eventType)
-    );
-
-    for (const sub of matching) {
+    for (const sub of subs) {
       const { data: delivery } = await supabaseAdmin
         .from('webhook_deliveries')
         .insert({
@@ -204,15 +201,12 @@ export async function dispatchSeriesCreatedWebhook(
       .from('webhook_subscriptions')
       .select('id, url, signing_secret, signing_secret_encrypted, event_types')
       .eq('status', 'active')
+      .contains('event_types', ['event.series_created'])
       .limit(10000);
 
     if (!subs || subs.length === 0) return;
 
-    const matching = subs.filter((s) =>
-      (s.event_types as string[]).includes('event.series_created')
-    );
-
-    for (const sub of matching) {
+    for (const sub of subs) {
       const { data: delivery } = await supabaseAdmin
         .from('webhook_deliveries')
         .insert({
@@ -261,15 +255,12 @@ export async function dispatchSeriesUpdatedWebhook(
       .from('webhook_subscriptions')
       .select('id, url, signing_secret, signing_secret_encrypted, event_types')
       .eq('status', 'active')
+      .contains('event_types', ['series.updated'])
       .limit(10000);
 
     if (!subs || subs.length === 0) return;
 
-    const matching = subs.filter((s) =>
-      (s.event_types as string[]).includes('series.updated')
-    );
-
-    for (const sub of matching) {
+    for (const sub of subs) {
       const { data: delivery } = await supabaseAdmin
         .from('webhook_deliveries')
         .insert({
@@ -314,15 +305,12 @@ export async function dispatchSeriesDeletedWebhook(
       .from('webhook_subscriptions')
       .select('id, url, signing_secret, signing_secret_encrypted, event_types')
       .eq('status', 'active')
+      .contains('event_types', ['series.deleted'])
       .limit(10000);
 
     if (!subs || subs.length === 0) return;
 
-    const matching = subs.filter((s) =>
-      (s.event_types as string[]).includes('series.deleted')
-    );
-
-    for (const sub of matching) {
+    for (const sub of subs) {
       const { data: delivery } = await supabaseAdmin
         .from('webhook_deliveries')
         .insert({
@@ -372,15 +360,12 @@ export async function dispatchImageProcessedWebhook(
       .from('webhook_subscriptions')
       .select('id, url, signing_secret, signing_secret_encrypted, event_types')
       .eq('status', 'active')
+      .contains('event_types', ['event.image_processed'])
       .limit(10000);
 
     if (!subs || subs.length === 0) return;
 
-    const matching = subs.filter((s) =>
-      (s.event_types as string[]).includes('event.image_processed')
-    );
-
-    for (const sub of matching) {
+    for (const sub of subs) {
       const { data: delivery } = await supabaseAdmin
         .from('webhook_deliveries')
         .insert({

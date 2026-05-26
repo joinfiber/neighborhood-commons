@@ -706,6 +706,9 @@ export async function updateSeriesFutureInstances(input: SeriesUpdateInput): Pro
 const HORIZON_MS = 6 * 7 * 24 * 60 * 60 * 1000; // 6 weeks
 /** Refill when the last instance is within this threshold (milliseconds) */
 const REFILL_THRESHOLD_MS = 3 * 7 * 24 * 60 * 60 * 1000; // 3 weeks
+/** Max series processed per auto-extend run — bounds one cron invocation. The
+ *  needs-extension filter is self-correcting, so repeated runs drain any backlog. */
+const SERIES_EXTEND_BATCH = 200;
 
 /**
  * Auto-extend all active series to maintain the 6-week rolling horizon.
@@ -717,22 +720,36 @@ export async function autoExtendSeries(): Promise<{
   instancesCreated: number;
   errors: number;
 }> {
-  // Fetch all active series (ongoing or bounded with future end)
-  const { data: allSeries } = await supabaseAdmin
-    .from('event_series')
-    .select('id, recurrence, base_event_data, creator_account_id, ends_at')
-    .or('ends_at.is.null,ends_at.gt.' + new Date().toISOString());
-
-  if (!allSeries || allSeries.length === 0) {
-    return { extended: 0, instancesCreated: 0, errors: 0 };
-  }
-
   const now = Date.now();
   const horizon = new Date(now + HORIZON_MS);
   const refillThreshold = new Date(now + REFILL_THRESHOLD_MS);
   let extended = 0;
   let instancesCreated = 0;
   let errors = 0;
+
+  // Only fetch series that actually need extension — those with no instance
+  // beyond the refill threshold — capped to a batch so one cron run can't grow
+  // unbounded with the series count. Self-correcting: an extended series gains
+  // instances past the threshold and drops out of the next run, so repeated runs
+  // drain any backlog without a stateful cursor. (Mirrors the per-series
+  // lastEvent.event_at > refillThreshold skip below.)
+  const { data: needy } = await supabaseAdmin.rpc('series_ids_needing_extension', {
+    p_threshold: refillThreshold.toISOString(),
+    p_limit: SERIES_EXTEND_BATCH,
+  });
+  const needyIds = ((needy as { id: string }[] | null) || []).map((r) => r.id);
+  if (needyIds.length === 0) {
+    return { extended, instancesCreated, errors };
+  }
+
+  const { data: allSeries } = await supabaseAdmin
+    .from('event_series')
+    .select('id, recurrence, base_event_data, creator_account_id, ends_at')
+    .in('id', needyIds);
+
+  if (!allSeries || allSeries.length === 0) {
+    return { extended, instancesCreated, errors };
+  }
 
   for (const series of allSeries) {
     try {

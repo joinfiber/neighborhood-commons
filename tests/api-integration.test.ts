@@ -26,6 +26,11 @@ const mockAuthUser = vi.hoisted(() => {
   return { value: { data: { user: null }, error: { message: 'invalid token' } } as unknown };
 });
 
+/** Mock RPC responses keyed by function name */
+const mockRpcResponses = vi.hoisted(() => {
+  return new Map<string, { data: unknown; error: unknown }>();
+});
+
 vi.mock('../src/lib/supabase.js', () => {
   /** Create a chainable PostgREST-like mock that resolves to the table's mock response */
   function createQueryChain(table: string) {
@@ -52,6 +57,15 @@ vi.mock('../src/lib/supabase.js', () => {
   return {
     supabaseAdmin: {
       from: (table: string) => createQueryChain(table),
+      rpc: (fn: string) => {
+        const chain: Record<string, unknown> = {};
+        chain.single = () => chain;
+        chain.then = (resolve: (v: unknown) => void, reject?: (e: unknown) => void) => {
+          const response = mockRpcResponses.get(fn) || { data: null, error: null };
+          return Promise.resolve(response).then(resolve, reject);
+        };
+        return chain;
+      },
       auth: {
         getUser: () => Promise.resolve(mockAuthUser.value),
       },
@@ -148,6 +162,7 @@ afterAll(() => {
 
 beforeEach(() => {
   mockResponses.clear();
+  mockRpcResponses.clear();
   mockAuthUser.value = { data: { user: null }, error: { message: 'invalid token' } };
 });
 
@@ -635,6 +650,10 @@ describe('series deduplication', () => {
       error: null,
       count: 4,
     });
+    mockRpcResponses.set('series_instance_counts', {
+      data: [{ series_id: 'series-uuid-1', count: 3 }],
+      error: null,
+    });
 
     // Without collapse_series, all 4 events are returned
     const resAll = await fetch(`${baseUrl}/api/v1/events`);
@@ -723,6 +742,28 @@ describe('Publishers API (v2)', () => {
     const res = await fetch(`${baseUrl}/api/v1/publishers/no-such-publisher`);
     expect(res.status).toBe(404);
   });
+
+  it('lists publishers via the publisher_org_ids RPC (no full-table scan)', async () => {
+    mockRpcResponses.set('publisher_org_ids', { data: [{ org_id: 'org-uuid-1' }], error: null });
+    mockResponses.set('organizations', {
+      data: [{
+        id: 'org-uuid-1', slug: 'test-bar', name: 'Test Bar', legal_name: null,
+        description: null, url: null, logo_url: null, image_url: null, telephone: null,
+        email: null, same_as: [], keywords: [], opening_hours_specification: null,
+        tags: [], commercial: null, method: 'seeded', primary_place_id: null,
+        created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+      }],
+      error: null, count: 1,
+    });
+    mockResponses.set('places', { data: [], error: null });
+    mockResponses.set('organization_verifications', { data: [], error: null });
+
+    const res = await fetch(`${baseUrl}/api/v1/publishers`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.publishers).toHaveLength(1);
+    expect(body.publishers[0].id).toBe('org-uuid-1');
+  });
 });
 
 describe('created_by_contributor on organizations & publishers', () => {
@@ -772,6 +813,21 @@ describe('created_by_contributor on organizations & publishers', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.publishers).toHaveLength(0);
+  });
+});
+
+describe('GET /api/meta/categories', () => {
+  it('returns category counts from the event_category_counts RPC', async () => {
+    mockRpcResponses.set('event_category_counts', {
+      data: [{ category: 'live_music', count: 3 }, { category: 'community', count: 1 }],
+      error: null,
+    });
+    const res = await fetch(`${baseUrl}/api/meta/categories`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.categories).toHaveLength(2);
+    // sorted by count desc; underscores become hyphens in the slug
+    expect(body.categories[0]).toMatchObject({ key: 'live_music', slug: 'live-music', count: 3 });
   });
 });
 

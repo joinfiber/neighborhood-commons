@@ -16,7 +16,7 @@ import helmet from 'helmet';
 import { config } from './config.js';
 import { supabaseAdmin } from './lib/supabase.js';
 import { errorHandler } from './middleware/error-handler.js';
-import { globalLimiter, writeLimiter } from './middleware/rate-limit.js';
+import { globalLimiter, writeLimiter, metaLimiter } from './middleware/rate-limit.js';
 
 // Routes
 import publicRoutes from './routes/public.js';
@@ -245,8 +245,8 @@ export function createApp(): Express {
   app.get('/api/v1/events.rss', rssHandler);
 
   // ─── Meta (regions, categories) ──────────────────────────────────
-  app.use('/api/v1/meta', metaRoutes);
-  app.use('/api/meta', metaRoutes);
+  app.use('/api/v1/meta', metaLimiter, metaRoutes);
+  app.use('/api/meta', metaLimiter, metaRoutes);
 
   // ─── Webhooks ────────────────────────────────────────────────────
   app.use('/api/v1/webhooks', webhookRoutes);

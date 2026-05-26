@@ -345,13 +345,11 @@ router.get('/', async (req, res, next) => {
     ));
     const seriesCounts = new Map<string, number>();
     if (seriesIds.length > 0) {
-      const { data: counts } = await supabaseAdmin
-        .from('events')
-        .select('series_id')
-        .in('series_id', seriesIds);
-      for (const row of counts || []) {
-        const sid = (row as { series_id: string }).series_id;
-        seriesCounts.set(sid, (seriesCounts.get(sid) || 0) + 1);
+      // series_instance_counts() GROUPs BY in Postgres — one row per series with
+      // its instance count — instead of fetching every instance row to tally in JS.
+      const { data: counts } = await supabaseAdmin.rpc('series_instance_counts', { p_series_ids: seriesIds });
+      for (const row of (counts as { series_id: string; count: number }[] | null) || []) {
+        if (row.series_id) seriesCounts.set(row.series_id, Number(row.count));
       }
     }
 

@@ -119,32 +119,22 @@ router.get('/regions', async (_req, res, next) => {
  */
 router.get('/categories', async (_req, res, next) => {
   try {
-    // Categories are defined in the DB or config — query distinct from events
-    const { data: categories, error } = await supabaseAdmin
-      .from('events')
-      .select('category')
-      .eq('status', 'published')
-      .is('ended_at', null)
-      .not('category', 'is', null);
+    // event_category_counts() (migration 096) does the GROUP BY in Postgres —
+    // one row per category — instead of streaming every published event's
+    // category into the process to dedup/count by hand.
+    const { data: categories, error } = await supabaseAdmin.rpc('event_category_counts');
 
     if (error) {
       console.error('[META] Failed to fetch categories:', error.message);
       throw createError('Failed to fetch categories', 500, 'DATABASE_ERROR');
     }
 
-    // Deduplicate and count
-    const categoryMap = new Map<string, number>();
-    for (const row of categories || []) {
-      if (row.category) {
-        categoryMap.set(row.category, (categoryMap.get(row.category) || 0) + 1);
-      }
-    }
-
-    const result = Array.from(categoryMap.entries())
-      .map(([slug, count]) => ({
-        slug: slug.replace(/_/g, '-'),
-        key: slug,
-        count,
+    const result = ((categories as { category: string; count: number }[] | null) || [])
+      .filter((row) => row.category)
+      .map((row) => ({
+        slug: row.category.replace(/_/g, '-'),
+        key: row.category,
+        count: Number(row.count),
       }))
       .sort((a, b) => b.count - a.count);
 
