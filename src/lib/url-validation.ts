@@ -81,6 +81,32 @@ export function isPrivateIPv6(ip: string): boolean {
 }
 
 /**
+ * Resolve a hostname and reject if ANY resolved address is private/reserved.
+ * Uses { all: true } so a dual-stack host can't pass on a public record while
+ * a later connect lands on a private one. Mirrors safe-fetch's connect-time
+ * ssrfSafeLookup; together they bracket the validate->connect TOCTOU window.
+ */
+async function assertResolvesToPublicIp(hostname: string): Promise<void> {
+  let addresses: Array<{ address: string; family: number }>;
+  try {
+    addresses = await dns.lookup(hostname, { all: true });
+  } catch (err) {
+    if (err instanceof Error && (err.message.includes('ENOTFOUND') || err.message.includes('EAI_AGAIN'))) {
+      throw new Error('URL hostname could not be resolved');
+    }
+    throw err;
+  }
+  for (const { address, family } of addresses) {
+    if (family === 4 && isPrivateIPv4(address)) {
+      throw new Error('URL resolves to a private IP address');
+    }
+    if (family === 6 && isPrivateIPv6(address)) {
+      throw new Error('URL resolves to a private IP address');
+    }
+  }
+}
+
+/**
  * Validate a webhook URL is safe to fetch.
  * Resolves the hostname and blocks private/internal IPs.
  *
@@ -111,26 +137,7 @@ export async function validateFeedUrl(url: string): Promise<void> {
     throw new Error('URL hostname is not allowed');
   }
 
-  // Resolve hostname to IP address
-  try {
-    const { address, family } = await dns.lookup(hostname);
-
-    if (family === 4 && isPrivateIPv4(address)) {
-      throw new Error('URL resolves to a private IP address');
-    }
-
-    if (family === 6 && isPrivateIPv6(address)) {
-      throw new Error('URL resolves to a private IP address');
-    }
-  } catch (err) {
-    if (err instanceof Error && err.message.includes('private IP')) {
-      throw err;
-    }
-    if (err instanceof Error && (err.message.includes('ENOTFOUND') || err.message.includes('EAI_AGAIN'))) {
-      throw new Error('URL hostname could not be resolved');
-    }
-    throw err;
-  }
+  await assertResolvesToPublicIp(hostname);
 }
 
 export async function validateWebhookUrl(url: string): Promise<void> {
@@ -152,25 +159,5 @@ export async function validateWebhookUrl(url: string): Promise<void> {
     throw new Error('URL hostname is not allowed');
   }
 
-  // Resolve hostname to IP address
-  try {
-    const { address, family } = await dns.lookup(hostname);
-
-    if (family === 4 && isPrivateIPv4(address)) {
-      throw new Error('URL resolves to a private IP address');
-    }
-
-    if (family === 6 && isPrivateIPv6(address)) {
-      throw new Error('URL resolves to a private IP address');
-    }
-  } catch (err) {
-    if (err instanceof Error && err.message.includes('private IP')) {
-      throw err;
-    }
-    // DNS resolution failure -- block (fail closed)
-    if (err instanceof Error && (err.message.includes('ENOTFOUND') || err.message.includes('EAI_AGAIN'))) {
-      throw new Error('URL hostname could not be resolved');
-    }
-    throw err;
-  }
+  await assertResolvesToPublicIp(hostname);
 }

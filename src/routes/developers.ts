@@ -22,6 +22,7 @@ import { z } from 'zod';
 import rateLimit from 'express-rate-limit';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { config } from '../config.js';
+import { verifyTurnstile } from '../lib/captcha.js';
 import {
   storeOtp,
   verifyOtp,
@@ -66,6 +67,7 @@ import {
   generateTotpSecret,
   otpauthUrl,
   verifyTotp,
+  verifyTotpStep,
   formatSecretForDisplay,
 } from '../lib/developer-portal/totp.js';
 import {
@@ -193,6 +195,19 @@ router.post('/register', writeFormLimiter, async (req, res, next) => {
       res.set('Content-Type', 'text/html; charset=utf-8');
       res.send(renderSignUp(issueCsrfCookie(res), message, req.body));
       return;
+    }
+
+    // CAPTCHA gate — inert unless config.captcha.enabled. The Turnstile widget
+    // injects cf-turnstile-response into the form; require and verify it so
+    // registration (which sends OTP email) isn't a bot-driven email-cost vector.
+    if (config.captcha.enabled) {
+      const token = (req.body?.['cf-turnstile-response'] as string) || '';
+      if (!token || !(await verifyTurnstile(token, req.ip))) {
+        res.status(400);
+        res.set('Content-Type', 'text/html; charset=utf-8');
+        res.send(renderSignUp(issueCsrfCookie(res), 'Please complete the verification challenge and try again.', req.body));
+        return;
+      }
     }
 
     const form: RegistrationFormData = {
@@ -953,10 +968,13 @@ async function loadKeyMfaState(apiKeyId: string): Promise<{
   mfa_enrolled_at: string | null;
   mfa_secret_encrypted: string | null;
   mfa_backup_codes_hashed: string[] | null;
+  mfa_failed_attempts: number;
+  mfa_locked_until: string | null;
+  mfa_last_totp_step: number | null;
 } | null> {
   const { data } = await supabaseAdmin
     .from('api_keys')
-    .select('mfa_enrolled_at, mfa_secret_encrypted, mfa_backup_codes_hashed')
+    .select('mfa_enrolled_at, mfa_secret_encrypted, mfa_backup_codes_hashed, mfa_failed_attempts, mfa_locked_until, mfa_last_totp_step')
     .eq('id', apiKeyId)
     .maybeSingle();
   if (!data) return null;
@@ -965,6 +983,9 @@ async function loadKeyMfaState(apiKeyId: string): Promise<{
     // Supabase-js returns bytea columns as `\x<hex>` strings on SELECT.
     mfa_secret_encrypted: (data.mfa_secret_encrypted as string | null) ?? null,
     mfa_backup_codes_hashed: (data.mfa_backup_codes_hashed as string[] | null) ?? null,
+    mfa_failed_attempts: (data.mfa_failed_attempts as number | null) ?? 0,
+    mfa_locked_until: (data.mfa_locked_until as string | null) ?? null,
+    mfa_last_totp_step: (data.mfa_last_totp_step as number | null) ?? null,
   };
 }
 
@@ -973,6 +994,30 @@ async function markSessionElevated(sessionId: string): Promise<void> {
     .from('developer_sessions')
     .update({ mfa_verified_at: new Date().toISOString() })
     .eq('id', sessionId);
+}
+
+// MFA step-up throttle. The step-up gate protects API-key rotation and the
+// operator portal, so a hijacked dashboard session must not be usable to grind
+// TOTP/backup codes. After MFA_MAX_ATTEMPTS consecutive failures the key is
+// locked out for MFA_LOCKOUT_MS.
+const MFA_MAX_ATTEMPTS = 5;
+const MFA_LOCKOUT_MS = 15 * 60 * 1000;
+
+async function recordMfaFailure(apiKeyId: string, currentAttempts: number): Promise<void> {
+  const next = currentAttempts + 1;
+  const update: Record<string, unknown> = { mfa_failed_attempts: next };
+  if (next >= MFA_MAX_ATTEMPTS) {
+    update.mfa_locked_until = new Date(Date.now() + MFA_LOCKOUT_MS).toISOString();
+    update.mfa_failed_attempts = 0; // counter resets; the lock is the gate now
+  }
+  await supabaseAdmin.from('api_keys').update(update).eq('id', apiKeyId);
+}
+
+async function clearMfaFailures(apiKeyId: string, consumedTotpStep: number | null): Promise<void> {
+  const update: Record<string, unknown> = { mfa_failed_attempts: 0, mfa_locked_until: null };
+  // Record the consumed TOTP step so the same code can't be replayed in-window.
+  if (consumedTotpStep !== null) update.mfa_last_totp_step = consumedTotpStep;
+  await supabaseAdmin.from('api_keys').update(update).eq('id', apiKeyId);
 }
 
 /**
@@ -1241,15 +1286,32 @@ router.post('/security/step-up', writeFormLimiter, requireDeveloperSession, asyn
       return;
     }
 
+    // Lockout: too many recent failures. This gate guards key rotation and the
+    // operator portal, so a hijacked session must not be usable to grind codes.
+    if (state.mfa_locked_until && Date.parse(state.mfa_locked_until) > Date.now()) {
+      res.status(429).send(portalShell({
+        title: 'Verify it’s you',
+        body: renderStepUp({ csrfToken: issueCsrfCookie(res), returnUrl, error: 'Too many attempts. Wait a few minutes and try again.' }),
+      }));
+      return;
+    }
+
     const submitted = parsed.data.code.trim();
     const looksLikeTotp = /^[0-9]{6}$/.test(submitted.replace(/\s+/g, ''));
 
     let verified = false;
+    let consumedTotpStep: number | null = null;
 
     if (looksLikeTotp) {
       try {
         const secret = decryptMfaSecret(state.mfa_secret_encrypted);
-        verified = verifyTotp(secret, submitted);
+        const step = verifyTotpStep(secret, submitted);
+        // Reject a code whose time-step was already consumed (replay within the
+        // ±1 validity window) — single-use, mirroring backup codes.
+        if (step !== null && step > (state.mfa_last_totp_step ?? -1)) {
+          verified = true;
+          consumedTotpStep = step;
+        }
       } catch (err) {
         console.error('[DEV_PORTAL] Step-up decrypt failed:', err instanceof Error ? err.message : err);
       }
@@ -1266,6 +1328,7 @@ router.post('/security/step-up', writeFormLimiter, requireDeveloperSession, asyn
     }
 
     if (!verified) {
+      await recordMfaFailure(session.api_key_id, state.mfa_failed_attempts);
       res.status(400).send(portalShell({
         title: 'Verify it’s you',
         body: renderStepUp({ csrfToken: issueCsrfCookie(res), returnUrl, error: 'That code didn’t match. Try again.' }),
@@ -1273,6 +1336,9 @@ router.post('/security/step-up', writeFormLimiter, requireDeveloperSession, asyn
       return;
     }
 
+    // Success: clear the failure counter and record the consumed TOTP step so
+    // the same code can't be replayed inside its validity window.
+    await clearMfaFailures(session.api_key_id, consumedTotpStep);
     await markSessionElevated(session.id);
     res.redirect(303, returnUrl);
   } catch (err) {
@@ -1423,6 +1489,10 @@ function renderSignUp(csrfToken: string, error: string | null, prefill: Record<s
       ${textField('category', 'Category (optional)', { maxlength: 50, value: prefill.category, hint: 'Free-form, e.g. "publishing", "discovery", "civic".' })}
       ${textareaField('what_youre_building', "What you're building", { required: true, value: prefill.what_youre_building, hint: `A paragraph is plenty. Name the data shape (events, hours, schedules, broadcasts) and the entities involved. Concrete is best — "I'm collecting public yoga-class schedules across Philly," or "I'm building a tool where chess clubs post their meetups," or "I'm OCR-ing flyers my users photograph." Any of those reads cleanly.` })}
       ${textareaField('verification_process', 'Verification process', { required: true, value: prefill.verification_process, hint: `How do you confirm the publisher of your content has authority over what they're publishing? Whatever fits: "I scrape venue calendar pages and de-dupe — the venues already post these publicly." Or: "Teachers create an account in my app and add their own classes." Or: "Users upload a photo of the flyer with each submission." Any of those reads cleanly.` })}
+      ${config.captcha.enabled && config.captcha.siteKey ? `
+      <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+      <div class="cf-turnstile" data-sitekey="${config.captcha.siteKey}" style="margin:16px 0;"></div>
+      ` : ''}
       <button type="submit" class="nc-btn">Send verification code</button>
     </form>
     <div class="nc-portal-footer-aux" style="margin-top:32px; font-size:13px; color:var(--muted);">

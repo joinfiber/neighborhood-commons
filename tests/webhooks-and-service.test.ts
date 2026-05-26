@@ -31,6 +31,11 @@ const mockRpcResponses = vi.hoisted(() => {
   return new Map<string, { data: unknown; error: unknown }>();
 });
 
+/** Captured RPC invocations (fnName + params) for argument assertions */
+const capturedRpcCalls = vi.hoisted(() => {
+  return [] as Array<{ fnName: string; params: unknown }>;
+});
+
 /** Mock auth OTP responses */
 const mockOtpResponse = vi.hoisted(() => {
   return { signIn: { error: null as unknown }, verify: { error: null as unknown } };
@@ -60,7 +65,8 @@ vi.mock('../src/lib/supabase.js', () => {
   return {
     supabaseAdmin: {
       from: (table: string) => createQueryChain(table),
-      rpc: (fnName: string) => {
+      rpc: (fnName: string, params?: unknown) => {
+        capturedRpcCalls.push({ fnName, params });
         const chain: Record<string, unknown> = {};
         chain.single = () => chain;
         chain.then = (resolve: (v: unknown) => void, reject?: (e: unknown) => void) => {
@@ -166,6 +172,7 @@ afterAll(() => {
 beforeEach(() => {
   mockResponses.clear();
   mockRpcResponses.clear();
+  capturedRpcCalls.length = 0;
   mockAuthUser.value = { data: { user: null }, error: { message: 'invalid token' } };
   mockOtpResponse.signIn = { error: null };
   mockOtpResponse.verify = { error: null };
@@ -269,6 +276,14 @@ describe('Webhooks — subscription lifecycle', () => {
     expect(typeof body.subscription.signing_secret).toBe('string');
     expect(body.subscription.signing_secret.length).toBe(64); // 32 bytes hex
     expect(body.note).toContain('signing_secret');
+
+    // M6: with encryption configured, the plaintext secret must NOT be persisted —
+    // only the encrypted column. A DB dump must not yield usable signing secrets.
+    const createCall = capturedRpcCalls.find((c) => c.fnName === 'create_webhook_subscription');
+    expect(createCall).toBeDefined();
+    const params = createCall!.params as Record<string, unknown>;
+    expect(params.p_signing_secret).toBeNull();
+    expect(params.p_signing_secret_encrypted).toBeDefined();
   });
 
   it('lists subscriptions for API key', async () => {

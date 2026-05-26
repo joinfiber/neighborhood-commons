@@ -557,3 +557,94 @@ describe('GET /developers/security/step-up', () => {
     expect(html).toContain('/developers/dashboard');
   });
 });
+
+// ---------------------------------------------------------------------------
+// HTTP — POST /developers/security/step-up (throttle + replay defense)
+// ---------------------------------------------------------------------------
+
+describe('POST /developers/security/step-up', () => {
+  function enrolledKeyData(secret: string, extra: Record<string, unknown> = {}) {
+    return {
+      contact_email: 'dev@example.com',
+      mfa_enrolled_at: '2026-05-18T00:00:00Z',
+      mfa_secret_encrypted: '\\x' + encryptMfaSecret(secret).toString('hex'),
+      mfa_backup_codes_hashed: [],
+      mfa_failed_attempts: 0,
+      mfa_locked_until: null,
+      mfa_last_totp_step: null,
+      ...extra,
+    };
+  }
+
+  async function csrfFor(): Promise<string> {
+    const getRes = await fetch(`${baseUrl}/developers/security/step-up`, {
+      headers: { Cookie: sessionCookie() },
+      redirect: 'manual',
+    });
+    return parseSetCookies(getRes).get('nc_dev_csrf') || '';
+  }
+
+  async function postStepUp(code: string, csrf: string, ret = '/developers/dashboard') {
+    return fetch(`${baseUrl}/developers/security/step-up`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Cookie: `${sessionCookie()}; nc_dev_csrf=${csrf}`,
+      },
+      body: new URLSearchParams({ _csrf: csrf, code, return: ret }).toString(),
+      redirect: 'manual',
+    });
+  }
+
+  it('elevates the session on a valid TOTP code and records the consumed step', async () => {
+    setupSession();
+    const secret = generateTotpSecret();
+    mockResponses.set('api_keys:single', { data: enrolledKeyData(secret), error: null });
+    const csrf = await csrfFor();
+    const res = await postStepUp(generateCode(secret), csrf, '/operator/applications');
+
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe('/operator/applications');
+    // session elevated
+    const sessionUpdates = updatedRows.get('developer_sessions') || [];
+    expect(sessionUpdates.some((u) => 'mfa_verified_at' in u)).toBe(true);
+    // failure counter cleared + consumed TOTP step recorded
+    const keyUpdates = updatedRows.get('api_keys') || [];
+    const cleared = keyUpdates.find((u) => 'mfa_last_totp_step' in u);
+    expect(cleared).toBeTruthy();
+    expect(cleared!.mfa_failed_attempts).toBe(0);
+    expect(typeof cleared!.mfa_last_totp_step).toBe('number');
+  });
+
+  it('rejects a replayed TOTP code whose step was already consumed', async () => {
+    setupSession();
+    const secret = generateTotpSecret();
+    const currentStep = Math.floor(Date.now() / 1000 / TOTP_PERIOD_SECONDS);
+    // last consumed step is ahead of any step the fresh code could match (±1)
+    mockResponses.set('api_keys:single', {
+      data: enrolledKeyData(secret, { mfa_last_totp_step: currentStep + 1 }),
+      error: null,
+    });
+    const csrf = await csrfFor();
+    const res = await postStepUp(generateCode(secret), csrf);
+
+    expect(res.status).toBe(400);
+    // NOT elevated
+    expect((updatedRows.get('developer_sessions') || []).some((u) => 'mfa_verified_at' in u)).toBe(false);
+  });
+
+  it('returns 429 when the key is locked out', async () => {
+    setupSession();
+    const secret = generateTotpSecret();
+    const future = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    mockResponses.set('api_keys:single', {
+      data: enrolledKeyData(secret, { mfa_locked_until: future }),
+      error: null,
+    });
+    const csrf = await csrfFor();
+    const res = await postStepUp(generateCode(secret), csrf);
+
+    expect(res.status).toBe(429);
+    expect((updatedRows.get('developer_sessions') || []).some((u) => 'mfa_verified_at' in u)).toBe(false);
+  });
+});
