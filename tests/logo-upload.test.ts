@@ -229,7 +229,9 @@ describe('GET /developers/profile — logo section', () => {
     expect(html).toContain('action="/developers/profile/logo"');
     expect(html).toContain('enctype="multipart/form-data"');
     expect(html).toContain('Upload logo');
-    expect(html).toContain('No logo yet');
+    // Tidied into one drop zone (native click + drag-drop, no JS)
+    expect(html).toContain('nc-dropzone');
+    expect(html).toContain('Drag a photo here, or click to choose');
     // No URL-paste field anymore
     expect(html).not.toContain('name="logo_url"');
   });
@@ -245,6 +247,9 @@ describe('GET /developers/profile — logo section', () => {
     expect(html).toContain('<img src="https://cdn.example/logo.jpg"');
     expect(html).toContain('Replace logo');
     expect(html).toContain('action="/developers/profile/logo/remove"');
+    // The preview lives inside the drop zone; Remove is demoted to a subtle link.
+    expect(html).toContain('nc-dropzone-preview');
+    expect(html).toContain('class="nc-link-btn"');
   });
 });
 

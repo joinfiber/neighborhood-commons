@@ -116,6 +116,61 @@ const SHARED_STYLES = `
   .nc-field input:focus,
   .nc-field textarea:focus { border-color: var(--accent); }
   .nc-required { color: var(--accent); font-weight: 500; margin-left: 2px; }
+  /* Logo drop zone. The file input is an opacity:0 overlay covering the whole
+     zone — opacity:0 (not display:none) keeps it a live target, so the browser
+     handles BOTH click-to-browse and native file drag-drop with no JavaScript.
+     Auto-upload-on-drop would need JS; here a single Upload button submits. */
+  .nc-dropzone {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 18px;
+    border: 1.5px dashed var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--bg);
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .nc-dropzone:hover,
+  .nc-dropzone:focus-within { border-color: var(--accent); background: var(--accent-soft); }
+  .nc-dropzone input[type="file"] {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+  }
+  .nc-dropzone-preview {
+    width: 64px;
+    height: 64px;
+    border-radius: 8px;
+    object-fit: cover;
+    background: #f1efea;
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted-2);
+    font-size: 26px;
+    font-weight: 300;
+  }
+  .nc-dropzone-text { font-size: 14px; color: var(--ink-2); }
+  .nc-dropzone-hint { display: block; font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .nc-link-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    font-size: 13px;
+    color: var(--muted);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+  }
+  .nc-link-btn:hover { color: var(--danger); }
   .nc-btn {
     display: inline-block;
     padding: 10px 18px;
