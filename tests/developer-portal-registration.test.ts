@@ -430,3 +430,79 @@ describe('Dashboard — What\'s next card', () => {
     expect(html).not.toContain('Enable MFA');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Dashboard — collective vs publishing scope
+// ---------------------------------------------------------------------------
+//
+// Regression for the bug where the dashboard labeled an arbitrary scoped org
+// (the first api_key_organization_links row) as "your collective." The
+// collective is the org named "<App> Community"; everything else is publishing
+// scope, surfaced as a count.
+
+describe('Dashboard — collective vs publishing scope', () => {
+  const RAW_TOKEN = 'd'.repeat(64);
+
+  function setupAuthed() {
+    const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    mockResponses.set('developer_sessions', {
+      data: { id: 'session-id', api_key_id: 'dev-api-key', mfa_verified_at: null, expires_at: future },
+      error: null,
+    });
+    mockResponses.set('api_keys', {
+      data: {
+        id: 'dev-api-key', name: 'Merrie', key_prefix: 'nc_abc123',
+        contributor_tier: 'service', status: 'active', activated_at: '2026-05-19T00:00:00Z',
+        contributor_profile_id: null, contact_email: 'dev@example.com', mfa_enrolled_at: null,
+      },
+      error: null,
+    });
+  }
+
+  it('shows "Publishing for N organizations" (not a collective) when no org is named "<App> Community"', async () => {
+    setupAuthed();
+    mockResponses.set('api_key_organization_links', {
+      data: [{ organization_id: 'org1' }, { organization_id: 'org2' }],
+      error: null,
+    });
+    mockResponses.set('organizations', {
+      data: [
+        { id: 'org1', name: 'Pong around Philly', slug: 'pong-around-philly' },
+        { id: 'org2', name: 'Another Group', slug: 'another-group' },
+      ],
+      error: null,
+    });
+    const res = await fetch(`${baseUrl}/developers/dashboard`, {
+      headers: { Cookie: `nc_dev_session=${RAW_TOKEN}` }, redirect: 'manual',
+    });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('Publishing for 2 organizations');
+    // The bug: an arbitrary scoped org must NOT be presented as the collective.
+    expect(html).not.toContain('Your collective');
+    expect(html).not.toContain('Pong around Philly');
+  });
+
+  it('shows the collective when a linked org is named "<App> Community"', async () => {
+    setupAuthed();
+    mockResponses.set('api_key_organization_links', {
+      data: [{ organization_id: 'org1' }, { organization_id: 'col' }],
+      error: null,
+    });
+    mockResponses.set('organizations', {
+      data: [
+        { id: 'org1', name: 'Pong around Philly', slug: 'pong-around-philly' },
+        { id: 'col', name: 'Merrie Community', slug: 'merrie-community' },
+      ],
+      error: null,
+    });
+    const res = await fetch(`${baseUrl}/developers/dashboard`, {
+      headers: { Cookie: `nc_dev_session=${RAW_TOKEN}` }, redirect: 'manual',
+    });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('Your collective: Merrie Community');
+    // The publishing org must not be mislabeled as the collective.
+    expect(html).not.toContain('Your collective: Pong around Philly');
+  });
+});
