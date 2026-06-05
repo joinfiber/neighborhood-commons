@@ -34,6 +34,8 @@ The Commons holds zero user accounts, zero PII, zero personal-identity records. 
 
 When Alice signs up for Merrie to start her chess club, her email and name are between Alice and Merrie. They never enter the Commons. The Commons knows the chess club exists; it does not know Alice exists.
 
+A username or handle is the same kind of thing as an email — an identifier for a person, not a public fact about the neighborhood. A user does not become a Commons entity by signing up, and not even by publishing: their content enters under the app's **collective organization** (a community identity like "Fiber Community" or "Go There By Bike Community"), and the person stays with the app. The only way a human appears in the Commons is as a **public persona they deliberately present** — a performing name, a named crew, a business — which is an organization, not a user (see [Organizations — the unified entity](#organizations--the-unified-entity)). Letting an app mint an entity per user account — surfacing handles as if they were venues or organizations — is the failure mode this rule exists to prevent.
+
 This is non-negotiable. It dissolves whole categories of problems — PII handling, GDPR exposure, cross-app identity portability, the temptation to build social-graph features — by simply not taking on the responsibility.
 
 Operational tables that hold email (currently `portal_accounts`) exist for service-key tenant claims and legacy OTP-claimed accounts. They are never surfaced via public API.
@@ -79,6 +81,8 @@ Future primitives expected: `Classified` (paid public offers, see Sustainability
 ### Organizations — the unified entity
 
 Everything that publishes or organizes is an organization, regardless of how many humans operate it. Alice's chess club is an organization-of-twenty-five. DJ Karma is an organization-of-one. Johnny Brenda's is an organization-of-a-staff. From the Commons' perspective they are structurally identical: named, slugged, public entities that do things.
+
+**An organization-of-one is a public persona, not a user.** This distinction is load-bearing. DJ Karma, Philly Bike Train, a handyman who advertises as "Joe's Handyman" — public-facing identities that stand on their own — are legitimately organizations-of-one. But a person who simply signs up for an app and posts something is *not* an entity; a username is identity, not a public fact (see [No Users in the Commons](#no-users-in-the-commons)). The test: **would the identity still make sense if the person walked away?** "DJ Karma," yes; "korin," a handle on a bike app, no. A private user's content enters the Commons under a community/collective organization — never under the person's handle — and presenting as a public persona is something the user opts into at publish time, not a byproduct of having an account.
 
 No `kind` discriminator. Earlier versions had `kind` as an enum (local_business, community_group, curator, etc.) but those values mixed structural facts with vibes with legal status and forced false choices that narrowed reach. Replaced with:
 
@@ -486,7 +490,7 @@ API_BASE_URL=                     # Override auto-detected base URL
 - **Don't add ingestion pipelines.** Feed polling, newsletter extraction, LLM classification — all in Studio. The Commons stores and serves; it doesn't collect.
 - **Don't add caching layers.** HTTP cache headers are fine. Application-level caching adds complexity we don't need at this scale.
 - **Don't add GraphQL.** REST is simple and sufficient.
-- **Don't reintroduce `persons`.** Everything is an organization. A solo DJ is an organization-of-one.
+- **Don't reintroduce `persons`.** A *public persona* (a solo DJ, a named crew) is an organization-of-one; a private user is not an entity at all — they stay in the app, and their content publishes under a collective organization (see No Users in the Commons).
 - **Don't reintroduce `kind` discriminator on organizations.** Use tags + commercial + derived signals.
 - **Don't reintroduce cross-app verification reputation graph.** Verification anchors Type A authority; that's all.
 - **Don't store Google Places API response data.** Only `place_id` is permitted indefinite storage. Other data is OSM-sourced or admin-curated.

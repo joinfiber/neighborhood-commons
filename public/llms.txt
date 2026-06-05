@@ -60,7 +60,7 @@ The Commons is **authoritative on facts**. Every response is self-contained: typ
 
 The Commons is **opt-in, not firehose**. Read endpoints accept filter parameters that compose into each app's editorial slice. Verification is a *signal* apps consume, not a permission gate the Commons enforces.
 
-The Commons holds **no user accounts**. Apps that have users own their users. Personal identifiers — emails, names, phones — are between users and the apps they sign up for. Entities (businesses, groups, places) are public; the people behind them are private.
+The Commons holds **no user accounts**. Apps that have users own their users. Personal identifiers — emails, names, phones — are between users and the apps they sign up for. Entities (businesses, groups, places) are public; the people behind them are private. A username is a personal identifier too: a user does not become a Commons entity by signing up, or even by publishing — their content enters under the app's **collective organization** (e.g. "Go There By Bike Community"), and the person stays with the app. A human appears in the Commons only as a **public persona they choose to present** — a performing name, a named crew, a business — which is an organization, never a user.
 
 ---
 
@@ -162,7 +162,7 @@ Schema.org `Place`. Physical locations, deduplicated by Google Places ID where a
 
 ### 2.2 Organization
 
-Schema.org `Organization`. The unified entity primitive — anything that publishes or organizes is an organization, regardless of how many humans operate it. A touring DJ is an organization-of-one; a chess club is an organization-of-many. Same primitive.
+Schema.org `Organization`. The unified entity primitive — anything that publishes or organizes is an organization, regardless of how many humans operate it. A touring DJ is an organization-of-one; a chess club is an organization-of-many. Same primitive. But an organization-of-one is a *public persona* (DJ Karma, a named ride crew), not an app's user — the test is whether the identity would still stand if the person walked away. Private users are never organizations; their content publishes under a collective, and they stay in the app.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -585,6 +585,8 @@ curl -X PATCH "https://neighborhood-commons.org/api/v1/service/organizations/ORG
   -H "X-API-Key: $NC_KEY" -H "Content-Type: application/json" \
   -d '{ "description": "Updated bio.", "telephone": "+12155550101" }'
 ```
+
+**Provenance (`method`).** Create declares how the org came to be known — the authority signal consumers filter on (`?method=self_asserted` surfaces only first-party records). It defaults to `seeded`: a bulk-imported org with no first-party assertion yet. Bulk importers (scraped venues, registry imports) send `seeded` (or omit it); a venue claiming itself through your app sends `self_asserted`. The stronger claims require standing, mirroring the events path — `self_asserted` needs the org to have a claimed owner (a key bound to a tenant account) or an admin key; `proxied` needs `proxy_authority`; `witnessed` needs `witness_authority`. Exceed your authority and you get `403 INSUFFICIENT_TIER`. A `seeded` org is promoted to `self_asserted` automatically when it verifies (§5) — so the honest path is seed-then-verify, not claim-on-create. `method` is set at creation; it is not an editable profile field (PATCH ignores it). Write-ownership (the auto-link granting your key edit rights) is independent of `method`: a bulk importer still owns and can enrich the `seeded` orgs it created.
 
 Image uploads (logo, hero image) are JSON-base64: `POST /v1/service/organizations/:id/logo` and `POST /v1/service/organizations/:id/image` with body `{ "image": "<base64>" }`. Magic-byte check, Sharp re-encoding, R2 upload.
 

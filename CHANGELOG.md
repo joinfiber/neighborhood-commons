@@ -14,6 +14,29 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-06-05 — doctrine: an organization-of-one is a public persona, not a user
+
+Clarification — no spec or behavior change. Sharpens the org / no-users doctrine for apps that mirror their users into the Commons (the failure mode: user handles surfacing as bogus venues/organizations).
+
+- An **organization-of-one is a public persona** (DJ Karma, a named crew, a business) — *not* an app's user. The test: would the identity still stand if the person walked away?
+- A **private user is never a Commons entity.** A username is a personal identifier like an email; signing up — or even publishing — does not create an org. Their content enters under the app's **collective organization** (e.g. "Go There By Bike Community"); presenting as a public persona is opt-in at publish time.
+- Docs only: `public/llms.txt` (The Guide) and `CLAUDE.md`. No `openapi.json` change — the Place/Organization split and the no-users rule already exist in the spec; this clarifies how to model against them.
+
+## 2026-06-04 — migration 102 backfill: promote verified-but-`seeded` orgs that migration 085 missed
+
+Data correction; no Spec change. Migration 085's `organizations.method` backfill had a no-op verification branch — it matched `organization_verifications.status = 'verified'`, but that status enum is `active` / `revoked` (migration 080), so it promoted nothing on that branch; only the `owner_account_id` branch did any work. An org that was verified but had no `owner_account_id` when 085 ran stayed `seeded` despite being first-party — and was invisible to consumers filtering `?method=self_asserted`. Migration 102 promotes exactly those rows (`seeded` + an active verification → `self_asserted`), using the real status value. Disjoint from migration 100's demotion (which only touches *unverified* orgs); the ongoing verify-then-promote path (`promoteOrganizationOnVerification`) was already correct.
+
+## 2026-06-03 — `POST /service/organizations` no longer hardcodes `self_asserted`; provenance is caller-declared
+
+Fix. The create handler stamped `method: 'self_asserted'` on **every** organization, overriding the DB default (`seeded`). Since `method` is the authority signal consumers filter on (`?method=self_asserted` = first-party records), this made it meaningless — a scraped venue looked identical to a verified first-party org. Provenance is now declared by the caller, mirroring how events declare `source_method`.
+
+- **New optional `method` on `OrganizationInput`** (additive): `self_asserted` / `proxied` / `witnessed` / `seeded`. Closes a gap — callers previously had no way to express org provenance at all.
+- **Behavior change: service-created orgs now default to `seeded`** (were `self_asserted`). A consumer filtering `?method=self_asserted` no longer sees unclaimed bulk imports — which is the point. A `seeded` org is promoted to `self_asserted` automatically on verification (existing path), so the lifecycle is seed-then-verify.
+- **Stronger claims are authority-gated** (admin bypasses), returning `403 INSUFFICIENT_TIER` otherwise: `self_asserted` requires the org to have a claimed owner (a key bound to a tenant account); `proxied` requires `proxy_authority`; `witnessed` requires `witness_authority`. Same authority model as the events path.
+- **`method` is set at creation only** — `PATCH /service/organizations/{id}` ignores it. Provenance changes through verification, not ordinary profile edits.
+- Write-ownership (the create-time auto-link granting edit rights) stays independent of `method`: a bulk importer still owns and can enrich the `seeded` orgs it created.
+- Existing rows corrected by **migration 100**: demotes wrongly-`self_asserted` orgs to `seeded` via an allow-list of the known first-party apps (Merrie + Go There), carving out verified orgs and app-native collectives (`<App> Community`). Neither `owner_account_id` nor `witness_authority` is used as a guard — the bulk importer (Studio v2) carries both, so they don't distinguish an import from a claim.
+
 ## 2026-05-24 — emit required `method` provenance on every primitive; conform `Broadcast.source`
 
 Fix / spec-conformance. No Spec change: the Spec has marked `method` **required** on `Organization`, `Broadcast`, and `List` since 3.0, and types `Broadcast.source` as the full `Source` object — the formatters simply weren't emitting them, so every read of these primitives was non-conformant.

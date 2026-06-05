@@ -1944,7 +1944,7 @@ export interface components {
             /** Format: date-time */
             updated_at?: string;
         };
-        /** @description Input shape for creating or updating an Organization. Classification is via `tags` (descriptive labels) and `commercial` (for-profit signal) — there is no `kind` field. Calling key auto-links to the new organization on create via `api_key_organization_links`; use `POST /service/organizations/link` to link to an existing org. */
+        /** @description Input shape for creating or updating an Organization. Classification is via `tags` (descriptive labels) and `commercial` (for-profit signal) — there is no `kind` field. Provenance is declared via `method` (defaults to `seeded`; see the field for the authority gating). Calling key auto-links to the new organization on create via `api_key_organization_links` (write-ownership, independent of `method`); use `POST /service/organizations/link` to link to an existing org. */
         OrganizationInput: {
             name: string;
             /** @description Optional; auto-generated from name if omitted. */
@@ -1972,6 +1972,12 @@ export interface components {
              * @description Reference to a Place row. Optional — drives `additionalType` derivation (`LocalBusiness` if set, plain `Organization` otherwise).
              */
             primaryPlaceId?: string;
+            /**
+             * @description Caller-set provenance method (docs/provenance.md) — the authority signal consumers filter on. `seeded` (default): a bulk-imported org with no first-party assertion yet; promoted to `self_asserted` when it verifies. `self_asserted`: first-party authority; requires the new org to have a claimed owner (a key bound to a tenant account) or an admin key — returns `403 INSUFFICIENT_TIER` otherwise. `proxied`: extracted from a public source (e.g. a business registry); requires `api_keys.proxy_authority=true` (or admin). `witnessed`: collective-evidence path; requires `api_keys.witness_authority=true` (or admin). Set at creation; ignored on update (provenance changes through verification, not ordinary profile edits).
+             * @default seeded
+             * @enum {string}
+             */
+            method: "self_asserted" | "proxied" | "witnessed" | "seeded";
         };
         /** @description Ephemeral real-time signal from an Organization, pinned to a Place. Maximum lifetime 24h. No direct Schema.org analog; conventions borrowed from SpecialAnnouncement (`datePosted`, `expires`). `method` carries the standard provenance vocabulary — broadcasts are always first-party from the organization (only `self_asserted` is valid today). */
         Broadcast: {
@@ -4767,6 +4773,13 @@ export interface operations {
             };
             400: components["responses"]["ValidationError"];
             401: components["responses"]["Unauthorized"];
+            /** @description INSUFFICIENT_TIER — the requested `method` exceeds the key's authority (e.g. `self_asserted` without a tenant account, `proxied` without `proxy_authority`, `witnessed` without `witness_authority`). Admin keys bypass. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Slug already in use */
             409: {
                 headers: {

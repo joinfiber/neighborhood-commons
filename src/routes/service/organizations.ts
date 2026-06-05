@@ -37,6 +37,16 @@ const PLACE_SELECT_INLINE = `
   latitude, longitude, region_id, created_at, updated_at
 `;
 
+// Caller-facing provenance method (docs/provenance.md). Mirrors events'
+// callerSourceMethod, plus `seeded` — the honest default for a bulk-imported
+// org with no first-party assertion behind it yet. `method` is the authority
+// signal consumers filter on, so it must reflect the *nature of the claim*,
+// not the act of creation. (The bug this closes: every service-created org was
+// hardcoded `self_asserted`, so the signal carried no information — a scraped
+// Porchfest venue looked identical to a verified first-party org.) The
+// stronger claims are gated by key authority in the handler below.
+const callerOrgMethod = z.enum(['self_asserted', 'proxied', 'witnessed', 'seeded']);
+
 const orgCreateSchema = z.object({
   name: z.string().min(1).max(200),
   slug: z.string().max(100).optional(),
@@ -54,9 +64,14 @@ const orgCreateSchema = z.object({
   keywords: z.array(z.string().max(50)).max(20).optional(),
   openingHoursSpecification: z.array(z.unknown()).optional(),
   primaryPlaceId: z.string().uuid().optional(),
+  method: callerOrgMethod.optional(),
 });
 
-const orgUpdateSchema = orgCreateSchema.partial();
+// Provenance is set at creation (or promoted by the verification path); it is
+// not a generic editable field. Omitting `method` from the update shape keeps
+// a PATCH from silently re-stamping authority — a seeded org earns
+// self_asserted through verification, never through an ordinary profile edit.
+const orgUpdateSchema = orgCreateSchema.omit({ method: true }).partial();
 
 const linkSchema = z.object({
   organizationId: z.string().uuid(),
@@ -105,6 +120,46 @@ router.post('/organizations', serviceLimiter, async (req, res, next) => {
       throw createError('Could not derive a valid slug from name', 400, 'VALIDATION_ERROR');
     }
 
+    // Provenance gate (docs/provenance.md). Default `seeded`: a bulk-imported
+    // row with no first-party assertion yet — the safe, honest baseline. The
+    // stronger claims each require standing, mirroring the events path; admin
+    // keys (operator tools) bypass. Write-ownership (the auto-link below) stays
+    // orthogonal — the creator can always edit what it created, whatever the
+    // method.
+    //   self_asserted — the org will have a claimed owner (the key is bound to
+    //                   a tenant account, so owner_account_id is set below);
+    //                   coherent with migration 085's owner⇒self_asserted
+    //                   invariant. An ownerless org earns self_asserted instead
+    //                   through verification (seeded→self_asserted promotion).
+    //   proxied       — extracted from a public source; requires proxy_authority.
+    //   witnessed     — collective observation; requires witness_authority.
+    const method = body.method ?? 'seeded';
+    if (!req.apiKeyInfo?.isAdmin) {
+      if (method === 'self_asserted' && !req.apiKeyInfo?.tenantAccountId) {
+        throw createError(
+          'method=self_asserted requires a key bound to a tenant account (so the '
+          + 'organization has a claimed owner) or an admin key. Orgs created without '
+          + 'an owner are seeded and earn self_asserted through verification.',
+          403,
+          'INSUFFICIENT_TIER',
+        );
+      }
+      if (method === 'proxied' && !req.apiKeyInfo?.proxyAuthority) {
+        throw createError(
+          'method=proxied requires a key with proxy_authority (or an admin key).',
+          403,
+          'INSUFFICIENT_TIER',
+        );
+      }
+      if (method === 'witnessed' && !req.apiKeyInfo?.witnessAuthority) {
+        throw createError(
+          'method=witnessed requires a key with witness_authority (or an admin key).',
+          403,
+          'INSUFFICIENT_TIER',
+        );
+      }
+    }
+
     const { data: created, error } = await supabaseAdmin
       .from('organizations')
       .insert({
@@ -134,13 +189,10 @@ router.post('/organizations', serviceLimiter, async (req, res, next) => {
         // key publishes under, snapshotted so source.contributor on the org
         // survives api_key rotation. Mirrors events.contributor_profile_id.
         contributor_profile_id: req.apiKeyInfo?.contributorProfileId ?? null,
-        // Provenance (docs/provenance.md): orgs created via the service
-        // API are first-party-asserted by definition — the calling key is
-        // the contributor acting as courier for the entity asserting its
-        // own existence. The DB default ('seeded') is only correct for
-        // bulk-imported rows that arrive without a human-mediated
-        // assertion; that's not this path.
-        method: 'self_asserted',
+        // Provenance (docs/provenance.md). Caller-declared, gated above,
+        // defaulting to `seeded`. This is the authority signal — it names how
+        // the claim came to be, independent of who may edit the row.
+        method,
       })
       .select('id')
       .single();
