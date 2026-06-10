@@ -178,7 +178,10 @@ async function formatList(row: Record<string, unknown>, opts: { hydrateItems: bo
 
     const [eventsRes, orgsRes, placesRes] = await Promise.all([
       eventIds.length > 0
-        ? supabaseAdmin.from('events').select(EVENT_SELECT_INLINE).in('id', eventIds)
+        // SECURITY: only published events may surface. Without the status
+        // filter, a draft/pending_review/suspended event added to a list leaks
+        // its full public Event shape here even though GET /events/{id} 404s it.
+        ? supabaseAdmin.from('events').select(EVENT_SELECT_INLINE).in('id', eventIds).eq('status', 'published')
         : Promise.resolve({ data: [], error: null }),
       orgIds.length > 0
         ? supabaseAdmin.from('organizations').select(ORG_SELECT_INLINE).in('id', orgIds)

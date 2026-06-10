@@ -14,6 +14,14 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-06-10 — Fix: list and series read paths return only published events
+
+Bug fix; aligns behavior with the Spec (these surfaces document public Events, which are published-only). Three read paths hydrated Event objects with no status filter, so a `draft`/`pending_review`/`suspended` event surfaced its full public Event shape even though `GET /events/{id}` 404s it:
+
+- `GET /lists/{idOrSlug}` — list-item events
+- `GET /series` and `GET /series/{idOrSlug}` — `next_instance`
+
+All three now constrain to `status='published'`. Found by the 2026-06-10 audit (F4, F20).
 ## 2026-06-10 — Security: escape JSON-LD on public event/venue pages (stored XSS)
 
 Internal hardening; no Spec or API-surface change. The server-rendered `/events/{id}` and `/venues/{slug}` pages embedded `JSON.stringify(jsonLd)` raw inside a `<script type="application/ld+json">` block. `JSON.stringify` does not escape `<`, `>`, or `/`, so a length-only-validated field (event/org name, description, address) containing `</script>` could terminate the element and inject markup. The serialized JSON-LD is now `\uXXXX`-escaped (`<`, `>`, `&`, U+2028/U+2029) at both sites via a shared `jsonLdScript()` helper. Regression test added in `pages.test.ts`.
