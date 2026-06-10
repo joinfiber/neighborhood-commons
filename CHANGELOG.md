@@ -14,6 +14,10 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-06-10 — Security: escape JSON-LD on public event/venue pages (stored XSS)
+
+Internal hardening; no Spec or API-surface change. The server-rendered `/events/{id}` and `/venues/{slug}` pages embedded `JSON.stringify(jsonLd)` raw inside a `<script type="application/ld+json">` block. `JSON.stringify` does not escape `<`, `>`, or `/`, so a length-only-validated field (event/org name, description, address) containing `</script>` could terminate the element and inject markup. The serialized JSON-LD is now `\uXXXX`-escaped (`<`, `>`, `&`, U+2028/U+2029) at both sites via a shared `jsonLdScript()` helper. Regression test added in `pages.test.ts`.
+
 ## 2026-06-05 — doctrine: an organization-of-one is a public persona, not a user
 
 Clarification — no spec or behavior change. Sharpens the org / no-users doctrine for apps that mirror their users into the Commons (the failure mode: user handles surfacing as bogus venues/organizations).
