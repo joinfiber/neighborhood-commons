@@ -14,6 +14,10 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-06-10 — Fix: series timezone change recomposes instance wall-clocks
+
+Bug fix. A timezone-only `PATCH /service/events/series/{id}` (only `timezone`, no `start`/`end`) wrote the new `event_timezone` onto every future instance without recomposing `event_at`. Since `event_at` is a fixed instant, each instance's wall-clock silently shifted by the offset delta (7pm → 6pm). A combined start+timezone change was also wrong (`event_at` composed in the old tz while the new tz was stored). `updateSeriesFutureInstances` now treats a timezone change as a per-instance recomposition — decompose in the old tz, recompose in the new — mirroring the single-event S6 fix, and syncs `base_event_data`'s timezone so the auto-extend cron materializes future instances in the new zone too. Found by the 2026-06-10 audit (F5).
+
 ## 2026-06-05 — doctrine: an organization-of-one is a public persona, not a user
 
 Clarification — no spec or behavior change. Sharpens the org / no-users doctrine for apps that mirror their users into the Commons (the failure mode: user handles surfacing as bogus venues/organizations).
