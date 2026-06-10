@@ -166,6 +166,14 @@ export async function createEventSeries(
     // cron materializes weeks later. Initial instances already inherit it via
     // the templateData spread below.
     'contributor_profile_id',
+    // Provenance (audit F6). The auto-extend cron and instance_count extend
+    // materialize instances SOLELY from base_event_data, so without these a
+    // witnessed/proxied or first-party recurring series publishes future
+    // instances with wrong Type A / four-roles signals — first_party falling
+    // back to false (mig 054), source_method to self_asserted (mig 085), and
+    // source_feed_url/tmdb_id dropped. Initial instances are correct via the
+    // templateData spread below; only the later cron/extend rows were wrong.
+    'first_party', 'source_method', 'source_feed_url', 'tmdb_id',
   ];
   for (const key of templateKeys) {
     if (key in templateData) baseEventData[key] = templateData[key];

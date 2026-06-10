@@ -14,6 +14,9 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-06-10 — Fix: auto-extended series instances keep their provenance
+
+Bug fix; makes later instances match the first ones. The auto-extend cron and the `instance_count` extend materialize future instances solely from `event_series.base_event_data`, whose snapshot omitted `first_party`, `source_method`, `source_feed_url`, and `tmdb_id`. A witnessed/proxied or first-party recurring series therefore published its later (cron-materialized) instances with wrong Type A / four-roles signals — `first_party` falling back to `false`, `source.method` to `self_asserted`, `source.url` dropped. These fields are now snapshotted into `base_event_data` at create, so every materialized instance carries the series' real provenance. Found by the 2026-06-10 audit (F6). (`region_id` on cron/extend rows is still hardcoded `null` — tracked as a follow-up.)
 ## 2026-06-10 — Fix: image-upload routes honor their documented 12MB limit
 
 Bug fix; no Spec change (aligns code to the Spec's "Max 12MB raw"). The global 5MB `express.json` parser ran before the image routes' own 12MB parser and set `req._body`, so body-parser short-circuited the override — base64 / `image_url` JSON uploads between 5MB and 12MB were wrongly `413`'d at 5MB. The global parser now skips the image-upload paths (`.../image`, `.../logo`, `.../cover`) so their 12MB limit applies. Found by the 2026-06-10 audit (F7).
