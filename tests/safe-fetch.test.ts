@@ -114,6 +114,46 @@ describe('isPrivateIPv6', () => {
     expect(isPrivateIPv6('::ffff:192.168.1.1')).toBe(true);
   });
 
+  it('detects IPv4-mapped private addresses in compressed-hex form', () => {
+    // Regression (SSRF bypass): dns.lookup returns IPv4-mapped addresses as
+    // ::ffff:HHHH:HHHH (no dot). The old guard only decoded the dotted form, so
+    // the hex form of cloud-metadata/loopback resolved through as "public".
+    expect(isPrivateIPv6('::ffff:a9fe:a9fe')).toBe(true); // 169.254.169.254
+    expect(isPrivateIPv6('::ffff:7f00:1')).toBe(true);    // 127.0.0.1
+    expect(isPrivateIPv6('::ffff:0a00:1')).toBe(true);    // 10.0.0.1
+    expect(isPrivateIPv6('::ffff:c0a8:101')).toBe(true);  // 192.168.1.1
+  });
+
+  it('allows IPv4-mapped public addresses in compressed-hex form', () => {
+    expect(isPrivateIPv6('::ffff:808:808')).toBe(false); // 8.8.8.8
+    expect(isPrivateIPv6('::ffff:101:101')).toBe(false); // 1.1.1.1
+  });
+
+  it('detects the full link-local /10 (fe80..febf), not just fe80', () => {
+    // Regression: startsWith('fe80:') matched only the bottom quarter of the
+    // /10. fe90/fea0/feb0..febf are equally link-local and dns can resolve to
+    // them.
+    expect(isPrivateIPv6('fe80::1')).toBe(true);
+    expect(isPrivateIPv6('fe90::1')).toBe(true);
+    expect(isPrivateIPv6('fea0::1')).toBe(true);
+    expect(isPrivateIPv6('feb0::1')).toBe(true);
+    expect(isPrivateIPv6('febf::1')).toBe(true);
+    // febf is the top of fe80::/10; fec0 and fe7f sit just outside it.
+    expect(isPrivateIPv6('fec0::1')).toBe(false);
+    expect(isPrivateIPv6('fe7f::1')).toBe(false);
+  });
+
+  it('classifies NAT64 64:ff9b::/96 by its embedded IPv4', () => {
+    expect(isPrivateIPv6('64:ff9b::a9fe:a9fe')).toBe(true); // -> 169.254.169.254
+    expect(isPrivateIPv6('64:ff9b::7f00:1')).toBe(true);    // -> 127.0.0.1
+    expect(isPrivateIPv6('64:ff9b::808:808')).toBe(false);  // -> 8.8.8.8 (public)
+  });
+
+  it('detects the discard-only prefix 100::/64', () => {
+    expect(isPrivateIPv6('100::1')).toBe(true);
+    expect(isPrivateIPv6('100::dead:beef')).toBe(true);
+  });
+
   it('allows public IPv6 addresses', () => {
     expect(isPrivateIPv6('2606:4700:4700::1111')).toBe(false); // Cloudflare
     expect(isPrivateIPv6('2001:4860:4860::8888')).toBe(false); // Google
@@ -188,6 +228,20 @@ describe('connect-hook lookup (SSRF rebinding defense)', () => {
   it('rejects when dns resolves to an IPv6 unique-local address', async () => {
     stubDnsResolution([{ address: 'fd00::1', family: 6 }]);
     const { err } = await invokeLookup('ipv6-attacker.example');
+    expect((err as NodeJS.ErrnoException).code).toBe('SSRF_BLOCKED');
+  });
+
+  it('rejects an IPv4-mapped metadata address in compressed-hex form', async () => {
+    // The audit's headline case: dns hands back the hex form of 169.254.169.254
+    // as a family-6 AAAA answer; the connect hook must still refuse it.
+    stubDnsResolution([{ address: '::ffff:a9fe:a9fe', family: 6 }]);
+    const { err } = await invokeLookup('mapped-hex-attacker.example');
+    expect((err as NodeJS.ErrnoException).code).toBe('SSRF_BLOCKED');
+  });
+
+  it('rejects a link-local address in the upper /10 (fe90::1)', async () => {
+    stubDnsResolution([{ address: 'fe90::1', family: 6 }]);
+    const { err } = await invokeLookup('linklocal-attacker.example');
     expect((err as NodeJS.ErrnoException).code).toBe('SSRF_BLOCKED');
   });
 
