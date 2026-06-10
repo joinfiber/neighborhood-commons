@@ -178,8 +178,20 @@ export function createApp(): Express {
   // Response compression
   app.use(compression());
 
-  // Body parsing
-  app.use(express.json({ limit: '5mb' }));
+  // Body parsing. Global JSON limit is 5MB, but the image-upload routes
+  // (.../image, .../logo, .../cover) declare their own 12MB express.json so
+  // base64 image payloads fit (Spec: "Max 12MB raw"). body-parser sets
+  // req._body after the first parse and every later json() instance early-
+  // returns on it, so this global parser MUST skip those paths — otherwise the
+  // per-route 12MB override is dead code and 6–12MB uploads are wrongly 413'd
+  // at 5MB. Match is anchored on the action suffix; /migrate-image-urls (ends
+  // in "urls") is intentionally not matched.
+  const globalJson = express.json({ limit: '5mb' });
+  const IMAGE_UPLOAD_PATH = /^\/api\/v1\/service\/.+\/(image|logo|cover)$/;
+  app.use((req, res, next) => {
+    if (IMAGE_UPLOAD_PATH.test(req.path)) return next();
+    return globalJson(req, res, next);
+  });
 
   // Global rate limit
   app.use(globalLimiter);

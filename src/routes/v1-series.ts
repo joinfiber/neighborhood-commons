@@ -94,6 +94,10 @@ router.get('/', async (req, res, next) => {
         .from('events')
         .select(`${PORTAL_SELECT}, organizations!events_organizer_org_id_fkey(id, slug, name)`)
         .in('series_id', seriesIds)
+        // SECURITY: next_instance is a public Event — only published instances
+        // may surface (mirrors GET /events). Without this, a pending_review/draft
+        // instance leaks as the series' next_instance.
+        .eq('status', 'published')
         .gte('event_at', new Date().toISOString())
         .order('series_id', { ascending: true })
         .order('event_at', { ascending: true });
@@ -152,6 +156,7 @@ router.get('/:idOrSlug', async (req, res, next) => {
       .from('events')
       .select(`${PORTAL_SELECT}, organizations!events_organizer_org_id_fkey(id, slug, name)`)
       .eq('series_id', seriesRow.id as string)
+      .eq('status', 'published') // SECURITY: see list handler — published-only next_instance
       .gte('event_at', new Date().toISOString())
       .order('event_at', { ascending: true })
       .limit(1)

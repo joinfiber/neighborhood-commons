@@ -49,6 +49,24 @@ function escapeAttr(text: string): string {
   return escapeHtml(text);
 }
 
+/**
+ * Serialize an object for embedding inside an inline <script> block.
+ * JSON.stringify does NOT escape `<`, `>`, `&`, or the U+2028/U+2029 line
+ * separators, so a string value containing `</script>` would terminate the
+ * element and let following markup be parsed as HTML (stored XSS). Escaping
+ * these as \uXXXX keeps the JSON valid — consumers decode the escapes — while
+ * making breakout impossible.
+ */
+function jsonLdScript(obj: unknown): string {
+  const json = JSON.stringify(obj)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+  return `<script type="application/ld+json">${json}</script>`;
+}
+
 /** Format a date for display: "Saturday, March 15, 2026" */
 function formatDate(isoDate: string, timezone: string): string {
   try {
@@ -363,7 +381,7 @@ router.get('/events/:id',async (req, res, next) => {
       venueLink = `${SITE_DOMAIN}/venues/${org.slug}`;
     }
 
-    const head = `<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>`;
+    const head = jsonLdScript(jsonLd);
 
     const body = `
 ${imageUrl ? `<img class="nc-event-hero" src="${escapeAttr(imageUrl)}" alt="${escapeAttr(name)}">` : ''}
@@ -512,7 +530,7 @@ router.get('/venues/:slug',async (req, res, next) => {
       ...(bio && { description: bio }),
     };
 
-    const head = `<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>`;
+    const head = jsonLdScript(jsonLd);
 
     const icalUrl = `${SITE_DOMAIN}/venues/${slug}/events.ics`;
     const widgetSnippet = `<div id="nc-events" data-venue="${escapeAttr(slug)}" data-limit="10"></div>\n<script src="${SITE_DOMAIN}/widget/events.js" async></script>`;
