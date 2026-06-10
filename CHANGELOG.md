@@ -14,6 +14,9 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-06-10 — Fix: image-upload routes honor their documented 12MB limit
+
+Bug fix; no Spec change (aligns code to the Spec's "Max 12MB raw"). The global 5MB `express.json` parser ran before the image routes' own 12MB parser and set `req._body`, so body-parser short-circuited the override — base64 / `image_url` JSON uploads between 5MB and 12MB were wrongly `413`'d at 5MB. The global parser now skips the image-upload paths (`.../image`, `.../logo`, `.../cover`) so their 12MB limit applies. Found by the 2026-06-10 audit (F7).
 ## 2026-06-10 — Fix: list and series read paths return only published events
 
 Bug fix; aligns behavior with the Spec (these surfaces document public Events, which are published-only). Three read paths hydrated Event objects with no status filter, so a `draft`/`pending_review`/`suspended` event surfaced its full public Event shape even though `GET /events/{id}` 404s it:
