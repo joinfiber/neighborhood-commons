@@ -22,6 +22,17 @@ Bug fix; aligns behavior with the Spec (these surfaces document public Events, w
 - `GET /series` and `GET /series/{idOrSlug}` — `next_instance`
 
 All three now constrain to `status='published'`. Found by the 2026-06-10 audit (F4, F20).
+## 2026-06-10 — Security: escape JSON-LD on public event/venue pages (stored XSS)
+
+Internal hardening; no Spec or API-surface change. The server-rendered `/events/{id}` and `/venues/{slug}` pages embedded `JSON.stringify(jsonLd)` raw inside a `<script type="application/ld+json">` block. `JSON.stringify` does not escape `<`, `>`, or `/`, so a length-only-validated field (event/org name, description, address) containing `</script>` could terminate the element and inject markup. The serialized JSON-LD is now `\uXXXX`-escaped (`<`, `>`, `&`, U+2028/U+2029) at both sites via a shared `jsonLdScript()` helper. Regression test added in `pages.test.ts`.
+
+## 2026-06-10 — Security: close IPv6 SSRF bypasses in the private-range guard
+
+Internal hardening; no Spec or API-surface change. The shared `isPrivateIPv6` predicate (used by the upfront webhook/image URL check and the connect-time DNS-rebinding guard) classified several private ranges as public, leaving a cloud-metadata SSRF path.
+
+- **IPv4-mapped addresses in compressed-hex form** (`::ffff:a9fe:a9fe` = `169.254.169.254`) resolved through as public — the old guard decoded only the dotted form. Both forms are now decoded via a shared `embeddedIPv4()` helper and classified by the embedded IPv4 (fail-closed if undecodable).
+- **Link-local `fe80::/10`** was matched with `startsWith('fe80:')`, missing `fe90`/`fea0`/`feb0`–`febf`; now matched across the full first-hextet range `fe80`–`febf`.
+- **NAT64 `64:ff9b::/96`** (RFC 6052) is now classified by its embedded IPv4, and the **discard-only `100::/64`** (RFC 6666) prefix is blocked.
 
 ## 2026-06-05 — doctrine: an organization-of-one is a public persona, not a user
 

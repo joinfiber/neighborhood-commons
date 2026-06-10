@@ -263,6 +263,42 @@ describe('private IPv6 blocking', () => {
     await expect(validateWebhookUrl('https://evil.com/webhook'))
       .rejects.toThrow('private IP');
   });
+
+  it('blocks ::ffff:a9fe:a9fe (IPv4-mapped metadata, compressed hex)', async () => {
+    mockLookup.mockResolvedValueOnce({ address: '::ffff:a9fe:a9fe', family: 6 });
+    await expect(validateWebhookUrl('https://evil.com/webhook'))
+      .rejects.toThrow('private IP');
+  });
+
+  it('blocks ::ffff:7f00:1 (IPv4-mapped loopback, compressed hex)', async () => {
+    mockLookup.mockResolvedValueOnce({ address: '::ffff:7f00:1', family: 6 });
+    await expect(validateWebhookUrl('https://evil.com/webhook'))
+      .rejects.toThrow('private IP');
+  });
+
+  it('blocks fe90::1 (link-local, upper /10)', async () => {
+    mockLookup.mockResolvedValueOnce({ address: 'fe90::1', family: 6 });
+    await expect(validateWebhookUrl('https://evil.com/webhook'))
+      .rejects.toThrow('private IP');
+  });
+
+  it('blocks fea0::1 (link-local, upper /10)', async () => {
+    mockLookup.mockResolvedValueOnce({ address: 'fea0::1', family: 6 });
+    await expect(validateWebhookUrl('https://evil.com/webhook'))
+      .rejects.toThrow('private IP');
+  });
+
+  it('blocks febf::1 (link-local, top of /10)', async () => {
+    mockLookup.mockResolvedValueOnce({ address: 'febf::1', family: 6 });
+    await expect(validateWebhookUrl('https://evil.com/webhook'))
+      .rejects.toThrow('private IP');
+  });
+
+  it('blocks 64:ff9b::a9fe:a9fe (NAT64-embedded metadata)', async () => {
+    mockLookup.mockResolvedValueOnce({ address: '64:ff9b::a9fe:a9fe', family: 6 });
+    await expect(validateWebhookUrl('https://evil.com/webhook'))
+      .rejects.toThrow('private IP');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -290,6 +326,12 @@ describe('public IPs allowed', () => {
 
   it('allows a public IPv6 address', async () => {
     mockLookup.mockResolvedValueOnce({ address: '2606:4700::1', family: 6 });
+    await expect(validateWebhookUrl('https://example.com/webhook'))
+      .resolves.toBeUndefined();
+  });
+
+  it('allows ::ffff:808:808 (IPv4-mapped public 8.8.8.8, compressed hex)', async () => {
+    mockLookup.mockResolvedValueOnce({ address: '::ffff:808:808', family: 6 });
     await expect(validateWebhookUrl('https://example.com/webhook'))
       .resolves.toBeUndefined();
   });
