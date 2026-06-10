@@ -14,6 +14,15 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-06-10 — Fix: list and series read paths return only published events
+
+Bug fix; aligns behavior with the Spec (these surfaces document public Events, which are published-only). Three read paths hydrated Event objects with no status filter, so a `draft`/`pending_review`/`suspended` event surfaced its full public Event shape even though `GET /events/{id}` 404s it:
+
+- `GET /lists/{idOrSlug}` — list-item events
+- `GET /series` and `GET /series/{idOrSlug}` — `next_instance`
+
+All three now constrain to `status='published'`. Found by the 2026-06-10 audit (F4, F20).
+
 ## 2026-06-05 — doctrine: an organization-of-one is a public persona, not a user
 
 Clarification — no spec or behavior change. Sharpens the org / no-users doctrine for apps that mirror their users into the Commons (the failure mode: user handles surfacing as bogus venues/organizations).
