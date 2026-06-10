@@ -14,6 +14,10 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-06-10 — Fix: auto-extended series instances keep their provenance
+
+Bug fix; makes later instances match the first ones. The auto-extend cron and the `instance_count` extend materialize future instances solely from `event_series.base_event_data`, whose snapshot omitted `first_party`, `source_method`, `source_feed_url`, and `tmdb_id`. A witnessed/proxied or first-party recurring series therefore published its later (cron-materialized) instances with wrong Type A / four-roles signals — `first_party` falling back to `false`, `source.method` to `self_asserted`, `source.url` dropped. These fields are now snapshotted into `base_event_data` at create, so every materialized instance carries the series' real provenance. Found by the 2026-06-10 audit (F6). (`region_id` on cron/extend rows is still hardcoded `null` — tracked as a follow-up.)
+
 ## 2026-06-05 — doctrine: an organization-of-one is a public persona, not a user
 
 Clarification — no spec or behavior change. Sharpens the org / no-users doctrine for apps that mirror their users into the Commons (the failure mode: user handles surfacing as bogus venues/organizations).
