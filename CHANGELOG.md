@@ -14,6 +14,9 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-06-10 — Fix: series timezone change recomposes instance wall-clocks
+
+Bug fix. A timezone-only `PATCH /service/events/series/{id}` (only `timezone`, no `start`/`end`) wrote the new `event_timezone` onto every future instance without recomposing `event_at`. Since `event_at` is a fixed instant, each instance's wall-clock silently shifted by the offset delta (7pm → 6pm). A combined start+timezone change was also wrong (`event_at` composed in the old tz while the new tz was stored). `updateSeriesFutureInstances` now treats a timezone change as a per-instance recomposition — decompose in the old tz, recompose in the new — mirroring the single-event S6 fix, and syncs `base_event_data`'s timezone so the auto-extend cron materializes future instances in the new zone too. Found by the 2026-06-10 audit (F5).
 ## 2026-06-10 — Fix: auto-extended series instances keep their provenance
 
 Bug fix; makes later instances match the first ones. The auto-extend cron and the `instance_count` extend materialize future instances solely from `event_series.base_event_data`, whose snapshot omitted `first_party`, `source_method`, `source_feed_url`, and `tmdb_id`. A witnessed/proxied or first-party recurring series therefore published its later (cron-materialized) instances with wrong Type A / four-roles signals — `first_party` falling back to `false`, `source.method` to `self_asserted`, `source.url` dropped. These fields are now snapshotted into `base_event_data` at create, so every materialized instance carries the series' real provenance. Found by the 2026-06-10 audit (F6). (`region_id` on cron/extend rows is still hardcoded `null` — tracked as a follow-up.)

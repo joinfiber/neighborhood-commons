@@ -531,34 +531,55 @@ export async function updateSeriesFutureInstances(input: SeriesUpdateInput): Pro
   let updatedCount = 0;
   const updatedIds: string[] = [];
   const hasTimeChange = timeChange && (timeChange.startTime !== undefined || timeChange.endTime !== undefined);
+  // A timezone change must be applied per-instance too. event_at is a fixed
+  // instant, so writing a new event_timezone without recomposing event_at
+  // silently shifts every instance's wall-clock (7pm becomes 6pm) — the S6 bug,
+  // for series. When the tz changes we decompose each instance in its OLD tz and
+  // recompose in the NEW one, preserving wall-clock, mirroring the single-event
+  // PATCH (events.ts). `updates` carries event_timezone when the caller changed it.
+  const newTz = ('event_timezone' in updates) ? (updates.event_timezone as string) : undefined;
+  const tzChanged = newTz !== undefined;
+  const perInstance = hasTimeChange || tzChanged;
 
   if (Object.keys(updates).length > 0 || hasTimeChange) {
-    if (hasTimeChange) {
-      // Time changes need per-instance handling (each instance has its own date)
+    if (perInstance) {
+      // Per-instance handling — each instance has its own date, and event_at /
+      // end_time must be (re)composed in the target timezone.
       for (const ev of futureEvents) {
         const instanceUpdate: Record<string, unknown> = { ...updates };
-        const instanceTz = (ev.event_timezone as string) || tz;
-        const parsed = ev.event_at ? fromTimestamptz(ev.event_at as string, instanceTz) : null;
+        const oldTz = (ev.event_timezone as string) || tz;
+        const targetTz = newTz || oldTz;
+        const parsed = ev.event_at ? fromTimestamptz(ev.event_at as string, oldTz) : null;
         const instanceDate = parsed?.date;
 
         if (instanceDate) {
-          if (timeChange!.startTime !== undefined) {
-            const newTime = timeChange!.startTime || parsed?.time;
-            if (newTime) instanceUpdate.event_at = toTimestamptz(instanceDate, newTime, instanceTz);
+          // event_at: an explicit new start time wins; otherwise, if only the
+          // timezone changed, recompose the existing wall-clock in the new tz.
+          if (timeChange && timeChange.startTime !== undefined) {
+            const newTime = timeChange.startTime || parsed?.time;
+            if (newTime) instanceUpdate.event_at = toTimestamptz(instanceDate, newTime, targetTz);
+          } else if (tzChanged && parsed?.time) {
+            instanceUpdate.event_at = toTimestamptz(instanceDate, parsed.time, targetTz);
           }
-          if (timeChange!.endTime !== undefined) {
-            if (timeChange!.endTime) {
+
+          // end_time: an explicit new end wins (or explicit null clear);
+          // otherwise, if only the timezone changed, recompose the end wall-clock.
+          if (timeChange && timeChange.endTime !== undefined) {
+            if (timeChange.endTime) {
               const eventAtRef = (instanceUpdate.event_at as string) || (ev.event_at as string);
-              let endTimeTs = toTimestamptz(instanceDate, timeChange!.endTime, instanceTz);
+              let endTimeTs = toTimestamptz(instanceDate, timeChange.endTime, targetTz);
               if (eventAtRef && new Date(endTimeTs) <= new Date(eventAtRef)) {
                 const nextDay = new Date(instanceDate);
                 nextDay.setDate(nextDay.getDate() + 1);
-                endTimeTs = toTimestamptz(nextDay.toISOString().split('T')[0]!, timeChange!.endTime, instanceTz);
+                endTimeTs = toTimestamptz(nextDay.toISOString().split('T')[0]!, timeChange.endTime, targetTz);
               }
               instanceUpdate.end_time = endTimeTs;
             } else {
               instanceUpdate.end_time = null;
             }
+          } else if (tzChanged && ev.end_time) {
+            const parsedEnd = fromTimestamptz(ev.end_time as string, oldTz);
+            if (parsedEnd?.time) instanceUpdate.end_time = toTimestamptz(parsedEnd.date, parsedEnd.time, targetTz);
           }
         }
 
@@ -575,7 +596,7 @@ export async function updateSeriesFutureInstances(input: SeriesUpdateInput): Pro
         }
       }
     } else {
-      // No time change — batch update all future instances at once
+      // No time or timezone change — batch update all future instances at once
       const ids = futureEvents.map(e => e.id as string);
       const { error: updateErr } = await supabaseAdmin
         .from('events')
@@ -598,6 +619,10 @@ export async function updateSeriesFutureInstances(input: SeriesUpdateInput): Pro
     if (timeChange!.startTime !== undefined) newBase.start_time = timeChange!.startTime;
     if (timeChange!.endTime !== undefined) newBase.end_time = timeChange!.endTime || null;
   }
+  // Keep the snapshot's timezone in sync so the auto-extend cron materializes
+  // future instances in the new zone too (event_timezone lives in
+  // base_event_data directly, not via COLUMN_TO_BASE_KEY).
+  if (tzChanged && newTz) newBase.event_timezone = newTz;
   await supabaseAdmin
     .from('event_series')
     .update({ base_event_data: newBase })
