@@ -484,7 +484,8 @@ describe('XSS protection', () => {
 
     // Verify no unescaped user content appears as executable HTML.
     // The h1 and description elements should contain HTML entities, not raw tags.
-    // (Google Calendar URLs and JSON-LD contain URL-encoded versions, which is safe.)
+    // (Google Calendar URLs are URL-encoded; the ld+json block is \uXXXX-escaped
+    // — see the dedicated breakout test below.)
     const h1Match = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/);
     expect(h1Match?.[1]).toContain('&lt;script&gt;');
     expect(h1Match?.[1]).not.toContain('<script>');
@@ -492,5 +493,23 @@ describe('XSS protection', () => {
     const descMatch = html.match(/nc-event-description">([\s\S]*?)<\/div>/);
     expect(descMatch?.[1]).toContain('&lt;img');
     expect(descMatch?.[1]).not.toContain('<img');
+  });
+
+  it('escapes </script> breakout in the JSON-LD block (stored XSS, F3)', async () => {
+    // JSON.stringify does not escape <, >, or /, so a name/description holding
+    // </script> would terminate the ld+json element and inject live markup.
+    const payload = `</script><script>alert('jsonld-xss')</script>`;
+    const row = makeEventRow({ content: payload, description: payload });
+    mockResponses.set('events', { data: row, error: null });
+    mockResponses.set('portal_accounts', { data: null, error: null });
+
+    const res = await fetch(`${baseUrl}/events/${row.id}`);
+    const html = await res.text();
+
+    // The injected opening tag must never appear as live markup anywhere.
+    expect(html).not.toContain(`<script>alert('jsonld-xss')`);
+    // Inside the ld+json block the payload's '<' is <-escaped — the JSON
+    // stays valid for consumers while breakout is impossible.
+    expect(html).toContain(`\\u003cscript\\u003ealert('jsonld-xss')`);
   });
 });

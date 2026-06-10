@@ -14,6 +14,10 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-06-10 — Security: escape JSON-LD on public event/venue pages (stored XSS)
+
+Internal hardening; no Spec or API-surface change. The server-rendered `/events/{id}` and `/venues/{slug}` pages embedded `JSON.stringify(jsonLd)` raw inside a `<script type="application/ld+json">` block. `JSON.stringify` does not escape `<`, `>`, or `/`, so a length-only-validated field (event/org name, description, address) containing `</script>` could terminate the element and inject markup. The serialized JSON-LD is now `\uXXXX`-escaped (`<`, `>`, `&`, U+2028/U+2029) at both sites via a shared `jsonLdScript()` helper. Regression test added in `pages.test.ts`.
+
 ## 2026-06-10 — Security: close IPv6 SSRF bypasses in the private-range guard
 
 Internal hardening; no Spec or API-surface change. The shared `isPrivateIPv6` predicate (used by the upfront webhook/image URL check and the connect-time DNS-rebinding guard) classified several private ranges as public, leaving a cloud-metadata SSRF path.
