@@ -17,6 +17,28 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 ## 2026-06-10 — Fix: auto-extended series instances keep their provenance
 
 Bug fix; makes later instances match the first ones. The auto-extend cron and the `instance_count` extend materialize future instances solely from `event_series.base_event_data`, whose snapshot omitted `first_party`, `source_method`, `source_feed_url`, and `tmdb_id`. A witnessed/proxied or first-party recurring series therefore published its later (cron-materialized) instances with wrong Type A / four-roles signals — `first_party` falling back to `false`, `source.method` to `self_asserted`, `source.url` dropped. These fields are now snapshotted into `base_event_data` at create, so every materialized instance carries the series' real provenance. Found by the 2026-06-10 audit (F6). (`region_id` on cron/extend rows is still hardcoded `null` — tracked as a follow-up.)
+## 2026-06-10 — Fix: image-upload routes honor their documented 12MB limit
+
+Bug fix; no Spec change (aligns code to the Spec's "Max 12MB raw"). The global 5MB `express.json` parser ran before the image routes' own 12MB parser and set `req._body`, so body-parser short-circuited the override — base64 / `image_url` JSON uploads between 5MB and 12MB were wrongly `413`'d at 5MB. The global parser now skips the image-upload paths (`.../image`, `.../logo`, `.../cover`) so their 12MB limit applies. Found by the 2026-06-10 audit (F7).
+## 2026-06-10 — Fix: list and series read paths return only published events
+
+Bug fix; aligns behavior with the Spec (these surfaces document public Events, which are published-only). Three read paths hydrated Event objects with no status filter, so a `draft`/`pending_review`/`suspended` event surfaced its full public Event shape even though `GET /events/{id}` 404s it:
+
+- `GET /lists/{idOrSlug}` — list-item events
+- `GET /series` and `GET /series/{idOrSlug}` — `next_instance`
+
+All three now constrain to `status='published'`. Found by the 2026-06-10 audit (F4, F20).
+## 2026-06-10 — Security: escape JSON-LD on public event/venue pages (stored XSS)
+
+Internal hardening; no Spec or API-surface change. The server-rendered `/events/{id}` and `/venues/{slug}` pages embedded `JSON.stringify(jsonLd)` raw inside a `<script type="application/ld+json">` block. `JSON.stringify` does not escape `<`, `>`, or `/`, so a length-only-validated field (event/org name, description, address) containing `</script>` could terminate the element and inject markup. The serialized JSON-LD is now `\uXXXX`-escaped (`<`, `>`, `&`, U+2028/U+2029) at both sites via a shared `jsonLdScript()` helper. Regression test added in `pages.test.ts`.
+
+## 2026-06-10 — Security: close IPv6 SSRF bypasses in the private-range guard
+
+Internal hardening; no Spec or API-surface change. The shared `isPrivateIPv6` predicate (used by the upfront webhook/image URL check and the connect-time DNS-rebinding guard) classified several private ranges as public, leaving a cloud-metadata SSRF path.
+
+- **IPv4-mapped addresses in compressed-hex form** (`::ffff:a9fe:a9fe` = `169.254.169.254`) resolved through as public — the old guard decoded only the dotted form. Both forms are now decoded via a shared `embeddedIPv4()` helper and classified by the embedded IPv4 (fail-closed if undecodable).
+- **Link-local `fe80::/10`** was matched with `startsWith('fe80:')`, missing `fe90`/`fea0`/`feb0`–`febf`; now matched across the full first-hextet range `fe80`–`febf`.
+- **NAT64 `64:ff9b::/96`** (RFC 6052) is now classified by its embedded IPv4, and the **discard-only `100::/64`** (RFC 6666) prefix is blocked.
 
 ## 2026-06-05 — doctrine: an organization-of-one is a public persona, not a user
 
