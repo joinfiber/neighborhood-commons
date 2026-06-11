@@ -7,12 +7,20 @@ FROM node:20-alpine AS base
 WORKDIR /app
 
 # ─── API: Production dependencies ─────────────────────────────
-# sharp prebuilt binary resolution fails on Alpine npm, so we
-# skip install scripts and explicitly add the musl prebuilt binary
+# sharp 0.34.5 ships prebuilt @img/* packages via optionalDependencies. On
+# Alpine/musl we install BOTH the native binding AND its matching libvips
+# shared library, pinned to the versions sharp resolves in package-lock.json.
+# The binding alone is not enough: at runtime it dlopen's libvips-cpp.so from
+# @img/sharp-libvips-linuxmusl-x64, so omitting that package — or letting an
+# unpinned `npm install @img/sharp-linuxmusl-x64` drift to a newer binding
+# whose libvips isn't present — fails the deploy with ERR_DLOPEN_FAILED.
+# Bump both versions whenever `sharp` is bumped in package.json.
 FROM base AS prod-deps
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts && \
-    npm install @img/sharp-linuxmusl-x64 --ignore-scripts
+    npm install --no-save --ignore-scripts \
+      @img/sharp-libvips-linuxmusl-x64@1.2.4 \
+      @img/sharp-linuxmusl-x64@0.34.5
 
 # ─── API: All dependencies (for TypeScript compilation) ───────
 FROM base AS all-deps
