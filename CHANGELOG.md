@@ -14,6 +14,14 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-06-10 — Spec: document `/dmca` and `/report`; `/report` drops the `person` target
+
+Contract conformance. Two live public routes were absent from the Spec (violating the "no route outside the Spec" rule); both are now documented, and the contract-drift test enforces them going forward.
+
+- **`GET /dmca`** (new `DmcaInfo` schema) — public DMCA designated-agent + takedown-channel discovery.
+- **`POST /report`** (new `ReportInput` → `ReportResponse`) — public, captcha-gated human content report; the app-to-app equivalent of `POST /service/disputes`.
+- **`POST /report` no longer accepts `target_type: "person"`.** Persons aren't a Commons primitive (no-users doctrine; no persons table post-migration-079), mirroring the same drop on `/service/disputes`. `event` and `organization` remain. A caller sending `person` now gets `400 VALIDATION_ERROR`.
+
 ## 2026-06-10 — Fix: series timezone change recomposes instance wall-clocks
 
 Bug fix. A timezone-only `PATCH /service/events/series/{id}` (only `timezone`, no `start`/`end`) wrote the new `event_timezone` onto every future instance without recomposing `event_at`. Since `event_at` is a fixed instant, each instance's wall-clock silently shifted by the offset delta (7pm → 6pm). A combined start+timezone change was also wrong (`event_at` composed in the old tz while the new tz was stored). `updateSeriesFutureInstances` now treats a timezone change as a per-instance recomposition — decompose in the old tz, recompose in the new — mirroring the single-event S6 fix, and syncs `base_event_data`'s timezone so the auto-extend cron materializes future instances in the new zone too. Found by the 2026-06-10 audit (F5).

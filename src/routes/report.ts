@@ -1,8 +1,8 @@
 /**
  * Public takedown / content-report endpoint — Neighborhood Commons
  *
- * Anyone can file a content report against any event, organization, or
- * person. Reports cover the full landscape of legitimate content
+ * Anyone can file a content report against any event or organization.
+ * Reports cover the full landscape of legitimate content
  * complaints (copyright, trademark, privacy, defamation, factual error,
  * other). The service-tier /api/v1/service/disputes endpoint is the
  * authenticated equivalent for app-to-app reporting; this surface is for
@@ -28,7 +28,10 @@ import { config } from '../config.js';
 const router: ReturnType<typeof Router> = Router();
 
 const reportInputSchema = z.object({
-  target_type: z.enum(['event', 'organization', 'person']),
+  // 'person' intentionally absent — Persons aren't a Commons primitive
+  // (no-users doctrine), and there's no persons table to target post-migration
+  // 079. Mirrors the same drop on the service-tier /disputes endpoint.
+  target_type: z.enum(['event', 'organization']),
   target_id: z.string().uuid(),
   reason_category: z.enum([
     'copyright',
