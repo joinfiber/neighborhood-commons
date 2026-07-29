@@ -4,6 +4,46 @@
  */
 
 export interface paths {
+    "/dmca": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * DMCA designated-agent and takedown info
+         * @description Public discovery of the Commons' DMCA designated agent and takedown channel (17 U.S.C. § 512(c)). No authentication. When the agent is not yet registered, `status` is `pending_registration` and `agent` is null; takedown notices still route to `interim_contact_email` or the `/report` endpoint.
+         */
+        get: operations["getDmcaInfo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * File a content report / takedown
+         * @description Public, human-filed content report against an event or organization (copyright, trademark, privacy, defamation, factual error, or other). The authenticated app-to-app equivalent is `POST /service/disputes`. Captcha-gated when CAPTCHA is enabled (production default): send `captcha_token`. Records an operator-reviewed audit entry; no automated takedown is performed.
+         */
+        post: operations["fileReport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/events": {
         parameters: {
             query?: never;
@@ -1422,6 +1462,44 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description DMCA designated-agent and takedown info, served at GET /dmca. */
+        DmcaInfo: {
+            /** @enum {string} */
+            status: "registered" | "pending_registration";
+            /** @description Null until the designated agent is registered. */
+            agent: {
+                name?: string;
+                email?: string;
+                phone?: string;
+                address?: string;
+            } | null;
+            interim_contact_email: string;
+            takedown_endpoint: string;
+            counter_notice_endpoint?: string | null;
+            registry_url: string;
+            notes: string;
+        };
+        /** @description A human-filed content report. Posted to /report. */
+        ReportInput: {
+            /** @enum {string} */
+            target_type: "event" | "organization";
+            /** Format: uuid */
+            target_id: string;
+            /** @enum {string} */
+            reason_category: "copyright" | "trademark" | "privacy" | "defamation" | "factual_error" | "other";
+            reason: string;
+            /** Format: email */
+            reporter_contact: string;
+            /** @description Cloudflare Turnstile token. Required when CAPTCHA is enabled (production); a missing token returns 400 VALIDATION_ERROR and a failed check returns 400 CAPTCHA_FAILED. */
+            captcha_token?: string;
+        };
+        ReportResponse: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            status: "received";
+            message: string;
+        };
         Meta: {
             total: number;
             limit: number;
@@ -2259,6 +2337,51 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    getDmcaInfo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description DMCA agent and takedown info */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DmcaInfo"];
+                };
+            };
+        };
+    };
+    fileReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportInput"];
+            };
+        };
+        responses: {
+            /** @description Report received and queued for operator review */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportResponse"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+        };
+    };
     listEvents: {
         parameters: {
             query?: {

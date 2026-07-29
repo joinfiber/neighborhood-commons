@@ -176,6 +176,9 @@ describe('contract drift: in-contract routes documented in openapi.json', () => 
     'service/lists.ts': '/service',
     'service/verifications.ts': '/service',
     'service/disputes.ts': '/service',
+    // Public legal / abuse surfaces (now documented in the Spec).
+    'dmca.ts': '/dmca',
+    'report.ts': '/report',
   };
 
   it('every in-contract router.METHOD call is in openapi.json paths', () => {

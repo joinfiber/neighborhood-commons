@@ -21,6 +21,57 @@
     }
   ],
   "paths": {
+    "/dmca": {
+      "get": {
+        "summary": "DMCA designated-agent and takedown info",
+        "description": "Public discovery of the Commons' DMCA designated agent and takedown channel (17 U.S.C. § 512(c)). No authentication. When the agent is not yet registered, `status` is `pending_registration` and `agent` is null; takedown notices still route to `interim_contact_email` or the `/report` endpoint.",
+        "operationId": "getDmcaInfo",
+        "responses": {
+          "200": {
+            "description": "DMCA agent and takedown info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DmcaInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/report": {
+      "post": {
+        "summary": "File a content report / takedown",
+        "description": "Public, human-filed content report against an event or organization (copyright, trademark, privacy, defamation, factual error, or other). The authenticated app-to-app equivalent is `POST /service/disputes`. Captcha-gated when CAPTCHA is enabled (production default): send `captcha_token`. Records an operator-reviewed audit entry; no automated takedown is performed.",
+        "operationId": "fileReport",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Report received and queued for operator review",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        }
+      }
+    },
     "/events": {
       "get": {
         "summary": "List events",
@@ -5407,6 +5458,105 @@
   },
   "components": {
     "schemas": {
+      "DmcaInfo": {
+        "type": "object",
+        "description": "DMCA designated-agent and takedown info, served at GET /dmca.",
+        "required": [
+          "status",
+          "agent",
+          "interim_contact_email",
+          "takedown_endpoint",
+          "registry_url",
+          "notes"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "registered",
+              "pending_registration"
+            ]
+          },
+          "agent": {
+            "type": "object",
+            "nullable": true,
+            "description": "Null until the designated agent is registered.",
+            "properties": {
+              "name": { "type": "string" },
+              "email": { "type": "string" },
+              "phone": { "type": "string" },
+              "address": { "type": "string" }
+            }
+          },
+          "interim_contact_email": { "type": "string" },
+          "takedown_endpoint": { "type": "string" },
+          "counter_notice_endpoint": { "type": "string", "nullable": true },
+          "registry_url": { "type": "string" },
+          "notes": { "type": "string" }
+        }
+      },
+      "ReportInput": {
+        "type": "object",
+        "description": "A human-filed content report. Posted to /report.",
+        "required": [
+          "target_type",
+          "target_id",
+          "reason_category",
+          "reason",
+          "reporter_contact"
+        ],
+        "properties": {
+          "target_type": {
+            "type": "string",
+            "enum": [
+              "event",
+              "organization"
+            ]
+          },
+          "target_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reason_category": {
+            "type": "string",
+            "enum": [
+              "copyright",
+              "trademark",
+              "privacy",
+              "defamation",
+              "factual_error",
+              "other"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 20,
+            "maxLength": 2000
+          },
+          "reporter_contact": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 200
+          },
+          "captcha_token": {
+            "type": "string",
+            "description": "Cloudflare Turnstile token. Required when CAPTCHA is enabled (production); a missing token returns 400 VALIDATION_ERROR and a failed check returns 400 CAPTCHA_FAILED."
+          }
+        }
+      },
+      "ReportResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "message"
+        ],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "status": { "type": "string", "enum": ["received"] },
+          "message": { "type": "string" }
+        }
+      },
       "Meta": {
         "type": "object",
         "required": [

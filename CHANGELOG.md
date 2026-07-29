@@ -14,6 +14,13 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-06-10 — Spec: document `/dmca` and `/report`; `/report` drops the `person` target
+
+Contract conformance. Two live public routes were absent from the Spec (violating the "no route outside the Spec" rule); both are now documented, and the contract-drift test enforces them going forward.
+
+- **`GET /dmca`** (new `DmcaInfo` schema) — public DMCA designated-agent + takedown-channel discovery.
+- **`POST /report`** (new `ReportInput` → `ReportResponse`) — public, captcha-gated human content report; the app-to-app equivalent of `POST /service/disputes`.
+- **`POST /report` no longer accepts `target_type: "person"`.** Persons aren't a Commons primitive (no-users doctrine; no persons table post-migration-079), mirroring the same drop on `/service/disputes`. `event` and `organization` remain. A caller sending `person` now gets `400 VALIDATION_ERROR`.
 ## 2026-06-10 — Fix: `POST /service/disputes` rejects the undocumented `person` target
 
 Code-to-spec conformance; no Spec change. The Zod `targetType` enum still accepted `person`, but the Spec's `DisputeInput.targetType` dropped it in v2 (Persons aren't a Commons primitive — the no-users doctrine). The handler now rejects `targetType: "person"` with `400 VALIDATION_ERROR`, matching the published enum (`organization`, `verified_identifier`). Found by the 2026-06-10 audit.
