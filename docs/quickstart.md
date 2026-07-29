@@ -8,39 +8,21 @@ The conceptual model is in [`docs/four-roles.md`](four-roles.md) — read that f
 
 Five steps. The whole sequence takes ~10 minutes of typing plus however long activation takes (typically same-day).
 
-### Step 1 — Self-issue a service-tier key
+### Step 1 — Get a service-tier key
+
+Service keys are issued through the developer portal, not the API. In your browser, go to **<https://neighborhood-commons.org/developers/sign-up>** and fill out the guided form: your email, app name, app URL, what you're building, and how publishers in your flow have authority over what they publish.
+
+You verify via a one-time code emailed to you, and the dashboard then lands you on your new service-tier key. **Copy it immediately — it's shown once and isn't recoverable.** Reads work right away; writes return `403 KEY_PENDING` until activation (Step 2).
 
 ```bash
 export COMMONS_BASE=https://neighborhood-commons.org/api/v1
-
-curl -X POST "$COMMONS_BASE/service/register/send-otp" \
-  -H "Content-Type: application/json" \
-  -d '{"email": "you@example.com"}'
-```
-
-A one-time code lands in your inbox. Then:
-
-```bash
-curl -X POST "$COMMONS_BASE/service/register/verify-otp" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "you@example.com",
-    "code": "123456",
-    "app_name": "Your App",
-    "app_url": "https://yourapp.example",
-    "what_youre_building": "One sentence — what does your app do for readers?",
-    "verification_process": "One sentence — how do you verify the entities you publish for?"
-  }'
-```
-
-The response includes your service-tier key. **Store it immediately** — it's not recoverable. Reads work right now; writes return `403 KEY_PENDING` until activation.
-
-```bash
 export COMMONS_API_KEY=nc_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 # Verify the key works for reads
 curl -s "$COMMONS_BASE/events?limit=1" -H "X-API-Key: $COMMONS_API_KEY" | jq .meta
 ```
+
+> The legacy `POST /service/register/*` curl endpoints were retired — they now return `410 ENDPOINT_RETIRED` pointing at the portal. Only the registration path moved; existing keys keep working.
 
 ### Step 2 — Wait for activation
 
@@ -68,14 +50,19 @@ curl -X POST "$COMMONS_BASE/service/places" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Johnny Brenda'\''s",
-    "street_address": "1201 N Frankford Ave",
-    "address_locality": "Philadelphia",
-    "address_region": "PA",
-    "postal_code": "19125",
-    "address_country": "US",
-    "google_place_id": "ChIJ-johnnybrendas-real-id"
+    "googlePlaceId": "ChIJ-johnnybrendas-real-id",
+    "address": {
+      "streetAddress": "1201 N Frankford Ave",
+      "addressLocality": "Philadelphia",
+      "addressRegion": "PA",
+      "postalCode": "19125",
+      "addressCountry": "US"
+    },
+    "geo": { "latitude": 39.9743, "longitude": -75.1340 }
   }'
 ```
+
+`geo` (latitude/longitude) is **required**; `address` and `googlePlaceId` are optional but recommended — the Place is idempotent on `googlePlaceId`, so sending it lets you safely re-run this step.
 
 Note the returned `id` — you'll reference it from your organization in Step 4.
 
