@@ -22,7 +22,10 @@ import { notifyOperator } from '../../lib/operator-notify.js';
 const router: ReturnType<typeof Router> = Router();
 
 const disputeInputSchema = z.object({
-  targetType: z.enum(['organization', 'person', 'verified_identifier']),
+  // 'person' is intentionally absent: Persons are not a Commons primitive
+  // (no-users doctrine), and the Spec's DisputeInput.targetType dropped it in
+  // v2. The enum had drifted and still accepted it; this realigns code to spec.
+  targetType: z.enum(['organization', 'verified_identifier']),
   targetId: z.string().uuid(),
   reason: z.string().min(1).max(2000),
   submitterContact: z.string().max(200).optional(),

@@ -14,6 +14,10 @@ Format: one line per change, grouped under the date it shipped. Terse and factua
 
 ---
 
+## 2026-06-10 — Fix: `POST /service/disputes` rejects the undocumented `person` target
+
+Code-to-spec conformance; no Spec change. The Zod `targetType` enum still accepted `person`, but the Spec's `DisputeInput.targetType` dropped it in v2 (Persons aren't a Commons primitive — the no-users doctrine). The handler now rejects `targetType: "person"` with `400 VALIDATION_ERROR`, matching the published enum (`organization`, `verified_identifier`). Found by the 2026-06-10 audit.
+
 ## 2026-06-10 — Fix: series timezone change recomposes instance wall-clocks
 
 Bug fix. A timezone-only `PATCH /service/events/series/{id}` (only `timezone`, no `start`/`end`) wrote the new `event_timezone` onto every future instance without recomposing `event_at`. Since `event_at` is a fixed instant, each instance's wall-clock silently shifted by the offset delta (7pm → 6pm). A combined start+timezone change was also wrong (`event_at` composed in the old tz while the new tz was stored). `updateSeriesFutureInstances` now treats a timezone change as a per-instance recomposition — decompose in the old tz, recompose in the new — mirroring the single-event S6 fix, and syncs `base_event_data`'s timezone so the auto-extend cron materializes future instances in the new zone too. Found by the 2026-06-10 audit (F5).
